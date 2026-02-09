@@ -1,0 +1,7 @@
+# Gitleaks baseline - known findings that are false positives.
+#
+# Format: fingerprint hash from gitleaks output
+#
+# To regenerate after adding new commits:
+#   gitleaks git --report-format json --report-path gitleaks-report.json
+#   # Review the report, then add fingerprints for false positives

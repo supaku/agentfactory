@@ -1,0 +1,29 @@
+# Gitleaks configuration for Supaku AgentFactory
+# https://github.com/gitleaks/gitleaks
+
+title = "AgentFactory gitleaks config"
+
+[extend]
+# Extend the default gitleaks rules (covers 100+ secret types)
+useDefault = true
+
+# Paths to exclude from scanning
+[allowlist]
+  description = "Global allowlist"
+
+  paths = [
+    # Lock files
+    '''pnpm-lock\.yaml''',
+    '''package-lock\.json''',
+    '''yarn\.lock''',
+
+    # Build artifacts
+    '''dist/''',
+    '''build/''',
+    '''node_modules/''',
+    '''\.pnpm-store/''',
+    '''\.turbo/''',
+
+    # Test fixtures (may contain mock tokens)
+    '''tests/fixtures/''',
+  ]
