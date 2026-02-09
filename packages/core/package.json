@@ -1,0 +1,52 @@
+{
+  "name": "@supaku/agentfactory",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supaku-org/agentfactory",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "agent",
+    "orchestrator",
+    "coding-agent",
+    "claude",
+    "codex",
+    "multi-agent",
+    "fleet-management"
+  ],
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.7",
+    "@supaku/agentfactory-linear": "workspace:*",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  }
+}

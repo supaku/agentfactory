@@ -1,0 +1,23 @@
+{
+  "name": "agentfactory",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "description": "The open-source software factory — multi-agent fleet management for coding agents",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "orchestrator": "node --import tsx packages/cli/src/orchestrator.ts",
+    "worker": "node --import tsx packages/cli/src/worker.ts",
+    "queue-admin": "node --import tsx packages/cli/src/queue-admin.ts",
+    "linear": "node packages/core/dist/linear-cli.mjs"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.3"
+  }
+}

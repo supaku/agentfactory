@@ -1,0 +1,51 @@
+{
+  "name": "@supaku/agentfactory-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supaku-org/agentfactory",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "cli",
+    "orchestrator",
+    "worker",
+    "agent-management"
+  ],
+  "bin": {
+    "agentfactory": "./dist/src/index.js",
+    "af-orchestrator": "./dist/src/orchestrator.js",
+    "af-worker": "./dist/src/worker.js"
+  },
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@supaku/agentfactory": "workspace:*",
+    "@supaku/agentfactory-linear": "workspace:*",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  }
+}
