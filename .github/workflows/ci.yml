@@ -11,16 +11,19 @@ jobs:
   gitleaks:
     name: Secret Scan
     runs-on: ubuntu-latest
-    if: ${{ secrets.GITLEAKS_LICENSE != '' }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ env.GITLEAKS_LICENSE != '' }}
         with:
           fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@v2
+        if: ${{ env.GITLEAKS_LICENSE != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+    env:
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   typecheck:
     name: Typecheck
