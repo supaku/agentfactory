@@ -30,14 +30,14 @@ import {
   didJustQueueAcceptance,
   markAcceptanceQueued,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../../types'
+import type { WebhookConfig } from '../../types.js'
 import {
   emitActivity,
   resolveStateName,
   isProjectAllowed,
   hasExcludedLabel,
   getAppUrl,
-} from '../utils'
+} from '../utils.js'
 import type { createLogger } from '@supaku/agentfactory-server'
 
 export async function handleIssueUpdated(

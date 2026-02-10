@@ -16,8 +16,8 @@ import {
   generateIdempotencyKey,
   isWebhookProcessed,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../../types'
-import { handleStopSignal, emitActivity } from '../utils'
+import type { WebhookConfig } from '../../types.js'
+import { handleStopSignal, emitActivity } from '../utils.js'
 import type { createLogger } from '@supaku/agentfactory-server'
 
 export async function handleSessionPrompted(

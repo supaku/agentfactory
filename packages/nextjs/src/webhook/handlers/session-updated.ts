@@ -4,8 +4,8 @@
 
 import { NextResponse } from 'next/server'
 import type { LinearWebhookPayload } from '@supaku/agentfactory-linear'
-import type { WebhookConfig } from '../../types'
-import { handleStopSignal } from '../utils'
+import type { WebhookConfig } from '../../types.js'
+import { handleStopSignal } from '../utils.js'
 import type { createLogger } from '@supaku/agentfactory-server'
 
 export async function handleSessionUpdated(

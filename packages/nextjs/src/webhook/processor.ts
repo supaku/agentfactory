@@ -14,12 +14,12 @@ import {
   isIssueUpdate,
 } from '@supaku/agentfactory-linear'
 import { createLogger, generateRequestId } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../types'
-import { verifyWebhookSignature } from './signature'
-import { handleSessionCreated } from './handlers/session-created'
-import { handleSessionUpdated } from './handlers/session-updated'
-import { handleSessionPrompted } from './handlers/session-prompted'
-import { handleIssueUpdated } from './handlers/issue-updated'
+import type { WebhookConfig } from '../types.js'
+import { verifyWebhookSignature } from './signature.js'
+import { handleSessionCreated } from './handlers/session-created.js'
+import { handleSessionUpdated } from './handlers/session-updated.js'
+import { handleSessionPrompted } from './handlers/session-prompted.js'
+import { handleIssueUpdated } from './handlers/issue-updated.js'
 
 const baseLogger = createLogger('webhook')
 

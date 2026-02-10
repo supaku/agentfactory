@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireWorkerAuth } from '../../middleware/worker-auth'
+import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import { deregisterWorker, getWorker, createLogger } from '@supaku/agentfactory-server'
 
 const log = createLogger('api:workers:detail')

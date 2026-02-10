@@ -17,7 +17,7 @@ import {
   promoteNextPendingWork,
   createLogger,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../types'
+import type { WebhookConfig } from '../types.js'
 
 const baseLogger = createLogger('webhook')
 

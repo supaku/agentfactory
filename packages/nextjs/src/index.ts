@@ -13,54 +13,58 @@ export type {
   AutoTriggerConfig,
   CronConfig,
   RouteHandler,
-} from './types'
+} from './types.js'
 
 // Factory
-export { createAllRoutes } from './factory'
-export type { AllRoutes } from './factory'
+export { createAllRoutes } from './factory.js'
+export type { AllRoutes } from './factory.js'
 
 // Middleware
-export { verifyCronAuth } from './middleware/cron-auth'
+export { verifyCronAuth } from './middleware/cron-auth.js'
 export {
   verifyWorkerAuth,
   requireWorkerAuth,
   unauthorizedResponse,
   isWorkerAuthConfigured,
-} from './middleware/worker-auth'
+} from './middleware/worker-auth.js'
 
 // Webhook
-export { createWebhookHandler } from './webhook/processor'
-export { verifyWebhookSignature } from './webhook/signature'
+export { createWebhookHandler } from './webhook/processor.js'
+export { verifyWebhookSignature } from './webhook/signature.js'
 
 // Individual handler factories (for custom wiring)
 
 // Worker handlers
-export { createWorkerRegisterHandler } from './handlers/workers/register'
-export { createWorkerListHandler } from './handlers/workers/list'
-export { createWorkerGetHandler, createWorkerDeleteHandler } from './handlers/workers/get-delete'
-export { createWorkerHeartbeatHandler } from './handlers/workers/heartbeat'
-export { createWorkerPollHandler } from './handlers/workers/poll'
+export { createWorkerRegisterHandler } from './handlers/workers/register.js'
+export { createWorkerListHandler } from './handlers/workers/list.js'
+export { createWorkerGetHandler, createWorkerDeleteHandler } from './handlers/workers/get-delete.js'
+export { createWorkerHeartbeatHandler } from './handlers/workers/heartbeat.js'
+export { createWorkerPollHandler } from './handlers/workers/poll.js'
 
 // Session handlers (no Linear dependency)
-export { createSessionListHandler } from './handlers/sessions/list'
-export { createSessionGetHandler } from './handlers/sessions/get'
-export { createSessionClaimHandler } from './handlers/sessions/claim'
-export { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status'
-export { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh'
-export { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts'
-export { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership'
+export { createSessionListHandler } from './handlers/sessions/list.js'
+export type { AgentSessionResponse } from './handlers/sessions/list.js'
+export { createSessionGetHandler } from './handlers/sessions/get.js'
+export { createSessionClaimHandler } from './handlers/sessions/claim.js'
+export { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
+export { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
+export { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+export { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)
-export { createSessionActivityHandler } from './handlers/sessions/activity'
-export { createSessionCompletionHandler } from './handlers/sessions/completion'
-export { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls'
-export { createSessionProgressHandler } from './handlers/sessions/progress'
-export { createSessionToolErrorHandler } from './handlers/sessions/tool-error'
+export { createSessionActivityHandler } from './handlers/sessions/activity.js'
+export { createSessionCompletionHandler } from './handlers/sessions/completion.js'
+export { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls.js'
+export { createSessionProgressHandler } from './handlers/sessions/progress.js'
+export { createSessionToolErrorHandler } from './handlers/sessions/tool-error.js'
 
 // Public handlers
-export { createPublicStatsHandler } from './handlers/public/stats'
-export { createPublicSessionsListHandler } from './handlers/public/sessions-list'
-export { createPublicSessionDetailHandler } from './handlers/public/session-detail'
+export { createPublicStatsHandler } from './handlers/public/stats.js'
+export type { PublicStatsResponse } from './handlers/public/stats.js'
+export { createPublicSessionsListHandler } from './handlers/public/sessions-list.js'
+export type { PublicSessionResponse } from './handlers/public/sessions-list.js'
+export { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
+export type { PublicSessionDetailResponse } from './handlers/public/session-detail.js'
 
 // Cleanup handler
-export { createCleanupHandler } from './handlers/cleanup'
+export { createCleanupHandler } from './handlers/cleanup.js'

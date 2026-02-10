@@ -6,41 +6,41 @@
  * route tree that maps 1:1 onto Next.js App Router exports.
  */
 
-import type { RouteHandler, RouteConfig, WebhookConfig, CronConfig } from './types'
+import type { RouteHandler, RouteConfig, WebhookConfig, CronConfig } from './types.js'
 
 // Worker handlers
-import { createWorkerRegisterHandler } from './handlers/workers/register'
-import { createWorkerListHandler } from './handlers/workers/list'
-import { createWorkerGetHandler, createWorkerDeleteHandler } from './handlers/workers/get-delete'
-import { createWorkerHeartbeatHandler } from './handlers/workers/heartbeat'
-import { createWorkerPollHandler } from './handlers/workers/poll'
+import { createWorkerRegisterHandler } from './handlers/workers/register.js'
+import { createWorkerListHandler } from './handlers/workers/list.js'
+import { createWorkerGetHandler, createWorkerDeleteHandler } from './handlers/workers/get-delete.js'
+import { createWorkerHeartbeatHandler } from './handlers/workers/heartbeat.js'
+import { createWorkerPollHandler } from './handlers/workers/poll.js'
 
 // Session handlers (no Linear)
-import { createSessionListHandler } from './handlers/sessions/list'
-import { createSessionGetHandler } from './handlers/sessions/get'
-import { createSessionClaimHandler } from './handlers/sessions/claim'
-import { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status'
-import { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh'
-import { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts'
-import { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership'
+import { createSessionListHandler } from './handlers/sessions/list.js'
+import { createSessionGetHandler } from './handlers/sessions/get.js'
+import { createSessionClaimHandler } from './handlers/sessions/claim.js'
+import { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
+import { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
+import { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+import { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)
-import { createSessionActivityHandler } from './handlers/sessions/activity'
-import { createSessionCompletionHandler } from './handlers/sessions/completion'
-import { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls'
-import { createSessionProgressHandler } from './handlers/sessions/progress'
-import { createSessionToolErrorHandler } from './handlers/sessions/tool-error'
+import { createSessionActivityHandler } from './handlers/sessions/activity.js'
+import { createSessionCompletionHandler } from './handlers/sessions/completion.js'
+import { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls.js'
+import { createSessionProgressHandler } from './handlers/sessions/progress.js'
+import { createSessionToolErrorHandler } from './handlers/sessions/tool-error.js'
 
 // Public handlers
-import { createPublicStatsHandler } from './handlers/public/stats'
-import { createPublicSessionsListHandler } from './handlers/public/sessions-list'
-import { createPublicSessionDetailHandler } from './handlers/public/session-detail'
+import { createPublicStatsHandler } from './handlers/public/stats.js'
+import { createPublicSessionsListHandler } from './handlers/public/sessions-list.js'
+import { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
 
 // Cleanup handler
-import { createCleanupHandler } from './handlers/cleanup'
+import { createCleanupHandler } from './handlers/cleanup.js'
 
 // Webhook processor
-import { createWebhookHandler } from './webhook/processor'
+import { createWebhookHandler } from './webhook/processor.js'
 
 export interface AllRoutes {
   workers: {

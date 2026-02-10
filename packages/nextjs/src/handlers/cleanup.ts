@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { cleanupOrphanedSessions, createLogger } from '@supaku/agentfactory-server'
-import { verifyCronAuth } from '../middleware/cron-auth'
-import type { CronConfig } from '../types'
+import { verifyCronAuth } from '../middleware/cron-auth.js'
+import type { CronConfig } from '../types.js'
 
 const log = createLogger('api:cleanup')
 

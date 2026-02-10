@@ -5,9 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireWorkerAuth } from '../../middleware/worker-auth'
+import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import { getSessionState, createLogger } from '@supaku/agentfactory-server'
-import type { RouteConfig } from '../../types'
+import type { RouteConfig } from '../../types.js'
 
 const log = createLogger('api:sessions:external-urls')
 
