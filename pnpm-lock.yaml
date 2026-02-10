@@ -26,6 +26,9 @@ importers:
       '@supaku/agentfactory-linear':
         specifier: workspace:*
         version: link:../linear
+      '@supaku/agentfactory-server':
+        specifier: workspace:*
+        version: link:../server
       dotenv:
         specifier: ^17.2.3
         version: 17.2.4

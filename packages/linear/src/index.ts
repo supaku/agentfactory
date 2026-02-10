@@ -122,3 +122,6 @@ export { LinearAgentClient, createLinearAgentClient } from './agent-client'
 
 // Session
 export { AgentSession, createAgentSession } from './agent-session'
+
+// Webhook types
+export * from './webhook-types'

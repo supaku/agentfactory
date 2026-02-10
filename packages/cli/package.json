@@ -38,7 +38,11 @@
   "bin": {
     "agentfactory": "./dist/src/index.js",
     "af-orchestrator": "./dist/src/orchestrator.js",
-    "af-worker": "./dist/src/worker.js"
+    "af-worker": "./dist/src/worker.js",
+    "af-worker-fleet": "./dist/src/worker-fleet.js",
+    "af-cleanup": "./dist/src/cleanup.js",
+    "af-queue-admin": "./dist/src/queue-admin.js",
+    "af-analyze-logs": "./dist/src/analyze-logs.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
@@ -57,6 +61,7 @@
   "dependencies": {
     "@supaku/agentfactory": "workspace:*",
     "@supaku/agentfactory-linear": "workspace:*",
+    "@supaku/agentfactory-server": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {

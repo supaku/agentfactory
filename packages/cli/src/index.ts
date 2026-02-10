@@ -18,6 +18,10 @@ Usage:
 Commands:
   orchestrator    Spawn concurrent agents on backlog issues
   worker          Start a remote worker that polls for queued work
+  worker-fleet    Spawn and manage multiple worker processes
+  cleanup         Clean up orphaned git worktrees
+  queue-admin     Manage Redis work queue and sessions
+  analyze-logs    Analyze agent session logs for errors
   help            Show this help message
 
 Run 'agentfactory <command> --help' for command-specific options.
@@ -32,6 +36,18 @@ switch (command) {
     break
   case 'worker':
     import('./worker')
+    break
+  case 'worker-fleet':
+    import('./worker-fleet')
+    break
+  case 'cleanup':
+    import('./cleanup')
+    break
+  case 'queue-admin':
+    import('./queue-admin')
+    break
+  case 'analyze-logs':
+    import('./analyze-logs')
     break
   case 'help':
   case '--help':
