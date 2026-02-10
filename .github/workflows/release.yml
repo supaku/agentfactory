@@ -64,7 +64,7 @@ jobs:
       - name: Set package versions
         if: steps.check.outputs.should_publish == 'true'
         run: |
-          for pkg in packages/linear packages/core packages/server packages/cli; do
+          for pkg in packages/linear packages/core packages/server packages/cli packages/nextjs; do
             cd "$pkg"
             npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
             cd "$GITHUB_WORKSPACE"
@@ -75,6 +75,7 @@ jobs:
       # 2. core (depends on linear)
       # 3. server (depends on core + linear)
       # 4. cli (depends on core + linear)
+      # 5. nextjs (depends on core + linear + server)
       - name: Publish @supaku/agentfactory-linear to npm
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm --filter @supaku/agentfactory-linear publish --no-git-checks --provenance --access public
@@ -90,6 +91,10 @@ jobs:
       - name: Publish @supaku/agentfactory-cli to npm
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm --filter @supaku/agentfactory-cli publish --no-git-checks --provenance --access public
+
+      - name: Publish @supaku/agentfactory-nextjs to npm
+        if: steps.check.outputs.should_publish == 'true'
+        run: pnpm --filter @supaku/agentfactory-nextjs publish --no-git-checks --provenance --access public
 
       # Publish to GitHub Packages
       - name: Setup Node.js for GitHub Packages
@@ -125,6 +130,12 @@ jobs:
       - name: Publish @supaku/agentfactory-cli to GitHub Packages
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm --filter @supaku/agentfactory-cli publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @supaku/agentfactory-nextjs to GitHub Packages
+        if: steps.check.outputs.should_publish == 'true'
+        run: pnpm --filter @supaku/agentfactory-nextjs publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
