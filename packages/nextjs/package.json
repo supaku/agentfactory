@@ -1,0 +1,76 @@
+{
+  "name": "@supaku/agentfactory-nextjs",
+  "version": "0.3.0",
+  "type": "module",
+  "description": "Next.js API route handlers for AgentFactory — webhook processor, worker/session management, public stats",
+  "author": "Supaku (https://supaku.com)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supaku/agentfactory",
+    "directory": "packages/nextjs"
+  },
+  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/nextjs",
+  "bugs": {
+    "url": "https://github.com/supaku/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js",
+        "default": "./dist/src/index.js"
+      }
+    },
+    "main": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts"
+  },
+  "keywords": [
+    "nextjs",
+    "api-routes",
+    "webhook",
+    "agent-server",
+    "linear"
+  ],
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@supaku/agentfactory": "workspace:*",
+    "@supaku/agentfactory-linear": "workspace:*",
+    "@supaku/agentfactory-server": "workspace:*"
+  },
+  "peerDependencies": {
+    "next": ">=14.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "next": "^15.3.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
+  }
+}
