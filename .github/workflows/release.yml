@@ -35,7 +35,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Remove deprecated always-auth from .npmrc
-        run: sed -i '/always-auth/d' ~/.npmrc
+        run: sed -i '/always-auth/d' "$NPM_CONFIG_USERCONFIG"
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -102,7 +102,7 @@ jobs:
 
       - name: Remove deprecated always-auth from .npmrc
         if: steps.check.outputs.should_publish == 'true'
-        run: sed -i '/always-auth/d' ~/.npmrc
+        run: sed -i '/always-auth/d' "$NPM_CONFIG_USERCONFIG"
 
       - name: Publish @supaku/agentfactory-linear to GitHub Packages
         if: steps.check.outputs.should_publish == 'true'
