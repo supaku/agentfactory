@@ -11,6 +11,7 @@ jobs:
   gitleaks:
     name: Secret Scan
     runs-on: ubuntu-latest
+    if: ${{ secrets.GITLEAKS_LICENSE != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,6 +20,7 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   typecheck:
     name: Typecheck
@@ -41,7 +43,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [gitleaks, typecheck]
+    needs: [typecheck]
     steps:
       - uses: actions/checkout@v4
 
