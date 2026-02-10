@@ -4,6 +4,10 @@
 
 AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Amp) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
 
+<p align="center">
+  <img src="docs/assets/dashboard.png" alt="AgentFactory Dashboard — real-time agent activity monitoring" width="800" />
+</p>
+
 ## The Software Factory
 
 | Factory Concept | AgentFactory Equivalent |
@@ -237,6 +241,20 @@ await session.start()
 await session.emitThought('Analyzing requirements...')
 await session.complete('Feature implemented with tests')
 ```
+
+## Agent Definitions
+
+Agent definitions tell coding agents how to behave at each stage of the pipeline. See [examples/agent-definitions](./examples/agent-definitions) for ready-to-use templates:
+
+| Definition | Stage | What it does |
+|-----------|-------|-------------|
+| [developer.md](./examples/agent-definitions/developer.md) | Development | Implements features, fixes bugs, creates PRs |
+| [qa-reviewer.md](./examples/agent-definitions/qa-reviewer.md) | QA | Validates implementation, runs tests |
+| [coordinator.md](./examples/agent-definitions/coordinator.md) | Coordination | Orchestrates parallel sub-issues |
+| [acceptance-handler.md](./examples/agent-definitions/acceptance-handler.md) | Acceptance | Validates, merges PRs, cleans up |
+| [backlog-writer.md](./examples/agent-definitions/backlog-writer.md) | Planning | Transforms plans into Linear issues |
+
+Place your definitions in `.claude/agents/` at the root of your repository. Customize them for your stack — add your test commands, framework patterns, and deployment checks.
 
 ## Development
 

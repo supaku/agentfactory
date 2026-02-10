@@ -2,7 +2,29 @@ node_modules/
 dist/
 .turbo/
 *.tsbuildinfo
+
+# Environment
 .env
 .env.local
 .env.*.local
+.npmrc
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+
+# Runtime
+.worktrees/
