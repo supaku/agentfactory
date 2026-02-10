@@ -3,11 +3,30 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Webhook server and distributed worker pool for AgentFactory — Redis queues, issue locks, session management",
+  "author": "Supaku (https://supaku.com)",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku-org/agentfactory",
+    "url": "https://github.com/supaku/agentfactory",
     "directory": "packages/server"
+  },
+  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/server",
+  "bugs": {
+    "url": "https://github.com/supaku/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js"
+      }
+    },
+    "main": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts"
   },
   "keywords": [
     "webhook",
@@ -45,6 +64,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
   }
 }

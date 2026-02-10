@@ -3,11 +3,30 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Linear issue tracker integration for AgentFactory — status transitions, agent sessions, work routing",
+  "author": "Supaku (https://supaku.com)",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku-org/agentfactory",
+    "url": "https://github.com/supaku/agentfactory",
     "directory": "packages/linear"
+  },
+  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/linear",
+  "bugs": {
+    "url": "https://github.com/supaku/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/src/index.d.ts",
+        "import": "./dist/src/index.js"
+      }
+    },
+    "main": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts"
   },
   "keywords": [
     "linear",
@@ -43,6 +62,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
   }
 }

@@ -22,7 +22,7 @@ Commands:
 
 Run 'agentfactory <command> --help' for command-specific options.
 
-Learn more: https://github.com/supaku-org/agentfactory
+Learn more: https://github.com/supaku/agentfactory
 `)
 }
 

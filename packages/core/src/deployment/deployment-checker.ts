@@ -57,8 +57,8 @@ export interface DeploymentCheckOptions {
 }
 
 const DEFAULT_OPTIONS: Required<DeploymentCheckOptions> = {
-  owner: 'supaku-org',
-  repo: 'supaku',
+  owner: 'supaku',
+  repo: 'agentfactory',
   timeout: 30000,
 }
 
