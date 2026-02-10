@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-server",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "description": "Webhook server and distributed worker pool for AgentFactory — Redis queues, issue locks, session management",
   "author": "Supaku (https://supaku.com)",
@@ -22,7 +22,8 @@
     "exports": {
       ".": {
         "types": "./dist/src/index.d.ts",
-        "import": "./dist/src/index.js"
+        "import": "./dist/src/index.js",
+        "default": "./dist/src/index.js"
       }
     },
     "main": "./dist/src/index.js",
@@ -41,7 +42,8 @@
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "import": "./dist/src/index.js"
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
     }
   },
   "files": [

@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-cli",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Supaku (https://supaku.com)",
@@ -22,7 +22,8 @@
     "exports": {
       ".": {
         "types": "./dist/src/index.d.ts",
-        "import": "./dist/src/index.js"
+        "import": "./dist/src/index.js",
+        "default": "./dist/src/index.js"
       }
     },
     "main": "./dist/src/index.js",
