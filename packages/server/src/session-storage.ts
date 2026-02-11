@@ -72,6 +72,9 @@ export interface AgentSessionState {
   /** Linear Agent ID handling this session */
   agentId?: string
 
+  /** Linear project name (for routing and dashboard visibility) */
+  projectName?: string
+
   // Cost tracking (populated from provider result events)
   /** Total cost in USD for this session */
   totalCostUsd?: number

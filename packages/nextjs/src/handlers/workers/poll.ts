@@ -45,8 +45,22 @@ export function createWorkerPollHandler() {
       let work: Awaited<ReturnType<typeof peekWork>> = []
 
       if (availableCapacity > 0) {
-        const limit = Math.min(availableCapacity, 5)
-        work = await peekWork(limit)
+        const desiredCount = Math.min(availableCapacity, 5)
+        const workerProjects = worker.projects
+        const hasProjectFilter = workerProjects && workerProjects.length > 0
+
+        // Over-fetch when filtering, since some items may not match
+        const fetchLimit = hasProjectFilter ? Math.min(desiredCount * 4, 50) : desiredCount
+        const allWork = await peekWork(fetchLimit)
+
+        if (hasProjectFilter) {
+          // Accept: matching project OR untagged items (backward compat)
+          work = allWork
+            .filter(w => !w.projectName || workerProjects.includes(w.projectName))
+            .slice(0, desiredCount)
+        } else {
+          work = allWork.slice(0, desiredCount)
+        }
       }
 
       const pendingPrompts: Record<string, PendingPrompt[]> = {}
@@ -73,6 +87,7 @@ export function createWorkerPollHandler() {
             sessionId: w.sessionId,
             issueIdentifier: w.issueIdentifier,
             workType: w.workType,
+            projectName: w.projectName,
           })),
           activeSessionCount: worker.activeSessions.length,
           pendingPromptsCount: totalPendingPrompts,

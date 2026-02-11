@@ -108,6 +108,7 @@ export async function handleSessionCreated(
   // Determine work type
   let workType: AgentWorkType = 'development'
   let currentStatus: string | undefined
+  let projectName: string | undefined
   let workTypeSource: 'mention' | 'status' = 'status'
 
   // Fetch current issue status
@@ -117,6 +118,10 @@ export async function handleSessionCreated(
     const currentState = await issueDetails.state
     currentStatus = currentState?.name
     sessionLog.debug('Fetched current issue status', { currentStatus })
+
+    // Extract project name for routing
+    const project = await issueDetails.project
+    projectName = project?.name
   } catch (err) {
     sessionLog.warn('Failed to fetch issue status', { error: err })
   }
@@ -249,6 +254,7 @@ export async function handleSessionCreated(
     organizationId: payload.organizationId,
     workType,
     agentId,
+    projectName,
   })
 
   // Queue work
@@ -260,6 +266,7 @@ export async function handleSessionCreated(
     queuedAt: Date.now(),
     workType,
     prompt: config.generatePrompt(issueIdentifier, workType, promptContext),
+    projectName,
   }
 
   const result = await dispatchWork(work)

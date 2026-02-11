@@ -11,11 +11,13 @@
  * Options:
  *   -w, --workers <n>   Number of worker processes (default: CPU cores / 2)
  *   -c, --capacity <n>  Agents per worker (default: 3)
+ *   -p, --projects <l>  Comma-separated project names to accept (default: all)
  *   --dry-run            Show configuration without starting workers
  *
  * Environment (loaded from .env.local in CWD):
  *   WORKER_FLEET_SIZE     Number of workers (override)
  *   WORKER_CAPACITY       Agents per worker (override)
+ *   WORKER_PROJECTS       Comma-separated project names to accept
  *   WORKER_API_URL        Coordinator API URL (required)
  *   WORKER_API_KEY        API key for authentication (required)
  */
@@ -38,19 +40,22 @@ const colors = {
   cyan: '\x1b[36m',
 }
 
-function parseArgs(): { workers: number; capacity: number; dryRun: boolean } {
+function parseArgs(): { workers: number; capacity: number; dryRun: boolean; projects?: string[] } {
   const args = process.argv.slice(2)
   let workers =
     parseInt(process.env.WORKER_FLEET_SIZE ?? '0', 10) ||
     Math.max(1, Math.floor(os.cpus().length / 2))
   let capacity = parseInt(process.env.WORKER_CAPACITY ?? '3', 10)
   let dryRun = false
+  let projects: string[] | undefined
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--workers' || args[i] === '-w') {
       workers = parseInt(args[++i], 10)
     } else if (args[i] === '--capacity' || args[i] === '-c') {
       capacity = parseInt(args[++i], 10)
+    } else if (args[i] === '--projects' || args[i] === '-p') {
+      projects = args[++i].split(',').map(s => s.trim()).filter(Boolean)
     } else if (args[i] === '--dry-run') {
       dryRun = true
     } else if (args[i] === '--help' || args[i] === '-h') {
@@ -59,7 +64,7 @@ function parseArgs(): { workers: number; capacity: number; dryRun: boolean } {
     }
   }
 
-  return { workers, capacity, dryRun }
+  return { workers, capacity, dryRun, projects }
 }
 
 function printHelp(): void {
@@ -73,17 +78,19 @@ ${colors.yellow}Usage:${colors.reset}
 ${colors.yellow}Options:${colors.reset}
   -w, --workers <n>   Number of worker processes (default: CPU cores / 2)
   -c, --capacity <n>  Agents per worker (default: 3)
+  -p, --projects <l>  Comma-separated project names to accept (default: all)
   --dry-run           Show configuration without starting workers
   -h, --help          Show this help message
 
 ${colors.yellow}Examples:${colors.reset}
   af-worker-fleet                     # Auto-detect optimal settings
   af-worker-fleet -w 8 -c 5           # 8 workers x 5 agents = 40 concurrent
-  af-worker-fleet --workers 16        # 16 workers with default capacity
+  af-worker-fleet -p Social,Agent     # Only accept Social and Agent projects
 
 ${colors.yellow}Environment (loaded from .env.local in CWD):${colors.reset}
   WORKER_FLEET_SIZE   Override number of workers
   WORKER_CAPACITY     Override agents per worker
+  WORKER_PROJECTS     Comma-separated project names to accept
   WORKER_API_URL      API endpoint (required)
   WORKER_API_KEY      API key for authentication (required)
 
@@ -118,6 +125,11 @@ const controller = new AbortController()
 process.on('SIGINT', () => controller.abort())
 process.on('SIGTERM', () => controller.abort())
 
+const projects = fleetArgs.projects ??
+  (process.env.WORKER_PROJECTS
+    ? process.env.WORKER_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+    : undefined)
+
 runWorkerFleet(
   {
     workers: fleetArgs.workers,
@@ -125,6 +137,7 @@ runWorkerFleet(
     dryRun: fleetArgs.dryRun,
     apiUrl: process.env.WORKER_API_URL,
     apiKey: process.env.WORKER_API_KEY,
+    projects,
   },
   controller.signal,
 )

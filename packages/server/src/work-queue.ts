@@ -74,6 +74,7 @@ export interface QueuedWork {
   claudeSessionId?: string // For resuming sessions
   workType?: AgentWorkType // Type of work (defaults to 'development')
   sourceSessionId?: string // For QA: the dev session that completed this work
+  projectName?: string // Linear project name, for worker routing
 }
 
 /**

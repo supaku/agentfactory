@@ -38,6 +38,8 @@ export interface WorkerRunnerConfig {
   linearApiKey?: string
   /** Git repository root (default: auto-detect) */
   gitRoot?: string
+  /** Linear project names to accept (undefined = all) */
+  projects?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +264,7 @@ export async function runWorker(
         hostname: workerConfig.hostname,
         capacity: workerConfig.capacity,
         version: '1.0.0',
+        projects: config.projects,
       }),
     })
 
@@ -842,6 +845,7 @@ export async function runWorker(
       hostname: workerConfig.hostname,
       capacity: workerConfig.capacity,
       dryRun: workerConfig.dryRun,
+      projects: config.projects?.length ? config.projects : 'all',
     })
 
     // Register with coordinator

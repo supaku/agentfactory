@@ -59,6 +59,7 @@ export interface WorkerData {
   lastHeartbeat: number // Unix timestamp
   status: 'active' | 'draining' | 'offline'
   version?: string
+  projects?: string[] // Project names this worker accepts (undefined = all)
 }
 
 /**
@@ -79,7 +80,8 @@ export interface WorkerInfo extends WorkerData {
 export async function registerWorker(
   hostname: string,
   capacity: number,
-  version?: string
+  version?: string,
+  projects?: string[],
 ): Promise<{ workerId: string; heartbeatInterval: number; pollInterval: number } | null> {
   if (!isRedisConfigured()) {
     log.warn('Redis not configured, cannot register worker')
@@ -99,6 +101,7 @@ export async function registerWorker(
       lastHeartbeat: now,
       status: 'active',
       version,
+      projects: projects?.length ? projects : undefined,
     }
 
     const key = `${WORKER_PREFIX}${workerId}`
@@ -108,6 +111,7 @@ export async function registerWorker(
       workerId,
       hostname,
       capacity,
+      projects: projects?.length ? projects : 'all',
     })
 
     return {

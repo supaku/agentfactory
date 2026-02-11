@@ -214,6 +214,7 @@ export async function handleIssueUpdated(
       priority: 2,
       organizationId: payload.organizationId,
       workType: qaWorkType,
+      projectName,
     })
 
     const qaWork: QueuedWork = {
@@ -224,6 +225,7 @@ export async function handleIssueUpdated(
       queuedAt: Date.now(),
       prompt: qaPrompt,
       workType: qaWorkType,
+      projectName,
     }
 
     const qaResult = await dispatchWork(qaWork)
@@ -334,6 +336,7 @@ export async function handleIssueUpdated(
       }
 
       const prompt = config.generatePrompt(issueIdentifier, workType)
+      const projectName = (data.project as Record<string, unknown> | undefined)?.name as string | undefined
 
       await storeSessionState(devSessionId, {
         issueId,
@@ -346,6 +349,7 @@ export async function handleIssueUpdated(
         priority: 3,
         organizationId: payload.organizationId,
         workType,
+        projectName,
       })
 
       const devWork: QueuedWork = {
@@ -356,6 +360,7 @@ export async function handleIssueUpdated(
         queuedAt: Date.now(),
         prompt,
         workType,
+        projectName,
       }
 
       const devResult = await dispatchWork(devWork)
@@ -527,6 +532,7 @@ export async function handleIssueUpdated(
         priority: 2,
         organizationId: payload.organizationId,
         workType: acceptanceWorkType,
+        projectName,
       })
 
       const acceptanceWork: QueuedWork = {
@@ -537,6 +543,7 @@ export async function handleIssueUpdated(
         queuedAt: Date.now(),
         prompt: acceptancePrompt,
         workType: acceptanceWorkType,
+        projectName,
       }
 
       const accResult = await dispatchWork(acceptanceWork)

@@ -120,6 +120,7 @@ export async function handleSessionPrompted(
       prompt: resumePrompt,
       claudeSessionId: existingSession?.claudeSessionId || undefined,
       workType,
+      projectName: existingSession?.projectName,
     }
 
     await dispatchWork(work)
@@ -232,6 +233,7 @@ export async function handleSessionPrompted(
       prompt: effectivePrompt,
       claudeSessionId: existingSession?.claudeSessionId || undefined,
       workType: existingSession?.workType || 'inflight',
+      projectName: existingSession?.projectName,
     }
 
     const dispatchResult = await dispatchWork(work)

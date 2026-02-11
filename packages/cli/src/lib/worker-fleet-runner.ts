@@ -27,6 +27,8 @@ export interface FleetRunnerConfig {
   apiKey: string
   /** Path to the worker script/binary (default: auto-detect from this package) */
   workerScript?: string
+  /** Linear project names for workers to accept (undefined = all) */
+  projects?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +110,7 @@ class WorkerFleet {
     dryRun: boolean
     apiUrl: string
     apiKey: string
+    projects?: string[]
   }
   private shuttingDown = false
   private readonly workerScript: string
@@ -120,6 +123,7 @@ class WorkerFleet {
       dryRun: boolean
       apiUrl: string
       apiKey: string
+      projects?: string[]
     },
     workerScript: string,
   ) {
@@ -138,6 +142,7 @@ ${colors.cyan}================================================================${
   Workers:         ${colors.green}${workers}${colors.reset}
   Capacity/Worker: ${colors.green}${capacity}${colors.reset}
   Total Capacity:  ${colors.green}${totalCapacity}${colors.reset} concurrent agents
+  Projects:        ${colors.green}${this.fleetConfig.projects?.length ? this.fleetConfig.projects.join(', ') : 'all'}${colors.reset}
 
   System:
     CPU Cores:    ${os.cpus().length}
@@ -190,17 +195,22 @@ ${colors.cyan}================================================================${
       `Starting worker (capacity: ${this.fleetConfig.capacity})${restartCount > 0 ? ` [restart #${restartCount}]` : ''}`,
     )
 
+    const workerArgs = [
+      this.workerScript,
+      '--capacity',
+      String(this.fleetConfig.capacity),
+      '--api-url',
+      this.fleetConfig.apiUrl,
+      '--api-key',
+      this.fleetConfig.apiKey,
+    ]
+    if (this.fleetConfig.projects?.length) {
+      workerArgs.push('--projects', this.fleetConfig.projects.join(','))
+    }
+
     const workerProcess = spawn(
       'node',
-      [
-        this.workerScript,
-        '--capacity',
-        String(this.fleetConfig.capacity),
-        '--api-url',
-        this.fleetConfig.apiUrl,
-        '--api-key',
-        this.fleetConfig.apiKey,
-      ],
+      workerArgs,
       {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
@@ -343,6 +353,7 @@ export async function runWorkerFleet(
       dryRun,
       apiUrl: config.apiUrl,
       apiKey: config.apiKey,
+      projects: config.projects?.length ? config.projects : undefined,
     },
     workerScript,
   )

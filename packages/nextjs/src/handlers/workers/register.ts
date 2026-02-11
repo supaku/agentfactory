@@ -18,7 +18,9 @@ export function createWorkerRegisterHandler() {
 
     try {
       const body = await request.json()
-      const { hostname, capacity, version } = body as { hostname: string; capacity: number; version?: string }
+      const { hostname, capacity, version, projects } = body as {
+        hostname: string; capacity: number; version?: string; projects?: string[]
+      }
 
       if (!hostname || typeof hostname !== 'string') {
         return NextResponse.json(
@@ -34,7 +36,14 @@ export function createWorkerRegisterHandler() {
         )
       }
 
-      const result = await registerWorker(hostname, capacity, version)
+      if (projects !== undefined && !Array.isArray(projects)) {
+        return NextResponse.json(
+          { error: 'Bad Request', message: 'projects must be an array of strings' },
+          { status: 400 }
+        )
+      }
+
+      const result = await registerWorker(hostname, capacity, version, projects)
 
       if (!result) {
         return NextResponse.json(
@@ -47,6 +56,7 @@ export function createWorkerRegisterHandler() {
         workerId: result.workerId,
         hostname,
         capacity,
+        projects: projects?.length ? projects : 'all',
       })
 
       return NextResponse.json(result, { status: 201 })

@@ -13,11 +13,13 @@
  *   --hostname <name>     Worker hostname (default: os.hostname())
  *   --api-url <url>       Coordinator API URL (default: WORKER_API_URL env)
  *   --api-key <key>       API key (default: WORKER_API_KEY env)
+ *   --projects <list>     Comma-separated project names to accept (default: all)
  *   --dry-run             Poll but don't execute work
  *
  * Environment (loaded from .env.local in CWD):
  *   WORKER_API_URL        Coordinator API URL (e.g., https://agent.example.com)
  *   WORKER_API_KEY        API key for authentication
+ *   WORKER_PROJECTS       Comma-separated project names to accept (e.g., Social,Agent)
  *   LINEAR_API_KEY        Required for agent operations
  */
 
@@ -36,6 +38,7 @@ interface WorkerCliArgs {
   hostname: string
   capacity: number
   dryRun: boolean
+  projects?: string[]
 }
 
 function parseArgs(): WorkerCliArgs {
@@ -66,6 +69,9 @@ function parseArgs(): WorkerCliArgs {
       case '--dry-run':
         parsed.dryRun = true
         break
+      case '--projects':
+        parsed.projects = args[++i].split(',').map(s => s.trim()).filter(Boolean)
+        break
       case '--help':
       case '-h':
         printHelp()
@@ -88,12 +94,14 @@ Options:
   --hostname <name>     Worker hostname (default: ${os.hostname()})
   --api-url <url>       Coordinator API URL
   --api-key <key>       API key for authentication
+  --projects <list>     Comma-separated project names to accept (default: all)
   --dry-run             Poll but don't execute work
   --help, -h            Show this help message
 
 Environment (loaded from .env.local in CWD):
   WORKER_API_URL        Coordinator API URL
   WORKER_API_KEY        API key for authentication
+  WORKER_PROJECTS       Comma-separated project names to accept
   LINEAR_API_KEY        Required for agent operations
 
 Examples:
@@ -128,6 +136,11 @@ const controller = new AbortController()
 process.on('SIGINT', () => controller.abort())
 process.on('SIGTERM', () => controller.abort())
 
+const projects = cliArgs.projects ??
+  (process.env.WORKER_PROJECTS
+    ? process.env.WORKER_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+    : undefined)
+
 runWorker(
   {
     apiUrl: cliArgs.apiUrl,
@@ -136,6 +149,7 @@ runWorker(
     capacity: cliArgs.capacity,
     dryRun: cliArgs.dryRun,
     linearApiKey: process.env.LINEAR_API_KEY,
+    projects,
   },
   controller.signal,
 )
