@@ -1,0 +1,78 @@
+# @supaku/create-agentfactory-app
+
+Scaffold a new [AgentFactory](https://github.com/supaku/agentfactory) project — a Next.js webhook server that processes Linear issues with coding agents.
+
+## Usage
+
+```bash
+npx @supaku/create-agentfactory-app my-agent
+```
+
+Then follow the prompts:
+
+```
+  create-agentfactory-app
+
+  Project name (my-agent):
+  Linear team key (e.g., MY): ENG
+  Include dashboard UI? [Y/n]: Y
+  Include CLI tools (worker, orchestrator)? [Y/n]: Y
+  Include Redis for distributed workers? [Y/n]: n
+
+  Created 28 files
+
+  Next steps:
+
+    cd my-agent
+    cp .env.example .env.local
+    # Fill in LINEAR_ACCESS_TOKEN and other secrets
+    pnpm install
+    pnpm dev              # Start webhook server
+    pnpm worker           # Start a local worker (in another terminal)
+```
+
+## What's Generated
+
+```
+my-agent/
+  .env.example              # All env vars with comments
+  src/lib/config.ts         # createAllRoutes() with defaults + customization hints
+  src/middleware.ts          # Auth, rate limiting, webhook verification
+  src/app/webhook/route.ts  # Linear webhook endpoint
+  src/app/callback/route.ts # OAuth callback
+  src/app/api/...           # All 21 route re-exports (2-3 lines each)
+  src/app/page.tsx          # Dashboard UI (optional)
+  cli/worker.ts             # Local worker wrapper
+  cli/orchestrator.ts       # Local orchestrator wrapper
+  .claude/agents/           # Agent definition templates
+```
+
+## Options
+
+```
+npx @supaku/create-agentfactory-app [project-name] [options]
+
+Options:
+  --team <KEY>     Linear team key (default: MY)
+  --no-dashboard   Skip dashboard UI
+  --no-cli         Skip CLI tools (worker, orchestrator)
+  --no-redis       Skip Redis/distributed worker setup
+  -h, --help       Show help
+```
+
+## After Setup
+
+1. **Configure Linear webhook** — point it to `https://your-app.vercel.app/webhook`
+2. **Set webhook secret** — add `LINEAR_WEBHOOK_SECRET` to `.env.local`
+3. **Customize prompts** — edit `src/lib/config.ts` to change how agents receive instructions
+4. **Add agent definitions** — edit `.claude/agents/developer.md` for your stack
+
+## Documentation
+
+- [Getting Started](https://github.com/supaku/agentfactory/blob/main/docs/getting-started.md)
+- [Configuration Reference](https://github.com/supaku/agentfactory/blob/main/docs/configuration.md)
+- [Architecture](https://github.com/supaku/agentfactory/blob/main/docs/architecture.md)
+
+## License
+
+MIT

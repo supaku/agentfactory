@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/supaku/agentfactory/blob/main/docs/getting-started.md
+    about: Check the docs before opening an issue
