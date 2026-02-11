@@ -32,16 +32,40 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 | **[@supaku/agentfactory-linear](./packages/linear)** | `@supaku/agentfactory-linear` | Linear issue tracker integration |
 | **[@supaku/agentfactory-server](./packages/server)** | `@supaku/agentfactory-server` | Redis work queue, session storage, worker pool |
 | **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools for local orchestrator and remote workers |
+| **[@supaku/agentfactory-nextjs](./packages/nextjs)** | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
+| **[create-agentfactory-app](./packages/create-app)** | `create-agentfactory-app` | Project scaffolding tool |
 
 ## Quick Start
 
-```bash
-# Install the core package
-npm install @supaku/agentfactory @supaku/agentfactory-linear
+### Create a new project (recommended)
 
-# Set up your environment
-export LINEAR_API_KEY=lin_api_...
-export AGENT_PROVIDER=claude  # or codex, amp
+```bash
+npx create-agentfactory-app my-agent
+
+cd my-agent
+cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN
+pnpm install && pnpm dev      # Start webhook server
+pnpm worker                   # Start local worker (in another terminal)
+```
+
+### Webhook Server (Next.js)
+
+For production use, AgentFactory provides a webhook server that receives Linear events and dispatches agents:
+
+```typescript
+// src/lib/config.ts
+import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+
+export const routes = createAllRoutes({
+  linearClient: createDefaultLinearClientResolver(),
+})
+```
+
+```typescript
+// src/app/webhook/route.ts
+import { routes } from '@/lib/config'
+export const POST = routes.webhook.POST
+export const GET = routes.webhook.GET
 ```
 
 ### Spawn an agent on a single issue

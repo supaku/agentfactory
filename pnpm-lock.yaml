@@ -62,6 +62,15 @@ importers:
         specifier: ^3.2.3
         version: 3.2.4(@types/node@22.19.10)(tsx@4.21.0)
 
+  packages/create-app:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.19.10
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/linear:
     dependencies:
       '@linear/sdk':

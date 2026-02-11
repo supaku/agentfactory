@@ -1,0 +1,51 @@
+{
+  "name": "create-agentfactory-app",
+  "version": "0.4.0",
+  "type": "module",
+  "description": "Create an AgentFactory app — multi-agent fleet management for coding agents",
+  "author": "Supaku (https://supaku.com)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supaku/agentfactory",
+    "directory": "packages/create-app"
+  },
+  "homepage": "https://github.com/supaku/agentfactory",
+  "bugs": {
+    "url": "https://github.com/supaku/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "create",
+    "agentfactory",
+    "ai-agents",
+    "coding-agents",
+    "linear",
+    "scaffolding"
+  ],
+  "bin": {
+    "create-agentfactory-app": "./dist/src/index.js"
+  },
+  "main": "./dist/src/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.7.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
+  }
+}

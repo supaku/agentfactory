@@ -4,7 +4,7 @@ This guide walks through setting up AgentFactory to process Linear issues with c
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 22
 - **pnpm** >= 8 (or npm/yarn)
 - **Git** — agents work in git worktrees
 - **Linear account** — with API key access
@@ -12,14 +12,34 @@ This guide walks through setting up AgentFactory to process Linear issues with c
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default)
   - [OpenAI Codex](https://platform.openai.com/docs/guides/codex) (experimental)
 
-## Installation
+## Quick Start (recommended)
+
+The fastest way to get started is with the scaffolding tool:
 
 ```bash
-# Core + Linear integration (minimum required)
+npx create-agentfactory-app my-agent
+
+cd my-agent
+cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN
+pnpm install && pnpm dev      # Start webhook server
+pnpm worker                   # Start local worker (in another terminal)
+```
+
+This creates a complete Next.js webhook server with all route handlers, middleware, OAuth, and CLI tools preconfigured.
+
+## Manual Installation
+
+If you prefer to add AgentFactory to an existing project:
+
+```bash
+# Webhook server (Next.js) — includes all route handlers
+npm install @supaku/agentfactory-nextjs
+
+# Core + Linear integration (for CLI-only usage)
 npm install @supaku/agentfactory @supaku/agentfactory-linear
 
-# Optional: CLI tools
-npm install -g @supaku/agentfactory-cli
+# Optional: CLI tools (orchestrator, worker, fleet)
+npm install @supaku/agentfactory-cli
 
 # Optional: Distributed workers (requires Redis)
 npm install @supaku/agentfactory-server
@@ -29,11 +49,14 @@ npm install @supaku/agentfactory-server
 
 ### Environment Variables
 
-Create a `.env` file:
+Create a `.env.local` file:
 
 ```bash
 # Required
-LINEAR_API_KEY=lin_api_...
+LINEAR_ACCESS_TOKEN=lin_api_...
+
+# Webhook verification
+LINEAR_WEBHOOK_SECRET=your-webhook-secret
 
 # Optional: agent provider (default: claude)
 AGENT_PROVIDER=claude
@@ -43,17 +66,75 @@ LINEAR_TEAM_ID=your-team-uuid
 
 # Optional: Redis (for distributed mode)
 REDIS_URL=redis://localhost:6379
+
+# Optional: Worker configuration
+WORKER_API_URL=https://your-app.vercel.app
+WORKER_API_KEY=your-api-key
 ```
 
 ### Linear Setup
 
 1. Go to **Settings > API** in Linear
 2. Create a Personal API Key
-3. Set it as `LINEAR_API_KEY`
+3. Set it as `LINEAR_ACCESS_TOKEN`
 
 For webhook-based triggers (production), you'll also need:
-- A Linear OAuth application
-- Webhook endpoint configured to receive events
+- A Linear webhook pointing to your `/webhook` endpoint
+- Set the webhook secret as `LINEAR_WEBHOOK_SECRET`
+- Optionally, a Linear OAuth application for multi-workspace support
+
+## Webhook Server Setup
+
+If you used `create-agentfactory-app`, this is already configured. For manual setup:
+
+### Route Configuration
+
+Create `src/lib/config.ts`:
+
+```typescript
+import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+
+export const routes = createAllRoutes({
+  linearClient: createDefaultLinearClientResolver(),
+  // Optional: customize prompt generation
+  // generatePrompt: (identifier, workType) => `Work on ${identifier}`,
+})
+```
+
+### Route Re-exports
+
+Each API route is a 2-line file that re-exports from the config:
+
+```typescript
+// src/app/webhook/route.ts
+import { routes } from '@/lib/config'
+export const POST = routes.webhook.POST
+export const GET = routes.webhook.GET
+```
+
+```typescript
+// src/app/api/sessions/route.ts
+import { routes } from '@/lib/config'
+export const GET = routes.sessions.list.GET
+```
+
+### Middleware
+
+Create `src/middleware.ts`:
+
+```typescript
+import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+
+const { middleware } = createAgentFactoryMiddleware()
+
+export { middleware }
+
+export const config = {
+  matcher: ['/api/:path*', '/webhook', '/dashboard', '/sessions/:path*', '/'],
+}
+```
+
+The middleware handles API key authentication, rate limiting, and webhook signature verification.
 
 ## Basic Usage
 
@@ -178,5 +259,6 @@ Each transition is automatic when `autoTransition: true` (default).
 ## Next Steps
 
 - [Architecture](./architecture.md) — understand the system design
+- [Configuration](./configuration.md) — complete config reference
 - [Providers](./providers.md) — configure multiple agent providers
 - [Examples](../examples/) — working code samples

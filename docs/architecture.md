@@ -32,7 +32,7 @@ AgentFactory is a multi-agent orchestrator that turns issue backlogs into shippe
 
 ## Package Architecture
 
-AgentFactory is split into four packages:
+AgentFactory is split into six packages:
 
 | Package | Responsibility |
 |---------|---------------|
@@ -40,20 +40,30 @@ AgentFactory is split into four packages:
 | `@supaku/agentfactory-linear` | Linear API integration, sessions, status transitions |
 | `@supaku/agentfactory-server` | Redis work queue, session storage, distributed workers |
 | `@supaku/agentfactory-cli` | CLI tools for local and remote operation |
+| `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
+| `create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
 
 ### Dependency Graph
 
 ```
+create-agentfactory-app (scaffolding, no runtime deps)
+
+@supaku/agentfactory-nextjs
+  ├── @supaku/agentfactory (core)
+  ├── @supaku/agentfactory-linear
+  └── @supaku/agentfactory-server
+
 @supaku/agentfactory-cli
-  └── @supaku/agentfactory (core)
-        └── @supaku/agentfactory-linear
+  ├── @supaku/agentfactory (core)
+  ├── @supaku/agentfactory-linear
+  └── @supaku/agentfactory-server
 
 @supaku/agentfactory-server
   ├── @supaku/agentfactory (core)
   └── @supaku/agentfactory-linear
 ```
 
-Users who only need the orchestrator install `@supaku/agentfactory` and `@supaku/agentfactory-linear`. The server and CLI packages are optional.
+For a full webhook-driven setup, install `@supaku/agentfactory-nextjs` (it pulls in all dependencies). For CLI-only local orchestration, install `@supaku/agentfactory` and `@supaku/agentfactory-linear`.
 
 ## Core Components
 
