@@ -1,5 +1,5 @@
-import type { RetryConfig } from './types'
-import { isRetryableError } from './errors'
+import type { RetryConfig } from './types.js'
+import { isRetryableError } from './errors.js'
 
 /**
  * Default retry configuration

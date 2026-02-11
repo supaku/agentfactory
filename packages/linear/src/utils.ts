@@ -10,7 +10,7 @@ import {
   MAX_COMPLETION_COMMENTS,
   COMMENT_OVERHEAD,
   CONTINUATION_MARKER,
-} from './constants'
+} from './constants.js'
 
 /**
  * Truncate a string to a maximum length, adding truncation marker if needed

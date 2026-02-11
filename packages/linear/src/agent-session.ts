@@ -1,5 +1,5 @@
 import type { Issue } from '@linear/sdk'
-import type { LinearAgentClient } from './agent-client'
+import type { LinearAgentClient } from './agent-client.js'
 import type {
   AgentSessionState,
   AgentSessionConfig,
@@ -16,30 +16,30 @@ import type {
   LinearPlanStatus,
   IssueRelationResult,
   IssueRelationInfo,
-} from './types'
+} from './types.js'
 import {
   WORK_TYPE_START_STATUS,
   WORK_TYPE_COMPLETE_STATUS,
   WORK_TYPE_FAIL_STATUS,
-} from './types'
+} from './types.js'
 import {
   LinearSessionError,
   LinearActivityError,
   LinearPlanError,
-} from './errors'
-import { buildCompletionComments } from './utils'
+} from './errors.js'
+import { buildCompletionComments } from './utils.js'
 import {
   DEFAULT_TEAM_ID,
   LINEAR_PROJECTS,
   LINEAR_LABELS,
   type EnvironmentIssueType,
-} from './constants'
+} from './constants.js'
 import {
   parseCheckboxes,
   updateCheckboxes,
   type CheckboxItem,
   type CheckboxUpdate,
-} from './checkbox-utils'
+} from './checkbox-utils.js'
 
 function generatePlanItemId(): string {
   return `plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`

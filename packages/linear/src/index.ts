@@ -41,7 +41,7 @@ export type {
   SubIssueGraphNode,
   SubIssueGraph,
   SubIssueStatus,
-} from './types'
+} from './types.js'
 
 // Work type mappings for status-based routing
 export {
@@ -54,9 +54,9 @@ export {
   TERMINAL_STATUSES,
   validateWorkTypeForStatus,
   getValidWorkTypesForStatus,
-} from './types'
+} from './types.js'
 
-export type { WorkTypeValidationResult } from './types'
+export type { WorkTypeValidationResult } from './types.js'
 
 // Errors
 export {
@@ -71,7 +71,7 @@ export {
   isLinearAgentError,
   isRetryableError,
   isAgentSpawnError,
-} from './errors'
+} from './errors.js'
 
 // Retry utilities
 export {
@@ -80,8 +80,8 @@ export {
   calculateDelay,
   withRetry,
   createRetryWrapper,
-} from './retry'
-export type { RetryContext, RetryCallback, WithRetryOptions } from './retry'
+} from './retry.js'
+export type { RetryContext, RetryCallback, WithRetryOptions } from './retry.js'
 
 // Constants
 export {
@@ -94,8 +94,8 @@ export {
   LINEAR_PROJECTS,
   LINEAR_LABELS,
   ENVIRONMENT_ISSUE_TYPES,
-} from './constants'
-export type { EnvironmentIssueType } from './constants'
+} from './constants.js'
+export type { EnvironmentIssueType } from './constants.js'
 
 // Utilities
 export {
@@ -103,8 +103,8 @@ export {
   buildCompletionComment,
   splitContentIntoComments,
   buildCompletionComments,
-} from './utils'
-export type { CommentChunk } from './utils'
+} from './utils.js'
+export type { CommentChunk } from './utils.js'
 
 // Checkbox utilities
 export {
@@ -114,17 +114,17 @@ export {
   updateCheckboxes,
   hasCheckboxes,
   getCheckboxSummary,
-} from './checkbox-utils'
-export type { CheckboxItem, CheckboxUpdate } from './checkbox-utils'
+} from './checkbox-utils.js'
+export type { CheckboxItem, CheckboxUpdate } from './checkbox-utils.js'
 
 // Client
-export { LinearAgentClient, createLinearAgentClient } from './agent-client'
+export { LinearAgentClient, createLinearAgentClient } from './agent-client.js'
 
 // Session
-export { AgentSession, createAgentSession } from './agent-session'
+export { AgentSession, createAgentSession } from './agent-session.js'
 
 // Webhook types
-export * from './webhook-types'
+export * from './webhook-types.js'
 
 // Default implementations (prompt templates, work type detection, priority, auto-trigger)
 export {
@@ -135,4 +135,4 @@ export {
   defaultGetPriority,
   defaultParseAutoTriggerConfig,
   type DefaultAutoTriggerConfig,
-} from './defaults/index'
+} from './defaults/index.js'

@@ -24,9 +24,9 @@ import type {
   SubIssueGraphNode,
   SubIssueGraph,
   SubIssueStatus,
-} from './types'
-import { LinearApiError, LinearStatusTransitionError } from './errors'
-import { withRetry, DEFAULT_RETRY_CONFIG } from './retry'
+} from './types.js'
+import { LinearApiError, LinearStatusTransitionError } from './errors.js'
+import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
 
 /**
  * Core Linear Agent Client

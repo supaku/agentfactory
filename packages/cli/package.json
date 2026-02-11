@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-cli",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Supaku (https://supaku.com)",
@@ -127,11 +127,14 @@
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "clean": "rm -rf dist",
     "prepublishOnly": "pnpm clean && pnpm build"
   }

@@ -9,7 +9,7 @@
  * @see https://linear.app/developers/agent-interaction
  */
 
-import type { AgentActivitySignal } from './types'
+import type { AgentActivitySignal } from './types.js'
 
 // ============================================================================
 // Common Webhook Types
