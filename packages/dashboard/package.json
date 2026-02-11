@@ -1,6 +1,9 @@
 {
   "name": "@supaku/agentfactory-dashboard",
-  "version": "0.4.0",
+  "version": "0.5.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Premium dashboard UI components for AgentFactory",
   "license": "MIT",
   "type": "module",
