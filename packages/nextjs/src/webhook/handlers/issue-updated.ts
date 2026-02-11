@@ -30,7 +30,7 @@ import {
   didJustQueueAcceptance,
   markAcceptanceQueued,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../../types.js'
+import type { ResolvedWebhookConfig } from '../../types.js'
 import {
   emitActivity,
   resolveStateName,
@@ -41,7 +41,7 @@ import {
 import type { createLogger } from '@supaku/agentfactory-server'
 
 export async function handleIssueUpdated(
-  config: WebhookConfig,
+  config: ResolvedWebhookConfig,
   payload: LinearWebhookPayload,
   log: ReturnType<typeof createLogger>
 ): Promise<NextResponse | null> {

@@ -125,3 +125,14 @@ export { AgentSession, createAgentSession } from './agent-session'
 
 // Webhook types
 export * from './webhook-types'
+
+// Default implementations (prompt templates, work type detection, priority, auto-trigger)
+export {
+  defaultGeneratePrompt,
+  defaultBuildParentQAContext,
+  defaultBuildParentAcceptanceContext,
+  defaultDetectWorkTypeFromPrompt,
+  defaultGetPriority,
+  defaultParseAutoTriggerConfig,
+  type DefaultAutoTriggerConfig,
+} from './defaults/index'

@@ -4,9 +4,19 @@
  * Wires all handlers together from a single configuration object.
  * Consumers call `createAllRoutes(config)` and get back a nested
  * route tree that maps 1:1 onto Next.js App Router exports.
+ *
+ * When optional config fields are omitted, sensible defaults from
+ * @supaku/agentfactory-linear are used (defaultGeneratePrompt, etc.).
  */
 
-import type { RouteHandler, RouteConfig, WebhookConfig, CronConfig } from './types.js'
+import type { RouteHandler, RouteConfig, WebhookConfig, ResolvedWebhookConfig, CronConfig } from './types.js'
+import {
+  defaultGeneratePrompt,
+  defaultDetectWorkTypeFromPrompt,
+  defaultGetPriority,
+  defaultBuildParentQAContext,
+  defaultBuildParentAcceptanceContext,
+} from '@supaku/agentfactory-linear'
 
 // Worker handlers
 import { createWorkerRegisterHandler } from './handlers/workers/register.js'
@@ -42,6 +52,9 @@ import { createCleanupHandler } from './handlers/cleanup.js'
 // Webhook processor
 import { createWebhookHandler } from './webhook/processor.js'
 
+// OAuth handler
+import { createOAuthCallbackHandler, type OAuthConfig } from './handlers/oauth/callback.js'
+
 export interface AllRoutes {
   workers: {
     register: { POST: RouteHandler }
@@ -71,32 +84,66 @@ export interface AllRoutes {
   }
   cleanup: { POST: RouteHandler; GET: RouteHandler }
   webhook: { POST: RouteHandler; GET: RouteHandler }
+  oauth: {
+    callback: { GET: RouteHandler }
+  }
+}
+
+/**
+ * Configuration for createAllRoutes.
+ * Extends WebhookConfig & CronConfig with optional OAuth config.
+ */
+export interface AllRoutesConfig extends WebhookConfig, CronConfig {
+  /** OAuth configuration for the callback handler */
+  oauth?: OAuthConfig
 }
 
 /**
  * Create all route handlers from a single config object.
  *
+ * Optional fields fall back to sensible defaults from @supaku/agentfactory-linear:
+ * - `generatePrompt` → `defaultGeneratePrompt`
+ * - `detectWorkTypeFromPrompt` → `defaultDetectWorkTypeFromPrompt`
+ * - `getPriority` → `defaultGetPriority`
+ * - `buildParentQAContext` → `defaultBuildParentQAContext`
+ * - `buildParentAcceptanceContext` → `defaultBuildParentAcceptanceContext`
+ *
  * @example
  * ```typescript
- * import { createAllRoutes } from '@supaku/agentfactory-nextjs'
+ * import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
  *
+ * // Minimal — everything uses defaults
  * const routes = createAllRoutes({
- *   linearClient: { getClient: async (orgId) => getLinearClient(orgId) },
- *   generatePrompt: (id, workType) => `Work on ${id}`,
+ *   linearClient: createDefaultLinearClientResolver(),
  * })
  *
- * // In app/api/workers/register/route.ts:
- * export const POST = routes.workers.register.POST
+ * // Custom — override specific callbacks
+ * const routes = createAllRoutes({
+ *   linearClient: createDefaultLinearClientResolver(),
+ *   generatePrompt: myCustomPromptFn,
+ *   oauth: { clientId: '...', clientSecret: '...' },
+ * })
  * ```
  */
-export function createAllRoutes(config: WebhookConfig & CronConfig): AllRoutes {
+export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
+  // Apply defaults for optional webhook config fields
+  const webhookConfig: ResolvedWebhookConfig & CronConfig = {
+    ...config,
+    generatePrompt: config.generatePrompt ?? defaultGeneratePrompt,
+    detectWorkTypeFromPrompt: config.detectWorkTypeFromPrompt ?? defaultDetectWorkTypeFromPrompt,
+    getPriority: config.getPriority ?? defaultGetPriority,
+    buildParentQAContext: config.buildParentQAContext ?? defaultBuildParentQAContext,
+    buildParentAcceptanceContext: config.buildParentAcceptanceContext ?? defaultBuildParentAcceptanceContext,
+  }
+
   const routeConfig: RouteConfig = {
     linearClient: config.linearClient,
     appUrl: config.appUrl,
   }
 
-  const cleanup = createCleanupHandler(config)
-  const webhook = createWebhookHandler(config)
+  const cleanup = createCleanupHandler(webhookConfig)
+  const webhook = createWebhookHandler(webhookConfig)
+  const oauth = createOAuthCallbackHandler(config.oauth)
 
   return {
     workers: {
@@ -127,5 +174,8 @@ export function createAllRoutes(config: WebhookConfig & CronConfig): AllRoutes {
     },
     cleanup: { POST: cleanup.POST, GET: cleanup.GET },
     webhook: { POST: webhook.POST, GET: webhook.GET },
+    oauth: {
+      callback: { GET: oauth.GET },
+    },
   }
 }

@@ -2,7 +2,8 @@
  * @supaku/agentfactory-nextjs
  *
  * Next.js API route handlers for AgentFactory.
- * Provides webhook processing, worker/session management, and public stats.
+ * Provides webhook processing, worker/session management, public stats,
+ * OAuth callback, middleware factory, webhook orchestrator, and Linear client resolver.
  */
 
 // Types
@@ -17,9 +18,32 @@ export type {
 
 // Factory
 export { createAllRoutes } from './factory.js'
-export type { AllRoutes } from './factory.js'
+export type { AllRoutes, AllRoutesConfig } from './factory.js'
 
-// Middleware
+// OAuth handler
+export { createOAuthCallbackHandler } from './handlers/oauth/callback.js'
+export type { OAuthConfig } from './handlers/oauth/callback.js'
+
+// Middleware factory
+export { createAgentFactoryMiddleware } from './middleware/factory.js'
+export type { MiddlewareConfig } from './middleware/types.js'
+
+// Webhook orchestrator
+export {
+  createWebhookOrchestrator,
+  formatErrorForComment,
+} from './orchestrator/index.js'
+export type {
+  WebhookOrchestratorConfig,
+  WebhookOrchestratorHooks,
+  WebhookOrchestratorInstance,
+} from './orchestrator/index.js'
+
+// Default Linear client resolver
+export { createDefaultLinearClientResolver } from './linear-client-resolver.js'
+export type { DefaultLinearClientResolverConfig } from './linear-client-resolver.js'
+
+// Middleware (existing)
 export { verifyCronAuth } from './middleware/cron-auth.js'
 export {
   verifyWorkerAuth,

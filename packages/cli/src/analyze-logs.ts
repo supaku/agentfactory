@@ -2,8 +2,8 @@
 /**
  * AgentFactory Log Analyzer CLI
  *
- * Analyzes agent session logs for errors and improvement opportunities.
- * Can automatically create deduplicated Linear issues in the backlog.
+ * Thin wrapper around the analyze-logs runner. Handles dotenv, arg parsing,
+ * SIGINT, and process.exit so the runner stays process-agnostic.
  *
  * Usage:
  *   af-analyze-logs [options]
@@ -24,27 +24,16 @@
  */
 
 import path from 'path'
-import { execSync } from 'child_process'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local in CWD
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
-import { createLogAnalyzer, type LogAnalyzer } from '@supaku/agentfactory'
+import { runLogAnalyzer, printSummary } from './lib/analyze-logs-runner.js'
 
-/**
- * Get the git repository root directory
- */
-function getGitRoot(): string {
-  try {
-    return execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
-  } catch {
-    return process.cwd()
-  }
-}
+// ---------------------------------------------------------------------------
+// Arg parsing
+// ---------------------------------------------------------------------------
 
 interface CliOptions {
   sessionId?: string
@@ -146,177 +135,9 @@ Examples:
 `)
 }
 
-interface AnalysisStats {
-  sessionsAnalyzed: number
-  totalErrors: number
-  totalPatterns: number
-  issuesCreated: number
-  issuesUpdated: number
-}
-
-/**
- * Analyze a single session and print results
- */
-async function analyzeAndPrintSession(
-  analyzer: LogAnalyzer,
-  sessionId: string,
-  options: CliOptions,
-  stats: AnalysisStats
-): Promise<boolean> {
-  console.log(`\nAnalyzing session: ${sessionId}`)
-  console.log('-'.repeat(50))
-
-  const result = analyzer.analyzeSession(sessionId)
-  if (!result) {
-    console.log('  [SKIP] Session not found or incomplete')
-    return false
-  }
-
-  console.log(`  Issue: ${result.metadata.issueIdentifier}`)
-  console.log(`  Work Type: ${result.metadata.workType}`)
-  console.log(`  Status: ${result.metadata.status}`)
-  console.log(`  Events: ${result.eventsAnalyzed}`)
-  console.log(`  Errors: ${result.errorsFound}`)
-  console.log(`  Patterns: ${result.patterns.length}`)
-
-  stats.sessionsAnalyzed++
-  stats.totalErrors += result.errorsFound
-  stats.totalPatterns += result.patterns.length
-
-  if (options.verbose && result.patterns.length > 0) {
-    console.log('\n  Detected Patterns:')
-    for (const pattern of result.patterns) {
-      console.log(`    - [${pattern.severity}] ${pattern.title}`)
-      console.log(`      Type: ${pattern.type}, Occurrences: ${pattern.occurrences}`)
-      if (pattern.tool) {
-        console.log(`      Tool: ${pattern.tool}`)
-      }
-    }
-  }
-
-  if (result.suggestedIssues.length > 0) {
-    console.log(`\n  Suggested Issues: ${result.suggestedIssues.length}`)
-
-    if (options.verbose) {
-      for (const issue of result.suggestedIssues) {
-        console.log(`    - ${issue.title}`)
-        console.log(`      Signature: ${issue.signature}`)
-        console.log(`      Labels: ${issue.labels.join(', ')}`)
-      }
-    }
-
-    try {
-      const issueResults = await analyzer.createIssues(
-        result.suggestedIssues,
-        sessionId,
-        options.dryRun
-      )
-
-      for (const issueResult of issueResults) {
-        if (issueResult.created) {
-          console.log(`  [${options.dryRun ? 'WOULD CREATE' : 'CREATED'}] ${issueResult.identifier}`)
-          stats.issuesCreated++
-        } else {
-          console.log(`  [${options.dryRun ? 'WOULD UPDATE' : 'UPDATED'}] ${issueResult.identifier}`)
-          stats.issuesUpdated++
-        }
-      }
-    } catch (error) {
-      console.log(`  [ERROR] Failed to create issues: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  if (!options.dryRun) {
-    analyzer.markProcessed(sessionId, result)
-    console.log('  [PROCESSED]')
-  }
-
-  return true
-}
-
-/**
- * Print summary statistics
- */
-function printSummary(stats: AnalysisStats, dryRun: boolean): void {
-  console.log('\n' + '='.repeat(50))
-  console.log('=== Summary ===\n')
-  console.log(`  Sessions analyzed: ${stats.sessionsAnalyzed}`)
-  console.log(`  Total errors found: ${stats.totalErrors}`)
-  console.log(`  Total patterns detected: ${stats.totalPatterns}`)
-  console.log(`  Issues created: ${stats.issuesCreated}${dryRun ? ' (dry run)' : ''}`)
-  console.log(`  Issues updated: ${stats.issuesUpdated}${dryRun ? ' (dry run)' : ''}`)
-  console.log('')
-}
-
-/**
- * Format time for display
- */
-function formatTime(): string {
-  return new Date().toLocaleTimeString()
-}
-
-/**
- * Watch mode - continuously poll for new sessions
- */
-async function runFollowMode(
-  analyzer: LogAnalyzer,
-  options: CliOptions
-): Promise<void> {
-  const stats: AnalysisStats = {
-    sessionsAnalyzed: 0,
-    totalErrors: 0,
-    totalPatterns: 0,
-    issuesCreated: 0,
-    issuesUpdated: 0,
-  }
-
-  const processedInSession = new Set<string>()
-
-  console.log(`[${formatTime()}] Watching for new sessions (poll interval: ${options.interval}ms)`)
-  console.log(`[${formatTime()}] Press Ctrl+C to stop\n`)
-
-  let running = true
-  const shutdown = () => {
-    console.log(`\n[${formatTime()}] Stopping...`)
-    running = false
-    printSummary(stats, options.dryRun)
-    process.exit(0)
-  }
-
-  process.on('SIGINT', shutdown)
-  process.on('SIGTERM', shutdown)
-
-  // Initial check for existing unprocessed sessions
-  const initialSessions = analyzer.getUnprocessedSessions()
-  if (initialSessions.length > 0) {
-    console.log(`[${formatTime()}] Found ${initialSessions.length} existing unprocessed session(s)`)
-    for (const sid of initialSessions) {
-      if (!running) break
-      await analyzeAndPrintSession(analyzer, sid, options, stats)
-      processedInSession.add(sid)
-    }
-  }
-
-  // Poll loop
-  while (running) {
-    await new Promise((resolve) => setTimeout(resolve, options.interval))
-    if (!running) break
-
-    const sessions = analyzer.getUnprocessedSessions()
-    const newSessions = sessions.filter((s) => !processedInSession.has(s))
-
-    if (newSessions.length > 0) {
-      console.log(`[${formatTime()}] Found ${newSessions.length} new session(s) ready for analysis`)
-      for (const sid of newSessions) {
-        if (!running) break
-        const analyzed = await analyzeAndPrintSession(analyzer, sid, options, stats)
-        if (analyzed) {
-          processedInSession.add(sid)
-        }
-      }
-    }
-  }
-}
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const options = parseArgs()
@@ -326,57 +147,30 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
-  const gitRoot = getGitRoot()
-  const logsDir = process.env.AGENT_LOGS_DIR ?? `${gitRoot}/.agent-logs`
-
-  console.log('\n=== AgentFactory Log Analyzer ===\n')
-
-  if (options.dryRun) {
-    console.log('[DRY RUN MODE - No issues will be created]\n')
-  }
-
-  const analyzer = createLogAnalyzer({ logsDir })
-
-  if (options.cleanup) {
-    console.log('Cleaning up old logs...\n')
-    const deleted = analyzer.cleanupOldLogs()
-    console.log(`Deleted ${deleted} old log entries.\n`)
-    return
-  }
+  // Create AbortController for SIGINT handling in follow mode
+  const controller = new AbortController()
 
   if (options.follow) {
-    await runFollowMode(analyzer, options)
-    return
+    const shutdown = () => {
+      controller.abort()
+    }
+    process.on('SIGINT', shutdown)
+    process.on('SIGTERM', shutdown)
   }
 
-  // Standard one-shot mode
-  const stats: AnalysisStats = {
-    sessionsAnalyzed: 0,
-    totalErrors: 0,
-    totalPatterns: 0,
-    issuesCreated: 0,
-    issuesUpdated: 0,
-  }
+  const result = await runLogAnalyzer(
+    {
+      sessionId: options.sessionId,
+      follow: options.follow,
+      interval: options.interval,
+      dryRun: options.dryRun,
+      cleanup: options.cleanup,
+      verbose: options.verbose,
+    },
+    controller.signal,
+  )
 
-  let sessionsToAnalyze: string[]
-  if (options.sessionId) {
-    sessionsToAnalyze = [options.sessionId]
-    console.log(`Analyzing session: ${options.sessionId}\n`)
-  } else {
-    sessionsToAnalyze = analyzer.getUnprocessedSessions()
-    console.log(`Found ${sessionsToAnalyze.length} unprocessed session(s)\n`)
-  }
-
-  if (sessionsToAnalyze.length === 0) {
-    console.log('No sessions to analyze.\n')
-    return
-  }
-
-  for (const sid of sessionsToAnalyze) {
-    await analyzeAndPrintSession(analyzer, sid, options, stats)
-  }
-
-  printSummary(stats, options.dryRun)
+  printSummary(result, options.dryRun)
 }
 
 main().catch((error) => {

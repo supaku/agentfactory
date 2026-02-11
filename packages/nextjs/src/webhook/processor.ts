@@ -14,7 +14,7 @@ import {
   isIssueUpdate,
 } from '@supaku/agentfactory-linear'
 import { createLogger, generateRequestId } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../types.js'
+import type { ResolvedWebhookConfig } from '../types.js'
 import { verifyWebhookSignature } from './signature.js'
 import { handleSessionCreated } from './handlers/session-created.js'
 import { handleSessionUpdated } from './handlers/session-updated.js'
@@ -28,7 +28,7 @@ const baseLogger = createLogger('webhook')
  *
  * Returns { POST, GET } for use as Next.js App Router exports.
  */
-export function createWebhookHandler(config: WebhookConfig) {
+export function createWebhookHandler(config: ResolvedWebhookConfig) {
   async function POST(request: NextRequest) {
     const startTime = Date.now()
     const requestId = generateRequestId()

@@ -17,7 +17,7 @@ import {
   promoteNextPendingWork,
   createLogger,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../types.js'
+import type { ResolvedWebhookConfig } from '../types.js'
 
 const baseLogger = createLogger('webhook')
 
@@ -55,7 +55,7 @@ export async function emitActivity(
  * - Any other non-terminal state: Updates status and cleans up
  */
 export async function handleStopSignal(
-  config: WebhookConfig,
+  config: ResolvedWebhookConfig,
   sessionId: string,
   issueId: string,
   organizationId?: string
@@ -109,7 +109,7 @@ export async function handleStopSignal(
  * Resolve a state ID to its name using the Linear API.
  */
 export async function resolveStateName(
-  config: WebhookConfig,
+  config: ResolvedWebhookConfig,
   organizationId: string | undefined,
   issueId: string,
   stateId: string
@@ -178,14 +178,14 @@ export function defaultGetPriority(workType: AgentWorkType): number {
 /**
  * Get the app URL for constructing dashboard links.
  */
-export function getAppUrl(config: WebhookConfig): string {
+export function getAppUrl(config: ResolvedWebhookConfig): string {
   return config.appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://agent.supaku.dev'
 }
 
 /**
  * Get the priority for a work type, using config override if available.
  */
-export function getPriority(config: WebhookConfig, workType: AgentWorkType): number {
+export function getPriority(config: ResolvedWebhookConfig, workType: AgentWorkType): number {
   return config.getPriority?.(workType) ?? defaultGetPriority(workType)
 }
 

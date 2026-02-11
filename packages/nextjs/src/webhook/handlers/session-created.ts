@@ -20,7 +20,7 @@ import {
   dispatchWork,
   type QueuedWork,
 } from '@supaku/agentfactory-server'
-import type { WebhookConfig } from '../../types.js'
+import type { ResolvedWebhookConfig } from '../../types.js'
 import {
   emitActivity,
   determineWorkType,
@@ -31,7 +31,7 @@ import {
 import type { createLogger } from '@supaku/agentfactory-server'
 
 export async function handleSessionCreated(
-  config: WebhookConfig,
+  config: ResolvedWebhookConfig,
   payload: LinearWebhookPayload,
   rawPayload: Record<string, unknown>,
   log: ReturnType<typeof createLogger>

@@ -40,9 +40,26 @@ export interface AutoTriggerConfig {
 
 /**
  * Configuration for the webhook processor.
+ *
+ * `generatePrompt` is optional — if not provided, falls back to
+ * `defaultGeneratePrompt` from @supaku/agentfactory-linear.
  */
 export interface WebhookConfig extends RouteConfig {
   webhookSecret?: string // falls back to LINEAR_WEBHOOK_SECRET
+  generatePrompt?: (identifier: string, workType: AgentWorkType, mentionContext?: string) => string
+  detectWorkTypeFromPrompt?: (prompt: string, validWorkTypes: AgentWorkType[]) => AgentWorkType | undefined
+  getPriority?: (workType: AgentWorkType) => number
+  autoTrigger?: AutoTriggerConfig
+  buildParentQAContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
+  buildParentAcceptanceContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
+}
+
+/**
+ * Resolved webhook config with all defaults applied.
+ * Used internally by webhook handlers — generatePrompt is guaranteed to be set.
+ */
+export interface ResolvedWebhookConfig extends RouteConfig {
+  webhookSecret?: string
   generatePrompt: (identifier: string, workType: AgentWorkType, mentionContext?: string) => string
   detectWorkTypeFromPrompt?: (prompt: string, validWorkTypes: AgentWorkType[]) => AgentWorkType | undefined
   getPriority?: (workType: AgentWorkType) => number

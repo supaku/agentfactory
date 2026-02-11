@@ -2,7 +2,7 @@
 /**
  * AgentFactory Orchestrator CLI
  *
- * Local script to spawn concurrent coding agents on backlog issues.
+ * Thin wrapper around the orchestrator runner.
  *
  * Usage:
  *   af-orchestrator [options]
@@ -19,24 +19,12 @@
  */
 
 import path from 'path'
-import { execSync } from 'child_process'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
-import { createOrchestrator, type AgentProcess, type OrchestratorIssue } from '@supaku/agentfactory'
-
-function getGitRoot(): string {
-  try {
-    return execSync('git rev-parse --show-toplevel', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
-  } catch {
-    return process.cwd()
-  }
-}
+import { runOrchestrator } from './lib/orchestrator-runner.js'
 
 function parseArgs(): {
   project?: string
@@ -112,20 +100,6 @@ Examples:
 `)
 }
 
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m ${seconds % 60}s`
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  }
-  return `${seconds}s`
-}
-
 async function main(): Promise<void> {
   const args = parseArgs()
 
@@ -141,113 +115,49 @@ async function main(): Promise<void> {
   console.log(`Dry run: ${args.dryRun}`)
   console.log('')
 
-  const gitRoot = getGitRoot()
-  const orchestrator = createOrchestrator(
-    {
-      project: args.project,
-      maxConcurrent: args.max,
-      worktreePath: path.resolve(gitRoot, '.worktrees'),
-    },
-    {
-      onIssueSelected: (issue: OrchestratorIssue) => {
-        console.log(`Selected: ${issue.identifier} - ${issue.title}`)
-        console.log(`  URL: ${issue.url}`)
-        console.log(`  Labels: ${issue.labels.join(', ') || 'none'}`)
-      },
-      onAgentStart: (agent: AgentProcess) => {
-        console.log(`Agent started: ${agent.identifier} (PID: ${agent.pid})`)
-        console.log(`  Worktree: ${agent.worktreePath}`)
-      },
-      onAgentComplete: (agent: AgentProcess) => {
-        const duration = agent.completedAt
-          ? formatDuration(agent.completedAt.getTime() - agent.startedAt.getTime())
-          : 'unknown'
-        console.log(`Agent completed: ${agent.identifier} (${duration})`)
-      },
-      onAgentError: (agent: AgentProcess, error: Error) => {
-        console.error(`Agent failed: ${agent.identifier}`)
-        console.error(`  Error: ${error.message}`)
-      },
-      onAgentIncomplete: (agent: AgentProcess) => {
-        const duration = agent.completedAt
-          ? formatDuration(agent.completedAt.getTime() - agent.startedAt.getTime())
-          : 'unknown'
-        console.warn(`Agent incomplete: ${agent.identifier} (${duration})`)
-        console.warn(`  Reason: ${agent.incompleteReason ?? 'unknown'}`)
-        console.warn(`  Worktree preserved: ${agent.worktreePath}`)
-      },
-    }
-  )
-
-  try {
-    if (args.single) {
-      console.log(`Processing single issue: ${args.single}`)
-
-      if (args.dryRun) {
-        console.log('[DRY RUN] Would spawn agent for:', args.single)
-        return
-      }
-
-      await orchestrator.spawnAgentForIssue(args.single)
-      console.log(`Agent spawned for ${args.single}`)
-
-      if (args.wait) {
-        console.log('Waiting for agent to complete...')
-        await orchestrator.waitForAll()
-      }
-
-      return
-    }
+  if (args.single) {
+    console.log(`Processing single issue: ${args.single}`)
 
     if (args.dryRun) {
-      const issues = await orchestrator.getBacklogIssues()
-
-      if (issues.length === 0) {
-        console.log('No backlog issues found')
-        return
-      }
-
-      console.log(`[DRY RUN] Would process ${issues.length} issue(s):`)
-      for (const issue of issues) {
-        console.log(`  - ${issue.identifier}: ${issue.title}`)
-        console.log(`    Priority: ${issue.priority || 'none'}`)
-        console.log(`    Labels: ${issue.labels.join(', ') || 'none'}`)
-      }
+      console.log('[DRY RUN] Would spawn agent for:', args.single)
       return
     }
+  }
 
-    const result = await orchestrator.run()
+  try {
+    const result = await runOrchestrator({
+      linearApiKey: process.env.LINEAR_API_KEY,
+      project: args.project,
+      max: args.max,
+      single: args.single,
+      wait: args.wait,
+      dryRun: args.dryRun,
+    })
 
-    console.log('')
-    console.log('Orchestrator started')
-    console.log(`  Agents spawned: ${result.agents.length}`)
-    console.log(`  Errors: ${result.errors.length}`)
-
-    if (result.errors.length > 0) {
+    if (!args.single && !args.dryRun) {
       console.log('')
-      console.log('Errors:')
-      for (const { issueId, error } of result.errors) {
-        console.log(`  ${issueId}: ${error.message}`)
+      console.log('Orchestrator started')
+      console.log(`  Agents spawned: ${result.agentsSpawned}`)
+      console.log(`  Errors: ${result.errors.length}`)
+
+      if (result.errors.length > 0) {
+        console.log('')
+        console.log('Errors:')
+        for (const { issueId, error } of result.errors) {
+          console.log(`  ${issueId}: ${error.message}`)
+        }
       }
     }
 
-    if (args.wait && result.agents.length > 0) {
-      console.log('')
-      console.log('Waiting for all agents to complete...')
+    if (args.single) {
+      console.log(`Agent spawned for ${args.single}`)
+    }
 
-      process.on('SIGINT', () => {
-        console.log('')
-        console.log('Received SIGINT, stopping agents...')
-        orchestrator.stopAll()
-        process.exit(1)
-      })
-
-      const completedAgents = await orchestrator.waitForAll()
-
+    if (args.wait && result.completed.length > 0) {
       console.log('')
       console.log('All agents completed')
       console.log('Results:')
-      for (const agent of completedAgents) {
+      for (const agent of result.completed) {
         const duration = agent.completedAt
           ? formatDuration(agent.completedAt.getTime() - agent.startedAt.getTime())
           : 'unknown'
@@ -259,6 +169,20 @@ async function main(): Promise<void> {
     console.error('Orchestrator failed:', error instanceof Error ? error.message : error)
     process.exit(1)
   }
+}
+
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds % 60}s`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`
+  }
+  return `${seconds}s`
 }
 
 main().catch((error) => {
