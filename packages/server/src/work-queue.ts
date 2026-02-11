@@ -34,8 +34,8 @@ import {
   redisLRange,
   redisLLen,
   redisLRem,
-} from './redis'
-import type { AgentWorkType } from './types'
+} from './redis.js'
+import type { AgentWorkType } from './types.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[work-queue] ${msg}`, data ? JSON.stringify(data) : ''),
@@ -57,7 +57,7 @@ const WORK_CLAIM_TTL = parseInt(process.env.WORK_CLAIM_TTL ?? '3600', 10)
 
 /**
  * Type of work being performed
- * @deprecated Use AgentWorkType from './types' instead
+ * @deprecated Use AgentWorkType from './types.js' instead
  */
 export type WorkType = AgentWorkType
 

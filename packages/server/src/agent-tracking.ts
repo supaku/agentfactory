@@ -5,7 +5,7 @@
  * Also tracks QA attempts to prevent infinite loops.
  */
 
-import { redisSet, redisGet, redisExists, redisDel } from './redis'
+import { redisSet, redisGet, redisExists, redisDel } from './redis.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[tracking] ${msg}`, data ? JSON.stringify(data) : ''),

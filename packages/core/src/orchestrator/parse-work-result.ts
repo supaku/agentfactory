@@ -1,5 +1,5 @@
 import type { AgentWorkType } from '@supaku/agentfactory-linear'
-import type { AgentWorkResult } from './types'
+import type { AgentWorkResult } from './types.js'
 
 /**
  * Structured marker pattern embedded in agent output.

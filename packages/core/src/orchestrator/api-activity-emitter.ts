@@ -25,7 +25,7 @@ import type {
   ClaudeErrorEvent,
   ClaudeTodoItem,
   ClaudeStreamHandlers,
-} from './stream-parser'
+} from './stream-parser.js'
 
 /** Configuration for the API activity emitter */
 export interface ApiActivityEmitterConfig {

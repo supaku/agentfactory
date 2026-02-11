@@ -10,7 +10,7 @@
  * Resolution order: work-type → project → env default → 'claude'
  */
 
-export type { AgentProviderName, AgentProvider, AgentSpawnConfig, AgentHandle, AgentEvent } from './types'
+export type { AgentProviderName, AgentProvider, AgentSpawnConfig, AgentHandle, AgentEvent } from './types.js'
 export type {
   AgentInitEvent,
   AgentSystemEvent,
@@ -21,16 +21,16 @@ export type {
   AgentResultEvent,
   AgentErrorEvent,
   AgentCostData,
-} from './types'
+} from './types.js'
 
-export { ClaudeProvider, createClaudeProvider } from './claude-provider'
-export { CodexProvider, createCodexProvider } from './codex-provider'
-export { AmpProvider, createAmpProvider } from './amp-provider'
+export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'
+export { CodexProvider, createCodexProvider } from './codex-provider.js'
+export { AmpProvider, createAmpProvider } from './amp-provider.js'
 
-import type { AgentProvider, AgentProviderName } from './types'
-import { ClaudeProvider } from './claude-provider'
-import { CodexProvider } from './codex-provider'
-import { AmpProvider } from './amp-provider'
+import type { AgentProvider, AgentProviderName } from './types.js'
+import { ClaudeProvider } from './claude-provider.js'
+import { CodexProvider } from './codex-provider.js'
+import { AmpProvider } from './amp-provider.js'
 
 /**
  * Create a provider instance by name.

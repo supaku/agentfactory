@@ -16,7 +16,7 @@ import {
   type AgentSpawnConfig,
   createProvider,
   resolveProviderName,
-} from '../providers'
+} from '../providers/index.js'
 import {
   initializeAgentDir,
   writeState,
@@ -27,12 +27,12 @@ import {
   buildRecoveryPrompt,
   getHeartbeatTimeoutFromEnv,
   getMaxRecoveryAttemptsFromEnv,
-} from './state-recovery'
-import { createHeartbeatWriter, getHeartbeatIntervalFromEnv, type HeartbeatWriter } from './heartbeat-writer'
-import { createProgressLogger, type ProgressLogger } from './progress-logger'
-import { createSessionLogger, type SessionLogger } from './session-logger'
-import { isSessionLoggingEnabled, isAutoAnalyzeEnabled, getLogAnalysisConfig } from './log-config'
-import type { WorktreeState, TodosState, TodoItem } from './state-types'
+} from './state-recovery.js'
+import { createHeartbeatWriter, getHeartbeatIntervalFromEnv, type HeartbeatWriter } from './heartbeat-writer.js'
+import { createProgressLogger, type ProgressLogger } from './progress-logger.js'
+import { createSessionLogger, type SessionLogger } from './session-logger.js'
+import { isSessionLoggingEnabled, isAutoAnalyzeEnabled, getLogAnalysisConfig } from './log-config.js'
+import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import {
   createLinearAgentClient,
   createAgentSession,
@@ -46,10 +46,10 @@ import {
   WORK_TYPE_COMPLETE_STATUS,
   WORK_TYPE_FAIL_STATUS,
 } from '@supaku/agentfactory-linear'
-import { parseWorkResult } from './parse-work-result'
-import { createActivityEmitter, type ActivityEmitter } from './activity-emitter'
-import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter'
-import { createLogger, type Logger } from '../logger'
+import { parseWorkResult } from './parse-work-result.js'
+import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
+import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
+import { createLogger, type Logger } from '../logger.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -62,7 +62,7 @@ import type {
   ForwardPromptResult,
   InjectMessageResult,
   SpawnAgentWithResumeOptions,
-} from './types'
+} from './types.js'
 
 // Default inactivity timeout: 5 minutes
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000

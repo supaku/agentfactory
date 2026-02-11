@@ -9,7 +9,7 @@
  * to sessionId if webhookId is not available.
  */
 
-import { isRedisConfigured, redisSet, redisExists, redisDel } from './redis'
+import { isRedisConfigured, redisSet, redisExists, redisDel } from './redis.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[idempotency] ${msg}`, data ? JSON.stringify(data) : ''),

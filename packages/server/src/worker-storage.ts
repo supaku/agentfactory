@@ -17,7 +17,7 @@ import {
   redisSMembers,
   redisExpire,
   isRedisConfigured,
-} from './redis'
+} from './redis.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[worker] ${msg}`, data ? JSON.stringify(data) : ''),

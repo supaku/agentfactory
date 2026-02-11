@@ -7,7 +7,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, statSync, renameSync } from 'fs'
 import { resolve, dirname } from 'path'
-import type { ProgressLoggerConfig, ProgressEventType } from './state-types'
+import type { ProgressLoggerConfig, ProgressEventType } from './state-types.js'
 
 // Default max log size: 1MB
 const DEFAULT_MAX_SIZE_BYTES = 1024 * 1024

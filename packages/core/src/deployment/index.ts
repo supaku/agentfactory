@@ -8,11 +8,11 @@ export {
   getPRHeadSha,
   formatDeploymentStatus,
   formatFailedDeployments,
-} from './deployment-checker'
+} from './deployment-checker.js'
 
 export type {
   DeploymentStatus,
   DeploymentCheckResult,
   DeploymentCheckOptions,
   IssuePRInfo,
-} from './deployment-checker'
+} from './deployment-checker.js'

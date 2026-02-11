@@ -5,7 +5,7 @@
  * Fails fast if critical security variables are missing in production.
  */
 
-import { createLogger } from './logger'
+import { createLogger } from './logger.js'
 
 const log = createLogger('env-validation')
 

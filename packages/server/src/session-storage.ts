@@ -1,5 +1,5 @@
-import { isRedisConfigured, redisSet, redisGet, redisDel, redisKeys } from './redis'
-import type { AgentWorkType } from './types'
+import { isRedisConfigured, redisSet, redisGet, redisDel, redisKeys } from './redis.js'
+import type { AgentWorkType } from './types.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[session] ${msg}`, data ? JSON.stringify(data) : ''),

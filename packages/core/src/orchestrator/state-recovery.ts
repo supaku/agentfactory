@@ -13,7 +13,7 @@ import type {
   TodosState,
   RecoveryCheckResult,
   WorktreeStatus,
-} from './state-types'
+} from './state-types.js'
 import type { AgentWorkType } from '@supaku/agentfactory-linear'
 
 // Default heartbeat timeout: 30 seconds

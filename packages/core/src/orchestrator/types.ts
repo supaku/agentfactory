@@ -3,7 +3,7 @@
  */
 
 import type { AgentWorkType } from '@supaku/agentfactory-linear'
-import type { AgentProvider } from '../providers/types'
+import type { AgentProvider } from '../providers/types.js'
 
 /**
  * Result of parsing an agent's output to determine pass/fail

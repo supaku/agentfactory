@@ -12,8 +12,8 @@ import {
   redisLLen,
   redisDel,
   isRedisConfigured,
-} from './redis'
-import { createLogger } from './logger'
+} from './redis.js'
+import { createLogger } from './logger.js'
 
 const log = createLogger('pending-prompts')
 

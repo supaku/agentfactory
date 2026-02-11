@@ -9,24 +9,24 @@
  * workflow state and the next worker will resume from where the previous one left off.
  */
 
-import { createLogger } from './logger'
+import { createLogger } from './logger.js'
 import {
   getAllSessions,
   resetSessionForRequeue,
   type AgentSessionState,
-} from './session-storage'
-import { listWorkers } from './worker-storage'
+} from './session-storage.js'
+import { listWorkers } from './worker-storage.js'
 import {
   releaseClaim,
   isSessionInQueue,
   type QueuedWork,
-} from './work-queue'
+} from './work-queue.js'
 import {
   dispatchWork,
   cleanupExpiredLocksWithPendingWork,
   cleanupStaleLocksWithIdleWorkers,
   isSessionParkedForIssue,
-} from './issue-lock'
+} from './issue-lock.js'
 
 const log = createLogger('orphan-cleanup')
 

@@ -28,10 +28,10 @@ import {
   redisHGetAll,
   isRedisConfigured,
   redisKeys,
-} from './redis'
-import { queueWork, type QueuedWork } from './work-queue'
-import { getSessionState } from './session-storage'
-import type { AgentWorkType } from './types'
+} from './redis.js'
+import { queueWork, type QueuedWork } from './work-queue.js'
+import { getSessionState } from './session-storage.js'
+import type { AgentWorkType } from './types.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[issue-lock] ${msg}`, data ? JSON.stringify(data) : ''),

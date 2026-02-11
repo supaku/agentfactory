@@ -11,7 +11,7 @@ import type {
   HeartbeatState,
   HeartbeatActivityType,
   HeartbeatWriterConfig,
-} from './state-types'
+} from './state-types.js'
 
 // Default heartbeat interval: 10 seconds
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10000

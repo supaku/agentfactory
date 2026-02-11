@@ -22,7 +22,7 @@ import type {
   ClaudeErrorEvent,
   ClaudeTodoItem,
   ClaudeStreamHandlers,
-} from './stream-parser'
+} from './stream-parser.js'
 import type { AgentPlanItemState } from '@supaku/agentfactory-linear'
 import { ENVIRONMENT_ISSUE_TYPES } from '@supaku/agentfactory-linear'
 

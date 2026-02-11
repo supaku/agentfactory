@@ -17,7 +17,7 @@ import type {
   AgentSpawnConfig,
   AgentHandle,
   AgentEvent,
-} from './types'
+} from './types.js'
 
 export class ClaudeProvider implements AgentProvider {
   readonly name = 'claude' as const

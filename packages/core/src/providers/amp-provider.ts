@@ -15,7 +15,7 @@ import type {
   AgentProvider,
   AgentSpawnConfig,
   AgentHandle,
-} from './types'
+} from './types.js'
 
 export class AmpProvider implements AgentProvider {
   readonly name = 'amp' as const

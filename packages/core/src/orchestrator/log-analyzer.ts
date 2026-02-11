@@ -28,8 +28,8 @@ import {
   readSessionEvents,
   type SessionMetadata,
   type SessionEvent,
-} from './session-logger'
-import { getLogAnalysisConfig, type LogAnalysisConfig } from './log-config'
+} from './session-logger.js'
+import { getLogAnalysisConfig, type LogAnalysisConfig } from './log-config.js'
 
 /**
  * Pattern types for categorization

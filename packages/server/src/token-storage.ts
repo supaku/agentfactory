@@ -7,8 +7,8 @@
  * - Multi-workspace token support
  */
 
-import { createLogger } from './logger'
-import { isRedisConfigured, redisSet, redisGet, redisDel, redisKeys } from './redis'
+import { createLogger } from './logger.js'
+import { isRedisConfigured, redisSet, redisGet, redisDel, redisKeys } from './redis.js'
 
 const log = createLogger('token-storage')
 

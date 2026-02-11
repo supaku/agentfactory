@@ -5,7 +5,7 @@
  * Uses LRU cache to prevent memory bloat from tracking many IPs.
  */
 
-import { createLogger } from './logger'
+import { createLogger } from './logger.js'
 
 const log = createLogger('rate-limit')
 

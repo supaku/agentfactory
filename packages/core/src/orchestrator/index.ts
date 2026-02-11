@@ -13,7 +13,7 @@ export type {
   SpawnAgentWithResumeOptions,
   WorkTypeTimeoutConfig,
   AgentWorkResult,
-} from './types'
+} from './types.js'
 
 // Stream Parser Types
 export type {
@@ -29,13 +29,13 @@ export type {
   ClaudeUserEvent,
   ClaudeEvent,
   ClaudeStreamHandlers,
-} from './stream-parser'
+} from './stream-parser.js'
 
 // Activity Emitter Types
-export type { ActivityEmitterConfig } from './activity-emitter'
+export type { ActivityEmitterConfig } from './activity-emitter.js'
 
 // API Activity Emitter Types
-export type { ApiActivityEmitterConfig, ProgressMilestone } from './api-activity-emitter'
+export type { ApiActivityEmitterConfig, ProgressMilestone } from './api-activity-emitter.js'
 
 // State Types (for durable agent hosting)
 export type {
@@ -51,10 +51,10 @@ export type {
   RecoveryCheckResult,
   HeartbeatWriterConfig,
   ProgressLoggerConfig,
-} from './state-types'
+} from './state-types.js'
 
 // Log Config Types (for session logging)
-export type { LogAnalysisConfig } from './log-config'
+export type { LogAnalysisConfig } from './log-config.js'
 
 // Session Logger Types (for verbose logging)
 export type {
@@ -62,7 +62,7 @@ export type {
   SessionEvent,
   SessionMetadata,
   SessionLoggerConfig,
-} from './session-logger'
+} from './session-logger.js'
 
 // Log Analyzer Types (for analysis and issue creation)
 export type {
@@ -73,29 +73,29 @@ export type {
   SuggestedIssue,
   TrackedIssue,
   DeduplicationStore,
-} from './log-analyzer'
+} from './log-analyzer.js'
 
 // Orchestrator
-export { AgentOrchestrator, createOrchestrator, getWorktreeIdentifier } from './orchestrator'
+export { AgentOrchestrator, createOrchestrator, getWorktreeIdentifier } from './orchestrator.js'
 
 // Stream Parser
-export { ClaudeStreamParser, createStreamParser } from './stream-parser'
+export { ClaudeStreamParser, createStreamParser } from './stream-parser.js'
 
 // Activity Emitter
-export { ActivityEmitter, createActivityEmitter } from './activity-emitter'
+export { ActivityEmitter, createActivityEmitter } from './activity-emitter.js'
 
 // API Activity Emitter (for remote workers proxying through API)
-export { ApiActivityEmitter, createApiActivityEmitter } from './api-activity-emitter'
+export { ApiActivityEmitter, createApiActivityEmitter } from './api-activity-emitter.js'
 
 // Heartbeat Writer (for crash detection)
 export {
   HeartbeatWriter,
   createHeartbeatWriter,
   getHeartbeatIntervalFromEnv,
-} from './heartbeat-writer'
+} from './heartbeat-writer.js'
 
 // Progress Logger (for debugging)
-export { ProgressLogger, createProgressLogger } from './progress-logger'
+export { ProgressLogger, createProgressLogger } from './progress-logger.js'
 
 // State Recovery (for crash recovery)
 export {
@@ -117,14 +117,14 @@ export {
   getHeartbeatTimeoutFromEnv,
   getMaxRecoveryAttemptsFromEnv,
   getTaskListId,
-} from './state-recovery'
+} from './state-recovery.js'
 
 // Log Config
 export {
   getLogAnalysisConfig,
   isSessionLoggingEnabled,
   isAutoAnalyzeEnabled,
-} from './log-config'
+} from './log-config.js'
 
 // Session Logger
 export {
@@ -132,10 +132,10 @@ export {
   createSessionLogger,
   readSessionMetadata,
   readSessionEvents,
-} from './session-logger'
+} from './session-logger.js'
 
 // Work Result Parser (for QA/acceptance pass/fail detection)
-export { parseWorkResult } from './parse-work-result'
+export { parseWorkResult } from './parse-work-result.js'
 
 // Log Analyzer
-export { LogAnalyzer, createLogAnalyzer } from './log-analyzer'
+export { LogAnalyzer, createLogAnalyzer } from './log-analyzer.js'

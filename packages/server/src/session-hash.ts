@@ -7,7 +7,7 @@
  */
 
 import crypto from 'crypto'
-import { getSessionHashSalt, isSessionHashConfigured } from './env-validation'
+import { getSessionHashSalt, isSessionHashConfigured } from './env-validation.js'
 
 /**
  * Create a public hash from a session ID
