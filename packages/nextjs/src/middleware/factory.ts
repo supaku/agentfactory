@@ -141,57 +141,9 @@ export function createAgentFactoryMiddleware(userConfig?: MiddlewareConfig) {
     const { pathname } = request.nextUrl
     const clientIP = getClientIP(request.headers)
 
-    // === PUBLIC ROUTES ===
-    if (publicRoutes.some(route => pathname === route || pathname.startsWith(route))) {
-      const result = checkRateLimit('public', clientIP)
-
-      if (!result.allowed) {
-        return new NextResponse(
-          JSON.stringify({ error: 'Too many requests' }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              ...buildRateLimitHeaders(result),
-            },
-          }
-        )
-      }
-
-      const response = NextResponse.next()
-      const rateLimitHeaders = buildRateLimitHeaders(result)
-      for (const [key, value] of Object.entries(rateLimitHeaders)) {
-        response.headers.set(key, value)
-      }
-      return response
-    }
-
-    // === SESSION DETAIL PAGES ===
-    if (sessionPages.some(route => pathname.startsWith(route))) {
-      return NextResponse.next()
-    }
-
-    // === WEBHOOK ROUTE ===
-    if (pathname === webhookRoute) {
-      const result = checkRateLimit('webhook', clientIP)
-
-      if (!result.allowed) {
-        return new NextResponse(
-          JSON.stringify({ error: 'Too many requests' }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              ...buildRateLimitHeaders(result),
-            },
-          }
-        )
-      }
-
-      return NextResponse.next()
-    }
-
-    // === PROTECTED INTERNAL APIS ===
+    // === PROTECTED INTERNAL APIS (checked first — no rate limiting) ===
+    // Must come before public routes because '/' in publicRoutes would
+    // match all pathnames via startsWith, rate-limiting authenticated workers.
     if (protectedRoutes.some(route => pathname.startsWith(route))) {
       const workerApiKey = process.env.WORKER_API_KEY
 
@@ -227,9 +179,59 @@ export function createAgentFactoryMiddleware(userConfig?: MiddlewareConfig) {
       return NextResponse.next()
     }
 
+    // === WEBHOOK ROUTE ===
+    if (pathname === webhookRoute) {
+      const result = checkRateLimit('webhook', clientIP)
+
+      if (!result.allowed) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Too many requests' }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              ...buildRateLimitHeaders(result),
+            },
+          }
+        )
+      }
+
+      return NextResponse.next()
+    }
+
+    // === SESSION DETAIL PAGES ===
+    if (sessionPages.some(route => pathname.startsWith(route))) {
+      return NextResponse.next()
+    }
+
     // === PASSTHROUGH ROUTES ===
     if (passthroughRoutes.some(route => pathname === route || pathname.startsWith(route))) {
       return NextResponse.next()
+    }
+
+    // === PUBLIC ROUTES (rate limited) ===
+    if (publicRoutes.some(route => pathname === route || pathname.startsWith(route))) {
+      const result = checkRateLimit('public', clientIP)
+
+      if (!result.allowed) {
+        return new NextResponse(
+          JSON.stringify({ error: 'Too many requests' }),
+          {
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              ...buildRateLimitHeaders(result),
+            },
+          }
+        )
+      }
+
+      const response = NextResponse.next()
+      const rateLimitHeaders = buildRateLimitHeaders(result)
+      for (const [key, value] of Object.entries(rateLimitHeaders)) {
+        response.headers.set(key, value)
+      }
+      return response
     }
 
     // === ALL OTHER ROUTES ===
