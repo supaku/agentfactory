@@ -22,6 +22,7 @@ export interface PublicSessionResponse {
   workType: string
   startedAt: string
   duration: number
+  costUsd?: number
 }
 
 function toPublicStatus(
@@ -70,6 +71,7 @@ async function toPublicSession(
     workType: session.workType || 'development',
     startedAt: new Date(startTime * 1000).toISOString(),
     duration: endTime - startTime,
+    costUsd: session.totalCostUsd,
   }
 }
 

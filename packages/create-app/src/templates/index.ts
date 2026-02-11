@@ -19,7 +19,7 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
 
   files['package.json'] = packageJson(opts)
   files['tsconfig.json'] = tsconfig()
-  files['next.config.ts'] = nextConfig()
+  files['next.config.ts'] = nextConfig(opts)
   files['.env.example'] = envExample(opts)
   files['.gitignore'] = gitignore()
 
@@ -68,6 +68,12 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
     files['src/app/layout.tsx'] = layoutTsx(opts)
     files['src/app/page.tsx'] = dashboardPageTsx()
     files['src/app/globals.css'] = globalsCss()
+    files['src/app/pipeline/page.tsx'] = pipelinePageTsx()
+    files['src/app/sessions/page.tsx'] = sessionsPageTsx()
+    files['src/app/sessions/[id]/page.tsx'] = sessionDetailPageTsx()
+    files['src/app/settings/page.tsx'] = settingsPageTsx()
+    files['tailwind.config.ts'] = tailwindConfig()
+    files['postcss.config.js'] = postcssConfig()
   } else {
     files['src/app/layout.tsx'] = layoutTsx(opts)
     files['src/app/page.tsx'] = minimalPageTsx()
@@ -126,6 +132,13 @@ function packageJson(opts: TemplateOptions): string {
     'typecheck': 'tsc --noEmit',
   }
 
+  if (opts.includeDashboard) {
+    deps['@supaku/agentfactory-dashboard'] = '^0.4.0'
+    devDeps['tailwindcss'] = '^3.4.0'
+    devDeps['postcss'] = '^8'
+    devDeps['autoprefixer'] = '^10'
+  }
+
   if (opts.includeCli) {
     deps['@supaku/agentfactory-cli'] = '^0.4.0'
     scripts['worker'] = 'tsx cli/worker.ts'
@@ -173,7 +186,17 @@ function tsconfig(): string {
   }, null, 2) + '\n'
 }
 
-function nextConfig(): string {
+function nextConfig(opts: TemplateOptions): string {
+  if (opts.includeDashboard) {
+    return `import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  transpilePackages: ['@supaku/agentfactory-dashboard'],
+}
+
+export default nextConfig
+`
+  }
   return `import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {}
@@ -287,6 +310,8 @@ export const config = {
     '/api/:path*',
     '/webhook',
     '/dashboard',
+    '/pipeline',
+    '/settings',
     '/sessions/:path*',
     '/',
   ],
@@ -295,6 +320,25 @@ export const config = {
 }
 
 function layoutTsx(opts: TemplateOptions): string {
+  if (opts.includeDashboard) {
+    return `import type { Metadata } from 'next'
+import '@supaku/agentfactory-dashboard/styles'
+import './globals.css'
+
+export const metadata: Metadata = {
+  title: '${opts.projectName} — AgentFactory',
+  description: 'AI agent fleet management',
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="dark">
+      <body className="antialiased">{children}</body>
+    </html>
+  )
+}
+`
+  }
   return `import type { Metadata } from 'next'
 import './globals.css'
 
@@ -321,33 +365,117 @@ function globalsCss(): string {
 }
 
 function dashboardPageTsx(): string {
-  return `export default function DashboardPage() {
+  return `'use client'
+
+import { DashboardShell, DashboardPage as FleetPage } from '@supaku/agentfactory-dashboard'
+import { usePathname } from 'next/navigation'
+
+export default function DashboardPage() {
+  const pathname = usePathname()
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
-      <h1 className="text-3xl font-bold mb-2">AgentFactory</h1>
-      <p className="text-gray-400 mb-8">Your AI agent fleet is running.</p>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <h2 className="text-sm font-medium text-gray-400 mb-1">Status</h2>
-          <p className="text-2xl font-bold text-green-400">Active</p>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <h2 className="text-sm font-medium text-gray-400 mb-1">Webhook</h2>
-          <p className="text-sm text-gray-300 font-mono">/webhook</p>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-          <h2 className="text-sm font-medium text-gray-400 mb-1">Public API</h2>
-          <p className="text-sm text-gray-300 font-mono">/api/public/stats</p>
-        </div>
-      </div>
-
-      <div className="mt-8 text-sm text-gray-500">
-        <p>Configure your Linear webhook to point to <code className="text-gray-400">/webhook</code></p>
-        <p className="mt-1">View agent sessions at <code className="text-gray-400">/api/public/sessions</code></p>
-      </div>
-    </main>
+    <DashboardShell currentPath={pathname}>
+      <FleetPage />
+    </DashboardShell>
   )
+}
+`
+}
+
+function pipelinePageTsx(): string {
+  return `'use client'
+
+import { DashboardShell, PipelinePage } from '@supaku/agentfactory-dashboard'
+import { usePathname } from 'next/navigation'
+
+export default function Pipeline() {
+  const pathname = usePathname()
+  return (
+    <DashboardShell currentPath={pathname}>
+      <PipelinePage />
+    </DashboardShell>
+  )
+}
+`
+}
+
+function sessionsPageTsx(): string {
+  return `'use client'
+
+import { DashboardShell, SessionPage } from '@supaku/agentfactory-dashboard'
+import { usePathname } from 'next/navigation'
+
+export default function Sessions() {
+  const pathname = usePathname()
+  return (
+    <DashboardShell currentPath={pathname}>
+      <SessionPage />
+    </DashboardShell>
+  )
+}
+`
+}
+
+function sessionDetailPageTsx(): string {
+  return `'use client'
+
+import { DashboardShell, SessionPage } from '@supaku/agentfactory-dashboard'
+import { usePathname, useParams } from 'next/navigation'
+
+export default function SessionDetailPage() {
+  const pathname = usePathname()
+  const params = useParams<{ id: string }>()
+  return (
+    <DashboardShell currentPath={pathname}>
+      <SessionPage sessionId={params.id} />
+    </DashboardShell>
+  )
+}
+`
+}
+
+function settingsPageTsx(): string {
+  return `'use client'
+
+import { DashboardShell, SettingsPage } from '@supaku/agentfactory-dashboard'
+import { usePathname } from 'next/navigation'
+
+export default function Settings() {
+  const pathname = usePathname()
+  return (
+    <DashboardShell currentPath={pathname}>
+      <SettingsPage />
+    </DashboardShell>
+  )
+}
+`
+}
+
+function tailwindConfig(): string {
+  return `import type { Config } from 'tailwindcss'
+import dashboardPreset from '@supaku/agentfactory-dashboard/tailwind-preset'
+
+const config: Config = {
+  presets: [dashboardPreset],
+  content: [
+    './src/**/*.{ts,tsx}',
+    './node_modules/@supaku/agentfactory-dashboard/src/**/*.{ts,tsx}',
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+
+export default config
+`
+}
+
+function postcssConfig(): string {
+  return `module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
 }
 `
 }

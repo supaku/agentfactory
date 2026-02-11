@@ -110,7 +110,7 @@ function timingSafeEqual(a: string, b: string): boolean {
 
 // === Route defaults ===
 
-const DEFAULT_PUBLIC_ROUTES = ['/api/public/', '/dashboard', '/']
+const DEFAULT_PUBLIC_ROUTES = ['/api/public/', '/dashboard', '/pipeline', '/settings', '/']
 const DEFAULT_PROTECTED_ROUTES = ['/api/sessions', '/api/workers']
 const DEFAULT_SESSION_PAGES = ['/sessions/']
 const DEFAULT_WEBHOOK_ROUTE = '/webhook'
@@ -243,6 +243,8 @@ export function createAgentFactoryMiddleware(userConfig?: MiddlewareConfig) {
       '/api/:path*',
       webhookRoute,
       '/dashboard',
+      '/pipeline',
+      '/settings',
       '/sessions/:path*',
       '/',
     ],
