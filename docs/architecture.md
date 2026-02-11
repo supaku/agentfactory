@@ -41,12 +41,12 @@ AgentFactory is split into six packages:
 | `@supaku/agentfactory-server` | Redis work queue, session storage, distributed workers |
 | `@supaku/agentfactory-cli` | CLI tools for local and remote operation |
 | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
-| `create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
+| `@supaku/create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
 
 ### Dependency Graph
 
 ```
-create-agentfactory-app (scaffolding, no runtime deps)
+@supaku/create-agentfactory-app (scaffolding, no runtime deps)
 
 @supaku/agentfactory-nextjs
   ├── @supaku/agentfactory (core)

@@ -2,7 +2,7 @@
 
 Spawn a single coding agent on a Linear issue.
 
-> **Tip:** For a complete project with webhook server, middleware, and CLI tools, use `npx create-agentfactory-app my-agent` instead.
+> **Tip:** For a complete project with webhook server, middleware, and CLI tools, use `npx @supaku/create-agentfactory-app my-agent` instead.
 
 ## Setup
 

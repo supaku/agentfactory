@@ -7,8 +7,8 @@
  * that processes Linear issues with coding agents.
  *
  * Usage:
- *   npx create-agentfactory-app my-agent
- *   npx create-agentfactory-app my-agent --team MY
+ *   npx @supaku/create-agentfactory-app my-agent
+ *   npx @supaku/create-agentfactory-app my-agent --team MY
  */
 
 import fs from 'node:fs'
@@ -149,7 +149,7 @@ async function main() {
 
 function printHelp() {
   console.log(`
-  Usage: npx create-agentfactory-app [project-name] [options]
+  Usage: npx @supaku/create-agentfactory-app [project-name] [options]
 
   Options:
     --team <KEY>     Linear team key (default: MY)
@@ -159,9 +159,9 @@ function printHelp() {
     -h, --help       Show this help message
 
   Examples:
-    npx create-agentfactory-app my-agent
-    npx create-agentfactory-app my-agent --team ENG
-    npx create-agentfactory-app my-agent --no-dashboard --no-redis
+    npx @supaku/create-agentfactory-app my-agent
+    npx @supaku/create-agentfactory-app my-agent --team ENG
+    npx @supaku/create-agentfactory-app my-agent --no-dashboard --no-redis
 `)
 }
 

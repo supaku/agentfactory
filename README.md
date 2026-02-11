@@ -33,14 +33,14 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 | **[@supaku/agentfactory-server](./packages/server)** | `@supaku/agentfactory-server` | Redis work queue, session storage, worker pool |
 | **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools for local orchestrator and remote workers |
 | **[@supaku/agentfactory-nextjs](./packages/nextjs)** | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
-| **[create-agentfactory-app](./packages/create-app)** | `create-agentfactory-app` | Project scaffolding tool |
+| **[@supaku/create-agentfactory-app](./packages/create-app)** | `@supaku/create-agentfactory-app` | Project scaffolding tool |
 
 ## Quick Start
 
 ### Create a new project (recommended)
 
 ```bash
-npx create-agentfactory-app my-agent
+npx @supaku/create-agentfactory-app my-agent
 
 cd my-agent
 cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN

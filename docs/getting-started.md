@@ -17,7 +17,7 @@ This guide walks through setting up AgentFactory to process Linear issues with c
 The fastest way to get started is with the scaffolding tool:
 
 ```bash
-npx create-agentfactory-app my-agent
+npx @supaku/create-agentfactory-app my-agent
 
 cd my-agent
 cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN
@@ -85,7 +85,7 @@ For webhook-based triggers (production), you'll also need:
 
 ## Webhook Server Setup
 
-If you used `create-agentfactory-app`, this is already configured. For manual setup:
+If you used `@supaku/create-agentfactory-app`, this is already configured. For manual setup:
 
 ### Route Configuration
 

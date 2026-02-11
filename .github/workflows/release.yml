@@ -97,9 +97,9 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm --filter @supaku/agentfactory-nextjs publish --no-git-checks --provenance --access public
 
-      - name: Publish create-agentfactory-app to npm
+      - name: Publish @supaku/create-agentfactory-app to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter create-agentfactory-app publish --no-git-checks --provenance --access public
+        run: pnpm --filter @supaku/create-agentfactory-app publish --no-git-checks --provenance --access public
 
       # Publish to GitHub Packages
       - name: Setup Node.js for GitHub Packages
@@ -144,9 +144,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish create-agentfactory-app to GitHub Packages
+      - name: Publish @supaku/create-agentfactory-app to GitHub Packages
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter create-agentfactory-app publish --no-git-checks
+        run: pnpm --filter @supaku/create-agentfactory-app publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
