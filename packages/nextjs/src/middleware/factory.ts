@@ -1,21 +1,114 @@
 /**
- * Middleware Factory
+ * Middleware Factory — Edge Runtime Compatible
  *
  * Creates a Next.js middleware function that handles authentication,
  * rate limiting, and security for AgentFactory API routes.
  *
- * Uses the rate limiter and worker auth from @supaku/agentfactory-server
- * for proper LRU eviction and crypto.timingSafeEqual.
+ * IMPORTANT: This module runs in the Edge Runtime. It MUST NOT import
+ * from @supaku/agentfactory-server (which uses Node.js crypto/ioredis).
+ * All utilities are inlined for Edge compatibility.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  checkRateLimit,
-  getClientIP,
-  buildRateLimitHeaders,
-  verifyApiKey,
-} from '@supaku/agentfactory-server'
 import type { MiddlewareConfig } from './types.js'
+
+// === Edge-compatible rate limiting ===
+
+interface RateLimitEntry {
+  timestamps: number[]
+  lastAccess: number
+}
+
+interface RateLimitResult {
+  allowed: boolean
+  remaining: number
+  resetIn: number
+  limit: number
+}
+
+const RATE_LIMITS = {
+  public: { limit: 60, windowMs: 60_000 },
+  webhook: { limit: 10, windowMs: 1_000 },
+  dashboard: { limit: 30, windowMs: 60_000 },
+} as const
+
+type RateLimitType = keyof typeof RATE_LIMITS
+
+const caches = new Map<string, Map<string, RateLimitEntry>>()
+
+function checkRateLimit(type: RateLimitType, key: string): RateLimitResult {
+  const config = RATE_LIMITS[type]
+  let cache = caches.get(type)
+  if (!cache) {
+    cache = new Map()
+    caches.set(type, cache)
+  }
+
+  const now = Date.now()
+  const windowStart = now - config.windowMs
+  let entry = cache.get(key)
+  if (!entry) {
+    entry = { timestamps: [], lastAccess: now }
+  }
+
+  entry.timestamps = entry.timestamps.filter((ts) => ts > windowStart)
+  entry.lastAccess = now
+
+  const allowed = entry.timestamps.length < config.limit
+  if (allowed) entry.timestamps.push(now)
+  cache.set(key, entry)
+
+  // LRU eviction at 10k entries
+  if (cache.size > 10_000) {
+    const entries = Array.from(cache.entries()).sort(
+      (a, b) => a[1].lastAccess - b[1].lastAccess
+    )
+    const toRemove = Math.ceil(10_000 * 0.1)
+    for (let i = 0; i < toRemove && i < entries.length; i++) {
+      cache.delete(entries[i][0])
+    }
+  }
+
+  const remaining = Math.max(0, config.limit - entry.timestamps.length)
+  const oldestTs = entry.timestamps[0]
+  const resetIn = oldestTs ? Math.max(0, oldestTs + config.windowMs - now) : 0
+
+  return { allowed, remaining, resetIn, limit: config.limit }
+}
+
+// === Edge-compatible utilities ===
+
+function getClientIP(headers: Headers): string {
+  return (
+    headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    headers.get('cf-connecting-ip') ||
+    headers.get('x-real-ip') ||
+    'unknown'
+  )
+}
+
+function buildRateLimitHeaders(result: RateLimitResult): Record<string, string> {
+  return {
+    'X-RateLimit-Limit': result.limit.toString(),
+    'X-RateLimit-Remaining': result.remaining.toString(),
+    'X-RateLimit-Reset': Math.ceil(result.resetIn / 1000).toString(),
+  }
+}
+
+/**
+ * Timing-safe string comparison using XOR (Edge-compatible).
+ * Does NOT use Node.js crypto.timingSafeEqual.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let result = 0
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return result === 0
+}
+
+// === Route defaults ===
 
 const DEFAULT_PUBLIC_ROUTES = ['/api/public/', '/dashboard', '/']
 const DEFAULT_PROTECTED_ROUTES = ['/api/sessions', '/api/workers']
@@ -124,7 +217,7 @@ export function createAgentFactoryMiddleware(userConfig?: MiddlewareConfig) {
       }
 
       const token = authHeader.slice(7)
-      if (!verifyApiKey(token, workerApiKey)) {
+      if (!timingSafeEqual(token, workerApiKey)) {
         return new NextResponse(
           JSON.stringify({ error: 'Unauthorized', message: 'Invalid or missing API key' }),
           { status: 401, headers: { 'Content-Type': 'application/json' } }
