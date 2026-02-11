@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-nextjs",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "type": "module",
   "description": "Next.js API route handlers for AgentFactory — webhook processor, worker/session management, public stats",
   "author": "Supaku (https://supaku.com)",

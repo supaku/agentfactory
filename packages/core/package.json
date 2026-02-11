@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "type": "module",
   "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
   "author": "Supaku (https://supaku.com)",
