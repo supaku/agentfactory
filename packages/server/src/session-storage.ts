@@ -252,6 +252,48 @@ export async function updateSessionStatus(
 }
 
 /**
+ * Update session cost data (tokens and USD)
+ *
+ * @param linearSessionId - The Linear session ID
+ * @param costData - Cost fields to persist
+ */
+export async function updateSessionCostData(
+  linearSessionId: string,
+  costData: { totalCostUsd?: number; inputTokens?: number; outputTokens?: number }
+): Promise<boolean> {
+  if (!isRedisConfigured()) {
+    log.warn('Redis not configured, cannot update session cost data')
+    return false
+  }
+
+  const existing = await getSessionState(linearSessionId)
+  if (!existing) {
+    log.warn('Session not found for cost update', { linearSessionId })
+    return false
+  }
+
+  const key = buildSessionKey(linearSessionId)
+  const now = Math.floor(Date.now() / 1000)
+
+  const updated: AgentSessionState = {
+    ...existing,
+    totalCostUsd: costData.totalCostUsd ?? existing.totalCostUsd,
+    inputTokens: costData.inputTokens ?? existing.inputTokens,
+    outputTokens: costData.outputTokens ?? existing.outputTokens,
+    updatedAt: now,
+  }
+
+  await redisSet(key, updated, SESSION_TTL_SECONDS)
+
+  log.info('Updated session cost data', {
+    linearSessionId,
+    totalCostUsd: updated.totalCostUsd,
+  })
+
+  return true
+}
+
+/**
  * Reset a session for re-queuing after orphan cleanup
  * Clears workerId and resets status to pending so a new worker can claim it
  *

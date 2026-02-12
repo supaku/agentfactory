@@ -32,6 +32,7 @@ import {
   getSessionState,
   updateClaudeSessionId,
   updateSessionStatus,
+  updateSessionCostData,
 } from '@supaku/agentfactory-server'
 import { formatErrorForComment } from './error-formatting.js'
 import type {
@@ -181,7 +182,15 @@ export function createWebhookOrchestrator(
               agentIdentifier: agent.identifier,
               issueId: agent.issueId,
               sessionId: agent.sessionId,
+              totalCostUsd: agent.totalCostUsd,
             })
+            if (agent.sessionId && (agent.totalCostUsd != null || agent.inputTokens != null || agent.outputTokens != null)) {
+              await updateSessionCostData(agent.sessionId, {
+                totalCostUsd: agent.totalCostUsd,
+                inputTokens: agent.inputTokens,
+                outputTokens: agent.outputTokens,
+              }).catch((err) => log.error('Failed to persist cost data', { error: err }))
+            }
             try {
               await hooks?.onAgentComplete?.(agent)
             } catch (err) {

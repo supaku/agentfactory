@@ -9,6 +9,7 @@ import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import {
   getSessionState,
   updateSessionStatus,
+  updateSessionCostData,
   updateClaudeSessionId,
   startSession,
   type AgentSessionStatus,
@@ -45,12 +46,15 @@ export function createSessionStatusPostHandler() {
 
     try {
       const body = await request.json()
-      const { workerId, status, claudeSessionId, worktreePath, error: errorInfo } = body as {
+      const { workerId, status, claudeSessionId, worktreePath, error: errorInfo, totalCostUsd, inputTokens, outputTokens } = body as {
         workerId: string
         status: AgentSessionStatus
         claudeSessionId?: string
         worktreePath?: string
         error?: unknown
+        totalCostUsd?: number
+        inputTokens?: number
+        outputTokens?: number
       }
 
       if (!workerId || typeof workerId !== 'string') {
@@ -99,6 +103,12 @@ export function createSessionStatusPostHandler() {
         await updateSessionStatus(sessionId, 'finalizing')
       } else if (TERMINAL_STATUSES.includes(status)) {
         await updateSessionStatus(sessionId, status)
+
+        if (totalCostUsd != null || inputTokens != null || outputTokens != null) {
+          await updateSessionCostData(sessionId, { totalCostUsd, inputTokens, outputTokens }).catch(
+            (err) => log.error('Failed to persist cost data', { sessionId, error: err })
+          )
+        }
 
         if (status === 'completed' && session.issueId) {
           try {

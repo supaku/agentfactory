@@ -467,7 +467,7 @@ export async function runWorker(
   async function reportStatus(
     sessionId: string,
     status: 'running' | 'finalizing' | 'completed' | 'failed' | 'stopped',
-    extra?: { claudeSessionId?: string; worktreePath?: string; error?: { message: string } },
+    extra?: { claudeSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number },
   ): Promise<void> {
     if (!workerId) return
 
@@ -562,7 +562,7 @@ export async function runWorker(
 
     // Two-phase completion: set in try/catch, read in finally
     let finalStatus: 'completed' | 'failed' | 'stopped' = 'failed'
-    let statusPayload: { claudeSessionId?: string; worktreePath?: string; error?: { message: string } } | undefined
+    let statusPayload: { claudeSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number } | undefined
 
     // Issue lock TTL refresher
     let lockRefresher: ReturnType<typeof setInterval> | null = null
@@ -793,6 +793,9 @@ export async function runWorker(
         statusPayload = {
           claudeSessionId: agent.sessionId,
           worktreePath: agent.worktreePath,
+          totalCostUsd: agent.totalCostUsd,
+          inputTokens: agent.inputTokens,
+          outputTokens: agent.outputTokens,
         }
         await reportStatus(work.sessionId, 'finalizing')
         await postProgress(
