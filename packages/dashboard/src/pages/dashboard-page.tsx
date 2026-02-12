@@ -2,6 +2,10 @@
 
 import { FleetOverview } from '../components/fleet/fleet-overview'
 
-export function DashboardPage() {
-  return <FleetOverview />
+interface DashboardPageProps {
+  onSessionSelect?: (sessionId: string) => void
+}
+
+export function DashboardPage({ onSessionSelect }: DashboardPageProps) {
+  return <FleetOverview onSessionSelect={onSessionSelect} />
 }

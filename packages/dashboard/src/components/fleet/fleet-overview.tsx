@@ -12,9 +12,10 @@ import { Users, Cpu, ListTodo, CheckCircle2, Gauge, DollarSign } from 'lucide-re
 
 interface FleetOverviewProps {
   className?: string
+  onSessionSelect?: (sessionId: string) => void
 }
 
-export function FleetOverview({ className }: FleetOverviewProps) {
+export function FleetOverview({ className, onSessionSelect }: FleetOverviewProps) {
   const { data: stats, isLoading: statsLoading } = useStats()
   const { data: sessionsData, isLoading: sessionsLoading } = useSessions()
 
@@ -114,7 +115,7 @@ export function FleetOverview({ className }: FleetOverviewProps) {
                 className="animate-fade-in"
                 style={{ animationDelay: `${i * 50}ms` }}
               >
-                <AgentCard session={session} />
+                <AgentCard session={session} onSelect={onSessionSelect} />
               </div>
             ))}
           </div>

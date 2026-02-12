@@ -30,9 +30,10 @@ function groupByColumn(sessions: PublicSessionResponse[]) {
 
 interface PipelineViewProps {
   className?: string
+  onSessionSelect?: (sessionId: string) => void
 }
 
-export function PipelineView({ className }: PipelineViewProps) {
+export function PipelineView({ className, onSessionSelect }: PipelineViewProps) {
   const { data, isLoading } = useSessions()
   const sessions = data?.sessions ?? []
 
@@ -73,6 +74,7 @@ export function PipelineView({ className }: PipelineViewProps) {
                 sessions={col.sessions}
                 count={col.sessions.length}
                 accentClass={col.accentClass}
+                onSessionSelect={onSessionSelect}
               />
             </div>
           ))}

@@ -9,17 +9,30 @@ import { Clock } from 'lucide-react'
 interface PipelineCardProps {
   session: PublicSessionResponse
   className?: string
+  onSelect?: (sessionId: string) => void
 }
 
-export function PipelineCard({ session, className }: PipelineCardProps) {
+export function PipelineCard({ session, className, onSelect }: PipelineCardProps) {
   const workTypeConfig = getWorkTypeConfig(session.workType)
 
   return (
     <div
       className={cn(
         'rounded-lg border border-af-surface-border/40 bg-af-surface/50 p-3 transition-all duration-200 hover-glow',
+        onSelect && 'cursor-pointer',
         className
       )}
+      {...(onSelect && {
+        role: 'button',
+        tabIndex: 0,
+        onClick: () => onSelect(session.id),
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onSelect(session.id)
+          }
+        },
+      })}
     >
       <div className="flex items-center gap-2">
         <StatusDot status={session.status} />

@@ -9,9 +9,10 @@ interface PipelineColumnProps {
   count: number
   accentClass?: string
   className?: string
+  onSessionSelect?: (sessionId: string) => void
 }
 
-export function PipelineColumn({ title, sessions, count, accentClass, className }: PipelineColumnProps) {
+export function PipelineColumn({ title, sessions, count, accentClass, className, onSessionSelect }: PipelineColumnProps) {
   return (
     <div
       className={cn(
@@ -34,7 +35,7 @@ export function PipelineColumn({ title, sessions, count, accentClass, className 
       <ScrollArea className="flex-1 px-2 pb-2">
         <div className="space-y-2">
           {sessions.map((session) => (
-            <PipelineCard key={session.id} session={session} />
+            <PipelineCard key={session.id} session={session} onSelect={onSessionSelect} />
           ))}
         </div>
       </ScrollArea>

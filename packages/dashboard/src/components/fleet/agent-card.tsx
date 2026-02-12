@@ -13,9 +13,10 @@ import { Clock, Coins } from 'lucide-react'
 interface AgentCardProps {
   session: PublicSessionResponse
   className?: string
+  onSelect?: (sessionId: string) => void
 }
 
-export function AgentCard({ session, className }: AgentCardProps) {
+export function AgentCard({ session, className, onSelect }: AgentCardProps) {
   const statusConfig = getStatusConfig(session.status)
   const workTypeConfig = getWorkTypeConfig(session.workType)
 
@@ -25,8 +26,20 @@ export function AgentCard({ session, className }: AgentCardProps) {
         'group relative rounded-xl border border-af-surface-border/50 bg-af-surface/40 p-4 transition-all duration-300 hover-glow',
         session.status === 'working' && 'border-af-status-success/10',
         session.status === 'failed' && 'border-af-status-error/10',
+        onSelect && 'cursor-pointer',
         className
       )}
+      {...(onSelect && {
+        role: 'button',
+        tabIndex: 0,
+        onClick: () => onSelect(session.id),
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onSelect(session.id)
+          }
+        },
+      })}
     >
       {/* Top row: identifier + provider */}
       <div className="flex items-start justify-between gap-2">

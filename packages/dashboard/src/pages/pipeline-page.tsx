@@ -2,6 +2,10 @@
 
 import { PipelineView } from '../components/pipeline/pipeline-view'
 
-export function PipelinePage() {
-  return <PipelineView />
+interface PipelinePageProps {
+  onSessionSelect?: (sessionId: string) => void
+}
+
+export function PipelinePage({ onSessionSelect }: PipelinePageProps) {
+  return <PipelineView onSessionSelect={onSessionSelect} />
 }
