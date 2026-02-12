@@ -1,8 +1,8 @@
 {
   "name": "@supaku/agentfactory-cli",
-  "version": "0.6.1",
+  "version": "0.6.3",
   "type": "module",
-  "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
+  "description": "CLI tools for AgentFactory \u2014 local orchestrator, remote worker, queue admin",
   "author": "Supaku (https://supaku.com)",
   "license": "MIT",
   "engines": {
