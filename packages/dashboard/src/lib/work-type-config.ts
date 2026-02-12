@@ -30,6 +30,54 @@ const workTypes: Record<string, WorkTypeConfig> = {
     bgColor: 'bg-purple-400/10',
     borderColor: 'border-purple-400/15',
   },
+  'qa-coordination': {
+    label: 'QA Coord',
+    color: 'text-purple-300',
+    bgColor: 'bg-purple-300/10',
+    borderColor: 'border-purple-300/15',
+  },
+  acceptance: {
+    label: 'Acceptance',
+    color: 'text-pink-400',
+    bgColor: 'bg-pink-400/10',
+    borderColor: 'border-pink-400/15',
+  },
+  'acceptance-coordination': {
+    label: 'Accept Coord',
+    color: 'text-pink-300',
+    bgColor: 'bg-pink-300/10',
+    borderColor: 'border-pink-300/15',
+  },
+  coordination: {
+    label: 'Coordination',
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-400/10',
+    borderColor: 'border-orange-400/15',
+  },
+  research: {
+    label: 'Research',
+    color: 'text-teal-400',
+    bgColor: 'bg-teal-400/10',
+    borderColor: 'border-teal-400/15',
+  },
+  'backlog-creation': {
+    label: 'Backlog',
+    color: 'text-slate-400',
+    bgColor: 'bg-slate-400/10',
+    borderColor: 'border-slate-400/15',
+  },
+  inflight: {
+    label: 'Inflight',
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-400/10',
+    borderColor: 'border-yellow-400/15',
+  },
+  refinement: {
+    label: 'Refinement',
+    color: 'text-lime-400',
+    bgColor: 'bg-lime-400/10',
+    borderColor: 'border-lime-400/15',
+  },
   refactor: {
     label: 'Refactor',
     color: 'text-amber-400',
@@ -51,7 +99,7 @@ const workTypes: Record<string, WorkTypeConfig> = {
 }
 
 const defaultWorkType: WorkTypeConfig = {
-  label: 'Development',
+  label: 'Unknown',
   color: 'text-af-text-secondary',
   bgColor: 'bg-af-text-secondary/8',
   borderColor: 'border-af-text-secondary/10',
