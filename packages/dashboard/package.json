@@ -1,16 +1,32 @@
 {
   "name": "@supaku/agentfactory-dashboard",
   "version": "0.6.1",
-  "publishConfig": {
-    "access": "public"
-  },
   "description": "Premium dashboard UI components for AgentFactory",
+  "author": "Supaku (https://supaku.com)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/supaku/agentfactory",
     "directory": "packages/dashboard"
   },
-  "license": "MIT",
+  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/dashboard",
+  "bugs": {
+    "url": "https://github.com/supaku/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "dashboard",
+    "agentfactory",
+    "fleet-management",
+    "react",
+    "ui-components",
+    "tailwindcss"
+  ],
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -20,7 +36,9 @@
   "files": [
     "src",
     "tailwind.config.ts",
-    "components.json"
+    "components.json",
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",

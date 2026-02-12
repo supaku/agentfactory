@@ -26,5 +26,8 @@ npm-debug.log*
 # Test
 coverage/
 
+# Claude Code
+.claude/
+
 # Runtime
 .worktrees/

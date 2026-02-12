@@ -8,7 +8,10 @@ Complete reference for all AgentFactory configuration options.
 
 | Variable | Description |
 |----------|-------------|
-| `LINEAR_ACCESS_TOKEN` | Linear API key (Personal API Key or OAuth token) |
+| `LINEAR_ACCESS_TOKEN` | Linear API key — used by the Next.js webhook server and `createDefaultLinearClientResolver()` |
+| `LINEAR_API_KEY` | Linear API key — used by CLI tools (`af-orchestrator`, `af-worker`, etc.) |
+
+> **Tip:** Set both to the same Linear API key value. If you only use CLI tools, `LINEAR_API_KEY` is sufficient. If you only use the Next.js server, `LINEAR_ACCESS_TOKEN` is sufficient.
 
 ### Webhook Server
 

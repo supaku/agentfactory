@@ -1,5 +1,10 @@
 # Supaku AgentFactory
 
+[![npm version](https://img.shields.io/npm/v/@supaku/agentfactory)](https://www.npmjs.com/package/@supaku/agentfactory)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Linear](https://img.shields.io/badge/Linear-Integrated-5E6AD2?logo=linear)](https://linear.app)
+
 **The open-source software factory — multi-agent fleet management for coding agents.**
 
 AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Amp) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
@@ -218,10 +223,13 @@ This requires the `@supaku/agentfactory-server` package and a Redis instance.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LINEAR_API_KEY` | Yes | Linear API key for issue management |
+| `LINEAR_ACCESS_TOKEN` | Yes | Linear API key (used by Next.js webhook server) |
+| `LINEAR_API_KEY` | Yes | Linear API key (used by CLI tools) |
 | `AGENT_PROVIDER` | No | Default provider: `claude`, `codex`, `amp` (default: `claude`) |
 | `LINEAR_TEAM_ID` | No | Linear team UUID |
 | `REDIS_URL` | For distributed | Redis connection URL |
+
+> **Note:** Set both `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` to the same value, or see [Configuration](./docs/configuration.md) for details.
 
 ### Orchestrator Config
 
@@ -295,6 +303,18 @@ pnpm typecheck
 # Run tests
 pnpm test
 ```
+
+## Built with AgentFactory
+
+AgentFactory powers real products in production:
+
+| Product | Description | Status |
+|---------|-------------|--------|
+| [Supaku Social](https://supaku.com/products/social) | AI-powered social media management | Beta |
+| [Supaku Art](https://supaku.com/products/art) | Art collection curation platform | Beta |
+| [Supaku Account](https://supaku.com/products/account) | Unified auth across the Supaku ecosystem | Live |
+
+> Building with AgentFactory? Add the badge to your README and [let us know](https://github.com/supaku/agentfactory/discussions).
 
 ## License
 
