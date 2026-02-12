@@ -9,8 +9,36 @@
 
 AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Amp) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
 
+### Fleet Overview
+
+Real-time view of your agent fleet. Track worker count, active/queued sessions, completed work, available capacity, and total cost at a glance. Each agent card shows the issue it's working on, work type, status, duration, and cost — click any card to jump to its session detail.
+
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="AgentFactory Dashboard — real-time agent activity monitoring" width="800" />
+  <img src="docs/assets/dashboard-fleet.png" alt="Fleet Overview — real-time agent metrics and session cards" width="800" />
+</p>
+
+### Pipeline
+
+Kanban-style board that groups sessions by stage: Backlog, Started, Finished, Failed, and Stopped. Visualize where work is flowing and where it's stuck across your entire factory.
+
+<p align="center">
+  <img src="docs/assets/dashboard-pipeline.png" alt="Pipeline — kanban board of agent sessions by stage" width="800" />
+</p>
+
+### Sessions
+
+Sortable table of every agent session with issue identifier, status, work type, duration, cost, and start time. Click any row to drill into the full session timeline with token usage and event history.
+
+<p align="center">
+  <img src="docs/assets/dashboard-sessions.png" alt="Sessions — detailed table of all agent sessions" width="800" />
+</p>
+
+### Settings
+
+Configuration and integration health at a glance. Shows connection status for the Linear webhook, public API, and worker API endpoints, lists connected workers, and displays fleet capacity.
+
+<p align="center">
+  <img src="docs/assets/dashboard-settings.png" alt="Settings — integration status and fleet configuration" width="800" />
 </p>
 
 ## The Software Factory
