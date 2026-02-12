@@ -5,6 +5,11 @@
     "access": "public"
   },
   "description": "Premium dashboard UI components for AgentFactory",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/supaku/agentfactory",
+    "directory": "packages/dashboard"
+  },
   "license": "MIT",
   "type": "module",
   "exports": {
