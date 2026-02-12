@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Linear](https://img.shields.io/badge/Linear-Integrated-5E6AD2?logo=linear)](https://linear.app)
+[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-dark.svg)](https://github.com/supaku/agentfactory)
 
 **The open-source software factory — multi-agent fleet management for coding agents.**
 
