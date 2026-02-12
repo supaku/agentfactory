@@ -1,14 +1,13 @@
 'use client'
 
 import { cn } from '../../lib/utils'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Separator } from '../../components/ui/separator'
 import { useStats } from '../../hooks/use-stats'
 import { useWorkers } from '../../hooks/use-workers'
 import { ProviderIcon } from '../../components/fleet/provider-icon'
 import { StatusDot } from '../../components/fleet/status-dot'
-import { CheckCircle2, AlertCircle, Settings2 } from 'lucide-react'
+import { CheckCircle2, AlertCircle, Settings2, Webhook, Server, Shield } from 'lucide-react'
 
 interface SettingsViewProps {
   className?: string
@@ -22,97 +21,106 @@ export function SettingsView({ className }: SettingsViewProps) {
   const hasWorkerAuth = workersData !== null
 
   return (
-    <div className={cn('space-y-6 p-5 max-w-3xl', className)}>
+    <div className={cn('space-y-6 p-6 max-w-3xl', className)}>
+      {/* Page header */}
       <div>
-        <h1 className="text-lg font-semibold text-af-text-primary">Settings</h1>
-        <p className="text-sm text-af-text-secondary">
+        <h1 className="font-display text-xl font-bold text-af-text-primary tracking-tight">Settings</h1>
+        <p className="mt-1 text-sm font-body text-af-text-secondary">
           Configuration and integration status for your AgentFactory instance.
         </p>
       </div>
 
       {/* Integration Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Integration Status</CardTitle>
-          <CardDescription>Connected services and API endpoints</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="rounded-xl border border-af-surface-border/40 bg-af-surface/30 overflow-hidden">
+        <div className="px-6 py-4 border-b border-af-surface-border/30">
+          <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-af-text-primary tracking-tight">
+            <Webhook className="h-4 w-4 text-af-text-tertiary" />
+            Integration Status
+          </h3>
+          <p className="mt-0.5 text-xs font-body text-af-text-tertiary">Connected services and API endpoints</p>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-4 w-4 text-af-status-success" />
               <div>
-                <p className="text-sm text-af-text-primary">Linear Webhook</p>
-                <p className="text-xs text-af-text-secondary font-mono">/webhook</p>
+                <p className="text-sm font-body text-af-text-primary">Linear Webhook</p>
+                <p className="text-2xs font-mono text-af-text-tertiary">/webhook</p>
               </div>
             </div>
             <Badge variant="success">Connected</Badge>
           </div>
 
-          <Separator />
+          <Separator className="bg-af-surface-border/30" />
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-4 w-4 text-af-status-success" />
               <div>
-                <p className="text-sm text-af-text-primary">Public API</p>
-                <p className="text-xs text-af-text-secondary font-mono">/api/public/stats</p>
+                <p className="text-sm font-body text-af-text-primary">Public API</p>
+                <p className="text-2xs font-mono text-af-text-tertiary">/api/public/stats</p>
               </div>
             </div>
             <Badge variant="success">Active</Badge>
           </div>
 
-          <Separator />
+          <Separator className="bg-af-surface-border/30" />
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {hasWorkerAuth ? (
                 <CheckCircle2 className="h-4 w-4 text-af-status-success" />
               ) : (
-                <AlertCircle className="h-4 w-4 text-af-text-secondary" />
+                <AlertCircle className="h-4 w-4 text-af-text-tertiary" />
               )}
               <div>
-                <p className="text-sm text-af-text-primary">Worker API</p>
-                <p className="text-xs text-af-text-secondary font-mono">/api/workers</p>
+                <p className="text-sm font-body text-af-text-primary">Worker API</p>
+                <p className="text-2xs font-mono text-af-text-tertiary">/api/workers</p>
               </div>
             </div>
             <Badge variant={hasWorkerAuth ? 'success' : 'secondary'}>
               {hasWorkerAuth ? 'Authenticated' : 'No Auth Key'}
             </Badge>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Workers */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Workers</CardTitle>
-          <CardDescription>
+      <div className="rounded-xl border border-af-surface-border/40 bg-af-surface/30 overflow-hidden">
+        <div className="px-6 py-4 border-b border-af-surface-border/30">
+          <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-af-text-primary tracking-tight">
+            <Server className="h-4 w-4 text-af-text-tertiary" />
+            Workers
+          </h3>
+          <p className="mt-0.5 text-xs font-body text-af-text-tertiary">
             {workers.length > 0
               ? `${workers.length} worker${workers.length !== 1 ? 's' : ''} registered`
               : 'No workers connected'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+
+        <div className="px-6 py-4">
           {workers.length === 0 ? (
-            <p className="text-sm text-af-text-secondary">
+            <p className="text-sm font-body text-af-text-tertiary">
               Workers will appear here once they register with the server.
             </p>
           ) : (
             <div className="space-y-3">
               {workers.map((worker) => (
-                <div key={worker.id} className="flex items-center justify-between">
+                <div key={worker.id} className="flex items-center justify-between py-1">
                   <div className="flex items-center gap-3">
                     <StatusDot status={worker.status === 'active' ? 'working' : 'stopped'} />
                     <div>
                       <p className="text-sm font-mono text-af-text-primary">
                         {worker.hostname ?? worker.id.slice(0, 8)}
                       </p>
-                      <p className="text-xs text-af-text-secondary">
+                      <p className="text-2xs font-body text-af-text-tertiary">
                         {worker.activeSessions}/{worker.capacity} slots
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <ProviderIcon provider={worker.provider} size={14} />
                     <Badge variant={worker.status === 'active' ? 'success' : 'secondary'}>
                       {worker.status}
@@ -122,34 +130,35 @@ export function SettingsView({ className }: SettingsViewProps) {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Fleet Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2 className="h-4 w-4" />
+      <div className="rounded-xl border border-af-surface-border/40 bg-af-surface/30 overflow-hidden">
+        <div className="px-6 py-4 border-b border-af-surface-border/30">
+          <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-af-text-primary tracking-tight">
+            <Shield className="h-4 w-4 text-af-text-tertiary" />
             Fleet Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-af-text-secondary">Total Capacity</dt>
-              <dd className="mt-0.5 text-af-text-primary font-medium">
+          </h3>
+        </div>
+
+        <div className="px-6 py-4">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <dt className="text-2xs font-body uppercase tracking-wider text-af-text-tertiary">Total Capacity</dt>
+              <dd className="font-display text-lg font-bold tabular-nums text-af-text-primary">
                 {stats?.availableCapacity ?? '—'}
               </dd>
             </div>
-            <div>
-              <dt className="text-af-text-secondary">Workers Online</dt>
-              <dd className="mt-0.5 text-af-text-primary font-medium">
+            <div className="space-y-1">
+              <dt className="text-2xs font-body uppercase tracking-wider text-af-text-tertiary">Workers Online</dt>
+              <dd className="font-display text-lg font-bold tabular-nums text-af-text-primary">
                 {stats?.workersOnline ?? '—'}
               </dd>
             </div>
-          </dl>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

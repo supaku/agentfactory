@@ -10,15 +10,15 @@ import type { PublicSessionResponse, SessionStatus } from '../../types/api'
 interface ColumnDef {
   title: string
   statuses: SessionStatus[]
-  accentColor: string
+  accentClass: string
 }
 
 const columns: ColumnDef[] = [
-  { title: 'Backlog', statuses: ['queued', 'parked'], accentColor: 'bg-af-text-secondary' },
-  { title: 'Started', statuses: ['working'], accentColor: 'bg-af-status-success' },
-  { title: 'Finished', statuses: ['completed'], accentColor: 'bg-blue-400' },
-  { title: 'Failed', statuses: ['failed'], accentColor: 'bg-af-status-error' },
-  { title: 'Stopped', statuses: ['stopped'], accentColor: 'bg-af-status-warning' },
+  { title: 'Backlog', statuses: ['queued', 'parked'], accentClass: 'column-accent column-accent-gray' },
+  { title: 'Started', statuses: ['working'], accentClass: 'column-accent column-accent-green' },
+  { title: 'Finished', statuses: ['completed'], accentClass: 'column-accent column-accent-blue' },
+  { title: 'Failed', statuses: ['failed'], accentClass: 'column-accent column-accent-red' },
+  { title: 'Stopped', statuses: ['stopped'], accentClass: 'column-accent column-accent-yellow' },
 ]
 
 function groupByColumn(sessions: PublicSessionResponse[]) {
@@ -36,40 +36,48 @@ export function PipelineView({ className }: PipelineViewProps) {
   const { data, isLoading } = useSessions()
   const sessions = data?.sessions ?? []
 
-  if (isLoading) {
-    return (
-      <div className={cn('flex gap-4 overflow-x-auto p-5', className)}>
-        {columns.map((col) => (
-          <Skeleton key={col.title} className="h-96 w-72 shrink-0 rounded-lg" />
-        ))}
+  return (
+    <div className={cn('p-6', className)}>
+      <div className="mb-5 flex items-center gap-3">
+        <h2 className="font-display text-lg font-bold text-af-text-primary tracking-tight">
+          Pipeline
+        </h2>
+        {!isLoading && (
+          <span className="rounded-full bg-af-surface/60 px-2 py-0.5 text-2xs font-body font-medium tabular-nums text-af-text-secondary">
+            {sessions.length}
+          </span>
+        )}
       </div>
-    )
-  }
 
-  if (sessions.length === 0) {
-    return (
-      <div className="p-5">
+      {isLoading ? (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {columns.map((col) => (
+            <Skeleton key={col.title} className="h-96 w-72 shrink-0 rounded-xl" />
+          ))}
+        </div>
+      ) : sessions.length === 0 ? (
         <EmptyState
           title="No pipeline data"
           description="Sessions will populate the pipeline as agents work on issues."
         />
-      </div>
-    )
-  }
-
-  const grouped = groupByColumn(sessions)
-
-  return (
-    <div className={cn('flex gap-4 overflow-x-auto p-5', className)}>
-      {grouped.map((col) => (
-        <PipelineColumn
-          key={col.title}
-          title={col.title}
-          sessions={col.sessions}
-          count={col.sessions.length}
-          accentColor={col.accentColor}
-        />
-      ))}
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {groupByColumn(sessions).map((col, i) => (
+            <div
+              key={col.title}
+              className="animate-fade-in"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <PipelineColumn
+                title={col.title}
+                sessions={col.sessions}
+                count={col.sessions.length}
+                accentClass={col.accentClass}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

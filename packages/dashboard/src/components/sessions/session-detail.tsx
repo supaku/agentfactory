@@ -1,7 +1,6 @@
 'use client'
 
 import { cn } from '../../lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { StatusDot } from '../../components/fleet/status-dot'
 import { SessionTimeline, type TimelineEvent } from './session-timeline'
@@ -10,7 +9,7 @@ import { formatDuration, formatCost } from '../../lib/format'
 import { getStatusConfig } from '../../lib/status-config'
 import { getWorkTypeConfig } from '../../lib/work-type-config'
 import type { PublicSessionResponse } from '../../types/api'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Clock, Coins, Calendar, Tag } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 
 interface SessionDetailProps {
@@ -23,7 +22,6 @@ export function SessionDetail({ session, onBack, className }: SessionDetailProps
   const statusConfig = getStatusConfig(session.status)
   const workTypeConfig = getWorkTypeConfig(session.workType)
 
-  // Synthesize timeline from available data
   const events: TimelineEvent[] = [
     {
       id: 'started',
@@ -52,9 +50,15 @@ export function SessionDetail({ session, onBack, className }: SessionDetailProps
   }
 
   return (
-    <div className={cn('space-y-4 p-5', className)}>
+    <div className={cn('space-y-6 p-6 animate-fade-in', className)}>
+      {/* Back button */}
       {onBack && (
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-af-text-secondary">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onBack}
+          className="gap-1.5 text-af-text-secondary hover:text-af-text-primary font-body -ml-2"
+        >
           <ArrowLeft className="h-3.5 w-3.5" />
           Back
         </Button>
@@ -62,13 +66,16 @@ export function SessionDetail({ session, onBack, className }: SessionDetailProps
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <StatusDot status={session.status} showHeartbeat={session.status === 'working'} />
-        <h1 className="text-lg font-semibold font-mono text-af-text-primary">
+        <StatusDot status={session.status} showHeartbeat={session.status === 'working'} className="h-3 w-3" />
+        <h1 className="font-display text-xl font-bold font-mono text-af-text-primary tracking-tight">
           {session.identifier}
         </h1>
         <Badge
           variant="outline"
-          className={cn('text-xs', statusConfig.bgColor, statusConfig.textColor, 'border-transparent')}
+          className={cn(
+            'text-xs border',
+            statusConfig.bgColor, statusConfig.textColor, statusConfig.borderColor
+          )}
         >
           {statusConfig.label}
         </Badge>
@@ -76,56 +83,70 @@ export function SessionDetail({ session, onBack, className }: SessionDetailProps
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Left: Details */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Session Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              <div>
-                <dt className="text-af-text-secondary">Work Type</dt>
-                <dd className="mt-0.5">
-                  <Badge
-                    variant="outline"
-                    className={cn(workTypeConfig.bgColor, workTypeConfig.color, 'border-transparent')}
-                  >
-                    {workTypeConfig.label}
-                  </Badge>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-af-text-secondary">Duration</dt>
-                <dd className="mt-0.5 tabular-nums text-af-text-primary">{formatDuration(session.duration)}</dd>
-              </div>
-              <div>
-                <dt className="text-af-text-secondary">Cost</dt>
-                <dd className="mt-0.5 tabular-nums font-mono text-af-text-primary">
-                  {formatCost(session.costUsd)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-af-text-secondary">Started</dt>
-                <dd className="mt-0.5 text-af-text-primary">
-                  {new Date(session.startedAt).toLocaleString()}
-                </dd>
-              </div>
-            </dl>
+        <div className="lg:col-span-2 rounded-xl border border-af-surface-border/40 bg-af-surface/30 p-6">
+          <h3 className="font-display text-sm font-semibold text-af-text-primary tracking-tight mb-5">
+            Session Details
+          </h3>
 
-            <div className="mt-6">
-              <TokenChart />
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <dt className="flex items-center gap-1.5 text-2xs font-body uppercase tracking-wider text-af-text-tertiary">
+                <Tag className="h-3 w-3" />
+                Work Type
+              </dt>
+              <dd>
+                <Badge
+                  variant="outline"
+                  className={cn('text-xs border', workTypeConfig.bgColor, workTypeConfig.color, workTypeConfig.borderColor)}
+                >
+                  {workTypeConfig.label}
+                </Badge>
+              </dd>
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="space-y-1">
+              <dt className="flex items-center gap-1.5 text-2xs font-body uppercase tracking-wider text-af-text-tertiary">
+                <Clock className="h-3 w-3" />
+                Duration
+              </dt>
+              <dd className="font-display text-lg font-bold tabular-nums text-af-text-primary">
+                {formatDuration(session.duration)}
+              </dd>
+            </div>
+
+            <div className="space-y-1">
+              <dt className="flex items-center gap-1.5 text-2xs font-body uppercase tracking-wider text-af-text-tertiary">
+                <Coins className="h-3 w-3" />
+                Cost
+              </dt>
+              <dd className="font-display text-lg font-bold tabular-nums font-mono text-af-accent">
+                {formatCost(session.costUsd)}
+              </dd>
+            </div>
+
+            <div className="space-y-1">
+              <dt className="flex items-center gap-1.5 text-2xs font-body uppercase tracking-wider text-af-text-tertiary">
+                <Calendar className="h-3 w-3" />
+                Started
+              </dt>
+              <dd className="text-sm font-body text-af-text-primary">
+                {new Date(session.startedAt).toLocaleString()}
+              </dd>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <TokenChart />
+          </div>
+        </div>
 
         {/* Right: Timeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SessionTimeline events={events} />
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-af-surface-border/40 bg-af-surface/30 p-6">
+          <h3 className="font-display text-sm font-semibold text-af-text-primary tracking-tight mb-5">
+            Timeline
+          </h3>
+          <SessionTimeline events={events} />
+        </div>
       </div>
     </div>
   )

@@ -11,7 +11,8 @@ export function StatusDot({ status, className, showHeartbeat = false }: StatusDo
   const config = getStatusConfig(status)
 
   return (
-    <span className={cn('relative inline-flex h-2.5 w-2.5', className)}>
+    <span className={cn('relative inline-flex h-2 w-2', className)}>
+      {/* Outer glow ring for active states */}
       {config.animate && showHeartbeat && (
         <span
           className={cn(
@@ -20,11 +21,13 @@ export function StatusDot({ status, className, showHeartbeat = false }: StatusDo
           )}
         />
       )}
+      {/* Core dot */}
       <span
         className={cn(
-          'relative inline-flex h-2.5 w-2.5 rounded-full',
+          'relative inline-flex h-2 w-2 rounded-full',
           config.dotColor,
-          config.animate && 'animate-pulse-dot'
+          config.animate && 'animate-pulse-dot',
+          config.glowClass
         )}
       />
     </span>

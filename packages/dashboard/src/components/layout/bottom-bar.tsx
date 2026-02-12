@@ -3,6 +3,7 @@
 import { cn } from '../../lib/utils'
 import { useStats } from '../../hooks/use-stats'
 import { formatCost } from '../../lib/format'
+import { Zap } from 'lucide-react'
 
 interface BottomBarProps {
   className?: string
@@ -14,25 +15,20 @@ export function BottomBar({ className }: BottomBarProps) {
   return (
     <footer
       className={cn(
-        'flex h-8 items-center justify-between border-t border-af-surface-border bg-af-bg-secondary px-5',
+        'flex h-8 items-center justify-between border-t border-af-surface-border/40 bg-af-bg-secondary/30 backdrop-blur-sm px-5',
         className
       )}
     >
-      <div className="flex items-center gap-4 text-xs text-af-text-secondary">
+      <div className="flex items-center gap-5 text-2xs font-body text-af-text-tertiary">
         <span>
-          Completed today:{' '}
-          <span className="font-medium text-af-text-primary">{data?.completedToday ?? 0}</span>
+          <span className="text-af-text-secondary tabular-nums">{data?.completedToday ?? 0}</span> completed
         </span>
         <span>
-          Capacity:{' '}
-          <span className="font-medium text-af-text-primary">{data?.availableCapacity ?? 0}</span>
+          <span className="text-af-text-secondary tabular-nums">{data?.availableCapacity ?? 0}</span> capacity
         </span>
         {data?.totalCostToday != null && (
           <span>
-            Cost today:{' '}
-            <span className="font-medium text-af-text-primary">
-              {formatCost(data.totalCostToday)}
-            </span>
+            <span className="text-af-accent font-mono tabular-nums">{formatCost(data.totalCostToday)}</span> today
           </span>
         )}
       </div>
@@ -41,9 +37,10 @@ export function BottomBar({ className }: BottomBarProps) {
         href="https://github.com/supaku/agentfactory"
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs text-af-text-secondary hover:text-af-text-primary transition-colors"
+        className="flex items-center gap-1 text-2xs font-body text-af-text-tertiary hover:text-af-text-secondary transition-colors"
       >
-        Powered by AgentFactory
+        <Zap className="h-2.5 w-2.5" />
+        AgentFactory
       </a>
     </footer>
   )

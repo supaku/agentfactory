@@ -3,7 +3,7 @@
 import { cn } from '../../lib/utils'
 import { Logo } from '../../components/shared/logo'
 import { Separator } from '../../components/ui/separator'
-import { LayoutDashboard, Columns3, Activity, Settings } from 'lucide-react'
+import { LayoutDashboard, Columns3, Activity, Settings, ExternalLink } from 'lucide-react'
 
 export interface NavItem {
   label: string
@@ -33,47 +33,63 @@ export function Sidebar({ currentPath = '/', navItems = defaultNavItems, classNa
   return (
     <aside
       className={cn(
-        'flex h-full w-56 flex-col border-r border-af-surface-border bg-af-bg-secondary',
+        'flex h-full w-[220px] flex-col border-r border-af-surface-border/60 bg-af-bg-secondary/60 backdrop-blur-xl',
         className
       )}
     >
+      {/* Logo area */}
       <div className="flex items-center gap-2.5 px-5 py-4">
-        <Logo size={24} />
-        <span className="text-sm font-semibold text-af-text-primary tracking-tight">
+        <Logo size={22} />
+        <span className="font-display text-sm font-bold text-af-text-primary tracking-tight">
           AgentFactory
         </span>
       </div>
 
-      <Separator />
+      <div className="px-5">
+        <Separator className="bg-af-surface-border/60" />
+      </div>
 
-      <nav className="flex-1 space-y-0.5 px-3 py-3">
-        {navItems.map((item) => (
-          <a
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors',
-              isActive(item.href)
-                ? 'bg-af-surface text-af-text-primary'
-                : 'text-af-text-secondary hover:bg-af-surface/50 hover:text-af-text-primary'
-            )}
-          >
-            {item.icon}
-            {item.label}
-          </a>
-        ))}
+      {/* Navigation */}
+      <nav className="flex-1 space-y-0.5 px-3 py-4">
+        {navItems.map((item) => {
+          const active = isActive(item.href)
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-body transition-all duration-200',
+                active
+                  ? 'nav-active-indicator bg-af-surface/80 text-af-text-primary font-medium'
+                  : 'text-af-text-secondary hover:bg-af-surface/40 hover:text-af-text-primary'
+              )}
+            >
+              <span className={cn(
+                'transition-colors duration-200',
+                active ? 'text-af-accent' : ''
+              )}>
+                {item.icon}
+              </span>
+              {item.label}
+            </a>
+          )
+        })}
       </nav>
 
-      <Separator />
+      <div className="px-5">
+        <Separator className="bg-af-surface-border/60" />
+      </div>
 
+      {/* Footer */}
       <div className="px-5 py-3">
         <a
           href="https://github.com/supaku/agentfactory"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-af-text-secondary hover:text-af-text-primary transition-colors"
+          className="group flex items-center gap-1.5 text-2xs font-body text-af-text-tertiary hover:text-af-text-secondary transition-colors"
         >
           AgentFactory
+          <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
         </a>
       </div>
     </aside>

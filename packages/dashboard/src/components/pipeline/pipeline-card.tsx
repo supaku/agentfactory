@@ -4,6 +4,7 @@ import { Badge } from '../../components/ui/badge'
 import { formatDuration } from '../../lib/format'
 import { getWorkTypeConfig } from '../../lib/work-type-config'
 import type { PublicSessionResponse } from '../../types/api'
+import { Clock } from 'lucide-react'
 
 interface PipelineCardProps {
   session: PublicSessionResponse
@@ -16,24 +17,28 @@ export function PipelineCard({ session, className }: PipelineCardProps) {
   return (
     <div
       className={cn(
-        'rounded-md border border-af-surface-border bg-af-surface p-3 transition-colors hover:border-af-surface-border/80',
+        'rounded-lg border border-af-surface-border/40 bg-af-surface/50 p-3 transition-all duration-200 hover-glow',
         className
       )}
     >
       <div className="flex items-center gap-2">
         <StatusDot status={session.status} />
-        <span className="text-xs font-medium text-af-text-primary font-mono truncate">
+        <span className="text-xs font-mono font-medium text-af-text-primary truncate">
           {session.identifier}
         </span>
       </div>
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2.5 flex items-center justify-between">
         <Badge
           variant="outline"
-          className={cn('text-xs', workTypeConfig.bgColor, workTypeConfig.color, 'border-transparent')}
+          className={cn(
+            'text-2xs border',
+            workTypeConfig.bgColor, workTypeConfig.color, workTypeConfig.borderColor
+          )}
         >
           {workTypeConfig.label}
         </Badge>
-        <span className="text-xs text-af-text-secondary tabular-nums">
+        <span className="flex items-center gap-1 text-2xs font-body text-af-text-tertiary tabular-nums">
+          <Clock className="h-2.5 w-2.5" />
           {formatDuration(session.duration)}
         </span>
       </div>

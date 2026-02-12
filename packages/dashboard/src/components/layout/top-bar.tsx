@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import { StatusDot } from '../../components/fleet/status-dot'
 import { useStats } from '../../hooks/use-stats'
 import { Skeleton } from '../../components/ui/skeleton'
+import { Radio } from 'lucide-react'
 
 interface TopBarProps {
   className?: string
@@ -15,39 +16,46 @@ export function TopBar({ className }: TopBarProps) {
   return (
     <header
       className={cn(
-        'flex h-11 items-center justify-between border-b border-af-surface-border bg-af-bg-secondary px-5',
+        'flex h-11 items-center justify-between border-b border-af-surface-border/50 bg-af-bg-secondary/40 backdrop-blur-md px-5',
         className
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-5">
         {isLoading ? (
           <>
-            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-4 w-28" />
             <Skeleton className="h-4 w-20" />
             <Skeleton className="h-4 w-20" />
           </>
         ) : (
           <>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <StatusDot status={data?.workersOnline ? 'working' : 'stopped'} showHeartbeat />
-              <span className="text-xs text-af-text-secondary">
-                <span className="font-medium text-af-text-primary">{data?.workersOnline ?? 0}</span>{' '}
-                {data?.workersOnline === 1 ? 'worker' : 'workers'} online
+              <span className="text-xs font-body text-af-text-secondary">
+                <span className="font-semibold text-af-text-primary tabular-nums">{data?.workersOnline ?? 0}</span>{' '}
+                {data?.workersOnline === 1 ? 'worker' : 'workers'}
               </span>
             </div>
-            <div className="text-xs text-af-text-secondary">
-              <span className="font-medium text-af-text-primary">{data?.agentsWorking ?? 0}</span> working
-            </div>
-            <div className="text-xs text-af-text-secondary">
-              <span className="font-medium text-af-text-primary">{data?.queueDepth ?? 0}</span> queued
-            </div>
+
+            <div className="h-3 w-px bg-af-surface-border" />
+
+            <span className="text-xs font-body text-af-text-secondary">
+              <span className="font-semibold text-af-teal tabular-nums">{data?.agentsWorking ?? 0}</span> active
+            </span>
+
+            <span className="text-xs font-body text-af-text-secondary">
+              <span className="font-semibold text-af-text-primary tabular-nums">{data?.queueDepth ?? 0}</span> queued
+            </span>
           </>
         )}
       </div>
 
-      <div className="text-xs text-af-text-secondary">
+      <div className="flex items-center gap-2 text-xs font-body text-af-text-tertiary">
         {data?.timestamp && (
-          <span>Updated {new Date(data.timestamp).toLocaleTimeString()}</span>
+          <>
+            <Radio className="h-3 w-3 text-af-teal animate-pulse-dot" />
+            <span>{new Date(data.timestamp).toLocaleTimeString()}</span>
+          </>
         )}
       </div>
     </header>

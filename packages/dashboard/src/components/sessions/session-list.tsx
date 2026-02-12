@@ -21,7 +21,7 @@ export function SessionList({ onSelect, className }: SessionListProps) {
 
   if (isLoading) {
     return (
-      <div className={cn('space-y-2 p-5', className)}>
+      <div className={cn('space-y-2 p-6', className)}>
         {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-14 rounded-lg" />
         ))}
@@ -31,7 +31,7 @@ export function SessionList({ onSelect, className }: SessionListProps) {
 
   if (sessions.length === 0) {
     return (
-      <div className="p-5">
+      <div className="p-6">
         <EmptyState
           title="No sessions"
           description="Agent sessions will appear here once they start."
@@ -41,60 +41,76 @@ export function SessionList({ onSelect, className }: SessionListProps) {
   }
 
   return (
-    <div className={cn('p-5', className)}>
-      <div className="rounded-lg border border-af-surface-border overflow-hidden">
-        <table className="w-full text-sm">
+    <div className={cn('p-6', className)}>
+      <div className="mb-5 flex items-center gap-3">
+        <h2 className="font-display text-lg font-bold text-af-text-primary tracking-tight">
+          Sessions
+        </h2>
+        <span className="rounded-full bg-af-surface/60 px-2 py-0.5 text-2xs font-body font-medium tabular-nums text-af-text-secondary">
+          {sessions.length}
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-af-surface-border/40 overflow-hidden">
+        <table className="w-full text-sm font-body">
           <thead>
-            <tr className="border-b border-af-surface-border bg-af-bg-secondary">
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Issue</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Status</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Type</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Duration</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Cost</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-af-text-secondary">Started</th>
+            <tr className="border-b border-af-surface-border/40 bg-af-bg-secondary/50">
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Issue</th>
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Status</th>
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Type</th>
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Duration</th>
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Cost</th>
+              <th className="px-4 py-3 text-left text-2xs font-semibold uppercase tracking-wider text-af-text-tertiary">Started</th>
             </tr>
           </thead>
           <tbody>
-            {sessions.map((session) => {
+            {sessions.map((session, i) => {
               const statusConfig = getStatusConfig(session.status)
               const workTypeConfig = getWorkTypeConfig(session.workType)
               return (
                 <tr
                   key={session.id}
-                  className="border-b border-af-surface-border last:border-0 hover:bg-af-surface/50 cursor-pointer transition-colors"
+                  className={cn(
+                    'border-b border-af-surface-border/20 last:border-0 cursor-pointer transition-all duration-200',
+                    'hover:bg-af-surface/30'
+                  )}
                   onClick={() => onSelect?.(session.id)}
+                  style={{ animationDelay: `${i * 30}ms` }}
                 >
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <span className="font-mono text-sm text-af-text-primary">{session.identifier}</span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-1.5">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
                       <StatusDot status={session.status} />
                       <span className={cn('text-xs', statusConfig.textColor)}>
                         {statusConfig.label}
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <Badge
                       variant="outline"
-                      className={cn('text-xs', workTypeConfig.bgColor, workTypeConfig.color, 'border-transparent')}
+                      className={cn(
+                        'text-2xs border',
+                        workTypeConfig.bgColor, workTypeConfig.color, workTypeConfig.borderColor
+                      )}
                     >
                       {workTypeConfig.label}
                     </Badge>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <span className="text-xs text-af-text-secondary tabular-nums">
                       {formatDuration(session.duration)}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-4 py-3">
                     <span className="text-xs text-af-text-secondary tabular-nums font-mono">
                       {formatCost(session.costUsd)}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-xs text-af-text-secondary">
+                  <td className="px-4 py-3">
+                    <span className="text-xs text-af-text-tertiary">
                       {formatRelativeTime(session.startedAt)}
                     </span>
                   </td>

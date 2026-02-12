@@ -7,27 +7,30 @@ interface PipelineColumnProps {
   title: string
   sessions: PublicSessionResponse[]
   count: number
-  accentColor?: string
+  accentClass?: string
   className?: string
 }
 
-export function PipelineColumn({ title, sessions, count, accentColor, className }: PipelineColumnProps) {
+export function PipelineColumn({ title, sessions, count, accentClass, className }: PipelineColumnProps) {
   return (
     <div
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-lg border border-af-surface-border bg-af-bg-secondary',
+        'flex w-72 shrink-0 flex-col rounded-xl border border-af-surface-border/40 bg-af-bg-secondary/50 backdrop-blur-sm',
+        accentClass,
         className
       )}
     >
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          {accentColor && (
-            <span className={cn('h-2 w-2 rounded-full', accentColor)} />
-          )}
-          <span className="text-xs font-medium text-af-text-primary">{title}</span>
-        </div>
-        <span className="text-xs tabular-nums text-af-text-secondary">{count}</span>
+      {/* Column header */}
+      <div className="flex items-center justify-between px-3.5 py-3">
+        <span className="text-xs font-display font-semibold text-af-text-primary tracking-tight">
+          {title}
+        </span>
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-af-surface/60 px-1.5 text-2xs font-body font-medium tabular-nums text-af-text-secondary">
+          {count}
+        </span>
       </div>
+
+      {/* Card list */}
       <ScrollArea className="flex-1 px-2 pb-2">
         <div className="space-y-2">
           {sessions.map((session) => (
