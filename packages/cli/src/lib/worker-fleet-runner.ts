@@ -6,6 +6,7 @@
  */
 
 import { spawn, type ChildProcess } from 'child_process'
+import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -94,8 +95,12 @@ function fleetLog(
 function getDefaultWorkerScript(): string {
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
-  // Runner lives in lib/, worker.js is one level up
-  return path.resolve(__dirname, '..', 'worker.js')
+  // Runner lives in lib/, worker entry is one level up.
+  // When running from compiled dist/ the .js file exists; when running from
+  // source via tsx only the .ts file exists.
+  const jsPath = path.resolve(__dirname, '..', 'worker.js')
+  if (fs.existsSync(jsPath)) return jsPath
+  return path.resolve(__dirname, '..', 'worker.ts')
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +200,12 @@ ${colors.cyan}================================================================${
       `Starting worker (capacity: ${this.fleetConfig.capacity})${restartCount > 0 ? ` [restart #${restartCount}]` : ''}`,
     )
 
-    const workerArgs = [
+    const nodeArgs: string[] = []
+    // When running a .ts worker script, register tsx so Node can load it
+    if (this.workerScript.endsWith('.ts')) {
+      nodeArgs.push('--import', 'tsx')
+    }
+    nodeArgs.push(
       this.workerScript,
       '--capacity',
       String(this.fleetConfig.capacity),
@@ -203,14 +213,14 @@ ${colors.cyan}================================================================${
       this.fleetConfig.apiUrl,
       '--api-key',
       this.fleetConfig.apiKey,
-    ]
+    )
     if (this.fleetConfig.projects?.length) {
-      workerArgs.push('--projects', this.fleetConfig.projects.join(','))
+      nodeArgs.push('--projects', this.fleetConfig.projects.join(','))
     }
 
     const workerProcess = spawn(
       'node',
-      workerArgs,
+      nodeArgs,
       {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
