@@ -26,7 +26,9 @@
     "clean": "turbo run clean",
     "orchestrator": "node --import tsx packages/cli/src/orchestrator.ts",
     "worker": "node --import tsx packages/cli/src/worker.ts",
+    "worker-fleet": "node --import tsx packages/cli/src/worker-fleet.ts",
     "queue-admin": "node --import tsx packages/cli/src/queue-admin.ts",
+    "analyze-logs": "node --import tsx packages/cli/src/analyze-logs.ts",
     "linear": "node packages/core/dist/linear-cli.mjs"
   },
   "devDependencies": {
