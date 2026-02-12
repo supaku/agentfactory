@@ -45,7 +45,12 @@ export function AgentCard({ session, className, onSelect }: AgentCardProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <StatusDot status={session.status} showHeartbeat={session.status === 'working'} />
-          <span className="text-sm font-mono font-medium text-af-text-primary truncate">
+          <span className={cn(
+            'text-sm font-mono font-medium truncate',
+            onSelect
+              ? 'text-af-teal hover:underline underline-offset-2'
+              : 'text-af-text-primary'
+          )}>
             {session.identifier}
           </span>
         </div>

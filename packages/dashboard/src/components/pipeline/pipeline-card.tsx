@@ -36,7 +36,12 @@ export function PipelineCard({ session, className, onSelect }: PipelineCardProps
     >
       <div className="flex items-center gap-2">
         <StatusDot status={session.status} />
-        <span className="text-xs font-mono font-medium text-af-text-primary truncate">
+        <span className={cn(
+          'text-xs font-mono font-medium truncate',
+          onSelect
+            ? 'text-af-teal hover:underline underline-offset-2'
+            : 'text-af-text-primary'
+        )}>
           {session.identifier}
         </span>
       </div>
