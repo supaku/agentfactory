@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-linear",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "type": "module",
   "description": "Linear issue tracker integration for AgentFactory — status transitions, agent sessions, work routing",
   "author": "Supaku (https://supaku.com)",
