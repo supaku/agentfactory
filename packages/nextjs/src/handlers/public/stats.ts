@@ -29,12 +29,15 @@ function getTodayStart(): number {
 export function createPublicStatsHandler() {
   return async function GET() {
     try {
-      const [allSessions, workers, capacity, queueLength] = await Promise.all([
+      // Fetch workers once and pass to getTotalCapacity to avoid
+      // redundant listWorkers() calls that can return different snapshots
+      const [allSessions, workers, queueLength] = await Promise.all([
         getAllSessions(),
         listWorkers(),
-        getTotalCapacity(),
         getQueueLength(),
       ])
+
+      const capacity = await getTotalCapacity(workers)
 
       const todayStart = getTodayStart()
 

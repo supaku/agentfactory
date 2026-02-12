@@ -13,11 +13,12 @@ const log = createLogger('api:workers:list')
 export function createWorkerListHandler() {
   return async function GET() {
     try {
-      const [workers, capacity, queueLength] = await Promise.all([
+      const [workers, queueLength] = await Promise.all([
         listWorkers(),
-        getTotalCapacity(),
         getQueueLength(),
       ])
+
+      const capacity = await getTotalCapacity(workers)
 
       return NextResponse.json({
         workers,

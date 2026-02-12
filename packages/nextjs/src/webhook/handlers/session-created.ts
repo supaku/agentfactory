@@ -170,10 +170,37 @@ export async function handleSessionCreated(
     })
   }
 
-  // Phase 2.5: Auto-detect parent issues for coordination
+  // Phase 2.5: Auto-detect parent/child issues for coordination routing
   if (workType === 'development' && workTypeSource === 'status') {
     try {
       const linearClient = await config.linearClient.getClient(payload.organizationId)
+
+      // Skip child/sub-issues for non-mention sessions — these are managed
+      // by the parent issue's coordinator agent, not dispatched independently.
+      const isChild = await linearClient.isChildIssue(issueId)
+      if (isChild) {
+        sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
+          issueIdentifier,
+        })
+
+        try {
+          await emitActivity(
+            linearClient,
+            sessionId,
+            'response',
+            `This is a sub-issue. Work will be coordinated by the parent issue's agent.`
+          )
+        } catch (err) {
+          sessionLog.warn('Failed to emit sub-issue skip activity', { error: err })
+        }
+
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          reason: 'sub_issue_managed_by_parent',
+        })
+      }
+
       const isParent = await linearClient.isParentIssue(issueId)
       if (isParent) {
         workType = 'coordination'
@@ -182,7 +209,7 @@ export async function handleSessionCreated(
         })
       }
     } catch (err) {
-      sessionLog.warn('Failed to check if issue is parent', { error: err })
+      sessionLog.warn('Failed to check issue parent/child status', { error: err })
     }
   }
 

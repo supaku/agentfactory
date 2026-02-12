@@ -41,7 +41,9 @@ export function createWorkerPollHandler() {
         )
       }
 
-      const availableCapacity = worker.capacity - worker.activeCount
+      // Use activeSessions.length (authoritative Redis set) instead of
+      // activeCount (heartbeat-reported, can be stale after re-registration)
+      const availableCapacity = worker.capacity - worker.activeSessions.length
       let work: Awaited<ReturnType<typeof peekWork>> = []
 
       if (availableCapacity > 0) {

@@ -353,9 +353,16 @@ export async function removeWorkerSession(
 }
 
 /**
- * Get total capacity across all active workers
+ * Get total capacity across all active workers.
+ *
+ * Accepts an optional pre-fetched workers list to avoid redundant Redis scans
+ * (callers like the stats handler already call listWorkers()).
+ *
+ * Uses activeSessions.length (authoritative Redis set) instead of the
+ * heartbeat-reported activeCount, which can be stale after re-registration
+ * or between heartbeat intervals.
  */
-export async function getTotalCapacity(): Promise<{
+export async function getTotalCapacity(prefetchedWorkers?: WorkerInfo[]): Promise<{
   totalCapacity: number
   totalActive: number
   availableCapacity: number
@@ -365,11 +372,11 @@ export async function getTotalCapacity(): Promise<{
   }
 
   try {
-    const workers = await listWorkers()
+    const workers = prefetchedWorkers ?? await listWorkers()
     const activeWorkers = workers.filter((w) => w.status === 'active')
 
     const totalCapacity = activeWorkers.reduce((sum, w) => sum + w.capacity, 0)
-    const totalActive = activeWorkers.reduce((sum, w) => sum + w.activeCount, 0)
+    const totalActive = activeWorkers.reduce((sum, w) => sum + w.activeSessions.length, 0)
 
     return {
       totalCapacity,
