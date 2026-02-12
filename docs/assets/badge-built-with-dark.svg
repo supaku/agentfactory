@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="28" role="img" aria-label="Built with AgentFactory">
+  <title>Built with AgentFactory</title>
+  <defs>
+    <linearGradient id="a" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0F1628"/>
+      <stop offset="100%" stop-color="#0D1220"/>
+    </linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#171F32"/>
+      <stop offset="100%" stop-color="#141B2D"/>
+    </linearGradient>
+  </defs>
+  <clipPath id="c"><rect width="192" height="28" rx="4"/></clipPath>
+  <g clip-path="url(#c)">
+    <rect width="34" height="28" fill="url(#a)"/>
+    <rect width="2" height="28" fill="#FF6B35"/>
+    <rect x="34" width="158" height="28" fill="url(#b)"/>
+    <rect x="33" y="5" width="1" height="18" fill="#1E2740"/>
+  </g>
+  <rect width="191" height="27" x="0.5" y="0.5" rx="3.5" fill="none" stroke="#283350" stroke-width="1"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+    <text x="19" y="18" text-anchor="middle" font-size="10" font-weight="700" fill="#FF6B35" letter-spacing="0.5">AF</text>
+    <text font-size="11" y="18">
+      <tspan x="42" fill="#7C8DB5">Built with</tspan>
+      <tspan dx="5" fill="#F1F5F9" font-weight="600">AgentFactory</tspan>
+    </text>
+  </g>
+</svg>

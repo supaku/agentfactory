@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="28" role="img" aria-label="Built with AgentFactory">
+  <title>Built with AgentFactory</title>
+  <clipPath id="c"><rect width="192" height="28" rx="4"/></clipPath>
+  <g clip-path="url(#c)">
+    <rect width="34" height="28" fill="#FFFFFF"/>
+    <rect width="2" height="28" fill="#FF6B35"/>
+    <rect x="34" width="158" height="28" fill="#F8FAFC"/>
+    <rect x="33" y="5" width="1" height="18" fill="#E2E8F0"/>
+  </g>
+  <rect width="191" height="27" x="0.5" y="0.5" rx="3.5" fill="none" stroke="#E2E8F0" stroke-width="1"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+    <text x="19" y="18" text-anchor="middle" font-size="10" font-weight="700" fill="#FF6B35" letter-spacing="0.5">AF</text>
+    <text font-size="11" y="18">
+      <tspan x="42" fill="#64748B">Built with</tspan>
+      <tspan dx="5" fill="#1E293B" font-weight="600">AgentFactory</tspan>
+    </text>
+  </g>
+</svg>

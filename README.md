@@ -336,13 +336,35 @@ pnpm test
 
 AgentFactory powers real products in production:
 
-| Product | Description | Status |
-|---------|-------------|--------|
-| [Supaku Social](https://supaku.com/products/social) | AI-powered social media management | Beta |
-| [Supaku Art](https://supaku.com/products/art) | Art collection curation platform | Beta |
-| [Supaku Account](https://supaku.com/products/account) | Unified auth across the Supaku ecosystem | Live |
+| Product | What it does |
+|---------|-------------|
+| [Supaku Social](https://supaku.com/products/social) | AI-powered social media management |
+| [Supaku Art](https://art.supaku.com) | Art collection curation platform |
+| [Supaku Account](https://account.supaku.com) | Unified auth across the Supaku ecosystem |
 
-> Building with AgentFactory? Add the badge to your README and [let us know](https://github.com/supaku/agentfactory/discussions).
+Building with AgentFactory? Add the badge to your project and [share it in Discussions](https://github.com/supaku/agentfactory/discussions).
+
+## Badge
+
+If you're building with AgentFactory, add the badge to your README:
+
+<!-- Dark badge (default) -->
+[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with.svg)](https://github.com/supaku/agentfactory)
+
+<!-- Light badge (for dark READMEs) -->
+[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-light.svg)](https://github.com/supaku/agentfactory)
+
+Or use HTML for GitHub theme-switching (auto light/dark):
+
+```html
+<a href="https://github.com/supaku/agentfactory">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-light.svg">
+    <img alt="Built with AgentFactory" src="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with.svg">
+  </picture>
+</a>
+```
 
 ## License
 
