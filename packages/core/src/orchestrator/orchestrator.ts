@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { config as loadDotenv } from 'dotenv'
 import {
@@ -459,8 +459,8 @@ Do NOT wait for user approval - create issues automatically.${LINEAR_CLI_INSTRUC
 Implement the feature/fix as specified in the issue description.
 
 DEPENDENCY INSTALLATION:
-Dependencies are pre-installed by the orchestrator. Do NOT run pnpm install unless you
-encounter a specific missing module error. If you must run it, run it SYNCHRONOUSLY
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
 (never with run_in_background). Never use sleep or polling loops to wait for commands.
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
@@ -475,8 +475,8 @@ See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI
 Resume where you left off. Check the issue for any new comments or feedback.
 
 DEPENDENCY INSTALLATION:
-Dependencies are pre-installed by the orchestrator. Do NOT run pnpm install unless you
-encounter a specific missing module error. If you must run it, run it SYNCHRONOUSLY
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
 (never with run_in_background). Never use sleep or polling loops to wait for commands.
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
@@ -492,8 +492,8 @@ Validate the implementation against acceptance criteria.
 Run tests, check for regressions, verify the PR meets requirements.
 
 DEPENDENCY INSTALLATION:
-Dependencies are pre-installed by the orchestrator. Do NOT run pnpm install unless you
-encounter a specific missing module error. If you must run it, run it SYNCHRONOUSLY
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
 (never with run_in_background). Never use sleep or polling loops to wait for commands.
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
@@ -550,8 +550,8 @@ Every sub-agent prompt you construct MUST include these rules:
 Prefix every sub-agent prompt with: "SHARED WORKTREE \u2014 DO NOT MODIFY GIT STATE"
 
 DEPENDENCY INSTALLATION:
-Dependencies are pre-installed by the orchestrator. Do NOT run pnpm install unless you
-encounter a specific missing module error. If you must run it, run it SYNCHRONOUSLY
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
 (never with run_in_background). Never use sleep or polling loops to wait for commands.
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
@@ -592,8 +592,8 @@ Every sub-agent prompt you construct MUST include these rules:
 Prefix every sub-agent prompt with: "SHARED WORKTREE \u2014 DO NOT MODIFY GIT STATE"
 
 DEPENDENCY INSTALLATION:
-Dependencies are pre-installed by the orchestrator. Do NOT run pnpm install unless you
-encounter a specific missing module error. If you must run it, run it SYNCHRONOUSLY
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
 (never with run_in_background). Never use sleep or polling loops to wait for commands.
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
@@ -1189,26 +1189,76 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Pre-install dependencies in a worktree before spawning an agent.
-   * This prevents agents from wasting time/tokens running pnpm install themselves,
-   * and avoids pathological polling loops when pnpm install is run as a background task.
+   * Link dependencies from the main repo into a worktree via symlinks.
    *
-   * @param worktreePath - Absolute path to the worktree
-   * @param identifier - Issue identifier for logging (e.g., "SUP-123")
+   * For Node.js/pnpm monorepos, this symlinks node_modules from the main repo
+   * into the worktree — instant (~0s) vs pnpm install (~10+ min on cross-volume).
+   *
+   * For non-Node repos (no node_modules in main repo), this is a no-op.
+   *
+   * Falls back to `pnpm install --frozen-lockfile` if symlinking fails.
    */
-  preInstallDependencies(worktreePath: string, identifier: string): void {
-    console.log(`[${identifier}] Pre-installing dependencies in worktree...`)
+  linkDependencies(worktreePath: string, identifier: string): void {
+    const repoRoot = findRepoRoot(worktreePath)
+    if (!repoRoot) {
+      console.warn(`[${identifier}] Could not find repo root, skipping dependency linking`)
+      return
+    }
+
+    const mainNodeModules = resolve(repoRoot, 'node_modules')
+    if (!existsSync(mainNodeModules)) {
+      // Not a Node.js project, or deps not installed in main repo — nothing to do
+      console.log(`[${identifier}] No node_modules in main repo, skipping dependency linking`)
+      return
+    }
+
+    console.log(`[${identifier}] Linking dependencies from main repo...`)
+    try {
+      // Symlink root node_modules
+      const destRoot = resolve(worktreePath, 'node_modules')
+      if (!existsSync(destRoot)) {
+        symlinkSync(mainNodeModules, destRoot)
+      }
+
+      // Symlink per-workspace node_modules (apps/*, packages/*)
+      for (const subdir of ['apps', 'packages']) {
+        const mainSubdir = resolve(repoRoot, subdir)
+        if (!existsSync(mainSubdir)) continue
+
+        for (const entry of readdirSync(mainSubdir)) {
+          const src = resolve(mainSubdir, entry, 'node_modules')
+          const dest = resolve(worktreePath, subdir, entry, 'node_modules')
+          if (existsSync(src) && !existsSync(dest)) {
+            symlinkSync(src, dest)
+          }
+        }
+      }
+
+      console.log(`[${identifier}] Dependencies linked successfully`)
+    } catch (error) {
+      console.warn(
+        `[${identifier}] Symlink failed, falling back to install:`,
+        error instanceof Error ? error.message : String(error)
+      )
+      this.installDependencies(worktreePath, identifier)
+    }
+  }
+
+  /**
+   * Fallback: install dependencies via pnpm install.
+   * Only called when symlinking fails.
+   */
+  private installDependencies(worktreePath: string, identifier: string): void {
+    console.log(`[${identifier}] Installing dependencies via pnpm...`)
     try {
       execSync('pnpm install --frozen-lockfile 2>&1', {
         cwd: worktreePath,
         stdio: 'pipe',
         encoding: 'utf-8',
-        timeout: 120_000, // 2 minute timeout
+        timeout: 120_000,
       })
       console.log(`[${identifier}] Dependencies installed successfully`)
-    } catch (error) {
-      // Retry without --frozen-lockfile in case lockfile is out of date
-      console.warn(`[${identifier}] Frozen lockfile install failed, retrying without --frozen-lockfile`)
+    } catch {
       try {
         execSync('pnpm install 2>&1', {
           cwd: worktreePath,
@@ -1216,15 +1266,21 @@ export class AgentOrchestrator {
           encoding: 'utf-8',
           timeout: 120_000,
         })
-        console.log(`[${identifier}] Dependencies installed successfully (without frozen lockfile)`)
+        console.log(`[${identifier}] Dependencies installed (without frozen lockfile)`)
       } catch (retryError) {
-        // Log but don't fail - the agent can still attempt to install
         console.warn(
-          `[${identifier}] Pre-install failed (agent will retry):`,
+          `[${identifier}] Install failed (agent may retry):`,
           retryError instanceof Error ? retryError.message : String(retryError)
         )
       }
     }
+  }
+
+  /**
+   * @deprecated Use linkDependencies() instead. This now delegates to linkDependencies.
+   */
+  preInstallDependencies(worktreePath: string, identifier: string): void {
+    this.linkDependencies(worktreePath, identifier)
   }
 
   /**
@@ -2130,8 +2186,8 @@ export class AgentOrchestrator {
         // Create worktree with work type suffix
         const { worktreePath, worktreeIdentifier } = this.createWorktree(issue.identifier, workType)
 
-        // Pre-install dependencies so the agent doesn't waste time on pnpm install
-        this.preInstallDependencies(worktreePath, issue.identifier)
+        // Link dependencies from main repo into worktree
+        this.linkDependencies(worktreePath, issue.identifier)
 
         const startStatus = WORK_TYPE_START_STATUS[workType]
 
@@ -2203,8 +2259,8 @@ export class AgentOrchestrator {
     // Create worktree with work type suffix (e.g., SUP-294-QA)
     const { worktreePath, worktreeIdentifier } = this.createWorktree(identifier, effectiveWorkType)
 
-    // Pre-install dependencies so the agent doesn't waste time on pnpm install
-    this.preInstallDependencies(worktreePath, identifier)
+    // Link dependencies from main repo into worktree
+    this.linkDependencies(worktreePath, identifier)
 
     // Check for existing state and potential recovery
     const recoveryCheck = checkRecovery(worktreePath, {
@@ -2477,8 +2533,8 @@ export class AgentOrchestrator {
         worktreePath = result.worktreePath
         worktreeIdentifier = result.worktreeIdentifier
 
-        // Pre-install dependencies so the agent doesn't waste time on pnpm install
-        this.preInstallDependencies(worktreePath, identifier)
+        // Link dependencies from main repo into worktree
+        this.linkDependencies(worktreePath, identifier)
       } catch (error) {
         return {
           forwarded: false,
@@ -2496,8 +2552,8 @@ export class AgentOrchestrator {
         worktreePath = result.worktreePath
         worktreeIdentifier = result.worktreeIdentifier
 
-        // Pre-install dependencies so the agent doesn't waste time on pnpm install
-        this.preInstallDependencies(worktreePath, identifier)
+        // Link dependencies from main repo into worktree
+        this.linkDependencies(worktreePath, identifier)
       } catch (error) {
         return {
           forwarded: false,
