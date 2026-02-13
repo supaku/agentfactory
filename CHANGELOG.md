@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.1
+
+### Features
+
+- **Worktree dependency symlinks** — Replaced `preInstallDependencies()` with `linkDependencies()` in the orchestrator. Symlinks `node_modules` from the main repo into worktrees instead of running `pnpm install`, making worktree setup near-instant vs 10+ minutes on cross-volume setups. Falls back to `pnpm install` if symlinking fails.
+
 ## v0.7.0
 
 ### Features
