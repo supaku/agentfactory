@@ -19,7 +19,7 @@ import { createHash } from 'crypto'
 import {
   createLinearAgentClient,
   type LinearAgentClient,
-  DEFAULT_TEAM_ID,
+  getDefaultTeamId,
   LINEAR_PROJECTS,
   LINEAR_LABELS,
 } from '@supaku/agentfactory-linear'
@@ -651,7 +651,7 @@ export class LogAnalyzer {
           if (!dryRun) {
             // Create issue in the configured backlog project with Bug label
             const payload = await this.linearClient.linearClient.createIssue({
-              teamId: DEFAULT_TEAM_ID,
+              teamId: getDefaultTeamId(),
               projectId: getBugBacklogProjectId(),
               labelIds: [LINEAR_LABELS.BUG],
               title: suggestion.title,

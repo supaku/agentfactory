@@ -45,8 +45,13 @@ export const CONTINUATION_MARKER = '\n\n*...continued in next comment*'
 /**
  * Default team UUID
  * Must be set via LINEAR_TEAM_ID env var
+ *
+ * Uses a getter to read lazily from process.env, avoiding ESM import
+ * hoisting issues where the value is captured before dotenv runs.
  */
-export const DEFAULT_TEAM_ID = process.env.LINEAR_TEAM_ID ?? ''
+export function getDefaultTeamId(): string {
+  return process.env.LINEAR_TEAM_ID ?? ''
+}
 
 /**
  * Project IDs — must be set via env vars:

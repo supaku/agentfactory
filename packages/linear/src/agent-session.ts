@@ -29,7 +29,7 @@ import {
 } from './errors.js'
 import { buildCompletionComments } from './utils.js'
 import {
-  DEFAULT_TEAM_ID,
+  getDefaultTeamId,
   LINEAR_PROJECTS,
   LINEAR_LABELS,
   type EnvironmentIssueType,
@@ -654,7 +654,7 @@ ${context?.errorStack ? `### Error Stack\n\n\`\`\`\n${context.errorStack}\n\`\`\
       const issue = await this.client.createIssue({
         title: `Bug: [Agent Environment] ${title}`,
         description: fullDescription,
-        teamId: DEFAULT_TEAM_ID,
+        teamId: getDefaultTeamId(),
         projectId: LINEAR_PROJECTS.AGENT,
         labelIds: [LINEAR_LABELS.BUG],
       })
