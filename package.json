@@ -29,7 +29,7 @@
     "worker-fleet": "node --import tsx packages/cli/src/worker-fleet.ts",
     "queue-admin": "node --import tsx packages/cli/src/queue-admin.ts",
     "analyze-logs": "node --import tsx packages/cli/src/analyze-logs.ts",
-    "linear": "node packages/core/dist/linear-cli.mjs"
+    "linear": "node --import tsx packages/core/src/linear-cli.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

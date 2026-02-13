@@ -26,8 +26,9 @@ npm-debug.log*
 # Test
 coverage/
 
-# Claude Code
-.claude/
+# Claude Code (ignore settings/cache, but track agent definitions)
+.claude/*
+!.claude/agents/
 
 # Runtime
 .worktrees/

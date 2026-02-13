@@ -427,13 +427,19 @@ function generatePromptForWorkType(
     return options.parentContext
   }
 
+  const LINEAR_CLI_INSTRUCTION = `
+
+LINEAR CLI (CRITICAL):
+Use the Linear CLI (\`pnpm linear\`) for ALL Linear operations. Do NOT use Linear MCP tools.
+See CLAUDE.md for the full command reference.`
+
   let basePrompt: string
   switch (workType) {
     case 'research':
       basePrompt = `Research and flesh out story ${identifier}.
 Analyze requirements, identify technical approach, estimate complexity,
 and update the story description with detailed acceptance criteria.
-Do NOT implement code. Focus on story refinement only.`
+Do NOT implement code. Focus on story refinement only.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'backlog-creation':
@@ -445,7 +451,7 @@ Choose the correct issue structure based on the work:
 - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context. Source stays in Icebox.
 - Single issue rewrite: When scope is atomic (single concern, \u22643 files, no phases). Rewrite source in-place and move to Backlog.
 IMPORTANT: When creating multiple issues (sub-issues or independent), always add "related" links between them AND blocking relations where one step depends on another. This informs sub-agents and the coordinator of execution order.
-Do NOT wait for user approval - create issues automatically.`
+Do NOT wait for user approval - create issues automatically.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'development':
@@ -461,7 +467,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'inflight':
@@ -477,7 +483,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'qa':
@@ -494,7 +500,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'acceptance':
@@ -502,14 +508,14 @@ See the "Working with Large Files" section in CLAUDE.md for details.`
 Validate development and QA work is complete.
 Verify PR is ready to merge (CI passing, no conflicts).
 Merge the PR using: gh pr merge <PR_NUMBER> --squash
-After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>`
+After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'refinement':
       basePrompt = `Refine ${identifier} based on rejection feedback.
 Read the rejection comments, identify required changes,
 update the issue description with refined requirements,
-then return to Backlog for re-implementation.`
+then return to Backlog for re-implementation.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'coordination':
@@ -552,7 +558,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'qa-coordination':
@@ -594,7 +600,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'acceptance-coordination':
@@ -621,7 +627,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.`
+See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
   }
 
