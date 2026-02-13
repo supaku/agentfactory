@@ -903,6 +903,52 @@ export class AgentOrchestrator {
   }
 
   /**
+   * Check if a path is the main git working tree (not a worktree).
+   *
+   * The main working tree has a `.git` directory, while worktrees have a
+   * `.git` file containing a `gitdir:` pointer. This is the primary safeguard
+   * against accidentally destroying the main repository.
+   */
+  private isMainWorktree(targetPath: string): boolean {
+    try {
+      const gitPath = resolve(targetPath, '.git')
+      if (!existsSync(gitPath)) return false
+      const stat = statSync(gitPath)
+      // Main working tree has .git as a directory; worktrees have .git as a file
+      if (stat.isDirectory()) return true
+
+      // Double-check via `git worktree list --porcelain`
+      const output = execSync('git worktree list --porcelain', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      })
+      const mainTreeMatch = output.match(/^worktree (.+)$/m)
+      if (mainTreeMatch) {
+        const mainTreePath = mainTreeMatch[1]
+        return resolve(targetPath) === resolve(mainTreePath)
+      }
+    } catch {
+      // If we can't determine, err on the side of caution - treat as main
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Check if a path is inside the configured .worktrees/ directory.
+   *
+   * Only paths within the worktrees directory should ever be candidates for
+   * automated cleanup. This prevents the main repo or other directories from
+   * being targeted.
+   */
+  private isInsideWorktreesDir(targetPath: string): boolean {
+    const worktreesDir = resolve(this.config.worktreePath)
+    const normalizedTarget = resolve(targetPath)
+    // Must be inside .worktrees/ (not equal to it)
+    return normalizedTarget.startsWith(worktreesDir + '/')
+  }
+
+  /**
    * Attempt to clean up a stale worktree that is blocking branch creation.
    *
    * During dev\u2192qa\u2192acceptance handoffs, the prior work type's worktree may still
@@ -911,9 +957,33 @@ export class AgentOrchestrator {
    * agent is still alive via heartbeat. If not, it removes the stale worktree
    * so the new work type can proceed.
    *
+   * SAFETY: This method will NEVER clean up the main working tree. It only
+   * operates on paths inside the .worktrees/ directory. This prevents
+   * catastrophic data loss when a branch is checked out in the main tree
+   * (e.g., by a user in their IDE).
+   *
    * @returns true if the conflicting worktree was cleaned up
    */
   private tryCleanupConflictingWorktree(conflictPath: string, branchName: string): boolean {
+    // SAFETY GUARD 1: Never touch the main working tree
+    if (this.isMainWorktree(conflictPath)) {
+      console.warn(
+        `SAFETY: Refusing to clean up ${conflictPath} \u2014 it is the main working tree. ` +
+        `Branch '${branchName}' appears to be checked out in the main repo (e.g., via IDE). ` +
+        `The agent will retry or skip this issue.`
+      )
+      return false
+    }
+
+    // SAFETY GUARD 2: Only clean up paths inside .worktrees/
+    if (!this.isInsideWorktreesDir(conflictPath)) {
+      console.warn(
+        `SAFETY: Refusing to clean up ${conflictPath} \u2014 it is not inside the worktrees directory. ` +
+        `Only paths inside '${resolve(this.config.worktreePath)}' can be auto-cleaned.`
+      )
+      return false
+    }
+
     if (!existsSync(conflictPath)) {
       // Directory doesn't exist - just prune git's worktree list
       try {
@@ -952,12 +1022,19 @@ export class AgentOrchestrator {
       console.log(`Removed stale worktree: ${conflictPath}`)
       return true
     } catch (removeError) {
-      console.warn(
-        `Failed to remove stale worktree ${conflictPath}:`,
-        removeError instanceof Error ? removeError.message : String(removeError)
-      )
+      const removeMsg = removeError instanceof Error ? removeError.message : String(removeError)
+      console.warn(`Failed to remove stale worktree ${conflictPath}:`, removeMsg)
 
-      // Try harder: rm -rf + prune
+      // SAFETY GUARD 3: If git itself says "main working tree", absolutely stop
+      if (removeMsg.includes('is a main working tree')) {
+        console.error(
+          `SAFETY: git confirmed ${conflictPath} is the main working tree. Aborting cleanup.`
+        )
+        return false
+      }
+
+      // Fallback: rm -rf + prune (safe because guards 1 & 2 already verified
+      // this path is inside .worktrees/ and is not the main tree)
       try {
         execSync(`rm -rf "${conflictPath}"`, { stdio: 'pipe', encoding: 'utf-8' })
         execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })

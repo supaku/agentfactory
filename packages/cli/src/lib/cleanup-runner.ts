@@ -158,9 +158,26 @@ function scanWorktrees(options: CleanupOptions): WorktreeInfo[] {
 }
 
 /**
- * Remove a single worktree
+ * Remove a single worktree with safety checks.
+ *
+ * SAFETY: Refuses to remove paths where .git is a directory (main working tree)
+ * to prevent catastrophic data loss.
  */
 function removeWorktree(worktreePath: string): { success: boolean; error?: string } {
+  // Safety check: never remove the main working tree
+  try {
+    const gitPath = resolve(worktreePath, '.git')
+    if (existsSync(gitPath) && statSync(gitPath).isDirectory()) {
+      return {
+        success: false,
+        error: `SAFETY: ${worktreePath} is the main working tree (.git is a directory). Refusing to remove.`,
+      }
+    }
+  } catch {
+    // If we can't check, err on the side of caution
+    return { success: false, error: `SAFETY: Could not verify ${worktreePath} is not the main working tree.` }
+  }
+
   try {
     execSync(`git worktree remove "${worktreePath}" --force`, {
       encoding: 'utf-8',

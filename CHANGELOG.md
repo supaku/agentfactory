@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.2
+
+### Critical Fix
+
+- **Prevent catastrophic main worktree destruction** — Fixed a critical bug where the stale worktree cleanup logic could `rm -rf` the main repository when a branch was checked out in the main working tree (e.g., via IDE). When the orchestrator encountered a branch conflict with the main tree, it incorrectly identified it as a "stale worktree" and attempted destructive cleanup, destroying all source files, `.git`, `.env.local`, and other untracked files.
+
+  Three layered safety guards added to `tryCleanupConflictingWorktree()`:
+  1. **`isMainWorktree()` check** — Detects the main working tree by verifying `.git` is a directory (not a worktree file), cross-checked with `git worktree list --porcelain`. Errs on the side of caution if undetermined.
+  2. **`isInsideWorktreesDir()` check** — Ensures the conflict path is inside `.worktrees/` before any cleanup is attempted. Paths outside the worktrees directory are never touched.
+  3. **`"is a main working tree"` error guard** — If `git worktree remove --force` itself reports the path is the main tree, the `rm -rf` fallback is now blocked instead of being used as escalation.
+
+  Additionally, `removeWorktree()` in the CLI cleanup-runner now validates the target is not the main working tree before proceeding.
+
 ## v0.7.1
 
 ### Features
