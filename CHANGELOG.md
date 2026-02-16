@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.4
+
+### Fixes
+
+- **Auto-allow bash commands for autonomous agents in worktrees** — Agents spawned in git worktrees couldn't run `pnpm linear` or other bash commands because `settings.local.json` and the auto-approve hook weren't accessible from the worktree CWD. The Claude provider now passes `allowedTools` to the SDK so `pnpm`, `git`, `gh`, `node`, and `npx` commands are auto-approved for autonomous agents without relying on filesystem settings. Added optional `allowedTools` field to `AgentSpawnConfig` for custom overrides.
+- **Linear CLI loads `.env.local` credentials automatically** — `pnpm linear` commands no longer require `LINEAR_API_KEY` to be exported in the shell. The CLI now loads `.env` and `.env.local` via dotenv at startup.
+
+### Chores
+
+- Aligned all package versions to 0.7.4 across the monorepo.
+
 ## v0.7.3
 
 ### Fixes
