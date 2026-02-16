@@ -96,12 +96,23 @@ export function SettingsView({ className }: SettingsViewProps) {
           <p className="mt-0.5 text-xs font-body text-af-text-tertiary">
             {workers.length > 0
               ? `${workers.length} worker${workers.length !== 1 ? 's' : ''} registered`
-              : 'No workers connected'}
+              : !hasWorkerAuth && (stats?.workersOnline ?? 0) > 0
+                ? `${stats!.workersOnline} worker${stats!.workersOnline !== 1 ? 's' : ''} online`
+                : 'No workers connected'}
           </p>
         </div>
 
         <div className="px-6 py-4">
-          {workers.length === 0 ? (
+          {!hasWorkerAuth && (stats?.workersOnline ?? 0) > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-body text-af-text-secondary">
+                {stats!.workersOnline} worker{stats!.workersOnline !== 1 ? 's' : ''} connected to the fleet.
+              </p>
+              <p className="text-xs font-body text-af-text-tertiary">
+                Set <code className="font-mono text-2xs px-1 py-0.5 rounded bg-af-surface-border/30">WORKER_API_KEY</code> to view detailed worker information.
+              </p>
+            </div>
+          ) : workers.length === 0 ? (
             <p className="text-sm font-body text-af-text-tertiary">
               Workers will appear here once they register with the server.
             </p>
