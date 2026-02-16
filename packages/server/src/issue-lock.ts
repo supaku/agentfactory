@@ -490,6 +490,9 @@ export async function cleanupExpiredLocksWithPendingWork(): Promise<number> {
       // Extract issueId from key
       const issueId = pendingKey.replace(PENDING_PREFIX, '')
 
+      // Skip keys that are actually issue:pending:items:* hashes (not sorted sets)
+      if (issueId.includes(':')) continue
+
       // Check if lock still exists
       const lockKey = `${LOCK_PREFIX}${issueId}`
       const lock = await redisGet(lockKey)
