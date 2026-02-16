@@ -31,6 +31,11 @@
  *   LINEAR_API_KEY              Required API key for authentication
  */
 
+import 'dotenv/config'
+import { config } from 'dotenv'
+// Load .env.local (higher priority, loaded second so it overrides)
+config({ path: '.env.local', override: true })
+
 import { createLinearAgentClient } from '@supaku/agentfactory-linear'
 import {
   checkPRDeploymentStatus,
