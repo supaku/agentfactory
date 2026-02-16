@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.5
+
+### Fixes
+
+- **Fix Redis WRONGTYPE error in expired lock cleanup** — `cleanupExpiredLocksWithPendingWork()` scanned `issue:pending:*` which matched both sorted sets (`issue:pending:{id}`) and hashes (`issue:pending:items:{id}`). Running `ZCARD` on a hash key caused a recurring `WRONGTYPE` error in production. Added the same colon-guard already present in `cleanupStaleLocksWithIdleWorkers`.
+
+### Chores
+
+- Aligned all package versions to 0.7.5 across the monorepo.
+
 ## v0.7.4
 
 ### Fixes
