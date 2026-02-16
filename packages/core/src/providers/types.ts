@@ -49,6 +49,12 @@ export interface AgentSpawnConfig {
   /** Sandbox level for filesystem/network restrictions */
   sandboxEnabled: boolean
   /**
+   * Tools to auto-allow without prompting for permission.
+   * Supports glob patterns (e.g., 'Bash(pnpm *)').
+   * When omitted the provider may supply defaults for autonomous agents.
+   */
+  allowedTools?: string[]
+  /**
    * Callback to capture PID when the agent process is spawned.
    * Providers call this once the underlying process is created.
    */

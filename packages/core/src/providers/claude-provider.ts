@@ -33,12 +33,26 @@ export class ClaudeProvider implements AgentProvider {
   private createHandle(config: AgentSpawnConfig, resumeSessionId?: string): AgentHandle {
     const abortController = config.abortController
 
+    // Default allowed tools for autonomous agents — ensures bash commands
+    // like `pnpm linear`, `git`, `gh` are auto-approved without needing
+    // settings.local.json (which isn't available in worktrees).
+    const defaultAllowedTools = config.autonomous
+      ? [
+          'Bash(pnpm *)',
+          'Bash(git *)',
+          'Bash(gh *)',
+          'Bash(node *)',
+          'Bash(npx *)',
+        ]
+      : []
+
     const agentQuery = query({
       prompt: config.prompt,
       options: {
         cwd: config.cwd,
         env: config.env,
         abortController,
+        allowedTools: config.allowedTools ?? defaultAllowedTools,
         permissionMode: 'acceptEdits',
         disallowedTools: config.autonomous ? ['AskUserQuestion'] : [],
         settingSources: ['project'],
