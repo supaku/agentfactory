@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.7.3
+
+### Fixes
+
+- **`create-agentfactory-app` scaffold overhaul** — Fixed multiple issues that caused scaffolded projects to fail at build time or crash on deployment:
+  - **Edge Runtime middleware crash** — Changed middleware import from `@supaku/agentfactory-nextjs` (main barrel, pulls in Node.js-only deps like ioredis) to `@supaku/agentfactory-nextjs/middleware` (Edge-compatible subpath). Without this fix, every Vercel deployment crashes with `MIDDLEWARE_INVOCATION_FAILED` / `charCodeAt` errors.
+  - **Tailwind v3 → v4** — Replaced deprecated Tailwind v3 setup (`tailwind.config.ts` + `postcss.config.js` + autoprefixer) with Tailwind v4 CSS-based config (`postcss.config.mjs` + `@tailwindcss/postcss`). Updated `globals.css` from `@tailwind` directives to `@import "tailwindcss"` + `@source`.
+  - **CLI orchestrator missing `linearApiKey`** — `runOrchestrator()` requires `linearApiKey` but the scaffold omitted it, causing a TypeScript error.
+  - **CLI cleanup called `.catch()` on sync return** — `runCleanup()` returns `CleanupResult` synchronously, not a Promise. The scaffold treated it as async.
+  - **CLI worker/worker-fleet missing signal handling** — Added `AbortController` for graceful SIGINT/SIGTERM shutdown, environment variable fallbacks for `WORKER_CAPACITY`/`WORKER_PROJECTS`/`WORKER_FLEET_SIZE`, and full argument parsing.
+  - **Stale dependency versions** — Bumped all `@supaku/agentfactory-*` deps from `^0.4.0` to `^0.7.2`, Next.js from `^15.3.0` to `^16.1.0`.
+  - **Removed `/dashboard` from middleware matcher** — The dashboard lives at `/`, not `/dashboard`.
+
+### Chores
+
+- Aligned all package versions to 0.7.3 across the monorepo.
+
 ## v0.7.2
 
 ### Critical Fix

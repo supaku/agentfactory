@@ -72,8 +72,7 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
     files['src/app/sessions/page.tsx'] = sessionsPageTsx()
     files['src/app/sessions/[id]/page.tsx'] = sessionDetailPageTsx()
     files['src/app/settings/page.tsx'] = settingsPageTsx()
-    files['tailwind.config.ts'] = tailwindConfig()
-    files['postcss.config.js'] = postcssConfig()
+    files['postcss.config.mjs'] = postcssConfig()
   } else {
     files['src/app/layout.tsx'] = layoutTsx(opts)
     files['src/app/page.tsx'] = minimalPageTsx()
@@ -110,11 +109,11 @@ function routeReexport(post: string | null, get?: string, del?: string): string 
 
 function packageJson(opts: TemplateOptions): string {
   const deps: Record<string, string> = {
-    '@supaku/agentfactory': '^0.4.0',
-    '@supaku/agentfactory-linear': '^0.4.0',
-    '@supaku/agentfactory-nextjs': '^0.4.0',
-    '@supaku/agentfactory-server': '^0.4.0',
-    'next': '^15.3.0',
+    '@supaku/agentfactory': '^0.7.3',
+    '@supaku/agentfactory-linear': '^0.7.3',
+    '@supaku/agentfactory-nextjs': '^0.7.3',
+    '@supaku/agentfactory-server': '^0.7.3',
+    'next': '^16.1.0',
     'react': '^19.0.0',
     'react-dom': '^19.0.0',
   }
@@ -133,14 +132,13 @@ function packageJson(opts: TemplateOptions): string {
   }
 
   if (opts.includeDashboard) {
-    deps['@supaku/agentfactory-dashboard'] = '^0.4.0'
-    devDeps['tailwindcss'] = '^3.4.0'
-    devDeps['postcss'] = '^8'
-    devDeps['autoprefixer'] = '^10'
+    deps['@supaku/agentfactory-dashboard'] = '^0.7.3'
+    devDeps['@tailwindcss/postcss'] = '^4'
+    devDeps['tailwindcss'] = '^4'
   }
 
   if (opts.includeCli) {
-    deps['@supaku/agentfactory-cli'] = '^0.4.0'
+    deps['@supaku/agentfactory-cli'] = '^0.7.3'
     scripts['worker'] = 'tsx cli/worker.ts'
     scripts['orchestrator'] = 'tsx cli/orchestrator.ts'
     scripts['worker-fleet'] = 'tsx cli/worker-fleet.ts'
@@ -298,7 +296,15 @@ export const routes = createAllRoutes({
 }
 
 function middlewareTs(): string {
-  return `import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+  return `/**
+ * Next.js Middleware — Edge Runtime Compatible
+ *
+ * Uses the /middleware subpath export which only loads Edge-compatible
+ * modules. Do NOT import from the main barrel ('@supaku/agentfactory-nextjs')
+ * — it pulls in Node.js-only dependencies via re-exports.
+ */
+
+import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs/middleware'
 
 const { middleware } = createAgentFactoryMiddleware()
 
@@ -309,7 +315,6 @@ export const config = {
   matcher: [
     '/api/:path*',
     '/webhook',
-    '/dashboard',
     '/pipeline',
     '/settings',
     '/sessions/:path*',
@@ -358,9 +363,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 
 function globalsCss(): string {
-  return `@tailwind base;
-@tailwind components;
-@tailwind utilities;
+  return `@import "tailwindcss";
+@source "../../node_modules/@supaku/agentfactory-dashboard/src";
 `
 }
 
@@ -450,31 +454,10 @@ export default function Settings() {
 `
 }
 
-function tailwindConfig(): string {
-  return `import type { Config } from 'tailwindcss'
-import dashboardPreset from '@supaku/agentfactory-dashboard/tailwind-preset'
-
-const config: Config = {
-  presets: [dashboardPreset],
-  content: [
-    './src/**/*.{ts,tsx}',
-    './node_modules/@supaku/agentfactory-dashboard/src/**/*.{ts,tsx}',
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
-
-export default config
-`
-}
-
 function postcssConfig(): string {
-  return `module.exports = {
+  return `export default {
   plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+    "@tailwindcss/postcss": {},
   },
 }
 `
@@ -497,26 +480,69 @@ function cliWorker(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-// Load environment from .env.local
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
 import { runWorker } from '@supaku/agentfactory-cli/worker'
 
-const apiUrl = process.env.WORKER_API_URL
+function parseArgs() {
+  const args = process.argv.slice(2)
+  const opts: Record<string, string | boolean> = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--capacity' && args[i + 1]) opts.capacity = args[++i]
+    else if (arg === '--hostname' && args[i + 1]) opts.hostname = args[++i]
+    else if (arg === '--api-url' && args[i + 1]) opts.apiUrl = args[++i]
+    else if (arg === '--projects' && args[i + 1]) opts.projects = args[++i]
+    else if (arg === '--dry-run') opts.dryRun = true
+  }
+  return opts
+}
+
+const args = parseArgs()
+
+const apiUrl = (args.apiUrl as string) || process.env.WORKER_API_URL
 const apiKey = process.env.WORKER_API_KEY
 
-if (!apiUrl || !apiKey) {
-  console.error('Missing WORKER_API_URL or WORKER_API_KEY in .env.local')
+if (!apiUrl) {
+  console.error('Error: WORKER_API_URL not set (use --api-url or env)')
+  process.exit(1)
+}
+if (!apiKey) {
+  console.error('Error: WORKER_API_KEY not set')
   process.exit(1)
 }
 
-runWorker({
-  apiUrl,
-  apiKey,
-  capacity: 3,
-}).catch((err) => {
-  console.error('Worker failed:', err)
-  process.exit(1)
+const controller = new AbortController()
+process.on('SIGINT', () => controller.abort())
+process.on('SIGTERM', () => controller.abort())
+
+const capacity = args.capacity
+  ? Number(args.capacity)
+  : process.env.WORKER_CAPACITY
+    ? Number(process.env.WORKER_CAPACITY)
+    : undefined
+
+const projects = (args.projects as string)
+  ? (args.projects as string).split(',').map(s => s.trim()).filter(Boolean)
+  : process.env.WORKER_PROJECTS
+    ? process.env.WORKER_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+    : undefined
+
+runWorker(
+  {
+    apiUrl,
+    apiKey,
+    hostname: args.hostname as string | undefined,
+    capacity,
+    dryRun: !!args.dryRun,
+    projects,
+  },
+  controller.signal,
+).catch((err) => {
+  if (err?.name !== 'AbortError') {
+    console.error('Worker failed:', err)
+    process.exit(1)
+  }
 })
 `
 }
@@ -526,21 +552,41 @@ function cliOrchestrator(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-// Load environment from .env.local
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
 import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
 
-const project = process.argv.find((_, i, a) => a[i - 1] === '--project') ?? undefined
-const single = process.argv.find((_, i, a) => a[i - 1] === '--single') ?? undefined
-const dryRun = process.argv.includes('--dry-run')
-const max = Number(process.argv.find((_, i, a) => a[i - 1] === '--max')) || 3
+function parseArgs() {
+  const args = process.argv.slice(2)
+  const opts: Record<string, string | boolean> = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--project' && args[i + 1]) opts.project = args[++i]
+    else if (arg === '--max' && args[i + 1]) opts.max = args[++i]
+    else if (arg === '--single' && args[i + 1]) opts.single = args[++i]
+    else if (arg === '--no-wait') opts.wait = false
+    else if (arg === '--dry-run') opts.dryRun = true
+  }
+  return opts
+}
+
+const args = parseArgs()
+
+const linearApiKey = process.env.LINEAR_API_KEY || process.env.LINEAR_ACCESS_TOKEN
+if (!linearApiKey) {
+  console.error('Error: LINEAR_API_KEY or LINEAR_ACCESS_TOKEN not set')
+  process.exit(1)
+}
 
 runOrchestrator({
-  project,
-  single,
-  dryRun,
-  max,
+  linearApiKey,
+  project: args.project as string | undefined,
+  max: args.max ? Number(args.max) : undefined,
+  single: args.single as string | undefined,
+  wait: args.wait !== false,
+  dryRun: !!args.dryRun,
+}).then((result) => {
+  if (result.errors.length > 0) process.exit(1)
 }).catch((err) => {
   console.error('Orchestrator failed:', err)
   process.exit(1)
@@ -553,45 +599,103 @@ function cliWorkerFleet(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-// Load environment from .env.local
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
 import { runWorkerFleet } from '@supaku/agentfactory-cli/worker-fleet'
 
+function parseArgs() {
+  const args = process.argv.slice(2)
+  const opts: Record<string, string | boolean> = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--workers' && args[i + 1]) opts.workers = args[++i]
+    else if (arg === '--capacity' && args[i + 1]) opts.capacity = args[++i]
+    else if (arg === '--projects' && args[i + 1]) opts.projects = args[++i]
+    else if (arg === '--dry-run') opts.dryRun = true
+  }
+  return opts
+}
+
+const args = parseArgs()
+
 const apiUrl = process.env.WORKER_API_URL
 const apiKey = process.env.WORKER_API_KEY
 
-if (!apiUrl || !apiKey) {
-  console.error('Missing WORKER_API_URL or WORKER_API_KEY in .env.local')
+if (!apiUrl) {
+  console.error('Error: WORKER_API_URL not set')
+  process.exit(1)
+}
+if (!apiKey) {
+  console.error('Error: WORKER_API_KEY not set')
   process.exit(1)
 }
 
-runWorkerFleet({
-  apiUrl,
-  apiKey,
-}).catch((err) => {
-  console.error('Worker fleet failed:', err)
-  process.exit(1)
+const controller = new AbortController()
+process.on('SIGINT', () => controller.abort())
+process.on('SIGTERM', () => controller.abort())
+
+const workers = args.workers
+  ? Number(args.workers)
+  : process.env.WORKER_FLEET_SIZE
+    ? Number(process.env.WORKER_FLEET_SIZE)
+    : undefined
+const capacity = args.capacity
+  ? Number(args.capacity)
+  : process.env.WORKER_CAPACITY
+    ? Number(process.env.WORKER_CAPACITY)
+    : undefined
+const projects = (args.projects as string)
+  ? (args.projects as string).split(',').map(s => s.trim()).filter(Boolean)
+  : process.env.WORKER_PROJECTS
+    ? process.env.WORKER_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+    : undefined
+
+runWorkerFleet(
+  {
+    apiUrl,
+    apiKey,
+    workers,
+    capacity,
+    dryRun: !!args.dryRun,
+    projects,
+  },
+  controller.signal,
+).catch((err) => {
+  if (err?.name !== 'AbortError') {
+    console.error('Fleet failed:', err)
+    process.exit(1)
+  }
 })
 `
 }
 
 function cliCleanup(): string {
   return `#!/usr/bin/env tsx
-import path from 'path'
-import { config } from 'dotenv'
+import { runCleanup, type CleanupRunnerConfig } from '@supaku/agentfactory-cli/cleanup'
 
-// Load environment from .env.local
-config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
+function parseArgs(): CleanupRunnerConfig {
+  const args = process.argv.slice(2)
+  const opts: CleanupRunnerConfig = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--dry-run') opts.dryRun = true
+    else if (arg === '--force') opts.force = true
+    else if (arg === '--path' && args[i + 1]) opts.worktreePath = args[++i]
+    else if (arg === '--help' || arg === '-h') {
+      console.log('Usage: pnpm cleanup [--dry-run] [--force] [--path <dir>]')
+      process.exit(0)
+    }
+  }
+  return opts
+}
 
-import { runCleanup } from '@supaku/agentfactory-cli/cleanup'
+const result = runCleanup(parseArgs())
 
-const dryRun = process.argv.includes('--dry-run')
-
-runCleanup({ dryRun }).catch((err) => {
-  console.error('Cleanup failed:', err)
+console.log(\`\\nSummary: scanned=\${result.scanned} orphaned=\${result.orphaned} cleaned=\${result.cleaned}\`)
+if (result.errors.length > 0) {
+  console.error('Errors:', result.errors)
   process.exit(1)
-})
+}
 `
 }
 
