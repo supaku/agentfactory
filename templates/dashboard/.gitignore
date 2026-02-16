@@ -1,0 +1,8 @@
+node_modules/
+.next/
+dist/
+.env.local
+.env*.local
+.worktrees/
+.agent/
+*.tsbuildinfo
