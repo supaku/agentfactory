@@ -59,6 +59,9 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
   files['src/app/api/public/sessions/route.ts'] = routeReexport(null, 'routes.public.sessions.GET')
   files['src/app/api/public/sessions/[id]/route.ts'] = routeReexport(null, 'routes.public.sessionDetail.GET')
 
+  // Config route
+  files['src/app/api/config/route.ts'] = routeReexport(null, 'routes.config.GET')
+
   // Cleanup route
   files['src/app/api/cleanup/route.ts'] = routeReexport('routes.cleanup.POST', 'routes.cleanup.GET')
 
@@ -278,6 +281,7 @@ import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agen
 export const routes = createAllRoutes({
   linearClient: createDefaultLinearClientResolver(),
   // Uncomment and customize as needed:
+  // projects: ['MyProject'],  // Only handle webhooks for these Linear projects
   // generatePrompt: (identifier, workType, mentionContext) => {
   //   return \`Work on issue \${identifier} (type: \${workType})\`
   // },

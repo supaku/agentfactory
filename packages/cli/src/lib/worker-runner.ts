@@ -144,6 +144,7 @@ export async function runWorker(
   let shutdownInProgress = false
   let consecutiveHeartbeatFailures = 0
   let reregistrationInProgress = false
+  let claimFailureCount = 0
   const activeOrchestrators = new Map<string, AgentOrchestrator>()
 
   // Logger — will be re-created after registration with worker context
@@ -388,6 +389,12 @@ export async function runWorker(
 
     if (result.data) {
       consecutiveHeartbeatFailures = 0
+
+      if (claimFailureCount > 0) {
+        log.info('Claim race summary since last heartbeat', { claimFailures: claimFailureCount })
+        claimFailureCount = 0
+      }
+
       log.debug('Heartbeat acknowledged', {
         activeCount,
         pendingWorkCount: result.data.pendingWorkCount,
@@ -863,6 +870,19 @@ export async function runWorker(
     // Update logger with worker context
     log = createLogger({ workerId, workerShortId }, { showTimestamp: true })
 
+    // Auto-inherit projects from server if not explicitly configured
+    if (!config.projects?.length) {
+      try {
+        const serverConfig = await apiRequest<{ projects: string[] }>('/api/config')
+        if (serverConfig?.projects?.length) {
+          config.projects = serverConfig.projects
+          log.info('Auto-inherited projects from server', { projects: config.projects })
+        }
+      } catch {
+        log.debug('Could not fetch server config, using no project filter')
+      }
+    }
+
     // Set up heartbeat
     heartbeatTimer = setInterval(
       () => sendHeartbeat(),
@@ -908,7 +928,8 @@ export async function runWorker(
                 })
               }
             } else {
-              log.warn(`Failed to claim work: ${item.issueIdentifier}`)
+              claimFailureCount++
+              log.debug(`Failed to claim work: ${item.issueIdentifier}`)
             }
           }
         }

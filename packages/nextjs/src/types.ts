@@ -52,6 +52,8 @@ export interface WebhookConfig extends RouteConfig {
   autoTrigger?: AutoTriggerConfig
   buildParentQAContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
   buildParentAcceptanceContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
+  /** Linear project names this server handles. Empty/undefined = all projects. */
+  projects?: string[]
 }
 
 /**
@@ -66,6 +68,8 @@ export interface ResolvedWebhookConfig extends RouteConfig {
   autoTrigger?: AutoTriggerConfig
   buildParentQAContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
   buildParentAcceptanceContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
+  /** Linear project names this server handles. Empty/undefined = all projects. */
+  projects?: string[]
 }
 
 /**

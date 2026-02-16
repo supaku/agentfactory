@@ -49,6 +49,9 @@ import { createPublicSessionDetailHandler } from './handlers/public/session-deta
 // Cleanup handler
 import { createCleanupHandler } from './handlers/cleanup.js'
 
+// Config handler
+import { createConfigHandler } from './handlers/config.js'
+
 // Webhook processor
 import { createWebhookHandler } from './webhook/processor.js'
 
@@ -82,6 +85,7 @@ export interface AllRoutes {
     sessions: { GET: RouteHandler }
     sessionDetail: { GET: RouteHandler }
   }
+  config: { GET: RouteHandler }
   cleanup: { POST: RouteHandler; GET: RouteHandler }
   webhook: { POST: RouteHandler; GET: RouteHandler }
   oauth: {
@@ -144,6 +148,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
   const cleanup = createCleanupHandler(webhookConfig)
   const webhook = createWebhookHandler(webhookConfig)
   const oauth = createOAuthCallbackHandler(config.oauth)
+  const configHandler = createConfigHandler(config.projects)
 
   return {
     workers: {
@@ -172,6 +177,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       sessions: { GET: createPublicSessionsListHandler() },
       sessionDetail: { GET: createPublicSessionDetailHandler() },
     },
+    config: { GET: configHandler.GET },
     cleanup: { POST: cleanup.POST, GET: cleanup.GET },
     webhook: { POST: webhook.POST, GET: webhook.GET },
     oauth: {

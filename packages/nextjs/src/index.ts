@@ -92,3 +92,6 @@ export type { PublicSessionDetailResponse } from './handlers/public/session-deta
 
 // Cleanup handler
 export { createCleanupHandler } from './handlers/cleanup.js'
+
+// Config handler
+export { createConfigHandler } from './handlers/config.js'

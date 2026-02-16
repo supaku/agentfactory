@@ -58,6 +58,14 @@ export async function handleIssueUpdated(
 
   const issueLog = log.child({ issueId, issueIdentifier })
 
+  // Server-level project filter (applies to all paths)
+  const projectName = (data.project as Record<string, unknown> | undefined)?.name as string | undefined
+
+  if (!isProjectAllowed(projectName, config.projects ?? [])) {
+    issueLog.debug('Project not handled by this server, skipping', { projectName })
+    return NextResponse.json({ success: true, skipped: true, reason: 'project_not_allowed' })
+  }
+
   const autoTrigger = config.autoTrigger
 
   // === Handle Finished transition (auto-QA) ===
@@ -89,7 +97,6 @@ export async function handleIssueUpdated(
       return NextResponse.json({ success: true, skipped: true, reason: 'auto_qa_disabled' })
     }
 
-    const projectName = (data.project as Record<string, unknown> | undefined)?.name as string | undefined
     if (!isProjectAllowed(projectName, autoTrigger.autoQAProjects)) {
       issueLog.debug('Project not in auto-QA list, skipping', { projectName })
       return NextResponse.json({ success: true, skipped: true, reason: 'project_not_allowed' })
@@ -336,7 +343,6 @@ export async function handleIssueUpdated(
       }
 
       const prompt = config.generatePrompt(issueIdentifier, workType)
-      const projectName = (data.project as Record<string, unknown> | undefined)?.name as string | undefined
 
       await storeSessionState(devSessionId, {
         issueId,
@@ -427,7 +433,6 @@ export async function handleIssueUpdated(
         return NextResponse.json({ success: true, skipped: true, reason: 'auto_acceptance_disabled' })
       }
 
-      const projectName = (data.project as Record<string, unknown> | undefined)?.name as string | undefined
       if (!isProjectAllowed(projectName, autoTrigger.autoAcceptanceProjects)) {
         issueLog.debug('Project not in auto-acceptance list, skipping', { projectName })
         return NextResponse.json({ success: true, skipped: true, reason: 'project_not_allowed' })

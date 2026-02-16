@@ -24,6 +24,7 @@ import type { ResolvedWebhookConfig } from '../../types.js'
 import {
   emitActivity,
   determineWorkType,
+  isProjectAllowed,
   getAppUrl,
   getPriority,
   WORK_TYPE_MESSAGES,
@@ -124,6 +125,12 @@ export async function handleSessionCreated(
     projectName = project?.name
   } catch (err) {
     sessionLog.warn('Failed to fetch issue status', { error: err })
+  }
+
+  // Server-level project filter
+  if (!isProjectAllowed(projectName, config.projects ?? [])) {
+    sessionLog.debug('Project not handled by this server, skipping', { projectName })
+    return NextResponse.json({ success: true, skipped: true, reason: 'project_not_allowed' })
   }
 
   // Phase 1: Mention-based routing
