@@ -15,14 +15,18 @@ const STRUCTURED_MARKER_RE = /<!--\s*WORK_RESULT:(passed|failed)\s*-->/i
  */
 const QA_PASS_PATTERNS = [
   /##\s*QA\s+Passed/i,
+  /##\s*QA\s+Complete[^]*?\bPASS/i,
   /QA\s+Result:\s*Pass/i,
   /QA\s+Status:\s*Passed/i,
+  /QA\s+(?:Result|Status|Verdict):\s*✅/i,
 ]
 
 const QA_FAIL_PATTERNS = [
   /##\s*QA\s+Failed/i,
+  /##\s*QA\s+Complete[^]*?\bFAIL/i,
   /QA\s+Result:\s*Fail/i,
   /QA\s+Status:\s*Failed/i,
+  /QA\s+(?:Result|Status|Verdict):\s*❌/i,
 ]
 
 const ACCEPTANCE_PASS_PATTERNS = [

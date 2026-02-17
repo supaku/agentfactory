@@ -491,6 +491,13 @@ See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI
 Validate the implementation against acceptance criteria.
 Run tests, check for regressions, verify the PR meets requirements.
 
+STRUCTURED RESULT MARKER (REQUIRED):
+You MUST include a structured result marker in your final output message.
+The orchestrator parses your output to determine whether to promote or reject the issue.
+Without this marker, the issue status will NOT be updated automatically.
+- On QA pass: Include <!-- WORK_RESULT:passed --> in your final message
+- On QA fail: Include <!-- WORK_RESULT:failed --> in your final message
+
 DEPENDENCY INSTALLATION:
 Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
 If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
@@ -508,7 +515,14 @@ See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI
 Validate development and QA work is complete.
 Verify PR is ready to merge (CI passing, no conflicts).
 Merge the PR using: gh pr merge <PR_NUMBER> --squash
-After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>${LINEAR_CLI_INSTRUCTION}`
+After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+
+STRUCTURED RESULT MARKER (REQUIRED):
+You MUST include a structured result marker in your final output message.
+The orchestrator parses your output to determine whether to promote or reject the issue.
+Without this marker, the issue status will NOT be updated automatically.
+- On acceptance pass: Include <!-- WORK_RESULT:passed --> in your final message
+- On acceptance fail: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'refinement':
