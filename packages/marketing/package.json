@@ -1,0 +1,28 @@
+{
+  "name": "@supaku/family-marketing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketing site for Supaku Family — personal CRM",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supaku/agentfactory-dashboard": "workspace:*",
+    "lucide-react": "^0.400.0",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 55% 5%;
+    --foreground: 210 40% 98%;
+    --card: 222 40% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 40% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 19 100% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 222 35% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 25% 16%;
+    --muted-foreground: 215 16% 54%;
+    --accent: 222 35% 12%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 222 25% 14%;
+    --input: 222 25% 14%;
+    --ring: 19 100% 60%;
+    --radius: 0.625rem;
+
+    --glow-orange: 19 100% 60%;
+    --glow-teal: 164 100% 42%;
+    --glow-blue: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: linear-gradient(
+      135deg,
+      hsl(222 40% 8% / 0.8) 0%,
+      hsl(222 40% 6% / 0.6) 100%
+    );
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  }
+
+  .glass-subtle {
+    background: linear-gradient(
+      135deg,
+      hsl(222 40% 10% / 0.5) 0%,
+      hsl(222 40% 7% / 0.4) 100%
+    );
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glow-orange {
+    box-shadow:
+      0 0 0 1px hsl(var(--glow-orange) / 0.15),
+      0 0 20px -4px hsl(var(--glow-orange) / 0.2),
+      0 0 40px -8px hsl(var(--glow-orange) / 0.1);
+  }
+
+  .glow-teal {
+    box-shadow:
+      0 0 0 1px hsl(var(--glow-teal) / 0.15),
+      0 0 20px -4px hsl(var(--glow-teal) / 0.2),
+      0 0 40px -8px hsl(var(--glow-teal) / 0.1);
+  }
+
+  .glow-soft {
+    box-shadow:
+      0 0 0 1px hsl(222 25% 18% / 0.6),
+      0 4px 24px -4px hsl(222 50% 4% / 0.5);
+  }
+
+  .mesh-gradient {
+    background:
+      radial-gradient(ellipse 600px 400px at 15% 20%, hsl(var(--glow-orange) / 0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 500px 500px at 85% 80%, hsl(var(--glow-teal) / 0.04) 0%, transparent 70%),
+      radial-gradient(ellipse 800px 300px at 50% 50%, hsl(var(--glow-blue) / 0.03) 0%, transparent 70%);
+  }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(222 30% 15% / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(222 30% 15% / 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .hover-glow {
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .hover-glow:hover {
+    border-color: hsl(var(--glow-orange) / 0.25);
+    box-shadow:
+      0 0 0 1px hsl(var(--glow-orange) / 0.1),
+      0 0 20px -8px hsl(var(--glow-orange) / 0.15);
+  }
+
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
+}
