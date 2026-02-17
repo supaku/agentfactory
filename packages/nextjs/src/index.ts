@@ -95,3 +95,21 @@ export { createCleanupHandler } from './handlers/cleanup.js'
 
 // Config handler
 export { createConfigHandler } from './handlers/config.js'
+
+// GDPR/Privacy compliance
+export { createGdprRoutes } from './gdpr-factory.js'
+export type { GdprRoutes, GdprRoutesConfig } from './gdpr-factory.js'
+
+// Individual GDPR handler factories (for custom wiring)
+export { createGdprExportHandler } from './handlers/gdpr/export.js'
+export type { GdprExportConfig } from './handlers/gdpr/export.js'
+export { createGdprDeleteHandler } from './handlers/gdpr/delete.js'
+export type { GdprDeleteConfig } from './handlers/gdpr/delete.js'
+export { createGdprAccessLogHandler } from './handlers/gdpr/access-log.js'
+export type { GdprAccessLogConfig } from './handlers/gdpr/access-log.js'
+export { createGdprConsentHandler } from './handlers/gdpr/consent.js'
+export type { GdprConsentConfig } from './handlers/gdpr/consent.js'
+export { createGdprEnrichmentGetHandler, createGdprEnrichmentDeleteHandler } from './handlers/gdpr/enrichment.js'
+export type { GdprEnrichmentConfig } from './handlers/gdpr/enrichment.js'
+export { createPrivacyPolicyHandler, createTosHandler } from './handlers/gdpr/privacy-policy.js'
+export type { PrivacyPolicyConfig } from './handlers/gdpr/privacy-policy.js'

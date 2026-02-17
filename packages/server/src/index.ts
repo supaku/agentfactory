@@ -45,3 +45,6 @@ export * from './token-storage.js'
 
 // Environment validation
 export * from './env-validation.js'
+
+// Privacy & GDPR compliance
+export * from './privacy/index.js'
