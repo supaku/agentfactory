@@ -12,7 +12,7 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 | `@supaku/agentfactory-nextjs` | `packages/nextjs` | Next.js webhook handlers and middleware |
 | `@supaku/agentfactory-dashboard` | `packages/dashboard` | Fleet management dashboard UI |
 | `@supaku/create-agentfactory` | `packages/create-app` | Project scaffolding CLI |
-| CLI scripts | `packages/cli` | Orchestrator, worker, and admin CLI entry points |
+| `@supaku/agentfactory-cli` | `packages/cli` | Orchestrator, worker, Linear CLI, and admin entry points |
 
 ## Linear CLI (CRITICAL)
 

@@ -65,7 +65,7 @@ Configuration and integration health at a glance. Shows connection status for th
 | **[@supaku/agentfactory](./packages/core)** | `@supaku/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
 | **[@supaku/agentfactory-linear](./packages/linear)** | `@supaku/agentfactory-linear` | Linear issue tracker integration |
 | **[@supaku/agentfactory-server](./packages/server)** | `@supaku/agentfactory-server` | Redis work queue, session storage, worker pool |
-| **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools for local orchestrator and remote workers |
+| **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
 | **[@supaku/agentfactory-nextjs](./packages/nextjs)** | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
 | **[@supaku/create-agentfactory-app](./packages/create-app)** | `@supaku/create-agentfactory-app` | Project scaffolding tool |
 
@@ -142,6 +142,22 @@ npx af-orchestrator --single PROJ-123
 
 # Preview what would be processed
 npx af-orchestrator --project MyProject --dry-run
+```
+
+### Linear CLI
+
+```bash
+# Get issue details
+npx af-linear get-issue PROJ-123
+
+# List backlog issues for a project
+npx af-linear list-backlog-issues --project "MyProject"
+
+# Update issue status
+npx af-linear update-issue PROJ-123 --state "Finished"
+
+# Create a comment
+npx af-linear create-comment PROJ-123 --body "Work complete"
 ```
 
 ## Architecture

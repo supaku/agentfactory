@@ -22,6 +22,7 @@ Commands:
   cleanup         Clean up orphaned git worktrees
   queue-admin     Manage Redis work queue and sessions
   analyze-logs    Analyze agent session logs for errors
+  linear          Linear issue tracker operations
   help            Show this help message
 
 Run 'agentfactory <command> --help' for command-specific options.
@@ -48,6 +49,9 @@ switch (command) {
     break
   case 'analyze-logs':
     import('./analyze-logs')
+    break
+  case 'linear':
+    import('./linear')
     break
   case 'help':
   case '--help':

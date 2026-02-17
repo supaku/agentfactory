@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 /**
+ * @deprecated Use `af-linear` from `@supaku/agentfactory-cli` instead.
+ * This file is kept for backwards compatibility. The canonical implementation
+ * is in packages/cli/src/lib/linear-runner.ts.
+ *
  * Linear CLI - Command-line interface for Linear Agent SDK
  *
  * Usage:

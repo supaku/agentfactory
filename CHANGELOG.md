@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.6
+
+### Features
+
+- **`af-linear` CLI** — Promoted the Linear CLI to a published binary in `@supaku/agentfactory-cli`. All 15 commands (`get-issue`, `create-issue`, `update-issue`, `list-comments`, `create-comment`, `list-backlog-issues`, `list-unblocked-backlog`, `check-blocked`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-deployment`) are now available via `npx af-linear` or `pnpm linear` after installing `@supaku/agentfactory-cli`. Previously, the Linear CLI only existed as an internal script in `packages/core/` and consumers had to bundle their own copy.
+- **`@supaku/agentfactory-cli/linear` subpath export** — `runLinear()` and `parseLinearArgs()` are available as a programmatic API for building custom CLI wrappers.
+- **`create-agentfactory-app` improvements** — Scaffolded projects now include `pnpm linear` out of the box (via `af-linear`), a `.claude/CLAUDE.md` with Linear CLI reference, and an enhanced developer agent definition with Linear status update workflows.
+
+### Chores
+
+- `@supaku/agentfactory-cli` is now a required dependency for all scaffolded projects (not just when `includeCli` is selected).
+- Deprecated `packages/core/src/linear-cli.ts` in favor of the CLI package.
+- Aligned all package versions to 0.7.6 across the monorepo.
+
 ## v0.7.5
 
 ### Fixes

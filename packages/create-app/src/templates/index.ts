@@ -93,6 +93,7 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
 
   // ── Agent definitions ──────────────────────────────────────────
 
+  files['.claude/CLAUDE.md'] = claudeMd(opts)
   files['.claude/agents/developer.md'] = agentDefinitionDeveloper()
 
   return files
@@ -112,10 +113,11 @@ function routeReexport(post: string | null, get?: string, del?: string): string 
 
 function packageJson(opts: TemplateOptions): string {
   const deps: Record<string, string> = {
-    '@supaku/agentfactory': '^0.7.3',
-    '@supaku/agentfactory-linear': '^0.7.3',
-    '@supaku/agentfactory-nextjs': '^0.7.3',
-    '@supaku/agentfactory-server': '^0.7.3',
+    '@supaku/agentfactory': '^0.7.6',
+    '@supaku/agentfactory-cli': '^0.7.6',
+    '@supaku/agentfactory-linear': '^0.7.6',
+    '@supaku/agentfactory-nextjs': '^0.7.6',
+    '@supaku/agentfactory-server': '^0.7.6',
     'next': '^16.1.0',
     'react': '^19.0.0',
     'react-dom': '^19.0.0',
@@ -132,16 +134,16 @@ function packageJson(opts: TemplateOptions): string {
     'build': 'next build',
     'start': 'next start',
     'typecheck': 'tsc --noEmit',
+    'linear': 'af-linear',
   }
 
   if (opts.includeDashboard) {
-    deps['@supaku/agentfactory-dashboard'] = '^0.7.3'
+    deps['@supaku/agentfactory-dashboard'] = '^0.7.6'
     devDeps['@tailwindcss/postcss'] = '^4'
     devDeps['tailwindcss'] = '^4'
   }
 
   if (opts.includeCli) {
-    deps['@supaku/agentfactory-cli'] = '^0.7.3'
     scripts['worker'] = 'tsx cli/worker.ts'
     scripts['orchestrator'] = 'tsx cli/orchestrator.ts'
     scripts['worker-fleet'] = 'tsx cli/worker-fleet.ts'
@@ -703,6 +705,67 @@ if (result.errors.length > 0) {
 `
 }
 
+function claudeMd(opts: TemplateOptions): string {
+  return `# ${opts.projectName}
+
+AgentFactory-powered project. Uses Linear for issue tracking.
+
+## Linear CLI
+
+Use \`pnpm linear\` (or \`af-linear\`) for ALL Linear operations. All commands return JSON to stdout.
+
+\`\`\`bash
+# Issue operations
+pnpm linear get-issue <id>
+pnpm linear create-issue --title "Title" --team "${opts.teamKey}" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]
+pnpm linear update-issue <id> [--title "..."] [--description "..."] [--state "..."] [--labels "..."]
+
+# Comments
+pnpm linear list-comments <issue-id>
+pnpm linear create-comment <issue-id> --body "Comment text"
+
+# Relations
+pnpm linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>
+pnpm linear list-relations <issue-id>
+pnpm linear remove-relation <relation-id>
+
+# Sub-issues
+pnpm linear list-sub-issues <parent-issue-id>
+pnpm linear list-sub-issue-statuses <parent-issue-id>
+pnpm linear update-sub-issue <id> [--state "Finished"] [--comment "Done"]
+
+# Backlog
+pnpm linear check-blocked <issue-id>
+pnpm linear list-backlog-issues --project "ProjectName"
+pnpm linear list-unblocked-backlog --project "ProjectName"
+
+# Deployment
+pnpm linear check-deployment <pr-number> [--format json|markdown]
+\`\`\`
+
+### Key Rules
+
+- \`--team\` is always required for \`create-issue\`
+- Use \`--state\` not \`--status\`
+- Use label names not UUIDs
+- \`--labels\` accepts comma-separated values
+- All commands return JSON to stdout
+
+## Environment
+
+Requires \`LINEAR_API_KEY\` or \`LINEAR_ACCESS_TOKEN\` in \`.env.local\`.
+
+## Build & Test
+
+\`\`\`bash
+pnpm dev          # Start dev server
+pnpm build        # Production build
+pnpm typecheck    # Type-check
+pnpm test         # Run tests
+\`\`\`
+`
+}
+
 function agentDefinitionDeveloper(): string {
   return `# Developer Agent
 
@@ -716,6 +779,44 @@ You are a coding agent working on issues from the project backlog.
 4. Write tests if the project has a test framework
 5. Run \`pnpm test\` and \`pnpm typecheck\` to verify
 6. Create a PR with a clear description
+7. Update the Linear issue status
+
+## Linear Status Updates
+
+\`\`\`bash
+# Mark issue as started when you begin work
+pnpm linear update-issue <id> --state "Started"
+
+# Post progress updates
+pnpm linear create-comment <issue-id> --body "Implementation complete, running tests"
+
+# Mark as finished when PR is created
+pnpm linear update-issue <id> --state "Finished"
+\`\`\`
+
+## PR Creation
+
+After completing the implementation:
+
+\`\`\`bash
+git add <files>
+git commit -m "<issue-id>: <description>"
+gh pr create --title "<issue-id>: <description>" --body "Resolves <issue-id>"
+\`\`\`
+
+## Work Result
+
+End your work with a comment indicating the result:
+
+\`\`\`
+<!-- WORK_RESULT:passed -->
+\`\`\`
+
+Or if the work failed:
+
+\`\`\`
+<!-- WORK_RESULT:failed -->
+\`\`\`
 
 ## Guidelines
 

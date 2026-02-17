@@ -181,6 +181,29 @@ npx af-orchestrator --single PROJ-123
 npx af-orchestrator --project MyProject --dry-run
 ```
 
+### Linear CLI
+
+The Linear CLI provides command-line access to Linear issue operations. After scaffolding, it's available as `pnpm linear`:
+
+```bash
+# Get issue details
+pnpm linear get-issue PROJ-123
+
+# List backlog issues for a project
+pnpm linear list-backlog-issues --project "MyProject"
+
+# Update issue status
+pnpm linear update-issue PROJ-123 --state "Finished"
+
+# Create a comment
+pnpm linear create-comment PROJ-123 --body "Implementation complete"
+
+# Check if an issue is blocked
+pnpm linear check-blocked PROJ-123
+```
+
+Run `pnpm linear help` for the full command list.
+
 ## What Happens When an Agent Runs
 
 1. **Worktree creation** — a git worktree is created at `.worktrees/PROJ-123-DEV`

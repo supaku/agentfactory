@@ -46,4 +46,16 @@ describe('@supaku/agentfactory-cli subpath exports', () => {
     expect(mod.runLogAnalyzer).toBeDefined()
     expect(typeof mod.runLogAnalyzer).toBe('function')
   })
+
+  it('exports runLinear from ./linear', async () => {
+    const mod = await import('../lib/linear-runner.js')
+    expect(mod.runLinear).toBeDefined()
+    expect(typeof mod.runLinear).toBe('function')
+  })
+
+  it('exports parseLinearArgs from ./linear', async () => {
+    const mod = await import('../lib/linear-runner.js')
+    expect(mod.parseLinearArgs).toBeDefined()
+    expect(typeof mod.parseLinearArgs).toBe('function')
+  })
 })

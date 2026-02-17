@@ -234,6 +234,35 @@ import { runWorkerFleet } from '@supaku/agentfactory-cli/worker-fleet'
 import { runCleanup } from '@supaku/agentfactory-cli/cleanup'
 import { runQueueAdmin } from '@supaku/agentfactory-cli/queue-admin'
 import { runLogAnalyzer } from '@supaku/agentfactory-cli/analyze-logs'
+import { runLinear, parseLinearArgs } from '@supaku/agentfactory-cli/linear'
 ```
 
 These functions accept config objects and return Promises — use them to build thin CLI wrappers with your own env loading strategy.
+
+### `runLinear(config)`
+
+Executes Linear CLI commands programmatically:
+
+```typescript
+import { runLinear } from '@supaku/agentfactory-cli/linear'
+
+const result = await runLinear({
+  command: 'get-issue',
+  args: {},
+  positionalArgs: ['PROJ-123'],
+  apiKey: process.env.LINEAR_API_KEY,
+})
+
+console.log(result.output) // { id, identifier, title, ... }
+```
+
+The `LinearRunnerConfig` interface:
+
+```typescript
+interface LinearRunnerConfig {
+  command: string                                    // Command name (e.g., 'get-issue')
+  args: Record<string, string | string[] | boolean>  // Named arguments
+  positionalArgs: string[]                           // Positional arguments
+  apiKey?: string                                    // LINEAR_API_KEY
+}
+```
