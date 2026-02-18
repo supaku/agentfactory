@@ -430,14 +430,14 @@ function generatePromptForWorkType(
   const LINEAR_CLI_INSTRUCTION = `
 
 LINEAR CLI (CRITICAL):
-Use the Linear CLI (\`pnpm linear\`) for ALL Linear operations. Do NOT use Linear MCP tools.
+Use the Linear CLI (\`pnpm af-linear\`) for ALL Linear operations. Do NOT use Linear MCP tools.
 See CLAUDE.md for the full command reference.
 
 HUMAN-NEEDED BLOCKERS:
 If you encounter work that requires human action and cannot be resolved autonomously
 (e.g., missing API keys/credentials, infrastructure not provisioned, third-party onboarding,
 manual setup steps, policy decisions, access permissions), create a blocker issue:
-  pnpm linear create-blocker <SOURCE-ISSUE-ID> --title "What human needs to do" --description "Detailed steps"
+  pnpm af-linear create-blocker <SOURCE-ISSUE-ID> --title "What human needs to do" --description "Detailed steps"
 This creates a tracked issue in Icebox with 'Needs Human' label, linked as blocking the source issue.
 Do NOT silently skip human-needed work or bury it in comments.
 Only create blockers for things that genuinely require a human — not for things you can retry or work around.`
@@ -549,13 +549,13 @@ and create a single PR with all changes when done.
 
 SUB-ISSUE STATUS MANAGEMENT:
 You MUST update sub-issue statuses in Linear as work progresses:
-- When starting work on a sub-issue: pnpm linear update-sub-issue <id> --state Started
-- When a sub-agent completes a sub-issue: pnpm linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
-- If a sub-agent fails on a sub-issue: pnpm linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
+- When starting work on a sub-issue: pnpm af-linear update-sub-issue <id> --state Started
+- When a sub-agent completes a sub-issue: pnpm af-linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
+- If a sub-agent fails on a sub-issue: pnpm af-linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
 
 COMPLETION VERIFICATION:
 Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
-  pnpm linear list-sub-issue-statuses ${identifier}
+  pnpm af-linear list-sub-issue-statuses ${identifier}
 If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
 
 SUB-AGENT SAFETY RULES (CRITICAL):
@@ -588,7 +588,7 @@ See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI
       basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}.
 
 WORKFLOW:
-1. Fetch sub-issues: pnpm linear list-sub-issues ${identifier}
+1. Fetch sub-issues: pnpm af-linear list-sub-issues ${identifier}
 2. Create Claude Code Tasks for each sub-issue's QA verification
 3. Spawn qa-reviewer sub-agents in parallel \u2014 no dependency graph needed, all sub-issues are already Finished
 4. Each sub-agent: reads sub-issue requirements, runs scoped tests, validates implementation, emits pass/fail
@@ -630,7 +630,7 @@ See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI
       basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}.
 
 WORKFLOW:
-1. Verify all sub-issues are in Delivered status: pnpm linear list-sub-issue-statuses ${identifier}
+1. Verify all sub-issues are in Delivered status: pnpm af-linear list-sub-issue-statuses ${identifier}
 2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
 3. Validate the PR:
    - CI checks are passing
@@ -638,7 +638,7 @@ WORKFLOW:
    - Preview deployment succeeded (if applicable)
 4. Merge the PR: gh pr merge <PR_NUMBER> --squash
 5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
-6. Bulk-update all sub-issues to Accepted: for each sub-issue, run pnpm linear update-sub-issue <id> --state Accepted
+6. Bulk-update all sub-issues to Accepted: for each sub-issue, run pnpm af-linear update-sub-issue <id> --state Accepted
 7. Mark parent as complete (transitions to Accepted)
 
 IMPORTANT CONSTRAINTS:

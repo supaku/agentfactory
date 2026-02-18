@@ -7,7 +7,7 @@
  * Linear CLI - Command-line interface for Linear Agent SDK
  *
  * Usage:
- *   pnpm linear <command> [options]
+ *   pnpm af-linear <command> [options]
  *
  * Commands:
  *   get-issue <id>              Get issue details
@@ -651,7 +651,7 @@ async function main() {
   const command = args[0]
 
   if (!command) {
-    console.error('Usage: pnpm linear <command> [options]')
+    console.error('Usage: pnpm af-linear <command> [options]')
     console.error('')
     console.error('Commands:')
     console.error('  get-issue <id>              Get issue details')
@@ -684,7 +684,7 @@ async function main() {
     case 'get-issue': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear get-issue <issue-id>')
+        console.error('Usage: pnpm af-linear get-issue <issue-id>')
         process.exit(1)
       }
       await getIssue(issueId)
@@ -694,7 +694,7 @@ async function main() {
     case 'create-issue': {
       if (!options.title || !options.team) {
         console.error(
-          'Usage: pnpm linear create-issue --title "Title" --team "Team" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]'
+          'Usage: pnpm af-linear create-issue --title "Title" --team "Team" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]'
         )
         process.exit(1)
       }
@@ -714,7 +714,7 @@ async function main() {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
         console.error(
-          'Usage: pnpm linear update-issue <issue-id> [--title "..."] [--description "..."] [--state "..."] [--labels "..."]'
+          'Usage: pnpm af-linear update-issue <issue-id> [--title "..."] [--description "..."] [--state "..."] [--labels "..."]'
         )
         process.exit(1)
       }
@@ -731,7 +731,7 @@ async function main() {
     case 'list-comments': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear list-comments <issue-id>')
+        console.error('Usage: pnpm af-linear list-comments <issue-id>')
         process.exit(1)
       }
       await listComments(issueId)
@@ -742,7 +742,7 @@ async function main() {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--') || !options.body) {
         console.error(
-          'Usage: pnpm linear create-comment <issue-id> --body "Comment text"'
+          'Usage: pnpm af-linear create-comment <issue-id> --body "Comment text"'
         )
         process.exit(1)
       }
@@ -753,7 +753,7 @@ async function main() {
     case 'list-backlog-issues': {
       if (!options.project) {
         console.error(
-          'Usage: pnpm linear list-backlog-issues --project "ProjectName"'
+          'Usage: pnpm af-linear list-backlog-issues --project "ProjectName"'
         )
         process.exit(1)
       }
@@ -764,7 +764,7 @@ async function main() {
     case 'list-unblocked-backlog': {
       if (!options.project) {
         console.error(
-          'Usage: pnpm linear list-unblocked-backlog --project "ProjectName"'
+          'Usage: pnpm af-linear list-unblocked-backlog --project "ProjectName"'
         )
         process.exit(1)
       }
@@ -775,7 +775,7 @@ async function main() {
     case 'check-blocked': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear check-blocked <issue-id>')
+        console.error('Usage: pnpm af-linear check-blocked <issue-id>')
         process.exit(1)
       }
       await checkBlocked(issueId)
@@ -795,7 +795,7 @@ async function main() {
         !['related', 'blocks', 'duplicate'].includes(relationType)
       ) {
         console.error(
-          'Usage: pnpm linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>'
+          'Usage: pnpm af-linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>'
         )
         process.exit(1)
       }
@@ -810,7 +810,7 @@ async function main() {
     case 'list-relations': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear list-relations <issue-id>')
+        console.error('Usage: pnpm af-linear list-relations <issue-id>')
         process.exit(1)
       }
       await listRelations(issueId)
@@ -820,7 +820,7 @@ async function main() {
     case 'remove-relation': {
       const relationId = args[1]
       if (!relationId || relationId.startsWith('--')) {
-        console.error('Usage: pnpm linear remove-relation <relation-id>')
+        console.error('Usage: pnpm af-linear remove-relation <relation-id>')
         process.exit(1)
       }
       await removeRelation(relationId)
@@ -830,7 +830,7 @@ async function main() {
     case 'list-sub-issues': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear list-sub-issues <issue-id>')
+        console.error('Usage: pnpm af-linear list-sub-issues <issue-id>')
         process.exit(1)
       }
       await listSubIssues(issueId)
@@ -840,7 +840,7 @@ async function main() {
     case 'list-sub-issue-statuses': {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
-        console.error('Usage: pnpm linear list-sub-issue-statuses <issue-id>')
+        console.error('Usage: pnpm af-linear list-sub-issue-statuses <issue-id>')
         process.exit(1)
       }
       await listSubIssueStatuses(issueId)
@@ -851,7 +851,7 @@ async function main() {
       const issueId = args[1]
       if (!issueId || issueId.startsWith('--')) {
         console.error(
-          'Usage: pnpm linear update-sub-issue <issue-id> [--state "Finished"] [--comment "Done"]'
+          'Usage: pnpm af-linear update-sub-issue <issue-id> [--state "Finished"] [--comment "Done"]'
         )
         process.exit(1)
       }
@@ -866,7 +866,7 @@ async function main() {
     case 'check-deployment': {
       const prArg = args[1]
       if (!prArg || prArg.startsWith('--')) {
-        console.error('Usage: pnpm linear check-deployment <pr-number> [--format json|markdown]')
+        console.error('Usage: pnpm af-linear check-deployment <pr-number> [--format json|markdown]')
         process.exit(1)
       }
       const prNumber = parseInt(prArg, 10)

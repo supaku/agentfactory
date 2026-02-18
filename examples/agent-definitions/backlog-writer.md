@@ -11,9 +11,9 @@ Transforms planning session outputs into well-structured Linear issues for devel
 
 ## CRITICAL: Linear CLI Only
 
-**Use `pnpm linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
+**Use `pnpm af-linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
 
-The Linear CLI outputs JSON to stdout. All issue creation, updates, comments, and relations must go through `pnpm linear` commands.
+The Linear CLI outputs JSON to stdout. All issue creation, updates, comments, and relations must go through `pnpm af-linear` commands.
 
 ## Autonomous Mode
 
@@ -43,7 +43,7 @@ const isAutonomous = !!process.env.LINEAR_SESSION_ID
 
 ```bash
 # 1. Fetch source issue details
-pnpm linear get-issue [source-issue-id]
+pnpm af-linear get-issue [source-issue-id]
 
 # 2. Parse the researched description (no plan file)
 # Extract: Summary, Technical Approach, Acceptance Criteria, Complexity
@@ -56,14 +56,14 @@ pnpm linear get-issue [source-issue-id]
 
 # 4a. SINGLE ISSUE - Rewrite source issue in place
 # When scope is atomic (single concern, <3 files, no distinct phases):
-pnpm linear update-issue [source-issue-id] \
+pnpm af-linear update-issue [source-issue-id] \
   --title "[Type]: [description]" \
   --description "[generated description]" \
   --labels "[Label]" \
   --state "Backlog"
 
 # Post summary comment explaining the rewrite
-pnpm linear create-comment [source-issue-id] \
+pnpm af-linear create-comment [source-issue-id] \
   --body "## Issue Ready for Development
 
 Converted this Icebox story into an actionable Backlog issue:
@@ -82,7 +82,7 @@ Ready to be picked up for development."
 
 # 4b. MULTIPLE INDEPENDENT ISSUES - Create new issues and link
 # When scope requires multiple separate stories with NO shared context:
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "[Type]: [description]" \
   --description "[generated description]" \
   --team "[TeamName]" \
@@ -91,10 +91,10 @@ pnpm linear create-issue \
   --state "Backlog"
 
 # 5b. Link new issues as related to source (only for independent issues)
-pnpm linear add-relation [new-issue-id] [source-issue-id] --type related
+pnpm af-linear add-relation [new-issue-id] [source-issue-id] --type related
 
 # 6b. Post summary comment on source issue (for independent issues)
-pnpm linear create-comment [source-issue-id] \
+pnpm af-linear create-comment [source-issue-id] \
   --body "## Backlog Issues Created
 
 Created N issues from this research:
@@ -108,10 +108,10 @@ You may now close or archive this Icebox issue."
 # 4c. SUB-ISSUES (COORDINATION-READY) - Create children of source
 # When work is a single concern with sequential/parallel phases:
 # First, move the source issue to Backlog (it becomes the parent)
-pnpm linear update-issue [source-issue-id] --state "Backlog"
+pnpm af-linear update-issue [source-issue-id] --state "Backlog"
 
 # Create sub-issues as children using --parentId
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "[Type]: [step description]" \
   --description "[generated description]" \
   --team "[TeamName]" \
@@ -123,12 +123,12 @@ pnpm linear create-issue \
 
 # 5c. Add relations between sub-issues
 # Blocking relations define execution order for the coordinator
-pnpm linear add-relation [step-1-id] [step-2-id] --type blocks
+pnpm af-linear add-relation [step-1-id] [step-2-id] --type blocks
 # Also add "related" links so sub-agents can see sibling context
-pnpm linear add-relation [step-1-id] [step-2-id] --type related
+pnpm af-linear add-relation [step-1-id] [step-2-id] --type related
 
 # 6c. Post summary comment on source (parent) issue
-pnpm linear create-comment [source-issue-id] \
+pnpm af-linear create-comment [source-issue-id] \
   --body "## Sub-Issues Created
 
 Created N sub-issues for coordinated execution:
@@ -284,7 +284,7 @@ Also add `--type related` links between sub-issues so sub-agents and the coordin
 
 ## Linear CLI Usage
 
-Use the Linear CLI (`pnpm linear`) for all Linear operations. **Do not use Linear MCP tools or write Node scripts using the SDK directly.**
+Use the Linear CLI (`pnpm af-linear`) for all Linear operations. **Do not use Linear MCP tools or write Node scripts using the SDK directly.**
 
 ### Critical Rules
 
@@ -298,7 +298,7 @@ Use the Linear CLI (`pnpm linear`) for all Linear operations. **Do not use Linea
 
 ```bash
 # Returns JSON: { "id": "uuid", "identifier": "PROJ-XX", "title": "...", "url": "..." }
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "Feature: [description]" \
   --description "[markdown description]" \
   --team "[TeamName]" \
@@ -310,7 +310,7 @@ pnpm linear create-issue \
 ### Create Sub-Issue
 
 ```bash
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "[step description]" \
   --team "[TeamName]" \
   --parentId "[parent-issue-id]"
@@ -320,32 +320,32 @@ pnpm linear create-issue \
 
 ```bash
 # Use --state (not --status)
-pnpm linear update-issue [issue-id] \
+pnpm af-linear update-issue [issue-id] \
   --state "Started"
 ```
 
 ### Comments
 
 ```bash
-pnpm linear create-comment [issue-id] --body "Comment text"
+pnpm af-linear create-comment [issue-id] --body "Comment text"
 ```
 
 ### Relations
 
 ```bash
-pnpm linear add-relation [source-issue-id] [target-issue-id] --type related
-pnpm linear add-relation [blocker-issue-id] [blocked-issue-id] --type blocks
-pnpm linear add-relation [duplicate-issue-id] [original-issue-id] --type duplicate
-pnpm linear list-relations [issue-id]
-pnpm linear remove-relation [relation-id]
+pnpm af-linear add-relation [source-issue-id] [target-issue-id] --type related
+pnpm af-linear add-relation [blocker-issue-id] [blocked-issue-id] --type blocks
+pnpm af-linear add-relation [duplicate-issue-id] [original-issue-id] --type duplicate
+pnpm af-linear list-relations [issue-id]
+pnpm af-linear remove-relation [relation-id]
 ```
 
 ### Query
 
 ```bash
-pnpm linear check-blocked [issue-id]
-pnpm linear list-unblocked-backlog --project "[ProjectName]"
-pnpm linear list-backlog-issues --project "[ProjectName]"
+pnpm af-linear check-blocked [issue-id]
+pnpm af-linear list-unblocked-backlog --project "[ProjectName]"
+pnpm af-linear list-backlog-issues --project "[ProjectName]"
 ```
 
 ## Issue Title Format
@@ -433,7 +433,7 @@ Common blocking scenarios:
 
 ```bash
 # 1. Create the blocking issue first
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "Feature: Add database migration for preferences" \
   --team "[TeamName]" \
   --project "[ProjectName]" \
@@ -441,7 +441,7 @@ pnpm linear create-issue \
 # Returns: { "id": "abc123", "identifier": "PROJ-20" }
 
 # 2. Create the blocked issue
-pnpm linear create-issue \
+pnpm af-linear create-issue \
   --title "Feature: Add preferences UI" \
   --team "[TeamName]" \
   --project "[ProjectName]" \
@@ -449,7 +449,7 @@ pnpm linear create-issue \
 # Returns: { "id": "def456", "identifier": "PROJ-21" }
 
 # 3. Establish the blocking relationship
-pnpm linear add-relation PROJ-20 PROJ-21 --type blocks
+pnpm af-linear add-relation PROJ-20 PROJ-21 --type blocks
 ```
 
 ## Example Sessions

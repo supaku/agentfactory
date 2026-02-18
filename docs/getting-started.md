@@ -183,26 +183,26 @@ npx af-orchestrator --project MyProject --dry-run
 
 ### Linear CLI
 
-The Linear CLI provides command-line access to Linear issue operations. After scaffolding, it's available as `pnpm linear`:
+The Linear CLI provides command-line access to Linear issue operations. After scaffolding, it's available as `pnpm af-linear`:
 
 ```bash
 # Get issue details
-pnpm linear get-issue PROJ-123
+pnpm af-linear get-issue PROJ-123
 
 # List backlog issues for a project
-pnpm linear list-backlog-issues --project "MyProject"
+pnpm af-linear list-backlog-issues --project "MyProject"
 
 # Update issue status
-pnpm linear update-issue PROJ-123 --state "Finished"
+pnpm af-linear update-issue PROJ-123 --state "Finished"
 
 # Create a comment
-pnpm linear create-comment PROJ-123 --body "Implementation complete"
+pnpm af-linear create-comment PROJ-123 --body "Implementation complete"
 
 # Check if an issue is blocked
-pnpm linear check-blocked PROJ-123
+pnpm af-linear check-blocked PROJ-123
 ```
 
-Run `pnpm linear help` for the full command list.
+Run `pnpm af-linear help` for the full command list.
 
 ## What Happens When an Agent Runs
 

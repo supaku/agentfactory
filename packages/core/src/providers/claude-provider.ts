@@ -96,7 +96,7 @@ export class ClaudeProvider implements AgentProvider {
     const abortController = config.abortController
 
     // Default allowed tools for autonomous agents — ensures bash commands
-    // like `pnpm linear`, `git`, `gh` are auto-approved without needing
+    // like `pnpm af-linear`, `git`, `gh` are auto-approved without needing
     // settings.local.json (which isn't available in worktrees).
     // Format: Bash(prefix:glob) — colon separates prefix from wildcard.
     const defaultAllowedTools = config.autonomous

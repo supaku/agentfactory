@@ -16,7 +16,7 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 
 ## Linear CLI (CRITICAL)
 
-**Use `pnpm linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
+**Use `pnpm af-linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
 
 The Linear CLI wraps the `@supaku/agentfactory-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
 
@@ -24,34 +24,34 @@ The Linear CLI wraps the `@supaku/agentfactory-linear` SDK and outputs JSON to s
 
 ```bash
 # Issue operations
-pnpm linear get-issue <id>
-pnpm linear create-issue --title "Title" --team "TeamName" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]
-pnpm linear update-issue <id> [--title "..."] [--description "..."] [--state "..."] [--labels "..."]
+pnpm af-linear get-issue <id>
+pnpm af-linear create-issue --title "Title" --team "TeamName" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]
+pnpm af-linear update-issue <id> [--title "..."] [--description "..."] [--state "..."] [--labels "..."]
 
 # Comments
-pnpm linear list-comments <issue-id>
-pnpm linear create-comment <issue-id> --body "Comment text"
+pnpm af-linear list-comments <issue-id>
+pnpm af-linear create-comment <issue-id> --body "Comment text"
 
 # Relations
-pnpm linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>
-pnpm linear list-relations <issue-id>
-pnpm linear remove-relation <relation-id>
+pnpm af-linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>
+pnpm af-linear list-relations <issue-id>
+pnpm af-linear remove-relation <relation-id>
 
 # Sub-issues (for coordination)
-pnpm linear list-sub-issues <parent-issue-id>
-pnpm linear list-sub-issue-statuses <parent-issue-id>
-pnpm linear update-sub-issue <id> [--state "Finished"] [--comment "Done"]
+pnpm af-linear list-sub-issues <parent-issue-id>
+pnpm af-linear list-sub-issue-statuses <parent-issue-id>
+pnpm af-linear update-sub-issue <id> [--state "Finished"] [--comment "Done"]
 
 # Blocking checks
-pnpm linear check-blocked <issue-id>
-pnpm linear list-backlog-issues --project "ProjectName"
-pnpm linear list-unblocked-backlog --project "ProjectName"
+pnpm af-linear check-blocked <issue-id>
+pnpm af-linear list-backlog-issues --project "ProjectName"
+pnpm af-linear list-unblocked-backlog --project "ProjectName"
 
 # Deployment
-pnpm linear check-deployment <pr-number> [--format json|markdown]
+pnpm af-linear check-deployment <pr-number> [--format json|markdown]
 
 # Blocker creation
-pnpm linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."] [--assignee "user@email.com"]
+pnpm af-linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."] [--assignee "user@email.com"]
 ```
 
 ### Key Rules

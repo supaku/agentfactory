@@ -1,16 +1,24 @@
 # Changelog
 
+## v0.7.8
+
+### Chores
+
+- **Standardize Linear CLI command references** — Replaced all `pnpm linear` references with `pnpm af-linear` across documentation, agent definitions, orchestrator prompts, and templates. The `af-linear` binary name is the canonical invocation since v0.7.6; the old `pnpm linear` script alias was an internal-only convenience that didn't work in consumer projects or worktrees.
+- Renamed root `package.json` script from `linear` to `af-linear` for consistency.
+- Aligned all package versions to 0.7.8 across the monorepo.
+
 ## v0.7.7
 
 ### Fixes
 
-- **Fix autonomous agent permissions in worktrees** — Agents spawned by the orchestrator in git worktrees were unable to run `pnpm linear` and other Bash commands because they received unanswerable permission prompts in headless mode. Two compounding issues:
+- **Fix autonomous agent permissions in worktrees** — Agents spawned by the orchestrator in git worktrees were unable to run `pnpm af-linear` and other Bash commands because they received unanswerable permission prompts in headless mode. Two compounding issues:
   1. **Wrong `allowedTools` pattern format** — `Bash(pnpm *)` (space) doesn't match; Claude Code uses `Bash(prefix:glob)` syntax with a colon separator. Fixed to `Bash(pnpm:*)`.
   2. **Filesystem hooks unreliable in worktrees** — The auto-approve hook (`.claude/hooks/auto-approve.js`) loaded via `settingSources: ['project']` may not resolve correctly when `.git` is a file (worktree) instead of a directory. Added a programmatic `canUseTool` callback as a reliable in-process fallback that doesn't depend on filesystem hook resolution.
 
 ### Features
 
-- **`create-blocker` command** — New `af-linear create-blocker` / `pnpm linear create-blocker` command for creating human-needed blocker issues that block the source issue.
+- **`create-blocker` command** — New `af-linear create-blocker` / `pnpm af-linear create-blocker` command for creating human-needed blocker issues that block the source issue.
 
 ### Improvements
 
@@ -25,9 +33,9 @@
 
 ### Features
 
-- **`af-linear` CLI** — Promoted the Linear CLI to a published binary in `@supaku/agentfactory-cli`. All 15 commands (`get-issue`, `create-issue`, `update-issue`, `list-comments`, `create-comment`, `list-backlog-issues`, `list-unblocked-backlog`, `check-blocked`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-deployment`) are now available via `npx af-linear` or `pnpm linear` after installing `@supaku/agentfactory-cli`. Previously, the Linear CLI only existed as an internal script in `packages/core/` and consumers had to bundle their own copy.
+- **`af-linear` CLI** — Promoted the Linear CLI to a published binary in `@supaku/agentfactory-cli`. All 15 commands (`get-issue`, `create-issue`, `update-issue`, `list-comments`, `create-comment`, `list-backlog-issues`, `list-unblocked-backlog`, `check-blocked`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-deployment`) are now available via `npx af-linear` or `pnpm af-linear` after installing `@supaku/agentfactory-cli`. Previously, the Linear CLI only existed as an internal script in `packages/core/` and consumers had to bundle their own copy.
 - **`@supaku/agentfactory-cli/linear` subpath export** — `runLinear()` and `parseLinearArgs()` are available as a programmatic API for building custom CLI wrappers.
-- **`create-agentfactory-app` improvements** — Scaffolded projects now include `pnpm linear` out of the box (via `af-linear`), a `.claude/CLAUDE.md` with Linear CLI reference, and an enhanced developer agent definition with Linear status update workflows.
+- **`create-agentfactory-app` improvements** — Scaffolded projects now include `pnpm af-linear` out of the box (via `af-linear`), a `.claude/CLAUDE.md` with Linear CLI reference, and an enhanced developer agent definition with Linear status update workflows.
 
 ### Chores
 
@@ -49,8 +57,8 @@
 
 ### Fixes
 
-- **Auto-allow bash commands for autonomous agents in worktrees** — Agents spawned in git worktrees couldn't run `pnpm linear` or other bash commands because `settings.local.json` and the auto-approve hook weren't accessible from the worktree CWD. The Claude provider now passes `allowedTools` to the SDK so `pnpm`, `git`, `gh`, `node`, and `npx` commands are auto-approved for autonomous agents without relying on filesystem settings. Added optional `allowedTools` field to `AgentSpawnConfig` for custom overrides.
-- **Linear CLI loads `.env.local` credentials automatically** — `pnpm linear` commands no longer require `LINEAR_API_KEY` to be exported in the shell. The CLI now loads `.env` and `.env.local` via dotenv at startup.
+- **Auto-allow bash commands for autonomous agents in worktrees** — Agents spawned in git worktrees couldn't run `pnpm af-linear` or other bash commands because `settings.local.json` and the auto-approve hook weren't accessible from the worktree CWD. The Claude provider now passes `allowedTools` to the SDK so `pnpm`, `git`, `gh`, `node`, and `npx` commands are auto-approved for autonomous agents without relying on filesystem settings. Added optional `allowedTools` field to `AgentSpawnConfig` for custom overrides.
+- **Linear CLI loads `.env.local` credentials automatically** — `pnpm af-linear` commands no longer require `LINEAR_API_KEY` to be exported in the shell. The CLI now loads `.env` and `.env.local` via dotenv at startup.
 
 ### Chores
 
@@ -96,10 +104,10 @@
 
 ### Features
 
-- **Linear CLI restored** — Ported the full Linear CLI entry point (`pnpm linear`) from the supaku repo. Provides 16 subcommands (`get-issue`, `create-issue`, `update-issue`, `create-comment`, `list-comments`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-blocked`, `list-backlog-issues`, `list-unblocked-backlog`, `check-deployment`) wrapping `@supaku/agentfactory-linear`. Runs via `node --import tsx` so it works in worktrees without a build step.
+- **Linear CLI restored** — Ported the full Linear CLI entry point (`pnpm af-linear`) from the supaku repo. Provides 16 subcommands (`get-issue`, `create-issue`, `update-issue`, `create-comment`, `list-comments`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-blocked`, `list-backlog-issues`, `list-unblocked-backlog`, `check-deployment`) wrapping `@supaku/agentfactory-linear`. Runs via `node --import tsx` so it works in worktrees without a build step.
 - **CLAUDE.md project instructions** — Added root-level `CLAUDE.md` with Linear CLI reference, autonomous mode detection, project structure, worktree lifecycle rules, and explicit prohibition of Linear MCP tools.
 - **Agent definitions** — Added full agent definitions to `examples/agent-definitions/` for backlog-writer, developer, qa-reviewer, coordinator, and acceptance-handler. Each includes Linear CLI instructions and MCP prohibition.
-- **Orchestrator CLI guidance** — All 10 work types in `generatePromptForWorkType()` now include explicit instructions to use `pnpm linear` instead of MCP tools.
+- **Orchestrator CLI guidance** — All 10 work types in `generatePromptForWorkType()` now include explicit instructions to use `pnpm af-linear` instead of MCP tools.
 
 ### Fixes
 

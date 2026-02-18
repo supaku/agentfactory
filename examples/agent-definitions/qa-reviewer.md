@@ -43,7 +43,7 @@ If the issue has sub-issues, perform holistic validation:
 ### Check Sub-Issue Statuses
 
 ```bash
-pnpm linear list-sub-issue-statuses [issue-id]
+pnpm af-linear list-sub-issue-statuses [issue-id]
 ```
 
 **Rules:**
@@ -104,9 +104,9 @@ Look for:
 ### On QA Pass
 
 ```bash
-pnpm linear update-issue [issue-id] --state "Delivered"
+pnpm af-linear update-issue [issue-id] --state "Delivered"
 
-pnpm linear create-comment [issue-id] \
+pnpm af-linear create-comment [issue-id] \
   --body "## QA Passed
 
 - All tests pass
@@ -119,7 +119,7 @@ pnpm linear create-comment [issue-id] \
 
 ```bash
 # Keep status as Finished (do not transition)
-pnpm linear create-comment [issue-id] \
+pnpm af-linear create-comment [issue-id] \
   --body "## QA Failed
 
 ### Issues Found
