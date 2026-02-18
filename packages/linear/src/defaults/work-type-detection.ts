@@ -59,9 +59,11 @@ const WORK_TYPE_PRIORITY_ORDER: AgentWorkType[] = [
   'coordination',
   'backlog-creation',
   'research',
+  'qa-coordination',
   'qa',
-  'inflight',
+  'acceptance-coordination',
   'acceptance',
+  'inflight',
   'refinement',
   'development',
 ]
