@@ -11,6 +11,7 @@ import {
   type SDKMessage,
   type SDKUserMessage,
   type Query,
+  type CanUseTool,
 } from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentProvider,
@@ -18,6 +19,67 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
+
+/**
+ * Programmatic permission handler for autonomous agents.
+ *
+ * Filesystem-based hooks (.claude/hooks/auto-approve.js) may not load
+ * correctly in git worktrees where .git is a file (not a directory),
+ * because the SDK's project root resolution can fail to find .claude/.
+ *
+ * This callback acts as a reliable fallback — it evaluates permissions
+ * in-process without filesystem dependencies.
+ */
+const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
+  // Read-only tools: always allow
+  if (['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'].includes(toolName)) {
+    return { behavior: 'allow' }
+  }
+
+  // File write tools: always allow (permissionMode: 'acceptEdits' should
+  // handle these, but be explicit as a safety net)
+  if (['Write', 'Edit', 'NotebookEdit'].includes(toolName)) {
+    return { behavior: 'allow' }
+  }
+
+  // Task management and planning
+  if (['Task', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
+       'EnterPlanMode', 'ExitPlanMode', 'Skill'].includes(toolName)) {
+    return { behavior: 'allow' }
+  }
+
+  // Bash: evaluate command safety
+  if (toolName === 'Bash') {
+    const cmd = (typeof input.command === 'string' ? input.command : '').trim()
+    if (!cmd) return { behavior: 'allow' }
+
+    // Deny destructive patterns
+    if (/rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/.test(cmd)) {
+      return { behavior: 'deny', message: 'rm of filesystem root blocked' }
+    }
+    if (/git\s+worktree\s+(remove|prune)/.test(cmd)) {
+      return { behavior: 'deny', message: 'worktree remove/prune blocked per project rules' }
+    }
+    if (/git\s+reset\s+--hard/.test(cmd)) {
+      return { behavior: 'deny', message: 'reset --hard blocked' }
+    }
+    if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
+      return { behavior: 'deny', message: 'force push blocked' }
+    }
+
+    // Allow everything else — autonomous agents run in isolated worktrees
+    // managed by the orchestrator, with guardrails at the process level.
+    return { behavior: 'allow' }
+  }
+
+  // MCP tools: allow all (agents need Linear, Vercel, etc.)
+  if (toolName.startsWith('mcp__')) {
+    return { behavior: 'allow' }
+  }
+
+  // Default: allow — autonomous agents should not be blocked by prompts
+  return { behavior: 'allow' }
+}
 
 export class ClaudeProvider implements AgentProvider {
   readonly name = 'claude' as const
@@ -36,13 +98,24 @@ export class ClaudeProvider implements AgentProvider {
     // Default allowed tools for autonomous agents — ensures bash commands
     // like `pnpm linear`, `git`, `gh` are auto-approved without needing
     // settings.local.json (which isn't available in worktrees).
+    // Format: Bash(prefix:glob) — colon separates prefix from wildcard.
     const defaultAllowedTools = config.autonomous
       ? [
-          'Bash(pnpm *)',
-          'Bash(git *)',
-          'Bash(gh *)',
-          'Bash(node *)',
-          'Bash(npx *)',
+          'Bash(pnpm:*)',
+          'Bash(git:*)',
+          'Bash(gh:*)',
+          'Bash(node:*)',
+          'Bash(npx:*)',
+          'Bash(npm:*)',
+          'Bash(tsx:*)',
+          'Bash(python3:*)',
+          'Bash(python:*)',
+          'Bash(curl:*)',
+          'Bash(turbo:*)',
+          'Bash(tsc:*)',
+          'Bash(vitest:*)',
+          'Bash(jest:*)',
+          'Bash(claude:*)',
         ]
       : []
 
@@ -53,6 +126,10 @@ export class ClaudeProvider implements AgentProvider {
         env: config.env,
         abortController,
         allowedTools: config.allowedTools ?? defaultAllowedTools,
+        // Programmatic permission handler for autonomous agents.
+        // Filesystem hooks may not resolve in worktrees — this callback
+        // ensures headless agents are never blocked by permission prompts.
+        canUseTool: config.autonomous ? autonomousCanUseTool : undefined,
         permissionMode: 'acceptEdits',
         disallowedTools: config.autonomous ? ['AskUserQuestion'] : [],
         settingSources: ['project'],

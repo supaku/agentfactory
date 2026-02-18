@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.7.7
+
+### Fixes
+
+- **Fix autonomous agent permissions in worktrees** — Agents spawned by the orchestrator in git worktrees were unable to run `pnpm linear` and other Bash commands because they received unanswerable permission prompts in headless mode. Two compounding issues:
+  1. **Wrong `allowedTools` pattern format** — `Bash(pnpm *)` (space) doesn't match; Claude Code uses `Bash(prefix:glob)` syntax with a colon separator. Fixed to `Bash(pnpm:*)`.
+  2. **Filesystem hooks unreliable in worktrees** — The auto-approve hook (`.claude/hooks/auto-approve.js`) loaded via `settingSources: ['project']` may not resolve correctly when `.git` is a file (worktree) instead of a directory. Added a programmatic `canUseTool` callback as a reliable in-process fallback that doesn't depend on filesystem hook resolution.
+
+### Features
+
+- **`create-blocker` command** — New `af-linear create-blocker` / `pnpm linear create-blocker` command for creating human-needed blocker issues that block the source issue.
+
+### Improvements
+
+- **Expanded `allowedTools` coverage** — Autonomous agents now pre-approve `npm`, `tsx`, `python3`, `python`, `curl`, `turbo`, `tsc`, `vitest`, `jest`, and `claude` in addition to the existing `pnpm`, `git`, `gh`, `node`, `npx`.
+- **WORK_RESULT marker instruction** — QA and acceptance agent prompts now include explicit instructions for the `<!-- WORK_RESULT:passed/failed -->` marker.
+
+### Chores
+
+- Aligned all package versions to 0.7.7 across the monorepo.
+
 ## v0.7.6
 
 ### Features

@@ -50,7 +50,8 @@ export interface AgentSpawnConfig {
   sandboxEnabled: boolean
   /**
    * Tools to auto-allow without prompting for permission.
-   * Supports glob patterns (e.g., 'Bash(pnpm *)').
+   * Uses Claude Code permission pattern format: 'Bash(prefix:glob)'.
+   * Examples: 'Bash(pnpm:*)', 'Bash(git commit:*)'.
    * When omitted the provider may supply defaults for autonomous agents.
    */
   allowedTools?: string[]
