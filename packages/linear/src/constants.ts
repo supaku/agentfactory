@@ -77,6 +77,7 @@ export const LINEAR_LABELS = {
   get BUG() { return process.env.LINEAR_LABEL_BUG ?? '' },
   get FEATURE() { return process.env.LINEAR_LABEL_FEATURE ?? '' },
   get CHORE() { return process.env.LINEAR_LABEL_CHORE ?? '' },
+  get NEEDS_HUMAN() { return process.env.LINEAR_LABEL_NEEDS_HUMAN ?? '' },
 } as const
 
 // Test-related labels (created dynamically, not hardcoded IDs)
@@ -102,6 +103,7 @@ export const ENVIRONMENT_ISSUE_TYPES = {
   DEPENDENCY: 'dependency',
   TIMEOUT: 'timeout',
   TOOL: 'tool',
+  HUMAN_BLOCKER: 'human-blocker',
 } as const
 
 export type EnvironmentIssueType =

@@ -7,6 +7,17 @@
 
 import type { AgentWorkType, SubIssueStatus } from '../types.js'
 
+const HUMAN_BLOCKER_INSTRUCTION = `
+
+HUMAN-NEEDED BLOCKERS:
+If you encounter work that requires human action and cannot be resolved autonomously
+(e.g., missing API keys/credentials, infrastructure not provisioned, third-party onboarding,
+manual setup steps, policy decisions, access permissions), create a blocker issue:
+  pnpm linear create-blocker <SOURCE-ISSUE-ID> --title "What human needs to do" --description "Detailed steps"
+This creates a tracked issue in Icebox with 'Needs Human' label, linked as blocking the source issue.
+Do NOT silently skip human-needed work or bury it in comments.
+Only create blockers for things that genuinely require a human — not for things you can retry or work around.`
+
 /**
  * Generate a default prompt for a given work type and issue identifier.
  *
@@ -71,6 +82,8 @@ If any sub-issue is not Finished, report the failure and do not mark the parent 
       basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR (CI passing, no conflicts), merge the PR, and bulk-update sub-issues to Accepted.`
       break
   }
+
+  basePrompt += HUMAN_BLOCKER_INSTRUCTION
 
   if (mentionContext) {
     return `${basePrompt}\n\nAdditional context from the user's mention:\n${mentionContext}`

@@ -23,6 +23,7 @@
  *   list-sub-issue-statuses <id> List sub-issue statuses (lightweight)
  *   update-sub-issue <id>       Update sub-issue status with comment
  *   check-deployment <PR>       Check Vercel deployment status for a PR
+ *   create-blocker <source-id>  Create a human-needed blocker issue
  *
  * Array Values:
  *   --labels accepts comma-separated: --labels "Bug,Feature"
@@ -64,6 +65,7 @@ Commands:
   list-sub-issue-statuses <id>  List sub-issue statuses (lightweight)
   update-sub-issue <id>         Update sub-issue status with comment
   check-deployment <PR>         Check Vercel deployment status for a PR
+  create-blocker <source-id>    Create a human-needed blocker issue
   help                          Show this help message
 
 Options:

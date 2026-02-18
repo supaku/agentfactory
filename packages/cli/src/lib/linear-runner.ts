@@ -110,6 +110,15 @@ interface UpdateIssueOptions {
   labels?: string[]
 }
 
+interface CreateBlockerOptions {
+  title: string
+  sourceIssueId: string
+  description?: string
+  team?: string
+  project?: string
+  assignee?: string
+}
+
 // ── Command implementations ────────────────────────────────────────
 
 async function getIssue(client: LinearClient, issueId: string): Promise<unknown> {
@@ -544,6 +553,151 @@ async function checkDeployment(
   return result
 }
 
+async function createBlocker(
+  client: LinearClient,
+  options: CreateBlockerOptions
+): Promise<unknown> {
+  // 1. Fetch source issue to resolve team/project
+  const sourceIssue = await client.getIssue(options.sourceIssueId)
+  const sourceTeam = await sourceIssue.team
+  const sourceProject = await sourceIssue.project
+
+  const teamName = options.team ?? sourceTeam?.name
+  if (!teamName) {
+    throw new Error('Could not resolve team from source issue. Provide --team explicitly.')
+  }
+
+  const team = await client.getTeam(teamName)
+  const projectName = options.project ?? sourceProject?.name
+
+  // 2. Deduplicate: check for existing Icebox issues with same title + "Needs Human" label
+  if (projectName) {
+    const projects = await client.linearClient.projects({
+      filter: { name: { eqIgnoreCase: projectName } },
+    })
+    if (projects.nodes.length > 0) {
+      const existingIssues = await client.linearClient.issues({
+        filter: {
+          project: { id: { eq: projects.nodes[0].id } },
+          state: { name: { eqIgnoreCase: 'Icebox' } },
+          labels: { name: { eqIgnoreCase: 'Needs Human' } },
+        },
+      })
+
+      const duplicate = existingIssues.nodes.find(
+        (i) => i.title.toLowerCase() === options.title.toLowerCase()
+      )
+
+      if (duplicate) {
+        // Add a +1 comment to the existing issue
+        await client.createComment(
+          duplicate.id,
+          `+1 — Also needed by ${sourceIssue.identifier}`
+        )
+        return {
+          id: duplicate.id,
+          identifier: duplicate.identifier,
+          title: duplicate.title,
+          url: duplicate.url,
+          sourceIssue: sourceIssue.identifier,
+          relation: 'blocks',
+          deduplicated: true,
+        }
+      }
+    }
+  }
+
+  // 3. Create the blocker issue
+  const createPayload: Parameters<LinearClient['linearClient']['createIssue']>[0] = {
+    teamId: team.id,
+    title: options.title,
+  }
+
+  // Description with source reference
+  const descParts: string[] = []
+  if (options.description) {
+    descParts.push(options.description)
+  }
+  descParts.push(`\n---\n*Source issue: ${sourceIssue.identifier}*`)
+  createPayload.description = descParts.join('\n\n')
+
+  // Set state to Icebox
+  const statuses = await client.getTeamStatuses(team.id)
+  const iceboxStateId = statuses['Icebox']
+  if (iceboxStateId) {
+    createPayload.stateId = iceboxStateId
+  }
+
+  // Set "Needs Human" label
+  const allLabels = await client.linearClient.issueLabels()
+  const needsHumanLabel = allLabels.nodes.find(
+    (l) => l.name.toLowerCase() === 'needs human'
+  )
+  if (needsHumanLabel) {
+    createPayload.labelIds = [needsHumanLabel.id]
+  }
+
+  // Set project
+  if (projectName) {
+    const projects = await client.linearClient.projects({
+      filter: { name: { eqIgnoreCase: projectName } },
+    })
+    if (projects.nodes.length > 0) {
+      createPayload.projectId = projects.nodes[0].id
+    }
+  }
+
+  const payload = await client.linearClient.createIssue(createPayload)
+  if (!payload.success) {
+    throw new Error('Failed to create blocker issue')
+  }
+
+  const blockerIssue = await payload.issue
+  if (!blockerIssue) {
+    throw new Error('Blocker issue created but not returned')
+  }
+
+  // 4. Create blocking relation: blocker blocks source
+  await client.createIssueRelation({
+    issueId: blockerIssue.id,
+    relatedIssueId: sourceIssue.id,
+    type: 'blocks',
+  })
+
+  // 5. Post comment on source issue
+  await client.createComment(
+    sourceIssue.id,
+    `\u{1F6A7} Human blocker created: [${blockerIssue.identifier}](${blockerIssue.url}) — ${options.title}`
+  )
+
+  // 6. Optionally assign
+  if (options.assignee) {
+    const users = await client.linearClient.users({
+      filter: {
+        or: [
+          { name: { eqIgnoreCase: options.assignee } },
+          { email: { eq: options.assignee } },
+        ],
+      },
+    })
+    if (users.nodes.length > 0) {
+      await client.linearClient.updateIssue(blockerIssue.id, {
+        assigneeId: users.nodes[0].id,
+      })
+    }
+  }
+
+  return {
+    id: blockerIssue.id,
+    identifier: blockerIssue.identifier,
+    title: blockerIssue.title,
+    url: blockerIssue.url,
+    sourceIssue: sourceIssue.identifier,
+    relation: 'blocks',
+    deduplicated: false,
+  }
+}
+
 // ── Commands that don't require LINEAR_API_KEY ─────────────────────
 
 const NO_API_KEY_COMMANDS = new Set(['check-deployment'])
@@ -727,6 +881,24 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
       }
       const format = (args.format as 'json' | 'markdown') || 'json'
       output = await checkDeployment(prNumber, format)
+      break
+    }
+
+    case 'create-blocker': {
+      const sourceIssueId = requirePositional('source-issue-id')
+      if (!args.title) {
+        throw new Error(
+          'Usage: af-linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."] [--assignee "user@email.com"]'
+        )
+      }
+      output = await createBlocker(client(), {
+        title: args.title as string,
+        sourceIssueId,
+        description: args.description as string | undefined,
+        team: args.team as string | undefined,
+        project: args.project as string | undefined,
+        assignee: args.assignee as string | undefined,
+      })
       break
     }
 

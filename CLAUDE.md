@@ -49,6 +49,9 @@ pnpm linear list-unblocked-backlog --project "ProjectName"
 
 # Deployment
 pnpm linear check-deployment <pr-number> [--format json|markdown]
+
+# Blocker creation
+pnpm linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."] [--assignee "user@email.com"]
 ```
 
 ### Key Rules
