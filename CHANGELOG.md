@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.7.9
+
+### Features
+
+- **`LINEAR_TEAM_NAME` env var for CLI** — `pnpm af-linear create-issue` now falls back to the `LINEAR_TEAM_NAME` environment variable when `--team` is omitted. The orchestrator auto-sets this from the issue's team context, so agents no longer waste turns discovering the team name. Explicit `--team` always wins. Added `getDefaultTeamName()` to `@supaku/agentfactory-linear` constants.
+- **Server-level project filtering** — `@supaku/agentfactory-server` supports project filtering at the server level for multi-project deployments.
+- **Improved WORK_RESULT marker handling** — QA and acceptance agent prompts now have better `<!-- WORK_RESULT:passed/failed -->` marker instructions and handling.
+
+### Fixes
+
+- **`qa-coordination` and `acceptance-coordination` priority order** — Fixed work type priority ordering to include `qa-coordination` and `acceptance-coordination` in the correct position.
+
+### Chores
+
+- Aligned all package versions to 0.7.9 across the monorepo.
+
 ## v0.7.8
 
 ### Chores
