@@ -95,6 +95,8 @@ export interface OrchestratorIssue {
   url: string
   priority: number
   labels: string[]
+  /** Team name resolved from the issue (used to set LINEAR_TEAM_NAME env var) */
+  teamName?: string
 }
 
 export interface AgentProcess {
@@ -161,6 +163,8 @@ export interface SpawnAgentOptions {
   workType?: AgentWorkType
   /** Custom prompt override. If not provided, generates prompt based on workType */
   prompt?: string
+  /** Team name to set as LINEAR_TEAM_NAME env var for agents */
+  teamName?: string
 }
 
 export interface OrchestratorStreamConfig {
@@ -212,4 +216,6 @@ export interface SpawnAgentWithResumeOptions {
   claudeSessionId?: string
   /** Type of work: determines transitions and agent behavior (defaults to 'development') */
   workType?: AgentWorkType
+  /** Team name to set as LINEAR_TEAM_NAME env var for agents */
+  teamName?: string
 }

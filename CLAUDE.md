@@ -56,7 +56,7 @@ pnpm af-linear create-blocker <source-issue-id> --title "Title" [--description "
 
 ### Key Rules
 
-- `--team` is **always required** for `create-issue`
+- `--team` is **required** for `create-issue` unless `LINEAR_TEAM_NAME` env var is set (auto-set by orchestrator)
 - Use `--state` not `--status` (e.g., `--state "Backlog"`)
 - Use label **names** not UUIDs (e.g., `--labels "Feature"`)
 - `--labels` accepts comma-separated values: `--labels "Bug,Feature"`

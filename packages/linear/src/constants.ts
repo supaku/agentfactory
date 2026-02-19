@@ -54,6 +54,14 @@ export function getDefaultTeamId(): string {
 }
 
 /**
+ * Default team name
+ * Can be set via LINEAR_TEAM_NAME env var (auto-set by orchestrator from issue context)
+ */
+export function getDefaultTeamName(): string {
+  return process.env.LINEAR_TEAM_NAME ?? ''
+}
+
+/**
  * Project IDs — must be set via env vars:
  * - LINEAR_PROJECT_AGENT
  * - LINEAR_PROJECT_SOCIAL

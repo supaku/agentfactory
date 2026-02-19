@@ -5,7 +5,7 @@
  * This module does NOT call process.exit, read process.argv, or load dotenv.
  */
 
-import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient, getDefaultTeamName } from '@supaku/agentfactory-linear'
 import {
   checkPRDeploymentStatus,
   formatDeploymentStatus,
@@ -748,14 +748,16 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
     }
 
     case 'create-issue': {
-      if (!args.title || !args.team) {
+      const teamArg = (args.team as string | undefined) ?? (getDefaultTeamName() || undefined)
+      if (!args.title || !teamArg) {
         throw new Error(
-          'Usage: af-linear create-issue --title "Title" --team "Team" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]'
+          'Usage: af-linear create-issue --title "Title" --team "Team" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]\n' +
+          'Tip: Set LINEAR_TEAM_NAME env var to provide a default team.'
         )
       }
       output = await createIssue(client(), {
         title: args.title as string,
-        team: args.team as string,
+        team: teamArg,
         description: args.description as string | undefined,
         project: args.project as string | undefined,
         labels: args.labels as string[] | undefined,

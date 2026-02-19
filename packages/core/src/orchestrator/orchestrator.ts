@@ -825,6 +825,7 @@ export class AgentOrchestrator {
       if (results.length >= maxIssues) break
 
       const labels = await issue.labels()
+      const team = await issue.team
       results.push({
         id: issue.id,
         identifier: issue.identifier,
@@ -833,6 +834,7 @@ export class AgentOrchestrator {
         url: issue.url,
         priority: issue.priority,
         labels: labels.nodes.map((l: { name: string }) => l.name),
+        teamName: team?.name,
       })
     }
 
@@ -1396,6 +1398,7 @@ export class AgentOrchestrator {
       streamActivities,
       workType = 'development',
       prompt: customPrompt,
+      teamName,
     } = options
 
     // Generate prompt based on work type, or use custom prompt if provided
@@ -1581,6 +1584,11 @@ export class AgentOrchestrator {
     // This enables Tasks to persist across crashes and be shared between subagents
     // Format: {issueIdentifier}-{WORKTYPE} (e.g., "SUP-123-DEV")
     env.CLAUDE_CODE_TASK_LIST_ID = worktreeIdentifier
+
+    // Set team name so agents can use `pnpm af-linear create-issue` without --team
+    if (teamName) {
+      env.LINEAR_TEAM_NAME = teamName
+    }
 
     log.info('Starting agent via provider', { provider: this.provider.name, worktreePath, workType, promptPreview: prompt.substring(0, 50) })
 
@@ -2324,6 +2332,7 @@ export class AgentOrchestrator {
           sessionId: randomUUID(),
           worktreePath,
           workType,
+          teamName: issue.teamName,
         })
 
         result.agents.push(agent)
@@ -2362,6 +2371,8 @@ export class AgentOrchestrator {
     const issue = await this.client.getIssue(issueIdOrIdentifier)
     const identifier = issue.identifier
     const issueId = issue.id // Use the actual UUID
+    const team = await issue.team
+    const teamName = team?.name
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
 
@@ -2433,6 +2444,7 @@ export class AgentOrchestrator {
         prompt: recoveryPrompt,
         claudeSessionId,
         workType: recoveryWorkType,
+        teamName,
       })
     }
 
@@ -2457,6 +2469,7 @@ export class AgentOrchestrator {
       worktreePath,
       workType: effectiveWorkType,
       prompt,
+      teamName,
     })
   }
 
@@ -2624,6 +2637,7 @@ export class AgentOrchestrator {
     let worktreePath: string
     let worktreeIdentifier: string
     let identifier: string
+    let teamName: string | undefined
 
     if (existingAgent) {
       worktreePath = existingAgent.worktreePath
@@ -2638,6 +2652,8 @@ export class AgentOrchestrator {
       try {
         const issue = await this.client.getIssue(issueId)
         identifier = issue.identifier
+        const issueTeam = await issue.team
+        teamName = issueTeam?.name
 
         // Auto-detect work type from issue status if not provided
         // This prevents defaulting to 'development' which would cause
@@ -2694,6 +2710,7 @@ export class AgentOrchestrator {
         prompt,
         claudeSessionId,
         workType,
+        teamName,
       })
 
       return {
@@ -2784,7 +2801,7 @@ export class AgentOrchestrator {
    * If autoTransition is enabled, also transitions the issue status to the appropriate working state
    */
   async spawnAgentWithResume(options: SpawnAgentWithResumeOptions): Promise<AgentProcess> {
-    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, claudeSessionId, workType } = options
+    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, claudeSessionId, workType, teamName } = options
 
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
@@ -2962,6 +2979,8 @@ export class AgentOrchestrator {
       LINEAR_SESSION_ID: sessionId,
       // Set work type so agent knows if it's doing QA or development work
       ...(workType && { LINEAR_WORK_TYPE: workType }),
+      // Set team name so agents can use `pnpm af-linear create-issue` without --team
+      ...(teamName && { LINEAR_TEAM_NAME: teamName }),
     }
 
     log.info('Starting agent via provider', {
