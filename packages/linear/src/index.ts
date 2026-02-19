@@ -131,6 +131,8 @@ export {
   defaultGeneratePrompt,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
+  WORK_RESULT_MARKER_INSTRUCTION,
+  PR_SELECTION_GUIDANCE,
   defaultDetectWorkTypeFromPrompt,
   defaultGetPriority,
   defaultParseAutoTriggerConfig,

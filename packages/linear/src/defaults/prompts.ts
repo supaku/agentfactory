@@ -18,6 +18,25 @@ This creates a tracked issue in Icebox with 'Needs Human' label, linked as block
 Do NOT silently skip human-needed work or bury it in comments.
 Only create blockers for things that genuinely require a human — not for things you can retry or work around.`
 
+export const WORK_RESULT_MARKER_INSTRUCTION = `
+
+MANDATORY — Structured Result Marker:
+You MUST include exactly one of these HTML comment markers in your final output:
+- On pass: <!-- WORK_RESULT:passed -->
+- On fail: <!-- WORK_RESULT:failed -->
+Without this marker, the orchestrator CANNOT detect your result and the issue status will NOT be updated. Even if you encounter errors, always emit <!-- WORK_RESULT:failed -->.`
+
+export const PR_SELECTION_GUIDANCE = `
+
+PR Selection (Multi-PR Handling):
+Issues may have multiple PRs. Select the correct one:
+1. Check linked PRs in the issue attachments/links for GitHub PR URLs
+2. Filter by state — prefer OPEN over MERGED over CLOSED: gh pr view NNN --json state
+3. If multiple OPEN PRs, pick the most recently created one
+4. Fallback search by branch: gh pr list --head "$(git branch --show-current)" --state open
+5. Last resort search by issue ID: gh pr list --state open --search "[issue-id]"
+6. If no PR found, emit WORK_RESULT:failed with explanation`
+
 /**
  * Generate a default prompt for a given work type and issue identifier.
  *
@@ -54,10 +73,30 @@ Do NOT wait for user approval - create issues automatically.`
       basePrompt = `Continue work on ${identifier}. Resume where you left off.`
       break
     case 'qa':
-      basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.`
+      basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.
+${WORK_RESULT_MARKER_INSTRUCTION}
+${PR_SELECTION_GUIDANCE}
+
+Validation Steps:
+1. Find and validate the correct PR (see PR selection above)
+2. Run tests scoped to the affected packages
+3. Verify the build passes
+4. Check deployment status (CI checks on the PR)
+5. Review changes against issue requirements
+6. Post result comment with the structured marker`
       break
     case 'acceptance':
-      basePrompt = `Process acceptance for ${identifier}. Validate development and QA work is complete, verify PR is ready to merge (CI passing, no conflicts), merge the PR, and clean up local resources.`
+      basePrompt = `Process acceptance for ${identifier}. Validate development and QA work is complete, verify PR is ready to merge (CI passing, no conflicts), merge the PR, and clean up local resources.
+${WORK_RESULT_MARKER_INSTRUCTION}
+${PR_SELECTION_GUIDANCE}
+
+Acceptance Steps:
+1. Find and validate the correct PR (see PR selection above)
+2. Verify CI is passing and there are no merge conflicts
+3. Confirm QA has passed (check issue status or QA comments)
+4. Merge the PR
+5. Delete the remote branch after successful merge
+6. Post result comment with the structured marker`
       break
     case 'refinement':
       basePrompt = `Refine ${identifier} based on rejection feedback. Read comments, update requirements, then return to Backlog.`
@@ -76,10 +115,12 @@ Before marking the parent issue as complete, verify ALL sub-issues are in Finish
 If any sub-issue is not Finished, report the failure and do not mark the parent as complete.`
       break
     case 'qa-coordination':
-      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, spawn QA sub-agents in parallel for each sub-issue, collect pass/fail results, and roll up to parent. ALL sub-issues must pass QA for the parent to pass.`
+      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, spawn QA sub-agents in parallel for each sub-issue, collect pass/fail results, and roll up to parent. ALL sub-issues must pass QA for the parent to pass.
+${WORK_RESULT_MARKER_INSTRUCTION}`
       break
     case 'acceptance-coordination':
-      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR (CI passing, no conflicts), merge the PR, and bulk-update sub-issues to Accepted.`
+      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR (CI passing, no conflicts), merge the PR, and bulk-update sub-issues to Accepted.
+${WORK_RESULT_MARKER_INSTRUCTION}`
       break
   }
 

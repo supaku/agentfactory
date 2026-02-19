@@ -10,6 +10,8 @@ export {
   defaultGeneratePrompt,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
+  WORK_RESULT_MARKER_INSTRUCTION,
+  PR_SELECTION_GUIDANCE,
 } from './prompts.js'
 
 export { defaultDetectWorkTypeFromPrompt } from './work-type-detection.js'

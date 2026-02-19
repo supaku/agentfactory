@@ -1672,6 +1672,25 @@ export class AgentOrchestrator {
               workType,
               hasResultMessage: !!agent.resultMessage,
             })
+
+            // Post a diagnostic comment so the issue doesn't silently stall
+            try {
+              await this.client.createComment(
+                issueId,
+                `⚠️ Agent completed but no structured result marker was detected in the output.\n\n` +
+                `**Issue status was NOT updated automatically.**\n\n` +
+                `The orchestrator expected one of:\n` +
+                `- \`<!-- WORK_RESULT:passed -->\` to promote the issue\n` +
+                `- \`<!-- WORK_RESULT:failed -->\` to record a failure\n\n` +
+                `This usually means the agent exited early (timeout, error, or missing logic). ` +
+                `Check the agent logs for details, then manually update the issue status or re-trigger the agent.`
+              )
+              log?.info('Posted diagnostic comment for unknown work result')
+            } catch (error) {
+              log?.warn('Failed to post diagnostic comment for unknown work result', {
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
           }
         } else {
           // Non-QA/acceptance: unchanged behavior — always promote on completion

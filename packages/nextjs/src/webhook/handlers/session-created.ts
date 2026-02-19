@@ -274,6 +274,52 @@ export async function handleSessionCreated(
     }
   }
 
+  // Extract PR info for QA/acceptance agents so they know which PRs to validate
+  let prContext = ''
+  const needsPrContext =
+    workType === 'qa' ||
+    workType === 'acceptance' ||
+    workType === 'qa-coordination' ||
+    workType === 'acceptance-coordination'
+
+  if (needsPrContext) {
+    try {
+      const linearClient = await config.linearClient.getClient(payload.organizationId)
+      const issueForAttachments = await linearClient.getIssue(issueId)
+      const attachments = await issueForAttachments.attachments()
+
+      const prLinks = attachments.nodes
+        .filter((a) => a.url?.includes('github.com') && a.url?.includes('/pull/'))
+        .map((a) => {
+          const match = a.url.match(/\/pull\/(\d+)/)
+          return match ? { url: a.url, number: parseInt(match[1], 10), title: a.title ?? '' } : null
+        })
+        .filter((pr): pr is { url: string; number: number; title: string } => pr !== null)
+
+      if (prLinks.length > 0) {
+        prContext = '\n\nLinked PRs:\n'
+        prContext += prLinks.map((pr) => `- PR #${pr.number}: ${pr.title} (${pr.url})`).join('\n')
+        if (prLinks.length > 1) {
+          prContext +=
+            '\n\nNote: Multiple PRs are linked. Check each PR state (open/merged/closed) and validate the most recent OPEN one.'
+        }
+      }
+
+      sessionLog.debug('Extracted PR context for QA/acceptance', {
+        prLinksCount: prLinks.length,
+        hasPrContext: prContext.length > 0,
+      })
+    } catch (err) {
+      sessionLog.warn('Failed to extract PR info from issue attachments', { error: err })
+    }
+  }
+
+  const enhancedPromptContext = prContext
+    ? promptContext
+      ? promptContext + prContext
+      : prContext
+    : promptContext
+
   const priority = getPriority(config, workType)
 
   await storeSessionState(sessionId, {
@@ -299,7 +345,7 @@ export async function handleSessionCreated(
     priority,
     queuedAt: Date.now(),
     workType,
-    prompt: config.generatePrompt(issueIdentifier, workType, promptContext),
+    prompt: config.generatePrompt(issueIdentifier, workType, enhancedPromptContext),
     projectName,
   }
 
