@@ -140,6 +140,95 @@ pnpm orchestrator --project ProjectName --dry-run
 pnpm orchestrator --project ProjectName --max 2
 ```
 
+## Workflow Template System
+
+Agent prompts are driven by YAML templates with Handlebars interpolation. Templates live in `packages/core/src/templates/defaults/` and can be overridden per project.
+
+### Template Structure
+
+```yaml
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: development
+  description: Standard development workflow
+  workType: development
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git commit *"
+  disallow:
+    - user-input
+prompt: |
+  Start work on {{identifier}}.
+  {{> partials/dependency-instructions}}
+  {{> partials/cli-instructions}}
+  {{#if mentionContext}}
+  Additional context: {{mentionContext}}
+  {{/if}}
+```
+
+### Customizing Templates
+
+Override built-in templates by creating `.agentfactory/templates/` in your project root:
+
+```
+.agentfactory/
+  templates/
+    development.yaml      # Override development workflow
+    qa.yaml               # Override QA workflow
+    partials/
+      custom-partial.yaml # Custom partial for {{> partials/custom-partial}}
+```
+
+Templates are resolved in layers (later overrides earlier):
+1. Built-in defaults (`packages/core/src/templates/defaults/`)
+2. Project-level overrides (`.agentfactory/templates/`)
+3. Programmatic overrides (`WebhookConfig.generatePrompt` still works)
+
+### CLI Flag
+
+```bash
+pnpm orchestrator --project MyProject --templates /path/to/templates
+```
+
+### Template Variables
+
+| Variable | Description |
+|----------|-------------|
+| `{{identifier}}` | Issue ID (e.g., "SUP-123") |
+| `{{mentionContext}}` | Optional user mention text |
+| `{{startStatus}}` | Frontend-resolved start status |
+| `{{completeStatus}}` | Frontend-resolved complete status |
+| `{{parentContext}}` | Parent issue context for coordination |
+| `{{subIssueList}}` | Formatted sub-issue list |
+
+### Available Partials
+
+| Partial | Description |
+|---------|-------------|
+| `{{> partials/cli-instructions}}` | Linear CLI + human blocker instructions |
+| `{{> partials/dependency-instructions}}` | Dependency installation rules |
+| `{{> partials/large-file-instructions}}` | Token limit handling |
+| `{{> partials/work-result-marker}}` | QA/acceptance WORK_RESULT marker |
+| `{{> partials/shared-worktree-safety}}` | Shared worktree safety rules |
+| `{{> partials/pr-selection}}` | PR selection guidance |
+
+### Tool Permissions
+
+Templates express tool permissions in a provider-agnostic format:
+
+```yaml
+tools:
+  allow:
+    - shell: "pnpm *"      # → Claude: Bash(pnpm:*)
+    - shell: "git commit *" # → Claude: Bash(git commit:*)
+  disallow:
+    - user-input            # → Claude: AskUserQuestion
+```
+
+Provider adapters translate these to native format at runtime.
+
 ## Build & Test
 
 ```bash

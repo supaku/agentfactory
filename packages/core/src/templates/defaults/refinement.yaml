@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: refinement
+  description: Refine based on rejection feedback and return to Backlog
+  workType: refinement
+
+tools:
+  allow:
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Refine {{identifier}} based on rejection feedback.
+  Read the rejection comments, identify required changes,
+  update the issue description with refined requirements,
+  then return to Backlog for re-implementation.{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

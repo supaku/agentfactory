@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: large-file-instructions
+  description: Instructions for handling large files that exceed token limits
+content: |
+
+  IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
+  - Use Grep to search for specific code patterns instead of reading entire files
+  - Use Read with offset/limit parameters to paginate through large files
+  - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
+  See the "Working with Large Files" section in CLAUDE.md for details.

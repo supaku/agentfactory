@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: research
+  description: Research and flesh out story details, estimate complexity
+  workType: research
+
+tools:
+  allow:
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Research and flesh out story {{identifier}}.
+  Analyze requirements, identify technical approach, estimate complexity,
+  and update the story description with detailed acceptance criteria.
+  Do NOT implement code. Focus on story refinement only.{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

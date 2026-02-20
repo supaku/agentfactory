@@ -35,6 +35,8 @@ export interface OrchestratorRunnerConfig {
   gitRoot?: string
   /** Callbacks for agent lifecycle events */
   callbacks?: OrchestratorCallbacks
+  /** Custom workflow template directory path */
+  templateDir?: string
 }
 
 export interface OrchestratorCallbacks {
@@ -130,13 +132,18 @@ export async function runOrchestrator(
 
   const cb = config.callbacks ?? defaultCallbacks()
 
+  const orchestratorConfig: Record<string, unknown> = {
+    project: config.project,
+    maxConcurrent,
+    worktreePath: path.resolve(gitRoot, '.worktrees'),
+    linearApiKey: config.linearApiKey,
+  }
+  if (config.templateDir) {
+    orchestratorConfig.templateDir = config.templateDir
+  }
+
   const orchestrator = createOrchestrator(
-    {
-      project: config.project,
-      maxConcurrent,
-      worktreePath: path.resolve(gitRoot, '.worktrees'),
-      linearApiKey: config.linearApiKey,
-    },
+    orchestratorConfig as Parameters<typeof createOrchestrator>[0],
     {
       onIssueSelected: cb.onIssueSelected,
       onAgentStart: cb.onAgentStart,

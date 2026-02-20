@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: inflight
+  description: Continue in-progress work where left off
+  workType: inflight
+
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git commit *"
+    - shell: "git push *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Continue work on {{identifier}}.
+  Resume where you left off. Check the issue for any new comments or feedback.
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

@@ -32,6 +32,7 @@ function parseArgs(): {
   single?: string
   wait: boolean
   dryRun: boolean
+  templates?: string
 } {
   const args = process.argv.slice(2)
   const result = {
@@ -40,6 +41,7 @@ function parseArgs(): {
     single: undefined as string | undefined,
     wait: true,
     dryRun: false,
+    templates: undefined as string | undefined,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -59,6 +61,9 @@ function parseArgs(): {
         break
       case '--dry-run':
         result.dryRun = true
+        break
+      case '--templates':
+        result.templates = args[++i]
         break
       case '--help':
       case '-h':
@@ -83,6 +88,7 @@ Options:
   --single <id>       Process a single issue by ID
   --no-wait           Don't wait for agents to complete
   --dry-run           Show what would be done without executing
+  --templates <path>  Custom workflow template directory
   --help, -h          Show this help message
 
 Environment:
@@ -132,6 +138,7 @@ async function main(): Promise<void> {
       single: args.single,
       wait: args.wait,
       dryRun: args.dryRun,
+      templateDir: args.templates,
     })
 
     if (!args.single && !args.dryRun) {

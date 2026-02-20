@@ -1,0 +1,236 @@
+/**
+ * Workflow Template Types
+ *
+ * TypeScript interfaces and Zod schemas for the YAML-based workflow template system.
+ * Templates use Handlebars for interpolation and partials for composability.
+ *
+ * Architecture decisions (from SUP-701):
+ * - YAML format with Handlebars interpolation (not custom parser)
+ * - Single flat `prompt` field (not sectioned)
+ * - State transitions stay in TypeScript (not in templates)
+ * - Schema versioning: apiVersion: v1
+ * - Provider-agnostic tool permissions
+ * - Frontend-specific content in partials only
+ */
+
+import { z } from 'zod'
+import type { AgentWorkType } from '@supaku/agentfactory-linear'
+
+// Re-export for convenience
+export type { AgentWorkType } from '@supaku/agentfactory-linear'
+
+// ---------------------------------------------------------------------------
+// Tool Permission Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Provider-agnostic tool permission.
+ *
+ * Shell permissions specify command patterns (e.g., "pnpm *").
+ * Provider adapters translate these to native format:
+ *   - Claude: { shell: "pnpm *" } → "Bash(pnpm:*)"
+ *   - Other providers: their own format
+ */
+export type ToolPermission =
+  | { shell: string }
+  | 'user-input'
+  | string
+
+// ---------------------------------------------------------------------------
+// Workflow Template
+// ---------------------------------------------------------------------------
+
+/**
+ * A workflow template defines the prompt and tool permissions for a work type.
+ */
+export interface WorkflowTemplate {
+  apiVersion: 'v1'
+  kind: 'WorkflowTemplate'
+  metadata: {
+    name: string
+    description?: string
+    workType: AgentWorkType
+  }
+  tools?: {
+    allow?: ToolPermission[]
+    disallow?: ToolPermission[]
+  }
+  /** Handlebars template string rendered with TemplateContext variables */
+  prompt: string
+}
+
+// ---------------------------------------------------------------------------
+// Partial Template
+// ---------------------------------------------------------------------------
+
+/**
+ * A reusable instruction block that can be composed into workflow templates
+ * via Handlebars partials: {{> partials/name}}
+ */
+export interface PartialTemplate {
+  apiVersion: 'v1'
+  kind: 'PartialTemplate'
+  metadata: {
+    name: string
+    description?: string
+    /** If set, this partial is frontend-specific (e.g., "linear", "asana") */
+    frontend?: string
+  }
+  /** Handlebars template string (may reference other partials) */
+  content: string
+}
+
+// ---------------------------------------------------------------------------
+// Template Context (variables available during rendering)
+// ---------------------------------------------------------------------------
+
+/**
+ * Variables available for interpolation in workflow templates.
+ */
+export interface TemplateContext {
+  /** Issue identifier, e.g., "SUP-123" */
+  identifier: string
+  /** Optional user mention text providing additional context */
+  mentionContext?: string
+
+  // Frontend-resolved variables (injected by frontend adapter)
+  /** Status to show when agent starts, e.g., "Started" (Linear) */
+  startStatus?: string
+  /** Status to show when agent completes, e.g., "Finished" */
+  completeStatus?: string
+
+  // Parent issue context (coordination work types)
+  /** Pre-built enriched prompt for parent issues with sub-issues */
+  parentContext?: string
+  /** Formatted list of sub-issues with statuses */
+  subIssueList?: string
+}
+
+// ---------------------------------------------------------------------------
+// Tool Permission Adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * Translates abstract tool permissions to provider-native format.
+ *
+ * Example: Claude adapter translates { shell: "pnpm *" } → "Bash(pnpm:*)"
+ */
+export interface ToolPermissionAdapter {
+  /** Translate abstract permissions to provider-native format */
+  translatePermissions(permissions: ToolPermission[]): string[]
+}
+
+// ---------------------------------------------------------------------------
+// Template Registry Configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for creating a template registry.
+ */
+export interface TemplateRegistryConfig {
+  /** Directories to scan for template YAML files (searched in order) */
+  templateDirs?: string[]
+  /** Inline template overrides (highest priority) */
+  templates?: Partial<Record<AgentWorkType, WorkflowTemplate>>
+  /** Whether to load built-in defaults (default: true) */
+  useBuiltinDefaults?: boolean
+  /** Frontend discriminator for partial resolution (e.g., "linear", "asana") */
+  frontend?: string
+  /** Provider discriminator for tool permission translation */
+  provider?: string
+}
+
+// ---------------------------------------------------------------------------
+// Zod Schemas
+// ---------------------------------------------------------------------------
+
+/** All valid work type values */
+const WORK_TYPES = [
+  'research',
+  'backlog-creation',
+  'development',
+  'inflight',
+  'qa',
+  'acceptance',
+  'refinement',
+  'coordination',
+  'qa-coordination',
+  'acceptance-coordination',
+] as const
+
+export const AgentWorkTypeSchema = z.enum(WORK_TYPES)
+
+export const ToolPermissionSchema = z.union([
+  z.object({ shell: z.string().min(1) }),
+  z.literal('user-input'),
+  z.string().min(1),
+])
+
+export const WorkflowTemplateSchema = z.object({
+  apiVersion: z.literal('v1'),
+  kind: z.literal('WorkflowTemplate'),
+  metadata: z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    workType: AgentWorkTypeSchema,
+  }),
+  tools: z.object({
+    allow: z.array(ToolPermissionSchema).optional(),
+    disallow: z.array(ToolPermissionSchema).optional(),
+  }).optional(),
+  prompt: z.string().min(1),
+})
+
+export const PartialTemplateSchema = z.object({
+  apiVersion: z.literal('v1'),
+  kind: z.literal('PartialTemplate'),
+  metadata: z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    frontend: z.string().optional(),
+  }),
+  content: z.string().min(1),
+})
+
+export const TemplateContextSchema = z.object({
+  identifier: z.string().min(1),
+  mentionContext: z.string().optional(),
+  startStatus: z.string().optional(),
+  completeStatus: z.string().optional(),
+  parentContext: z.string().optional(),
+  subIssueList: z.string().optional(),
+})
+
+// ---------------------------------------------------------------------------
+// Validation Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate a parsed YAML object as a WorkflowTemplate.
+ * Throws ZodError with detailed messages on failure.
+ */
+export function validateWorkflowTemplate(data: unknown, filePath?: string): WorkflowTemplate {
+  try {
+    return WorkflowTemplateSchema.parse(data)
+  } catch (error) {
+    if (filePath && error instanceof z.ZodError) {
+      throw new Error(`Invalid workflow template at ${filePath}: ${error.message}`, { cause: error })
+    }
+    throw error
+  }
+}
+
+/**
+ * Validate a parsed YAML object as a PartialTemplate.
+ * Throws ZodError with detailed messages on failure.
+ */
+export function validatePartialTemplate(data: unknown, filePath?: string): PartialTemplate {
+  try {
+    return PartialTemplateSchema.parse(data)
+  } catch (error) {
+    if (filePath && error instanceof z.ZodError) {
+      throw new Error(`Invalid partial template at ${filePath}: ${error.message}`, { cause: error })
+    }
+    throw error
+  }
+}

@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: acceptance
+  description: Final acceptance testing and PR merge
+  workType: acceptance
+
+tools:
+  allow:
+    - shell: "gh pr *"
+    - shell: "git push *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Process acceptance for {{identifier}}.
+  Validate development and QA work is complete.
+  Verify PR is ready to merge (CI passing, no conflicts).
+  Merge the PR using: gh pr merge <PR_NUMBER> --squash
+  After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+  {{> partials/work-result-marker}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
