@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.11
+
+### Features
+
+- **Hybrid Event+Poll Governor** — `EventDrivenGovernor` wraps the existing decision engine with a real-time event loop (via `GovernorEventBus`) plus a periodic poll safety net (default 5 min), both feeding through `EventDeduplicator` to avoid duplicate processing
+- **PlatformAdapter pattern** — New `PlatformAdapter` interface in core with `LinearPlatformAdapter` implementation that normalizes Linear webhooks into `GovernorEvent`s and scans projects for non-terminal issues
+- **Webhook-to-Governor bridge** — `governorMode` config (`direct` | `event-bridge` | `governor-only`) lets deployments opt in incrementally; webhooks publish status-change events to the bus alongside or instead of direct dispatch
+- **Real GovernorDependencies** — CLI governor now wires all 10 dependency callbacks to Linear SDK + Redis (sessions, cooldowns, overrides, workflow state, phase tracking, work dispatch) with stub fallback when env vars aren't set
+- **Redis Streams event bus** — `RedisEventBus` with consumer groups, MAXLEN trimming, and pending message re-delivery; `RedisEventDeduplicator` using SETNX with TTL
+- **`--mode event-driven|poll-only` CLI flag** — `af-governor` now supports event-driven mode with `InMemoryEventBus` for single-process usage
+
+### Chores
+
+- Aligned all package versions to 0.7.11 across the monorepo.
+
 ## v0.7.10
 
 ### Features
