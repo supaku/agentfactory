@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.7.14
+
+### Features
+
+- **Linear API rate limiter** — New `TokenBucket` rate limiter in `@supaku/agentfactory-linear` proactively throttles requests below Linear's ~100 req/min limit. Uses a token bucket algorithm (80 burst capacity, 1.5 tokens/sec refill). All `LinearAgentClient` API calls now pass through the rate limiter with automatic backpressure. Includes `Retry-After` header parsing for 429 responses.
+- **Auto-detect app URL on Vercel** — `getAppUrl()` and OAuth callback in `@supaku/agentfactory-nextjs` now fall back to `VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL` when `NEXT_PUBLIC_APP_URL` is not set. Removes the need to manually configure app URL on Vercel deployments.
+- **One-click deploy buttons** — Vercel and Railway deploy buttons are now fully functional across all READMEs. Vercel deploys from the monorepo subdirectory (`agentfactory/tree/main/templates/dashboard`), eliminating the need for a separate template repository. Railway deploy uses a published template with bundled Redis.
+
+### Fixes
+
+- **Dashboard template Tailwind v4 build** — The dashboard template imported the `@supaku/agentfactory-dashboard` v3 stylesheet which used `@apply border-border`, failing under Tailwind v4. Converted all dashboard styles to v4-native `@theme` declarations and removed the v3 import.
+- **`vercel.json` schema validation** — Removed invalid `env` block that used object format (`{description, required}`) instead of Vercel's expected string values. Env vars are prompted via the deploy button URL parameter instead.
+- **Retry improvements** — Retry logic now handles `429 Too Many Requests` with `Retry-After` header parsing, and distinguishes retryable status codes (429, 500, 502, 503, 504) from non-retryable ones.
+- **Governor dependencies cleanup** — Simplified `governor-dependencies.ts` in the CLI package, removing redundant wiring.
+
+### Docs
+
+- **Workflow Governor documentation** — Added comprehensive Governor docs across all packages.
+
+### Chores
+
+- Updated dashboard template dependency versions to 0.7.14.
+- Added `next-env.d.ts` to template `.gitignore`.
+- Aligned all package versions to 0.7.14 across the monorepo.
+
 ## v0.7.13
 
 ### Fixes
