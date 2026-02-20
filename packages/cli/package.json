@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-cli",
-  "version": "0.7.14",
+  "version": "0.7.15",
   "type": "module",
   "description": "CLI tools for AgentFactory \u2014 local orchestrator, remote worker, queue admin",
   "author": "Supaku (https://supaku.com)",
@@ -59,6 +59,11 @@
         "types": "./dist/src/lib/linear-runner.d.ts",
         "import": "./dist/src/lib/linear-runner.js",
         "default": "./dist/src/lib/linear-runner.js"
+      },
+      "./sync-routes": {
+        "types": "./dist/src/lib/sync-routes-runner.d.ts",
+        "import": "./dist/src/lib/sync-routes-runner.js",
+        "default": "./dist/src/lib/sync-routes-runner.js"
       }
     },
     "main": "./dist/src/index.js",
@@ -79,7 +84,8 @@
     "af-queue-admin": "./dist/src/queue-admin.js",
     "af-analyze-logs": "./dist/src/analyze-logs.js",
     "af-linear": "./dist/src/linear.js",
-    "af-governor": "./dist/src/governor.js"
+    "af-governor": "./dist/src/governor.js",
+    "af-sync-routes": "./dist/src/sync-routes.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
@@ -124,6 +130,11 @@
       "types": "./dist/src/lib/linear-runner.d.ts",
       "import": "./dist/src/lib/linear-runner.js",
       "default": "./dist/src/lib/linear-runner.js"
+    },
+    "./sync-routes": {
+      "types": "./dist/src/lib/sync-routes-runner.d.ts",
+      "import": "./dist/src/lib/sync-routes-runner.js",
+      "default": "./dist/src/lib/sync-routes-runner.js"
     }
   },
   "files": [

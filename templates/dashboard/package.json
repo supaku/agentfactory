@@ -13,12 +13,12 @@
     "cleanup": "tsx cli/cleanup.ts"
   },
   "dependencies": {
-    "@supaku/agentfactory": "0.7.14",
-    "@supaku/agentfactory-cli": "0.7.14",
-    "@supaku/agentfactory-dashboard": "0.7.14",
-    "@supaku/agentfactory-linear": "0.7.14",
-    "@supaku/agentfactory-nextjs": "0.7.14",
-    "@supaku/agentfactory-server": "0.7.14",
+    "@supaku/agentfactory": "0.7.15",
+    "@supaku/agentfactory-cli": "0.7.15",
+    "@supaku/agentfactory-dashboard": "0.7.15",
+    "@supaku/agentfactory-linear": "0.7.15",
+    "@supaku/agentfactory-nextjs": "0.7.15",
+    "@supaku/agentfactory-server": "0.7.15",
     "next": "^16.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7.15
+
+### Features
+
+- **`af-sync-routes` CLI command** — New command that auto-generates missing `route.ts` and `page.tsx` files in consumer projects after upgrading `@supaku` packages. Reads from a central route manifest in `@supaku/agentfactory` and creates only missing files (never overwrites). Use `--pages` to also sync dashboard pages, `--dry-run` to preview. Available as `af-sync-routes` binary and `@supaku/agentfactory-cli/sync-routes` subpath export.
+- **Route manifest** — New `ROUTE_MANIFEST` in `@supaku/agentfactory` defines all 24 API routes and 5 dashboard pages as structured data. Includes `generateRouteContent()` and `generatePageContent()` generators that produce output identical to the `create-app` templates.
+
+### Tests
+
+- Manifest unit tests (14 tests) — validates entry counts, path patterns, method accessors, and content generation.
+- Manifest / create-app parity tests (6 tests) — ensures the manifest stays in sync with `create-app` templates.
+- Sync routes runner tests (8 tests) — file creation, no-overwrite safety, dry-run, error handling, and page sync.
+
+### Chores
+
+- Excluded `__tests__` directories from tsc build in core and cli packages.
+- Aligned all package versions to 0.7.15 across the monorepo.
+
 ## v0.7.14
 
 ### Features

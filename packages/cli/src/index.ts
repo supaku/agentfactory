@@ -24,6 +24,7 @@ Commands:
   queue-admin     Manage Redis work queue and sessions
   analyze-logs    Analyze agent session logs for errors
   linear          Linear issue tracker operations
+  sync-routes     Generate missing route and page files from manifest
   help            Show this help message
 
 Run 'agentfactory <command> --help' for command-specific options.
@@ -56,6 +57,9 @@ switch (command) {
     break
   case 'linear':
     import('./linear')
+    break
+  case 'sync-routes':
+    import('./sync-routes')
     break
   case 'help':
   case '--help':

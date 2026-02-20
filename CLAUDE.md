@@ -63,6 +63,25 @@ pnpm af-linear create-blocker <source-issue-id> --title "Title" [--description "
 - All commands return JSON to stdout — capture the `id` field for subsequent operations
 - Use `--parentId` when creating sub-issues to enable coordinator orchestration
 
+## Route Sync CLI
+
+After upgrading `@supaku` packages, new routes may be missing from `src/app/`. Use `af-sync-routes` to generate missing route files from the manifest.
+
+```bash
+# Preview what would be created
+pnpm af-sync-routes --dry-run
+
+# Create missing API route files
+pnpm af-sync-routes
+
+# Also sync dashboard page files
+pnpm af-sync-routes --pages
+```
+
+- Never overwrites existing files
+- Pages are opt-in via `--pages` (API routes sync by default)
+- Use `--app-dir <path>` for non-standard app directory
+
 ## Autonomous Operation Mode
 
 When running as an automated agent (via webhook or orchestrator), Claude operates in headless mode.
