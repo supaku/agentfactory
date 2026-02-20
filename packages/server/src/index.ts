@@ -51,3 +51,9 @@ export * from './governor-storage.js'
 
 // Processing state storage (Redis-backed top-of-funnel phase tracking)
 export * from './processing-state-storage.js'
+
+// Governor event bus (Redis Streams)
+export * from './governor-event-bus.js'
+
+// Governor event deduplicator (Redis SETNX)
+export * from './governor-dedup.js'
