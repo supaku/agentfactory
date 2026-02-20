@@ -69,7 +69,7 @@ export function parseWorkResult(
   }
 
   // 2. Fall back to heuristic patterns scoped by work type
-  if (workType === 'qa') {
+  if (workType === 'qa' || workType === 'qa-coordination') {
     if (QA_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }
@@ -78,7 +78,7 @@ export function parseWorkResult(
     }
   }
 
-  if (workType === 'acceptance') {
+  if (workType === 'acceptance' || workType === 'acceptance-coordination') {
     if (ACCEPTANCE_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }

@@ -78,6 +78,13 @@ describe('parseWorkResult', () => {
       expect(parseWorkResult('QA Result: Pass', 'acceptance')).toBe('unknown')
     })
 
+    it('matches QA patterns for qa-coordination work type', () => {
+      expect(parseWorkResult('## QA Passed\nAll sub-issues pass.', 'qa-coordination')).toBe('passed')
+      expect(parseWorkResult('## QA Failed\nSUP-712 needs work.', 'qa-coordination')).toBe('failed')
+      expect(parseWorkResult('QA Result: Pass', 'qa-coordination')).toBe('passed')
+      expect(parseWorkResult('QA Result: Fail', 'qa-coordination')).toBe('failed')
+    })
+
     it('checks fail patterns before pass patterns', () => {
       // Both present - fail takes precedence since it's checked first
       expect(parseWorkResult('## QA Failed\n## QA Passed', 'qa')).toBe(
@@ -127,6 +134,13 @@ describe('parseWorkResult', () => {
       expect(
         parseWorkResult('PR has been merged successfully', 'development')
       ).toBe('unknown')
+    })
+
+    it('matches acceptance patterns for acceptance-coordination work type', () => {
+      expect(parseWorkResult('## Acceptance Complete', 'acceptance-coordination')).toBe('passed')
+      expect(parseWorkResult('PR has been merged successfully', 'acceptance-coordination')).toBe('passed')
+      expect(parseWorkResult('## Acceptance Failed', 'acceptance-coordination')).toBe('failed')
+      expect(parseWorkResult('Cannot merge PR', 'acceptance-coordination')).toBe('failed')
     })
   })
 
