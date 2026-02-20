@@ -6,3 +6,4 @@ dist/
 .worktrees/
 .agent/
 *.tsbuildinfo
+next-env.d.ts
