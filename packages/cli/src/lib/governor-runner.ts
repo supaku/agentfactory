@@ -275,6 +275,7 @@ Modes:
 Environment:
   LINEAR_API_KEY              Required API key for Linear authentication
   REDIS_URL                   Redis connection URL (required for real dependencies)
+  GOVERNOR_PROJECTS           Comma-separated project names (fallback for --project)
 
 Examples:
   # Start the governor for a project

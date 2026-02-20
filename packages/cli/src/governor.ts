@@ -20,6 +20,7 @@
  *
  * Environment:
  *   LINEAR_API_KEY              Required API key for Linear authentication
+ *   GOVERNOR_PROJECTS           Comma-separated project names (fallback for --project)
  */
 
 import path from 'path'
@@ -83,8 +84,13 @@ function createStubDependencies(): GovernorDependencies {
 async function main(): Promise<void> {
   const args = parseGovernorArgs()
 
+  // Fall back to GOVERNOR_PROJECTS env var (comma-separated) when no --project flags
+  if (args.projects.length === 0 && process.env.GOVERNOR_PROJECTS) {
+    args.projects = process.env.GOVERNOR_PROJECTS.split(',').map(s => s.trim()).filter(Boolean)
+  }
+
   if (args.projects.length === 0) {
-    console.error('Error: at least one --project is required')
+    console.error('Error: at least one --project is required (or set GOVERNOR_PROJECTS env var)')
     process.exit(1)
   }
 
