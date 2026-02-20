@@ -2,6 +2,17 @@
 
 A self-contained React component library for AgentFactory fleet management. Provides a complete dashboard UI with real-time data fetching, a dark design system with orange accent, and four page-level components.
 
+## Deploy
+
+Want to run the dashboard without building from source? Use the one-click deploy template:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template%23environment-variables&project-name=agentfactory-dashboard)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/agentfactory?referralCode=supaku)
+
+> Railway includes Redis automatically. Vercel requires adding [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash Redis](https://upstash.com/) after deployment.
+
+See the [dashboard template repository](https://github.com/supaku-org/agentfactory-dashboard-template) for full setup instructions.
+
 ## Installation
 
 ```bash

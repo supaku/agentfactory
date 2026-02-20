@@ -8,13 +8,27 @@ AI agent fleet management dashboard powered by [AgentFactory](https://github.com
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template%23environment-variables&project-name=agentfactory-dashboard)
 
-> **Note:** Vercel does not include built-in Redis. Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash Redis](https://upstash.com/) after deployment and set the `REDIS_URL` environment variable.
+> **Note:** Vercel does not include built-in Redis. After deploying, add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) from the Storage tab or create an [Upstash Redis](https://upstash.com/) database, then set the `REDIS_URL` environment variable.
+
+**What happens when you click Deploy:**
+1. Vercel clones this repository into your GitHub account
+2. You're prompted for the 4 required environment variables
+3. Vercel auto-detects Next.js and builds the project
+4. After deploy, add Redis (Vercel KV or Upstash) and configure `REDIS_URL`
+5. Set up your [Linear webhook](#2-linear-webhook) pointing to `https://your-app.vercel.app/webhook`
 
 ### Railway
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/agentfactory?referralCode=supaku)
 
-> **Advantage:** Railway bundles Redis as a companion service — Redis is provisioned automatically with the template.
+> **Advantage:** Railway bundles Redis as a companion service — Redis is provisioned automatically with the template. No separate Redis setup required.
+
+**What happens when you click Deploy:**
+1. Railway creates your project with two services: the dashboard app and a Redis instance
+2. You're prompted for `LINEAR_ACCESS_TOKEN` and `LINEAR_WEBHOOK_SECRET`
+3. `REDIS_URL` is auto-injected from the companion Redis service
+4. The app builds via Railpack and starts with health checks on `/api/public/stats`
+5. Set up your [Linear webhook](#2-linear-webhook) pointing to your Railway domain
 
 ## Quick Start (Local)
 
@@ -105,11 +119,14 @@ This is a [Next.js](https://nextjs.org) application that provides:
 
 | Feature | Vercel | Railway |
 |---------|--------|---------|
-| Redis included | No (add Vercel KV/Upstash) | Yes (companion service) |
+| Redis included | No (add Vercel KV or Upstash) | Yes (auto-provisioned companion service) |
+| Redis setup | Manual — add after deploy | Automatic — `REDIS_URL` injected |
 | Auto-detect Next.js | Yes | Yes (via Railpack) |
 | Custom domain | Yes | Yes |
-| Health checks | Via Vercel | Configurable in railway.toml |
+| Health checks | Built-in | Configurable via `railway.toml` |
+| CLI tools (worker, orchestrator) | Serverless only | Full Node.js runtime |
 | Pricing | Free tier available | Free tier available |
+| Best for | Serverless dashboard + external workers | All-in-one dashboard + local workers |
 
 ## Staying Up to Date
 
