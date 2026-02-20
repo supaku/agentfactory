@@ -61,8 +61,8 @@ const DIRECTIVE_PATTERNS: Array<{
   { type: 'hold', pattern: /^hold(?:\s*[—–-]\s*(.+))?$/i },
   // RESUME
   { type: 'resume', pattern: /^resume$/i },
-  // SKIP QA
-  { type: 'skip-qa', pattern: /^skip\s+qa$/i },
+  // SKIP QA or SKIP-QA
+  { type: 'skip-qa', pattern: /^skip[\s-]+qa$/i },
   // DECOMPOSE
   { type: 'decompose', pattern: /^decompose$/i },
   // REASSIGN

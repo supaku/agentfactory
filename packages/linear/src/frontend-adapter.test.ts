@@ -105,7 +105,10 @@ function createMockClient(): {
     getIssueComments: vi.fn(),
     createIssue: vi.fn(),
     isParentIssue: vi.fn(),
+    isChildIssue: vi.fn(),
     getSubIssues: vi.fn(),
+    getIssueRelations: vi.fn(),
+    createIssueRelation: vi.fn(),
     createAgentSessionOnIssue: vi.fn(),
     updateAgentSession: vi.fn(),
     createAgentActivity: vi.fn(),
@@ -113,6 +116,7 @@ function createMockClient(): {
 
   const linearClient = {
     issues: vi.fn(),
+    issueLabels: vi.fn(),
   }
 
   const client = {
@@ -122,6 +126,7 @@ function createMockClient(): {
 
   // Store the linearClient mock for direct access
   mocks.linearClientIssues = linearClient.issues
+  mocks.linearClientIssueLabels = linearClient.issueLabels
 
   return { client, mocks }
 }
@@ -534,6 +539,167 @@ describe('LinearFrontendAdapter', () => {
       expect(result).toHaveLength(2)
       expect(result[0].identifier).toBe('SUP-10')
       expect(result[1].identifier).toBe('SUP-11')
+    })
+  })
+
+  // ========================================================================
+  // getUnblockedIssues
+  // ========================================================================
+
+  describe('getUnblockedIssues', () => {
+    it('returns only issues without incoming "blocks" relations', async () => {
+      const issues = [
+        mockLinearIssue({ id: 'i1', identifier: 'SUP-10', stateName: 'Backlog' }),
+        mockLinearIssue({ id: 'i2', identifier: 'SUP-11', stateName: 'Backlog' }),
+        mockLinearIssue({ id: 'i3', identifier: 'SUP-12', stateName: 'Backlog' }),
+      ]
+      mocks.linearClientIssues.mockResolvedValue({ nodes: issues })
+
+      // i1 is unblocked, i2 is blocked, i3 is unblocked
+      mocks.getIssueRelations
+        .mockResolvedValueOnce({ relations: [], inverseRelations: [] })
+        .mockResolvedValueOnce({
+          relations: [],
+          inverseRelations: [{ id: 'rel-1', type: 'blocks', issueId: 'blocker-id', relatedIssueId: 'i2' }],
+        })
+        .mockResolvedValueOnce({ relations: [], inverseRelations: [] })
+
+      const result = await adapter.getUnblockedIssues('MyProject', 'backlog')
+
+      expect(result).toHaveLength(2)
+      expect(result[0].identifier).toBe('SUP-10')
+      expect(result[1].identifier).toBe('SUP-12')
+    })
+
+    it('returns all issues when none are blocked', async () => {
+      const issues = [
+        mockLinearIssue({ id: 'i1', identifier: 'SUP-10', stateName: 'Backlog' }),
+      ]
+      mocks.linearClientIssues.mockResolvedValue({ nodes: issues })
+      mocks.getIssueRelations.mockResolvedValue({ relations: [], inverseRelations: [] })
+
+      const result = await adapter.getUnblockedIssues('MyProject', 'backlog')
+
+      expect(result).toHaveLength(1)
+      expect(result[0].identifier).toBe('SUP-10')
+    })
+
+    it('returns empty array when all issues are blocked', async () => {
+      const issues = [
+        mockLinearIssue({ id: 'i1', identifier: 'SUP-10', stateName: 'Backlog' }),
+      ]
+      mocks.linearClientIssues.mockResolvedValue({ nodes: issues })
+      mocks.getIssueRelations.mockResolvedValue({
+        relations: [],
+        inverseRelations: [{ id: 'rel-1', type: 'blocks', issueId: 'blocker-id', relatedIssueId: 'i1' }],
+      })
+
+      const result = await adapter.getUnblockedIssues('MyProject', 'backlog')
+
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  // ========================================================================
+  // isChildIssue
+  // ========================================================================
+
+  describe('isChildIssue', () => {
+    it('delegates to client.isChildIssue', async () => {
+      mocks.isChildIssue.mockResolvedValue(true)
+
+      const result = await adapter.isChildIssue('issue-1')
+
+      expect(mocks.isChildIssue).toHaveBeenCalledWith('issue-1')
+      expect(result).toBe(true)
+    })
+
+    it('returns false when issue has no parent', async () => {
+      mocks.isChildIssue.mockResolvedValue(false)
+
+      const result = await adapter.isChildIssue('issue-1')
+
+      expect(result).toBe(false)
+    })
+  })
+
+  // ========================================================================
+  // createBlockerIssue
+  // ========================================================================
+
+  describe('createBlockerIssue', () => {
+    it('creates a blocker issue in Icebox with blocking relation', async () => {
+      const sourceIssue = mockLinearIssue({ id: 'source-1' })
+      mocks.getIssue.mockResolvedValue(sourceIssue)
+      mocks.getTeamStatuses.mockResolvedValue({ Icebox: 'state-icebox-id', Backlog: 'state-backlog-id' })
+      mocks.linearClientIssueLabels.mockResolvedValue({
+        nodes: [{ id: 'label-1', name: 'Needs Human' }, { id: 'label-2', name: 'Bug' }],
+      })
+
+      const createdIssue = mockLinearIssue({
+        id: 'blocker-uuid',
+        identifier: 'SUP-300',
+        title: 'Human review needed',
+        stateName: 'Icebox',
+      })
+      mocks.createIssue.mockResolvedValue(createdIssue)
+      mocks.createIssueRelation.mockResolvedValue({ success: true, relationId: 'rel-1' })
+
+      const result = await adapter.createBlockerIssue('source-1', {
+        title: 'Human review needed',
+        description: 'This needs human review',
+      })
+
+      expect(mocks.createIssue).toHaveBeenCalledWith({
+        title: 'Human review needed',
+        description: 'This needs human review',
+        teamId: 'team-1',
+        projectId: undefined,
+        stateId: 'state-icebox-id',
+        labelIds: ['label-1'],
+      })
+      expect(mocks.createIssueRelation).toHaveBeenCalledWith({
+        issueId: 'blocker-uuid',
+        relatedIssueId: 'source-1',
+        type: 'blocks',
+      })
+      expect(result.identifier).toBe('SUP-300')
+    })
+
+    it('uses provided teamId instead of looking up from source issue', async () => {
+      mocks.getTeamStatuses.mockResolvedValue({ Icebox: 'state-icebox-id' })
+      mocks.linearClientIssueLabels.mockResolvedValue({ nodes: [] })
+
+      const createdIssue = mockLinearIssue({ id: 'blocker-uuid', identifier: 'SUP-301' })
+      mocks.createIssue.mockResolvedValue(createdIssue)
+      mocks.createIssueRelation.mockResolvedValue({ success: true, relationId: 'rel-1' })
+
+      await adapter.createBlockerIssue('source-1', {
+        title: 'Blocker',
+        teamId: 'explicit-team',
+      })
+
+      // Should NOT call getIssue since teamId was provided
+      expect(mocks.getIssue).not.toHaveBeenCalled()
+      expect(mocks.getTeamStatuses).toHaveBeenCalledWith('explicit-team')
+    })
+
+    it('creates issue without label when "Needs Human" label not found', async () => {
+      const sourceIssue = mockLinearIssue({ id: 'source-1' })
+      mocks.getIssue.mockResolvedValue(sourceIssue)
+      mocks.getTeamStatuses.mockResolvedValue({ Icebox: 'state-icebox-id' })
+      mocks.linearClientIssueLabels.mockResolvedValue({ nodes: [{ id: 'l1', name: 'Bug' }] })
+
+      const createdIssue = mockLinearIssue({ id: 'blocker-uuid', identifier: 'SUP-302' })
+      mocks.createIssue.mockResolvedValue(createdIssue)
+      mocks.createIssueRelation.mockResolvedValue({ success: true })
+
+      await adapter.createBlockerIssue('source-1', { title: 'Blocker' })
+
+      // Should not include labelIds since "Needs Human" was not found
+      expect(mocks.createIssue).toHaveBeenCalledWith(
+        expect.not.objectContaining({ labelIds: expect.anything() })
+      )
     })
   })
 })

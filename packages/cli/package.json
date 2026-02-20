@@ -78,7 +78,8 @@
     "af-cleanup": "./dist/src/cleanup.js",
     "af-queue-admin": "./dist/src/queue-admin.js",
     "af-analyze-logs": "./dist/src/analyze-logs.js",
-    "af-linear": "./dist/src/linear.js"
+    "af-linear": "./dist/src/linear.js",
+    "af-governor": "./dist/src/governor.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",

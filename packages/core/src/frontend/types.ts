@@ -108,14 +108,17 @@ export interface WorkSchedulingFrontend {
   // Read operations
   getIssue(id: string): Promise<AbstractIssue>
   listIssuesByStatus(project: string, status: AbstractStatus): Promise<AbstractIssue[]>
+  getUnblockedIssues(project: string, status: AbstractStatus): Promise<AbstractIssue[]>
   getIssueComments(id: string): Promise<AbstractComment[]>
   isParentIssue(id: string): Promise<boolean>
+  isChildIssue(id: string): Promise<boolean>
   getSubIssues(id: string): Promise<AbstractIssue[]>
 
   // Write operations
   transitionIssue(id: string, status: AbstractStatus): Promise<void>
   createComment(id: string, body: string): Promise<void>
   createIssue(data: CreateIssueInput): Promise<AbstractIssue>
+  createBlockerIssue(sourceId: string, data: CreateBlockerInput): Promise<AbstractIssue>
 
   // Agent session operations
   createAgentSession(issueId: string, externalUrls?: ExternalUrl[]): Promise<string>

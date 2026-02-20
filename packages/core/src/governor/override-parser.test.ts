@@ -108,6 +108,20 @@ describe('parseOverrideDirective', () => {
       expect(result).not.toBeNull()
       expect(result!.type).toBe('skip-qa')
     })
+
+    it('parses SKIP-QA (hyphenated)', () => {
+      const comment = makeComment({ body: 'SKIP-QA' })
+      const result = parseOverrideDirective(comment)
+      expect(result).not.toBeNull()
+      expect(result!.type).toBe('skip-qa')
+    })
+
+    it('parses skip-qa (hyphenated lowercase)', () => {
+      const comment = makeComment({ body: 'skip-qa' })
+      const result = parseOverrideDirective(comment)
+      expect(result).not.toBeNull()
+      expect(result!.type).toBe('skip-qa')
+    })
   })
 
   describe('DECOMPOSE directive', () => {

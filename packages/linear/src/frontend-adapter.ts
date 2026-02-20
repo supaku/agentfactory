@@ -84,6 +84,17 @@ export interface CreateIssueInput {
 }
 
 /**
+ * Input for creating a blocker issue.
+ */
+export interface CreateBlockerInput {
+  title: string
+  description?: string
+  teamId?: string
+  projectId?: string
+  assignee?: string
+}
+
+/**
  * Input for updating an agent session.
  */
 export interface UpdateSessionInput {
@@ -241,10 +252,38 @@ export class LinearFrontendAdapter {
   }
 
   /**
+   * List issues in a project filtered by abstract status, excluding
+   * those that are blocked by other issues (have incoming "blocks" relations).
+   */
+  async getUnblockedIssues(project: string, status: AbstractStatus): Promise<AbstractIssue[]> {
+    const allIssues = await this.listIssuesByStatus(project, status)
+    const results: AbstractIssue[] = []
+
+    for (const issue of allIssues) {
+      const relations = await this.client.getIssueRelations(issue.id)
+      // An issue is blocked if another issue has an outgoing "blocks" relation to it
+      // (appears as an inverse relation with type "blocks")
+      const isBlocked = relations.inverseRelations.some((r) => r.type === 'blocks')
+      if (!isBlocked) {
+        results.push(issue)
+      }
+    }
+
+    return results
+  }
+
+  /**
    * Check if an issue has child issues (is a parent issue).
    */
   async isParentIssue(id: string): Promise<boolean> {
     return this.client.isParentIssue(id)
+  }
+
+  /**
+   * Check if an issue has a parent (is a child/sub-issue).
+   */
+  async isChildIssue(id: string): Promise<boolean> {
+    return this.client.isChildIssue(id)
   }
 
   /**
@@ -289,6 +328,52 @@ export class LinearFrontendAdapter {
    */
   async createComment(id: string, body: string): Promise<void> {
     await this.client.createComment(id, body)
+  }
+
+  /**
+   * Create a blocker issue that blocks the source issue.
+   * Creates the issue in Icebox with a "Needs Human" label (if found),
+   * then creates a "blocks" relation from the blocker to the source.
+   */
+  async createBlockerIssue(sourceId: string, data: CreateBlockerInput): Promise<AbstractIssue> {
+    // Determine the team — use provided teamId or look it up from the source issue
+    let teamId = data.teamId
+    if (!teamId) {
+      const sourceIssue = await this.client.getIssue(sourceId)
+      const team = await sourceIssue.team
+      if (!team) {
+        throw new Error(`Cannot create blocker: source issue ${sourceId} has no team`)
+      }
+      teamId = team.id
+    }
+
+    // Find the Icebox state
+    const statuses = await this.client.getTeamStatuses(teamId)
+    const iceboxStateId = statuses['Icebox']
+
+    // Find the "Needs Human" label
+    const allLabels = await this.client.linearClient.issueLabels()
+    const needsHumanLabel = allLabels.nodes.find(
+      (l) => l.name.toLowerCase() === 'needs human'
+    )
+
+    const issue = await this.client.createIssue({
+      title: data.title,
+      description: data.description,
+      teamId,
+      projectId: data.projectId,
+      ...(iceboxStateId && { stateId: iceboxStateId }),
+      ...(needsHumanLabel && { labelIds: [needsHumanLabel.id] }),
+    })
+
+    // Create blocking relation: blocker blocks source issue
+    await this.client.createIssueRelation({
+      issueId: issue.id,
+      relatedIssueId: sourceId,
+      type: 'blocks',
+    })
+
+    return toAbstractIssue(issue)
   }
 
   /**
