@@ -1544,7 +1544,7 @@ export class AgentOrchestrator {
     if (customPrompt) {
       prompt = customPrompt
     } else if (this.templateRegistry?.hasTemplate(workType)) {
-      const context: TemplateContext = { identifier }
+      const context: TemplateContext = { identifier, repository: this.config.repository }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
     } else {

@@ -124,6 +124,10 @@ export interface TemplateContext {
   blockerIdentifier?: string
   /** Team name (for decomposition sub-issue creation) */
   team?: string
+
+  // Repository validation variables
+  /** Git repository URL pattern for pre-push validation (e.g. 'github.com/org/repo') */
+  repository?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +237,8 @@ export const TemplateContextSchema = z.object({
   // Governor notification variables
   blockerIdentifier: z.string().optional(),
   team: z.string().optional(),
+  // Repository validation variables
+  repository: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------
