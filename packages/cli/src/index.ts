@@ -17,6 +17,7 @@ Usage:
 
 Commands:
   orchestrator    Spawn concurrent agents on backlog issues
+  governor        Automated workflow scan loop with configurable triggers
   worker          Start a remote worker that polls for queued work
   worker-fleet    Spawn and manage multiple worker processes
   cleanup         Clean up orphaned git worktrees
@@ -34,6 +35,9 @@ Learn more: https://github.com/supaku/agentfactory
 switch (command) {
   case 'orchestrator':
     import('./orchestrator')
+    break
+  case 'governor':
+    import('./governor')
     break
   case 'worker':
     import('./worker')

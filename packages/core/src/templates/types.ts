@@ -104,6 +104,26 @@ export interface TemplateContext {
   parentContext?: string
   /** Formatted list of sub-issues with statuses */
   subIssueList?: string
+
+  // Strategy / WorkflowState variables (injected by escalation governor)
+  /** Current escalation cycle count (from WorkflowState) */
+  cycleCount?: number
+  /** Current escalation strategy: 'normal' | 'context-enriched' | 'decompose' | 'escalate-human' */
+  strategy?: string
+  /** Accumulated failure summary across cycles */
+  failureSummary?: string
+  /** Attempt number within current phase */
+  attemptNumber?: number
+  /** List of previous failure reasons */
+  previousFailureReasons?: string[]
+  /** Total cost in USD across all attempts */
+  totalCostUsd?: number
+
+  // Governor notification variables
+  /** Blocker issue identifier (for escalation alerts) */
+  blockerIdentifier?: string
+  /** Team name (for decomposition sub-issue creation) */
+  team?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -130,8 +150,12 @@ export interface ToolPermissionAdapter {
 export interface TemplateRegistryConfig {
   /** Directories to scan for template YAML files (searched in order) */
   templateDirs?: string[]
-  /** Inline template overrides (highest priority) */
-  templates?: Partial<Record<AgentWorkType, WorkflowTemplate>>
+  /**
+   * Inline template overrides (highest priority).
+   * Keys can be AgentWorkType values (e.g., "development") or strategy-specific
+   * compound keys (e.g., "refinement-context-enriched").
+   */
+  templates?: Partial<Record<AgentWorkType, WorkflowTemplate>> & Record<string, WorkflowTemplate>
   /** Whether to load built-in defaults (default: true) */
   useBuiltinDefaults?: boolean
   /** Frontend discriminator for partial resolution (e.g., "linear", "asana") */
@@ -199,6 +223,16 @@ export const TemplateContextSchema = z.object({
   completeStatus: z.string().optional(),
   parentContext: z.string().optional(),
   subIssueList: z.string().optional(),
+  // Strategy / WorkflowState variables
+  cycleCount: z.number().int().nonnegative().optional(),
+  strategy: z.string().optional(),
+  failureSummary: z.string().optional(),
+  attemptNumber: z.number().int().positive().optional(),
+  previousFailureReasons: z.array(z.string()).optional(),
+  totalCostUsd: z.number().nonnegative().optional(),
+  // Governor notification variables
+  blockerIdentifier: z.string().optional(),
+  team: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------

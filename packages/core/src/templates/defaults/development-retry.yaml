@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: development-retry
+  description: Development retry after rejection
+  workType: development
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git commit *"
+    - shell: "git diff *"
+    - shell: "git log *"
+  disallow:
+    - user-input
+prompt: |
+  You are retrying development on {{identifier}} (attempt {{attemptNumber}}).
+
+  {{#if previousFailureReasons}}
+  ## Previous Failures — DO NOT REPEAT THESE MISTAKES
+  {{#each previousFailureReasons}}
+  - {{this}}
+  {{/each}}
+  {{/if}}
+
+  {{#if failureSummary}}
+  ## Full Failure Context
+  {{{failureSummary}}}
+  {{/if}}
+
+  ## Instructions
+  1. Review the previous failure reasons carefully
+  2. Do NOT repeat approaches that already failed
+  3. Take a different strategy if the same approach failed twice
+  4. Run tests to verify: `pnpm test` and `pnpm typecheck`
+  5. Create a PR
+
+  {{> partials/dependency-instructions}}
+  {{> partials/cli-instructions}}
+  {{> partials/work-result-marker}}

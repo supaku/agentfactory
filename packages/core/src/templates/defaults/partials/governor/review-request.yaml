@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: governor/review-request
+  description: Review request notification for repeated QA failures
+content: |
+  ## Review Requested: Repeated QA Failure
+
+  This issue has failed QA after {{cycleCount}} development cycles.
+
+  **Failure Pattern:**
+  {{#if failureSummary}}
+  {{{failureSummary}}}
+  {{else}}
+  No failure details available.
+  {{/if}}
+
+  {{#if totalCostUsd}}
+  **Cost so far:** ${{totalCostUsd}}
+  {{/if}}
+
+  **Options:**
+  - Comment "HOLD" to pause and investigate manually
+  - Comment "DECOMPOSE" to break into smaller issues
+  - Do nothing — system will retry with enriched context

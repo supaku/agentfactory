@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: refinement-decompose
+  description: Decomposition strategy after 3 failed QA cycles
+  workType: refinement
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git commit *"
+  disallow:
+    - user-input
+prompt: |
+  You are working on {{identifier}} which has FAILED QA {{cycleCount}} times.
+
+  The system has determined this issue is too complex to solve in a single pass.
+  Your task is to DECOMPOSE this issue into smaller, independently testable sub-issues.
+
+  ## Failure History
+  {{#if failureSummary}}
+  {{{failureSummary}}}
+  {{else}}
+  No failure details available.
+  {{/if}}
+
+  ## Instructions
+  1. Analyze the failure history to identify independent failure modes
+  2. Break the original issue into 2-4 smaller sub-issues, each independently testable
+  3. Create sub-issues using the Linear CLI:
+     ```
+     pnpm af-linear create-issue --title "Sub-task title" --team "{{team}}" --parentId "PARENT_ID" --description "..."
+     ```
+  4. Each sub-issue should have clear acceptance criteria
+  5. Add blocking relations if sub-issues have dependencies
+  6. Report the decomposition in your WORK_RESULT
+
+  {{> partials/dependency-instructions}}
+  {{> partials/cli-instructions}}
+  {{> partials/work-result-marker}}
