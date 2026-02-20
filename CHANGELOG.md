@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.16
+
+### Fixes
+
+- **Governor `GOVERNOR_PROJECTS` env var** — The governor CLI now reads `GOVERNOR_PROJECTS` (comma-separated) as a fallback when no `--project` flags are provided. Aligns with `worker` and `worker-fleet` CLIs which already support env var defaults via `WORKER_PROJECTS`.
+
+### Chores
+
+- Aligned all package versions to 0.7.16 across the monorepo.
+
 ## v0.7.15
 
 ### Features
