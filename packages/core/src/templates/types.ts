@@ -214,7 +214,7 @@ export function validateWorkflowTemplate(data: unknown, filePath?: string): Work
     return WorkflowTemplateSchema.parse(data)
   } catch (error) {
     if (filePath && error instanceof z.ZodError) {
-      error.message = `Invalid workflow template at ${filePath}: ${error.message}`
+      throw new Error(`Invalid workflow template at ${filePath}: ${error.message}`, { cause: error })
     }
     throw error
   }
@@ -229,7 +229,7 @@ export function validatePartialTemplate(data: unknown, filePath?: string): Parti
     return PartialTemplateSchema.parse(data)
   } catch (error) {
     if (filePath && error instanceof z.ZodError) {
-      error.message = `Invalid partial template at ${filePath}: ${error.message}`
+      throw new Error(`Invalid partial template at ${filePath}: ${error.message}`, { cause: error })
     }
     throw error
   }
