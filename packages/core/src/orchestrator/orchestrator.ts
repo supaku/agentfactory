@@ -914,9 +914,11 @@ export class AgentOrchestrator {
         filter.project = { id: { eq: projects.nodes[0].id } }
 
         // Cross-reference project repo metadata with config (SUP-725)
-        if (this.config.repository) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime check for method added in SUP-725
+        const clientAny = this.client as any
+        if (this.config.repository && typeof clientAny.getProjectRepositoryUrl === 'function') {
           try {
-            const projectRepoUrl = await this.client.getProjectRepositoryUrl(projects.nodes[0].id)
+            const projectRepoUrl: string | null = await clientAny.getProjectRepositoryUrl(projects.nodes[0].id)
             if (projectRepoUrl) {
               const normalizedProjectRepo = projectRepoUrl
                 .replace(/^https?:\/\//, '')
