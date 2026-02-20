@@ -8,7 +8,12 @@
 
 import {
   WorkflowGovernor,
+  EventDrivenGovernor,
+  InMemoryEventBus,
+  InMemoryEventDeduplicator,
   type GovernorDependencies,
+  type GovernorEventBus,
+  type EventDeduplicator,
 } from '@supaku/agentfactory'
 import type {
   GovernorConfig,
@@ -44,6 +49,12 @@ export interface GovernorRunnerConfig {
   dependencies: GovernorDependencies
   /** Callbacks for governor lifecycle events */
   callbacks?: GovernorRunnerCallbacks
+  /** Governor execution mode (default: 'poll-only') */
+  mode?: 'poll-only' | 'event-driven'
+  /** Event bus for event-driven mode (created automatically if not provided) */
+  eventBus?: GovernorEventBus
+  /** Event deduplicator for event-driven mode (created automatically if not provided) */
+  deduplicator?: EventDeduplicator
 }
 
 export interface GovernorRunnerCallbacks {
@@ -52,8 +63,8 @@ export interface GovernorRunnerCallbacks {
 }
 
 export interface GovernorRunnerResult {
-  governor: WorkflowGovernor
-  /** Only populated in --once mode */
+  governor: WorkflowGovernor | EventDrivenGovernor
+  /** Only populated in --once mode (poll-only) */
   scanResults?: ScanResult[]
 }
 
@@ -64,9 +75,15 @@ export interface GovernorRunnerResult {
 /**
  * Start the Workflow Governor with the given configuration.
  *
- * In `once` mode, runs a single scan pass and returns the results.
- * Otherwise, starts the scan loop and returns the governor instance
- * (caller is responsible for calling `governor.stop()` on shutdown).
+ * In `poll-only` mode (default):
+ *   - `once` mode: runs a single scan pass and returns the results.
+ *   - Otherwise: starts the scan loop and returns the governor instance
+ *     (caller is responsible for calling `governor.stop()` on shutdown).
+ *
+ * In `event-driven` mode:
+ *   - Creates an EventDrivenGovernor with an event bus and optional deduplicator.
+ *   - Starts the event loop and periodic poll sweep.
+ *   - `once` mode is not supported in event-driven mode (falls back to poll-only).
  */
 export async function runGovernor(
   config: GovernorRunnerConfig,
@@ -82,6 +99,37 @@ export async function runGovernor(
     enableAutoAcceptance: config.enableAutoAcceptance,
   }
 
+  const mode = config.mode ?? 'poll-only'
+
+  // -- Event-driven mode --
+  if (mode === 'event-driven' && !config.once) {
+    const eventBus = config.eventBus ?? new InMemoryEventBus()
+    const deduplicator = config.deduplicator ?? new InMemoryEventDeduplicator()
+
+    const governor = new EventDrivenGovernor(
+      {
+        ...governorConfig,
+        // Spread required GovernorConfig defaults so TypeScript is happy
+        projects: config.projects,
+        scanIntervalMs: config.scanIntervalMs ?? 60_000,
+        maxConcurrentDispatches: config.maxConcurrentDispatches ?? 3,
+        enableAutoResearch: config.enableAutoResearch ?? true,
+        enableAutoBacklogCreation: config.enableAutoBacklogCreation ?? true,
+        enableAutoDevelopment: config.enableAutoDevelopment ?? true,
+        enableAutoQA: config.enableAutoQA ?? true,
+        enableAutoAcceptance: config.enableAutoAcceptance ?? true,
+        humanResponseTimeoutMs: 4 * 60 * 60 * 1000,
+        eventBus,
+        deduplicator,
+      },
+      config.dependencies,
+    )
+
+    await governor.start()
+    return { governor }
+  }
+
+  // -- Poll-only mode (default) --
   const governor = new WorkflowGovernor(governorConfig, config.dependencies)
 
   // -- Single scan mode (--once) --
@@ -110,6 +158,7 @@ export interface GovernorCLIArgs {
   enableAutoQA: boolean
   enableAutoAcceptance: boolean
   once: boolean
+  mode: 'poll-only' | 'event-driven'
 }
 
 /**
@@ -141,6 +190,7 @@ export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): Gover
     enableAutoQA: true,
     enableAutoAcceptance: true,
     once: false,
+    mode: 'poll-only',
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -173,6 +223,9 @@ export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): Gover
       case '--once':
         result.once = true
         break
+      case '--mode':
+        result.mode = argv[++i] as 'poll-only' | 'event-driven'
+        break
       case '--help':
       case '-h':
         printGovernorHelp()
@@ -197,6 +250,7 @@ Options:
   --project <name>            Project to scan (can be repeated for multiple projects)
   --scan-interval <ms>        Scan interval in milliseconds (default: 60000)
   --max-dispatches <n>        Maximum concurrent dispatches per scan (default: 3)
+  --mode <mode>               Execution mode: poll-only (default) or event-driven
   --no-auto-research          Disable auto-research from Icebox
   --no-auto-backlog-creation  Disable auto-backlog-creation from Icebox
   --no-auto-development       Disable auto-development from Backlog
@@ -205,8 +259,14 @@ Options:
   --once                      Run a single scan pass and exit
   --help, -h                  Show this help message
 
+Modes:
+  poll-only      Periodic scan loop using WorkflowGovernor (default)
+  event-driven   Hybrid event-driven + poll sweep using EventDrivenGovernor.
+                 Reacts to events in real time with a periodic safety-net poll.
+
 Environment:
   LINEAR_API_KEY              Required API key for Linear authentication
+  REDIS_URL                   Redis connection URL (required for real dependencies)
 
 Examples:
   # Start the governor for a project
@@ -220,5 +280,8 @@ Examples:
 
   # Disable auto-QA (only scan for development work)
   agentfactory governor --project MyProject --no-auto-qa --no-auto-acceptance
+
+  # Use event-driven mode
+  agentfactory governor --project MyProject --mode event-driven
 `)
 }
