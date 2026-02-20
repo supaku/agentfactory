@@ -56,6 +56,9 @@ export {
 export { createWebhookHandler } from './webhook/processor.js'
 export { verifyWebhookSignature } from './webhook/signature.js'
 
+// Governor bridge
+export { setGovernorEventBus, getGovernorEventBus, publishGovernorEvent } from './webhook/governor-bridge.js'
+
 // Individual handler factories (for custom wiring)
 
 // Worker handlers

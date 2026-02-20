@@ -14,7 +14,10 @@ import type { LinearWebhookPayload, AgentWorkType } from '@supaku/agentfactory-l
 import {
   checkIssueDeploymentStatus,
   formatFailedDeployments,
+  eventTimestamp,
 } from '@supaku/agentfactory'
+import type { GovernorIssue } from '@supaku/agentfactory'
+import { publishGovernorEvent } from '../governor-bridge.js'
 import {
   generateIdempotencyKey,
   isWebhookProcessed,
@@ -70,6 +73,36 @@ export async function handleIssueUpdated(
   }
 
   const autoTrigger = config.autoTrigger
+
+  // --- Governor event bridge ---
+  if (currentStateName && updatedFrom?.stateId) {
+    const governorIssue: GovernorIssue = {
+      id: issueId,
+      identifier: issueIdentifier,
+      title: (data.title as string) ?? '',
+      description: (data.description as string) ?? undefined,
+      status: currentStateName,
+      labels: ((data.labels as Array<{ name: string }>) ?? []).map(l => l.name),
+      createdAt: data.createdAt ? new Date(data.createdAt as string).getTime() : Date.now(),
+      parentId: (data.parent as Record<string, unknown>)?.id as string | undefined,
+      project: projectName,
+    }
+
+    await publishGovernorEvent({
+      type: 'issue-status-changed',
+      issueId,
+      issue: governorIssue,
+      previousStatus: (updatedFrom.state as Record<string, unknown>)?.name as string | undefined,
+      newStatus: currentStateName,
+      timestamp: eventTimestamp(),
+      source: 'webhook',
+    })
+  }
+
+  if (config.governorMode === 'governor-only') {
+    issueLog.info('Governor-only mode: skipping direct dispatch', { currentStateName })
+    return NextResponse.json({ success: true, governorMode: 'governor-only' })
+  }
 
   // === Handle Finished transition (auto-QA) ===
   if (currentStateName === 'Finished' && updatedFrom?.stateId) {
