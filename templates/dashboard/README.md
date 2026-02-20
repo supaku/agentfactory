@@ -19,7 +19,7 @@ AI agent fleet management dashboard powered by [AgentFactory](https://github.com
 
 ### Railway
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/agentfactory?referralCode=supaku)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/A7hIuF?referralCode=MwgIWL)
 
 > **Advantage:** Railway bundles Redis as a companion service — Redis is provisioned automatically with the template. No separate Redis setup required.
 

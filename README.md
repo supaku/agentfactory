@@ -78,7 +78,7 @@ Deploy the dashboard with a single click — no local setup required:
 | Platform | Deploy | Redis |
 |----------|--------|-------|
 | **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
-| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/agentfactory?referralCode=supaku) | Bundled automatically |
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/A7hIuF?referralCode=MwgIWL) | Bundled automatically |
 
 > See the [dashboard template](https://github.com/supaku/agentfactory/tree/main/templates/dashboard) for full setup instructions.
 
