@@ -33,6 +33,7 @@ function parseArgs(): {
   wait: boolean
   dryRun: boolean
   templates?: string
+  repo?: string
 } {
   const args = process.argv.slice(2)
   const result = {
@@ -42,6 +43,7 @@ function parseArgs(): {
     wait: true,
     dryRun: false,
     templates: undefined as string | undefined,
+    repo: undefined as string | undefined,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -64,6 +66,9 @@ function parseArgs(): {
         break
       case '--templates':
         result.templates = args[++i]
+        break
+      case '--repo':
+        result.repo = args[++i]
         break
       case '--help':
       case '-h':
@@ -89,6 +94,7 @@ Options:
   --no-wait           Don't wait for agents to complete
   --dry-run           Show what would be done without executing
   --templates <path>  Custom workflow template directory
+  --repo <url>        Git repository URL for worktree cloning
   --help, -h          Show this help message
 
 Environment:
@@ -118,6 +124,7 @@ async function main(): Promise<void> {
   console.log('========================')
   console.log(`Project: ${args.project ?? 'All'}`)
   console.log(`Max concurrent: ${args.max}`)
+  console.log(`Repo: ${args.repo ?? 'Any'}`)
   console.log(`Dry run: ${args.dryRun}`)
   console.log('')
 
@@ -139,6 +146,7 @@ async function main(): Promise<void> {
       wait: args.wait,
       dryRun: args.dryRun,
       templateDir: args.templates,
+      repository: args.repo,
     })
 
     if (!args.single && !args.dryRun) {

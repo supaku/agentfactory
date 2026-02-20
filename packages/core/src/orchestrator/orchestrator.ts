@@ -51,6 +51,7 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, ClaudeToolPermissionAdapter } from '../templates/index.js'
+import { loadRepositoryConfig } from '../config/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
   OrchestratorConfig,
@@ -71,7 +72,46 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
 // Default max session timeout: unlimited (undefined)
 const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
+/**
+ * Validate that the git remote origin URL contains the expected repository pattern.
+ * Supports both HTTPS (github.com/org/repo) and SSH (git@github.com:org/repo) formats.
+ *
+ * @param expectedRepo - The expected repository pattern (e.g. 'github.com/supaku/agentfactory')
+ * @param cwd - Working directory to run git commands in
+ * @throws Error if the git remote does not match the expected repository
+ */
+export function validateGitRemote(expectedRepo: string, cwd?: string): void {
+  let remoteUrl: string
+  try {
+    remoteUrl = execSync('git remote get-url origin', {
+      encoding: 'utf-8',
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+  } catch {
+    throw new Error(
+      `Repository validation failed: could not get git remote URL. Expected '${expectedRepo}'.`
+    )
+  }
+
+  // Normalize: convert SSH format (git@github.com:org/repo.git) to comparable form
+  const normalizedRemote = remoteUrl
+    .replace(/^git@([^:]+):/, '$1/')  // git@github.com:org/repo -> github.com/org/repo
+    .replace(/^https?:\/\//, '')       // https://github.com/org/repo -> github.com/org/repo
+    .replace(/\.git$/, '')             // remove trailing .git
+
+  const normalizedExpected = expectedRepo
+    .replace(/^https?:\/\//, '')
+    .replace(/\.git$/, '')
+
+  if (!normalizedRemote.includes(normalizedExpected)) {
+    throw new Error(
+      `Repository mismatch: expected '${expectedRepo}' but git remote is '${remoteUrl}'. Refusing to proceed.`
+    )
+  }
+}
+
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -700,8 +740,9 @@ export function getWorktreeIdentifier(
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
     project?: string
+    repository?: string
     streamConfig: OrchestratorStreamConfig
     apiActivityConfig?: OrchestratorConfig['apiActivityConfig']
     workTypeTimeouts?: OrchestratorConfig['workTypeTimeouts']
@@ -728,6 +769,8 @@ export class AgentOrchestrator {
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
+  // Allowlisted project names from .agentfactory/config.yaml
+  private allowedProjects?: string[]
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -757,6 +800,11 @@ export class AgentOrchestrator {
       inactivityTimeoutMs: config.inactivityTimeoutMs ?? envInactivityTimeout ?? DEFAULT_CONFIG.inactivityTimeoutMs,
       maxSessionTimeoutMs: config.maxSessionTimeoutMs ?? envMaxSessionTimeout ?? DEFAULT_CONFIG.maxSessionTimeoutMs,
     }
+    // Validate git remote matches configured repository (if set)
+    if (this.config.repository) {
+      validateGitRemote(this.config.repository)
+    }
+
     this.client = createLinearAgentClient({ apiKey })
     this.events = events
 
@@ -784,6 +832,27 @@ export class AgentOrchestrator {
     } catch {
       // If template loading fails, fall back to hardcoded prompts
       this.templateRegistry = null
+    }
+
+    // Auto-load .agentfactory/config.yaml from repository root
+    try {
+      const repoRoot = findRepoRoot(process.cwd())
+      if (repoRoot) {
+        const repoConfig = loadRepositoryConfig(repoRoot)
+        if (repoConfig) {
+          // Use repository from config as fallback if not set in OrchestratorConfig
+          if (!this.config.repository && repoConfig.repository) {
+            this.config.repository = repoConfig.repository
+            validateGitRemote(this.config.repository)
+          }
+          // Store allowedProjects for backlog filtering
+          if (repoConfig.allowedProjects) {
+            this.allowedProjects = repoConfig.allowedProjects
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
     }
   }
 
@@ -843,6 +912,33 @@ export class AgentOrchestrator {
       })
       if (projects.nodes.length > 0) {
         filter.project = { id: { eq: projects.nodes[0].id } }
+
+        // Cross-reference project repo metadata with config (SUP-725)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime check for method added in SUP-725
+        const clientAny = this.client as any
+        if (this.config.repository && typeof clientAny.getProjectRepositoryUrl === 'function') {
+          try {
+            const projectRepoUrl: string | null = await clientAny.getProjectRepositoryUrl(projects.nodes[0].id)
+            if (projectRepoUrl) {
+              const normalizedProjectRepo = projectRepoUrl
+                .replace(/^https?:\/\//, '')
+                .replace(/\.git$/, '')
+              const normalizedConfigRepo = this.config.repository
+                .replace(/^https?:\/\//, '')
+                .replace(/\.git$/, '')
+              if (!normalizedProjectRepo.includes(normalizedConfigRepo) && !normalizedConfigRepo.includes(normalizedProjectRepo)) {
+                console.warn(
+                  `Warning: Project '${this.config.project}' repository metadata '${projectRepoUrl}' ` +
+                  `does not match configured repository '${this.config.repository}'. Skipping issues.`
+                )
+                return []
+              }
+            }
+          } catch (error) {
+            // Non-fatal: log warning but continue if metadata check fails
+            console.warn('Warning: Could not check project repository metadata:', error instanceof Error ? error.message : String(error))
+          }
+        }
       }
     }
 
@@ -854,6 +950,18 @@ export class AgentOrchestrator {
     const results: OrchestratorIssue[] = []
     for (const issue of issues.nodes) {
       if (results.length >= maxIssues) break
+
+      // Filter by allowedProjects from .agentfactory/config.yaml
+      if (this.allowedProjects && this.allowedProjects.length > 0) {
+        const project = await issue.project
+        const projectName = project?.name
+        if (!projectName || !this.allowedProjects.includes(projectName)) {
+          console.warn(
+            `[orchestrator] Skipping issue ${issue.identifier} — project "${projectName ?? '(none)'}" is not in allowedProjects: [${this.allowedProjects.join(', ')}]`
+          )
+          continue
+        }
+      }
 
       const labels = await issue.labels()
       const team = await issue.team
@@ -1438,7 +1546,7 @@ export class AgentOrchestrator {
     if (customPrompt) {
       prompt = customPrompt
     } else if (this.templateRegistry?.hasTemplate(workType)) {
-      const context: TemplateContext = { identifier }
+      const context: TemplateContext = { identifier, repository: this.config.repository }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
     } else {
@@ -2416,6 +2524,11 @@ export class AgentOrchestrator {
     const teamName = team?.name
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
+
+    // Defense in depth: re-validate git remote before spawning (guards against long-running instances)
+    if (this.config.repository) {
+      validateGitRemote(this.config.repository)
+    }
 
     // Auto-detect work type from issue status if not provided
     // This must happen BEFORE creating worktree since path includes work type suffix

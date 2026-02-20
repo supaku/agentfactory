@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: repo-validation
+  description: Pre-push git remote validation instructions
+content: |
+  {{#if repository}}
+
+  ## Repository Validation (CRITICAL)
+  Before ANY git push or gh pr create:
+  1. Run: git remote get-url origin
+  2. Verify the URL contains: {{repository}}
+  3. If it does NOT match, STOP IMMEDIATELY and post a Linear comment:
+     'FATAL: Repository mismatch — expected {{repository}} but found [actual]. Aborting.'
+  4. Do NOT push under any circumstances if the remote does not match.
+  {{/if}}

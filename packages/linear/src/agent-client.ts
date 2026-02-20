@@ -649,6 +649,40 @@ export class LinearAgentClient {
   }
 
   /**
+   * Get the repository URL associated with a project via its links or description
+   *
+   * Checks project links for a link with label matching 'Repository' or 'GitHub'
+   * (case-insensitive). Falls back to parsing the project description for a
+   * "Repository: <url>" pattern.
+   *
+   * @param projectId - The project ID
+   * @returns The repository URL if found, null otherwise
+   */
+  async getProjectRepositoryUrl(projectId: string): Promise<string | null> {
+    return this.withRetry(async () => {
+      const project = await this.client.project(projectId)
+
+      // Check project external links for a Repository/GitHub link
+      const links = await project.externalLinks()
+      for (const link of links.nodes) {
+        if (link.label && /^(repository|github)$/i.test(link.label)) {
+          return link.url
+        }
+      }
+
+      // Fallback: check project description for Repository: pattern
+      if (project.description) {
+        const match = project.description.match(/Repository:\s*([\S]+)/i)
+        if (match) {
+          return match[1]
+        }
+      }
+
+      return null
+    })
+  }
+
+  /**
    * Get sub-issues with their blocking relations for dependency graph building
    *
    * Builds a complete dependency graph of a parent issue's children, including

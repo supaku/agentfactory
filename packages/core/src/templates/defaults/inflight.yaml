@@ -18,6 +18,7 @@ tools:
 prompt: |
   Continue work on {{identifier}}.
   Resume where you left off. Check the issue for any new comments or feedback.
+  {{> partials/repo-validation}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}

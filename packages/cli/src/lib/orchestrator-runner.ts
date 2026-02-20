@@ -37,6 +37,8 @@ export interface OrchestratorRunnerConfig {
   callbacks?: OrchestratorCallbacks
   /** Custom workflow template directory path */
   templateDir?: string
+  /** Git repository URL for worktree cloning */
+  repository?: string
 }
 
 export interface OrchestratorCallbacks {
@@ -140,6 +142,9 @@ export async function runOrchestrator(
   }
   if (config.templateDir) {
     orchestratorConfig.templateDir = config.templateDir
+  }
+  if (config.repository) {
+    orchestratorConfig.repository = config.repository
   }
 
   const orchestrator = createOrchestrator(

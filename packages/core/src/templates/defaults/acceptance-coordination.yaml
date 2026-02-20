@@ -32,6 +32,7 @@ prompt: |
   - ALL sub-issues must be in Delivered status before proceeding
   - The PR must pass CI and have no conflicts
   - If merge fails, report the error and do not mark as Accepted
+  {{> partials/repo-validation}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 

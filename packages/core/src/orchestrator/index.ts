@@ -76,7 +76,7 @@ export type {
 } from './log-analyzer.js'
 
 // Orchestrator
-export { AgentOrchestrator, createOrchestrator, getWorktreeIdentifier } from './orchestrator.js'
+export { AgentOrchestrator, createOrchestrator, getWorktreeIdentifier, validateGitRemote } from './orchestrator.js'
 
 // Stream Parser
 export { ClaudeStreamParser, createStreamParser } from './stream-parser.js'

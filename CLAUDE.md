@@ -138,7 +138,37 @@ pnpm orchestrator --project ProjectName --dry-run
 
 # Custom concurrency
 pnpm orchestrator --project ProjectName --max 2
+
+# Restrict to a specific git repository
+pnpm orchestrator --project ProjectName --repo github.com/supaku/agentfactory
 ```
+
+## Repository-Scoped Orchestration
+
+The orchestrator validates that agents only push to the correct repository. Configure via:
+
+### .agentfactory/config.yaml
+
+Checked into each repository to define allowed projects and repository identity:
+
+```yaml
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/supaku/agentfactory
+allowedProjects:
+  - Agent
+```
+
+- `repository`: Git remote URL pattern validated at startup against `git remote get-url origin`
+- `allowedProjects`: Only issues from these Linear projects are processed
+
+### Validation layers
+
+1. **OrchestratorConfig.repository** — validates git remote at constructor time and before spawning agents
+2. **CLI `--repo` flag** — passes repository to OrchestratorConfig from the command line
+3. **.agentfactory/config.yaml** — auto-loaded at startup, filters issues by `allowedProjects`
+4. **Template partial `{{> partials/repo-validation}}`** — agents verify git remote before any push
+5. **Linear project metadata** — cross-references project repo link with config
 
 ## Workflow Template System
 
@@ -202,6 +232,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{completeStatus}}` | Frontend-resolved complete status |
 | `{{parentContext}}` | Parent issue context for coordination |
 | `{{subIssueList}}` | Formatted sub-issue list |
+| `{{repository}}` | Git repository URL pattern for pre-push validation |
 
 ### Available Partials
 
@@ -213,6 +244,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/work-result-marker}}` | QA/acceptance WORK_RESULT marker |
 | `{{> partials/shared-worktree-safety}}` | Shared worktree safety rules |
 | `{{> partials/pr-selection}}` | PR selection guidance |
+| `{{> partials/repo-validation}}` | Pre-push git remote URL validation |
 
 ### Tool Permissions
 
