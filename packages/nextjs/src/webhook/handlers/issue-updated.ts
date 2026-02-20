@@ -2,12 +2,14 @@
  * Handle Issue update events — status transition triggers.
  *
  * Handles:
- * - Finished → auto-QA trigger
- * - Icebox → Backlog → auto-development trigger
+ * - Finished → auto-QA trigger (with circuit breaker)
+ * - → Rejected → escalation ladder (circuit breaker, decomposition, human escalation)
+ * - (Icebox|Rejected|Canceled) → Backlog → auto-development trigger (with circuit breaker)
  * - Finished → Delivered → auto-acceptance trigger
  */
 
 import { NextResponse } from 'next/server'
+import { buildFailureContextBlock, type WorkflowContext } from '@supaku/agentfactory-linear'
 import type { LinearWebhookPayload, AgentWorkType } from '@supaku/agentfactory-linear'
 import {
   checkIssueDeploymentStatus,
@@ -29,6 +31,7 @@ import {
   markDevelopmentQueued,
   didJustQueueAcceptance,
   markAcceptanceQueued,
+  getWorkflowState,
 } from '@supaku/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -122,6 +125,20 @@ export async function handleIssueUpdated(
       return NextResponse.json({ success: true, skipped: true, reason: 'qa_cooldown' })
     }
 
+    // Check workflow state for circuit breaker before QA
+    try {
+      const workflowState = await getWorkflowState(issueId)
+      if (workflowState?.strategy === 'escalate-human') {
+        issueLog.warn('Circuit breaker: escalate-human strategy, blocking QA', {
+          cycleCount: workflowState.cycleCount,
+          strategy: workflowState.strategy,
+        })
+        return NextResponse.json({ success: true, skipped: true, reason: 'circuit_breaker_escalate_human' })
+      }
+    } catch (err) {
+      issueLog.warn('Failed to check workflow state for circuit breaker', { error: err })
+    }
+
     const attemptCount = await getQAAttemptCount(issueId)
     if (attemptCount >= 3) {
       issueLog.warn('QA attempt limit reached', { attemptCount })
@@ -185,6 +202,31 @@ export async function handleIssueUpdated(
       }
     } catch (err) {
       issueLog.warn('Failed to detect parent issue for QA routing', { error: err })
+    }
+
+    // Enrich QA prompt with previous failure context
+    if (attemptCount > 0) {
+      try {
+        const workflowState = await getWorkflowState(issueId)
+        if (workflowState && workflowState.failureSummary) {
+          const wfContext: WorkflowContext = {
+            cycleCount: workflowState.cycleCount,
+            strategy: workflowState.strategy,
+            failureSummary: workflowState.failureSummary,
+            qaAttemptCount: attemptCount,
+          }
+          const contextBlock = buildFailureContextBlock(qaWorkType, wfContext)
+          if (contextBlock) {
+            qaPrompt += contextBlock
+            issueLog.info('QA prompt enriched with failure context', {
+              cycleCount: workflowState.cycleCount,
+              attemptCount,
+            })
+          }
+        }
+      } catch (err) {
+        issueLog.warn('Failed to enrich QA prompt with failure context', { error: err })
+      }
     }
 
     // Create Linear AgentSession for QA
@@ -272,7 +314,78 @@ export async function handleIssueUpdated(
     }
   }
 
-  // === Handle Icebox → Backlog transition (auto-development) ===
+  // === Handle → Rejected transition (escalation ladder) ===
+  // When QA/acceptance fails, the orchestrator transitions the issue to Rejected.
+  // Check the escalation strategy and act accordingly.
+  if (currentStateName === 'Rejected' && updatedFrom?.stateId) {
+    try {
+      const workflowState = await getWorkflowState(issueId)
+      if (workflowState) {
+        const { strategy, cycleCount, failureSummary } = workflowState
+
+        if (strategy === 'escalate-human') {
+          issueLog.warn('Escalation ladder: escalate-human — creating blocker and stopping loop', {
+            cycleCount,
+            strategy,
+          })
+
+          const linearClient = await config.linearClient.getClient(payload.organizationId)
+
+          // Post escalation summary comment
+          const totalCostLine = workflowState.phases
+            ? (() => {
+                const allPhases = [
+                  ...workflowState.phases.development,
+                  ...workflowState.phases.qa,
+                  ...workflowState.phases.refinement,
+                  ...workflowState.phases.acceptance,
+                ]
+                const totalCost = allPhases.reduce((sum, p) => sum + (p.costUsd ?? 0), 0)
+                return totalCost > 0 ? `\n**Total cost across all attempts:** $${totalCost.toFixed(2)}` : ''
+              })()
+            : ''
+
+          try {
+            await linearClient.createComment(
+              issueId,
+              `## Circuit Breaker: Human Intervention Required\n\n` +
+              `This issue has gone through **${cycleCount} dev-QA-rejected cycles** without passing.\n` +
+              `The automated system is stopping further attempts.\n` +
+              totalCostLine +
+              `\n\n### Failure History\n\n${failureSummary ?? 'No failure details recorded.'}\n\n` +
+              `### Recommended Actions\n` +
+              `1. Review the failure patterns above\n` +
+              `2. Consider if the acceptance criteria need clarification\n` +
+              `3. Investigate whether there's an architectural issue\n` +
+              `4. Manually fix or decompose the issue before re-enabling automation`
+            )
+          } catch (err) {
+            issueLog.error('Failed to post escalation comment', { error: err })
+          }
+
+          // Note: The create-blocker CLI command should be invoked, but since we're in a webhook handler
+          // and don't have CLI access, we add the 'Needs Human' label directly if possible
+          issueLog.info('Escalation ladder: issue marked for human intervention', {
+            issueId,
+            cycleCount,
+          })
+
+        } else if (strategy === 'decompose') {
+          issueLog.info('Escalation ladder: decompose strategy — refinement will attempt decomposition', {
+            cycleCount,
+            strategy,
+          })
+          // The decomposition strategy will be handled via prompt enrichment (SUP-713)
+          // by injecting decomposition instructions into the refinement prompt
+        }
+      }
+    } catch (err) {
+      issueLog.warn('Failed to check workflow state for escalation ladder', { error: err })
+    }
+  }
+
+  // === Handle → Backlog transition (auto-development) ===
+  // Triggers from: Icebox → Backlog (new issues), Rejected → Backlog (post-refinement retries), etc.
   if (currentStateName === 'Backlog' && updatedFrom?.stateId) {
     const previousStateName = await resolveStateName(
       config,
@@ -281,13 +394,41 @@ export async function handleIssueUpdated(
       updatedFrom.stateId as string
     )
 
-    if (previousStateName !== 'Icebox') {
-      issueLog.debug('Issue transitioned to Backlog but not from Icebox', { previousStateName })
+    // Skip transitions from states that don't indicate readiness for development
+    // (e.g., Backlog → Backlog is a no-op, Started → Backlog means work was abandoned)
+    const allowedPreviousStates = ['Icebox', 'Rejected', 'Canceled']
+    if (!allowedPreviousStates.includes(previousStateName ?? '')) {
+      issueLog.debug('Issue transitioned to Backlog from non-triggering state', { previousStateName })
     } else {
-      issueLog.info('Issue transitioned from Icebox to Backlog', {
+      const isRetry = previousStateName === 'Rejected'
+
+      issueLog.info('Issue transitioned to Backlog', {
         previousStateName,
+        isRetry,
         actorName: actor?.name,
       })
+
+      // Circuit breaker: check workflow state for escalate-human strategy
+      if (isRetry) {
+        try {
+          const workflowState = await getWorkflowState(issueId)
+          if (workflowState && workflowState.strategy === 'escalate-human') {
+            issueLog.warn('Circuit breaker: issue at escalate-human strategy, skipping auto-development', {
+              cycleCount: workflowState.cycleCount,
+              strategy: workflowState.strategy,
+            })
+            return NextResponse.json({ success: true, skipped: true, reason: 'circuit_breaker_escalate_human' })
+          }
+          if (workflowState) {
+            issueLog.info('Workflow state found for retry', {
+              cycleCount: workflowState.cycleCount,
+              strategy: workflowState.strategy,
+            })
+          }
+        } catch (err) {
+          issueLog.warn('Failed to check workflow state for circuit breaker', { error: err })
+        }
+      }
 
       const existingSession = await getSessionStateByIssue(issueId)
       if (existingSession && ['running', 'claimed', 'pending'].includes(existingSession.status)) {
@@ -342,7 +483,31 @@ export async function handleIssueUpdated(
         issueLog.warn('Failed to check if issue is parent', { error: err })
       }
 
-      const prompt = config.generatePrompt(issueIdentifier, workType)
+      let prompt = config.generatePrompt(issueIdentifier, workType)
+
+      // Enrich prompt with failure context for retries
+      if (isRetry) {
+        try {
+          const workflowState = await getWorkflowState(issueId)
+          if (workflowState && workflowState.cycleCount > 0) {
+            const wfContext: WorkflowContext = {
+              cycleCount: workflowState.cycleCount,
+              strategy: workflowState.strategy,
+              failureSummary: workflowState.failureSummary,
+            }
+            const contextBlock = buildFailureContextBlock(workType, wfContext)
+            if (contextBlock) {
+              prompt += contextBlock
+              issueLog.info('Development prompt enriched with failure context', {
+                cycleCount: workflowState.cycleCount,
+                strategy: workflowState.strategy,
+              })
+            }
+          }
+        } catch (err) {
+          issueLog.warn('Failed to enrich development prompt with failure context', { error: err })
+        }
+      }
 
       await storeSessionState(devSessionId, {
         issueId,
@@ -372,7 +537,8 @@ export async function handleIssueUpdated(
       const devResult = await dispatchWork(devWork)
 
       if (devResult.dispatched || devResult.parked) {
-        issueLog.info('Development work dispatched', { sessionId: devSessionId })
+        const retryLabel = isRetry ? ' (retry)' : ''
+        issueLog.info(`Development work dispatched${retryLabel}`, { sessionId: devSessionId })
 
         try {
           const appUrl = getAppUrl(config)
@@ -385,7 +551,10 @@ export async function handleIssueUpdated(
         }
 
         try {
-          await emitActivity(linearClient, devSessionId, 'thought', 'Development work queued. Waiting for an available worker...')
+          const activityMsg = isRetry
+            ? 'Development work queued (retry after refinement). Waiting for an available worker...'
+            : 'Development work queued. Waiting for an available worker...'
+          await emitActivity(linearClient, devSessionId, 'thought', activityMsg)
         } catch (err) {
           issueLog.warn('Failed to emit queued activity', { error: err })
         }

@@ -33,6 +33,14 @@ import {
   updateClaudeSessionId,
   updateSessionStatus,
   updateSessionCostData,
+  getWorkflowState,
+  updateWorkflowState,
+  recordPhaseAttempt,
+  incrementCycleCount,
+  appendFailureSummary,
+  clearWorkflowState,
+  extractFailureReason,
+  type WorkflowPhase,
 } from '@supaku/agentfactory-server'
 import { formatErrorForComment } from './error-formatting.js'
 import type {
@@ -191,6 +199,64 @@ export function createWebhookOrchestrator(
                 outputTokens: agent.outputTokens,
               }).catch((err) => log.error('Failed to persist cost data', { error: err }))
             }
+
+            // Track workflow state for result-sensitive work types
+            try {
+              const workType = agent.workType ?? 'development'
+              const phaseMap: Partial<Record<string, WorkflowPhase>> = {
+                development: 'development',
+                qa: 'qa',
+                'qa-coordination': 'qa',
+                acceptance: 'acceptance',
+                'acceptance-coordination': 'acceptance',
+                refinement: 'refinement',
+              }
+              const phase = phaseMap[workType]
+
+              if (phase) {
+                // Ensure workflow state exists
+                await updateWorkflowState(agent.issueId, {
+                  issueIdentifier: agent.identifier,
+                })
+
+                // Record the phase attempt
+                await recordPhaseAttempt(agent.issueId, phase, {
+                  attempt: 1, // Will be refined by phase-specific logic
+                  sessionId: agent.sessionId,
+                  startedAt: agent.startedAt.getTime(),
+                  completedAt: agent.completedAt?.getTime(),
+                  result: agent.workResult ?? (phase === 'development' || phase === 'refinement' ? 'passed' : undefined),
+                  costUsd: agent.totalCostUsd,
+                })
+
+                // On QA/acceptance failure: increment cycle count and append failure summary
+                const isResultSensitive = phase === 'qa' || phase === 'acceptance'
+                if (isResultSensitive && agent.workResult === 'failed') {
+                  const state = await incrementCycleCount(agent.issueId)
+                  const failureReason = extractFailureReason(agent.resultMessage)
+                  const formattedFailure = `--- Cycle ${state.cycleCount}, ${phase} (${new Date().toISOString()}) ---\n${failureReason}`
+                  await appendFailureSummary(agent.issueId, formattedFailure)
+
+                  log.info('Workflow state updated after failure', {
+                    issueId: agent.issueId,
+                    cycleCount: state.cycleCount,
+                    strategy: state.strategy,
+                    phase,
+                  })
+                }
+
+                // On acceptance pass: clear workflow state (issue is done)
+                if (phase === 'acceptance' && agent.workResult === 'passed') {
+                  await clearWorkflowState(agent.issueId)
+                  log.info('Workflow state cleared after acceptance pass', {
+                    issueId: agent.issueId,
+                  })
+                }
+              }
+            } catch (err) {
+              log.error('Failed to update workflow state', { error: err, issueId: agent.issueId })
+            }
+
             try {
               await hooks?.onAgentComplete?.(agent)
             } catch (err) {

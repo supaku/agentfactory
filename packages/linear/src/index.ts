@@ -132,10 +132,12 @@ export {
   defaultGeneratePrompt,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
+  buildFailureContextBlock,
   WORK_RESULT_MARKER_INSTRUCTION,
   PR_SELECTION_GUIDANCE,
   defaultDetectWorkTypeFromPrompt,
   defaultGetPriority,
   defaultParseAutoTriggerConfig,
   type DefaultAutoTriggerConfig,
+  type WorkflowContext,
 } from './defaults/index.js'
