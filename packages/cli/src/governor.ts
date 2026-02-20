@@ -33,6 +33,10 @@ import {
   runGovernor,
   type GovernorRunnerConfig,
 } from './lib/governor-runner.js'
+import { createRealDependencies } from './lib/governor-dependencies.js'
+import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+import { initTouchpointStorage } from '@supaku/agentfactory'
+import { RedisOverrideStorage } from '@supaku/agentfactory-server'
 import type { GovernorDependencies, GovernorIssue, GovernorAction, ScanResult } from '@supaku/agentfactory'
 
 // ---------------------------------------------------------------------------
@@ -89,8 +93,36 @@ async function main(): Promise<void> {
   console.log(`Projects: ${args.projects.join(', ')}`)
   console.log(`Scan interval: ${args.scanIntervalMs}ms`)
   console.log(`Max dispatches per scan: ${args.maxConcurrentDispatches}`)
+  console.log(`Execution mode: ${args.mode}`)
   console.log(`Mode: ${args.once ? 'single scan' : 'continuous'}`)
   console.log('')
+
+  // -----------------------------------------------------------------------
+  // Choose real or stub dependencies based on environment
+  // -----------------------------------------------------------------------
+  let dependencies: GovernorDependencies
+
+  const linearApiKey = process.env.LINEAR_API_KEY
+  const redisUrl = process.env.REDIS_URL
+
+  if (linearApiKey) {
+    console.log('LINEAR_API_KEY detected — using real dependencies')
+
+    const linearClient = createLinearAgentClient({ apiKey: linearApiKey })
+
+    // Initialize touchpoint storage (for isHeld / getOverridePriority) when Redis is available
+    if (redisUrl) {
+      console.log('REDIS_URL detected — initializing Redis-backed touchpoint storage')
+      initTouchpointStorage(new RedisOverrideStorage())
+    } else {
+      console.warn('Warning: REDIS_URL not set — touchpoint overrides (HOLD, PRIORITY) will not persist')
+    }
+
+    dependencies = createRealDependencies({ linearClient })
+  } else {
+    console.warn('Warning: LINEAR_API_KEY not set — using stub dependencies (no real work will be dispatched)')
+    dependencies = createStubDependencies()
+  }
 
   const runnerConfig: GovernorRunnerConfig = {
     projects: args.projects,
@@ -102,7 +134,8 @@ async function main(): Promise<void> {
     enableAutoQA: args.enableAutoQA,
     enableAutoAcceptance: args.enableAutoAcceptance,
     once: args.once,
-    dependencies: createStubDependencies(),
+    mode: args.mode,
+    dependencies,
     callbacks: {
       onScanComplete: (results: ScanResult[]) => {
         for (const result of results) {
