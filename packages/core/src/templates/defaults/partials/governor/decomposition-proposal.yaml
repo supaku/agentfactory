@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: governor/decomposition-proposal
+  description: Decomposition proposal after multiple QA failures
+content: |
+  ## Decomposition Proposed
+
+  This issue has failed QA {{cycleCount}} times. The system is preparing to decompose it.
+
+  **Proposed approach:** Break into independently testable sub-issues based on failure patterns.
+
+  {{#if totalCostUsd}}
+  **Cost so far:** ${{totalCostUsd}}
+  {{/if}}
+
+  - Comment "HOLD" to review before decomposition
+  - Do nothing — system will decompose automatically

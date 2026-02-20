@@ -127,6 +127,17 @@ export { AgentSession, createAgentSession } from './agent-session.js'
 // Webhook types
 export * from './webhook-types.js'
 
+// Frontend adapter
+export { LinearFrontendAdapter } from './frontend-adapter.js'
+export type {
+  AbstractStatus as LinearAbstractStatus,
+  AbstractIssue as LinearAbstractIssue,
+  AbstractComment as LinearAbstractComment,
+  ExternalUrl as LinearExternalUrl,
+  CreateIssueInput as LinearCreateIssueInput,
+  UpdateSessionInput as LinearUpdateSessionInput,
+} from './frontend-adapter.js'
+
 // Default implementations (prompt templates, work type detection, priority, auto-trigger)
 export {
   defaultGeneratePrompt,

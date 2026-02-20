@@ -174,6 +174,49 @@ describe('TemplateContextSchema', () => {
     expect(result.mentionContext).toBe('user mention')
   })
 
+  it('validates context with strategy/WorkflowState fields', () => {
+    const result = TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+      cycleCount: 3,
+      strategy: 'context-enriched',
+      failureSummary: 'Tests failing on auth module',
+      attemptNumber: 2,
+      previousFailureReasons: ['reason1', 'reason2'],
+      totalCostUsd: 1.50,
+      blockerIdentifier: 'SUP-999',
+      team: 'Engineering',
+    })
+    expect(result.cycleCount).toBe(3)
+    expect(result.strategy).toBe('context-enriched')
+    expect(result.failureSummary).toBe('Tests failing on auth module')
+    expect(result.attemptNumber).toBe(2)
+    expect(result.previousFailureReasons).toEqual(['reason1', 'reason2'])
+    expect(result.totalCostUsd).toBe(1.50)
+    expect(result.blockerIdentifier).toBe('SUP-999')
+    expect(result.team).toBe('Engineering')
+  })
+
+  it('rejects negative cycleCount', () => {
+    expect(() => TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+      cycleCount: -1,
+    })).toThrow()
+  })
+
+  it('rejects non-positive attemptNumber', () => {
+    expect(() => TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+      attemptNumber: 0,
+    })).toThrow()
+  })
+
+  it('rejects negative totalCostUsd', () => {
+    expect(() => TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+      totalCostUsd: -5,
+    })).toThrow()
+  })
+
   it('rejects empty identifier', () => {
     expect(() => TemplateContextSchema.parse({ identifier: '' })).toThrow()
   })

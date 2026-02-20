@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: governor/escalation-alert
+  description: Escalation alert when automated strategies are exhausted
+content: |
+  ## Human Intervention Required
+
+  This issue has exhausted all automated retry strategies ({{cycleCount}} cycles{{#if totalCostUsd}}, ${{totalCostUsd}}{{/if}}).
+
+  {{#if blockerIdentifier}}
+  A human-needed blocker has been created: {{blockerIdentifier}}
+  {{/if}}
+
+  **Full failure history:**
+  {{#if failureSummary}}
+  {{{failureSummary}}}
+  {{else}}
+  No failure details recorded.
+  {{/if}}

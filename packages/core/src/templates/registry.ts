@@ -24,9 +24,17 @@ import {
 
 /**
  * Template Registry manages workflow templates and renders prompts.
+ *
+ * Supports strategy-aware template resolution: given a (workType, strategy) tuple,
+ * the registry first looks for a strategy-specific template (e.g., "refinement-context-enriched")
+ * and falls back to the base work type template (e.g., "refinement").
  */
 export class TemplateRegistry {
-  private templates = new Map<AgentWorkType, WorkflowTemplate>()
+  /**
+   * Internal map uses string keys to support both base work types (e.g., "development")
+   * and strategy-specific compound keys (e.g., "refinement-context-enriched").
+   */
+  private templates = new Map<string, WorkflowTemplate>()
   private handlebars: typeof Handlebars
   private toolPermissionAdapter?: ToolPermissionAdapter
 
@@ -57,8 +65,8 @@ export class TemplateRegistry {
     if (useBuiltinDefaults) {
       const builtinDir = getBuiltinDefaultsDir()
       const builtinTemplates = loadTemplatesFromDir(builtinDir)
-      for (const [workType, template] of builtinTemplates) {
-        this.templates.set(workType, template)
+      for (const [key, template] of builtinTemplates) {
+        this.templates.set(key, template)
       }
 
       // Load built-in partials
@@ -72,8 +80,8 @@ export class TemplateRegistry {
     // Layer 2: Project-level overrides (each dir in order)
     for (const dir of templateDirs) {
       const dirTemplates = loadTemplatesFromDir(dir)
-      for (const [workType, template] of dirTemplates) {
-        this.templates.set(workType, template)
+      for (const [key, template] of dirTemplates) {
+        this.templates.set(key, template)
       }
 
       // Load partials from each dir's partials subdirectory
@@ -88,7 +96,7 @@ export class TemplateRegistry {
     if (templates) {
       for (const [workType, template] of Object.entries(templates)) {
         if (template) {
-          this.templates.set(workType as AgentWorkType, template)
+          this.templates.set(workType, template)
         }
       }
     }
@@ -102,33 +110,48 @@ export class TemplateRegistry {
   }
 
   /**
-   * Look up a template by work type.
-   * Returns undefined if no template is registered for the work type.
+   * Look up a template by work type, with optional strategy for compound key resolution.
+   *
+   * Resolution order:
+   *   1. "{workType}-{strategy}" (e.g., "refinement-context-enriched")
+   *   2. "{workType}" (e.g., "refinement" -- fallback)
+   *
+   * Returns undefined if no template is registered.
    */
-  getTemplate(workType: AgentWorkType): WorkflowTemplate | undefined {
+  getTemplate(workType: AgentWorkType, strategy?: string): WorkflowTemplate | undefined {
+    if (strategy) {
+      const strategyKey = `${workType}-${strategy}`
+      const strategyTemplate = this.templates.get(strategyKey)
+      if (strategyTemplate) return strategyTemplate
+    }
     return this.templates.get(workType)
   }
 
   /**
-   * Check if a template is registered for a work type.
+   * Check if a template is registered for a work type (optionally with strategy).
    */
-  hasTemplate(workType: AgentWorkType): boolean {
+  hasTemplate(workType: AgentWorkType, strategy?: string): boolean {
+    if (strategy) {
+      const strategyKey = `${workType}-${strategy}`
+      if (this.templates.has(strategyKey)) return true
+    }
     return this.templates.has(workType)
   }
 
   /**
-   * Get all registered work types.
+   * Get all registered template keys (base work types and strategy-specific keys).
    */
-  getRegisteredWorkTypes(): AgentWorkType[] {
+  getRegisteredWorkTypes(): string[] {
     return Array.from(this.templates.keys())
   }
 
   /**
    * Render a template for a work type with the given context variables.
+   * Optionally specify a strategy for strategy-aware template resolution.
    * Returns null if no template is registered for the work type.
    */
-  renderPrompt(workType: AgentWorkType, context: TemplateContext): string | null {
-    const template = this.templates.get(workType)
+  renderPrompt(workType: AgentWorkType, context: TemplateContext, strategy?: string): string | null {
+    const template = this.getTemplate(workType, strategy)
     if (!template) {
       return null
     }
@@ -138,18 +161,19 @@ export class TemplateRegistry {
       return compiledTemplate(context)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      const key = strategy ? `${workType}-${strategy}` : workType
       throw new Error(
-        `Failed to render template for work type "${workType}": ${message}`
+        `Failed to render template for work type "${key}": ${message}`
       )
     }
   }
 
   /**
-   * Get the translated tool permissions for a work type.
+   * Get the translated tool permissions for a work type (optionally with strategy).
    * Returns undefined if no template or no tool permissions defined.
    */
-  getToolPermissions(workType: AgentWorkType): string[] | undefined {
-    const template = this.templates.get(workType)
+  getToolPermissions(workType: AgentWorkType, strategy?: string): string[] | undefined {
+    const template = this.getTemplate(workType, strategy)
     if (!template?.tools?.allow) {
       return undefined
     }
@@ -165,10 +189,10 @@ export class TemplateRegistry {
   }
 
   /**
-   * Get disallowed tools for a work type.
+   * Get disallowed tools for a work type (optionally with strategy).
    */
-  getDisallowedTools(workType: AgentWorkType): ToolPermission[] | undefined {
-    const template = this.templates.get(workType)
+  getDisallowedTools(workType: AgentWorkType, strategy?: string): ToolPermission[] | undefined {
+    const template = this.getTemplate(workType, strategy)
     return template?.tools?.disallow
   }
 

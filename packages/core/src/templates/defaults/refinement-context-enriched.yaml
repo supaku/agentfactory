@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: refinement-context-enriched
+  description: Context-enriched refinement after repeated QA failures
+  workType: refinement
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git commit *"
+    - shell: "git diff *"
+    - shell: "git log *"
+  disallow:
+    - user-input
+prompt: |
+  You are working on {{identifier}} which has FAILED QA {{cycleCount}} times.
+
+  This is a context-enriched retry. The system has accumulated failure context across previous attempts.
+
+  ## Failure History
+  {{#if failureSummary}}
+  {{{failureSummary}}}
+  {{else}}
+  No failure details available.
+  {{/if}}
+
+  ## Instructions
+  1. Read the full failure history above carefully
+  2. Identify the ROOT CAUSE — do not just fix symptoms
+  3. Check if previous attempts made the same mistake repeatedly
+  4. Make targeted fixes addressing the core issue
+  5. Run tests to verify: `pnpm test` and `pnpm typecheck`
+  6. Create a PR with clear description of what was wrong and how you fixed it
+
+  {{> partials/dependency-instructions}}
+  {{> partials/cli-instructions}}
+  {{> partials/work-result-marker}}

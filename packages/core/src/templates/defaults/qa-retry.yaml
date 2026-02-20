@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: qa-retry
+  description: QA retry with context from previous failures
+  workType: qa
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git diff *"
+    - shell: "git log *"
+  disallow:
+    - user-input
+prompt: |
+  You are running QA on {{identifier}} (QA attempt {{attemptNumber}}).
+
+  {{#if previousFailureReasons}}
+  ## Previous QA Failures — Focus your testing on these areas
+  {{#each previousFailureReasons}}
+  - {{this}}
+  {{/each}}
+  {{/if}}
+
+  ## Instructions
+  1. Focus testing on previously failing areas first
+  2. Run the full test suite: `pnpm test` and `pnpm typecheck`
+  3. Verify the PR changes address the previously reported issues
+  4. If issues persist, provide detailed failure reasons
+  5. If all checks pass, report QA_PASSED
+
+  {{> partials/work-result-marker}}

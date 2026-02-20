@@ -11,16 +11,19 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
 import type { WorkflowTemplate, PartialTemplate } from './types.js'
 import { validateWorkflowTemplate, validatePartialTemplate } from './types.js'
 
 /**
  * Load all workflow templates from a directory.
  * Only processes .yaml and .yml files at the top level.
+ *
+ * The map key is determined by `metadata.name` when it differs from `metadata.workType`,
+ * enabling strategy-specific compound keys like "refinement-context-enriched".
+ * When `metadata.name` equals `metadata.workType`, the key is simply the work type.
  */
-export function loadTemplatesFromDir(dir: string): Map<AgentWorkType, WorkflowTemplate> {
-  const templates = new Map<AgentWorkType, WorkflowTemplate>()
+export function loadTemplatesFromDir(dir: string): Map<string, WorkflowTemplate> {
+  const templates = new Map<string, WorkflowTemplate>()
 
   if (!fs.existsSync(dir)) {
     return templates
@@ -34,7 +37,12 @@ export function loadTemplatesFromDir(dir: string): Map<AgentWorkType, WorkflowTe
     const filePath = path.join(dir, file)
     const template = loadTemplateFile(filePath)
     if (template) {
-      templates.set(template.metadata.workType, template)
+      // Use metadata.name as the key when it differs from workType (strategy templates),
+      // otherwise fall back to workType for backward compatibility.
+      const key = template.metadata.name !== template.metadata.workType
+        ? template.metadata.name
+        : template.metadata.workType
+      templates.set(key, template)
     }
   }
 
