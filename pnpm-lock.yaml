@@ -64,6 +64,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@supaku/create-agentfactory-app':
+        specifier: workspace:*
+        version: link:../create-app
       '@types/node':
         specifier: ^22.5.4
         version: 22.19.10

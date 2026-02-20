@@ -32,6 +32,18 @@
     "create-agentfactory-app": "./dist/src/index.js"
   },
   "main": "./dist/src/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./templates": {
+      "types": "./dist/src/templates/index.d.ts",
+      "import": "./dist/src/templates/index.js",
+      "default": "./dist/src/templates/index.js"
+    }
+  },
   "files": [
     "dist",
     "README.md",

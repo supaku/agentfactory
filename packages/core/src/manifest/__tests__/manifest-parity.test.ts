@@ -4,12 +4,13 @@
  * Verifies that every route/page entry in the manifest has a corresponding
  * file in the create-app template output, and that generated content matches.
  *
- * This test is excluded from tsc build (see tsconfig.json) but runs via vitest.
+ * Imports create-app via its package subpath export (not a relative path)
+ * to avoid tsc emitting stray build artifacts alongside the source files.
  */
 
 import { describe, it, expect } from 'vitest'
 import { ROUTE_MANIFEST, generateRouteContent, generatePageContent } from '../index.js'
-import { getTemplates } from '../../../../create-app/src/templates/index.js'
+import { getTemplates } from '@supaku/create-agentfactory-app/templates'
 
 const templateFiles = getTemplates({
   projectName: 'test-project',
