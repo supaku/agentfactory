@@ -71,7 +71,46 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
 // Default max session timeout: unlimited (undefined)
 const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
+/**
+ * Validate that the git remote origin URL contains the expected repository pattern.
+ * Supports both HTTPS (github.com/org/repo) and SSH (git@github.com:org/repo) formats.
+ *
+ * @param expectedRepo - The expected repository pattern (e.g. 'github.com/supaku/agentfactory')
+ * @param cwd - Working directory to run git commands in
+ * @throws Error if the git remote does not match the expected repository
+ */
+export function validateGitRemote(expectedRepo: string, cwd?: string): void {
+  let remoteUrl: string
+  try {
+    remoteUrl = execSync('git remote get-url origin', {
+      encoding: 'utf-8',
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+  } catch {
+    throw new Error(
+      `Repository validation failed: could not get git remote URL. Expected '${expectedRepo}'.`
+    )
+  }
+
+  // Normalize: convert SSH format (git@github.com:org/repo.git) to comparable form
+  const normalizedRemote = remoteUrl
+    .replace(/^git@([^:]+):/, '$1/')  // git@github.com:org/repo -> github.com/org/repo
+    .replace(/^https?:\/\//, '')       // https://github.com/org/repo -> github.com/org/repo
+    .replace(/\.git$/, '')             // remove trailing .git
+
+  const normalizedExpected = expectedRepo
+    .replace(/^https?:\/\//, '')
+    .replace(/\.git$/, '')
+
+  if (!normalizedRemote.includes(normalizedExpected)) {
+    throw new Error(
+      `Repository mismatch: expected '${expectedRepo}' but git remote is '${remoteUrl}'. Refusing to proceed.`
+    )
+  }
+}
+
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -757,6 +796,11 @@ export class AgentOrchestrator {
       inactivityTimeoutMs: config.inactivityTimeoutMs ?? envInactivityTimeout ?? DEFAULT_CONFIG.inactivityTimeoutMs,
       maxSessionTimeoutMs: config.maxSessionTimeoutMs ?? envMaxSessionTimeout ?? DEFAULT_CONFIG.maxSessionTimeoutMs,
     }
+    // Validate git remote matches configured repository (if set)
+    if (this.config.repository) {
+      validateGitRemote(this.config.repository)
+    }
+
     this.client = createLinearAgentClient({ apiKey })
     this.events = events
 
@@ -2416,6 +2460,11 @@ export class AgentOrchestrator {
     const teamName = team?.name
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
+
+    // Defense in depth: re-validate git remote before spawning (guards against long-running instances)
+    if (this.config.repository) {
+      validateGitRemote(this.config.repository)
+    }
 
     // Auto-detect work type from issue status if not provided
     // This must happen BEFORE creating worktree since path includes work type suffix

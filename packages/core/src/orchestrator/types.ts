@@ -91,6 +91,12 @@ export interface OrchestratorConfig {
    * Supports .agentfactory/templates/ convention.
    */
   templateDir?: string
+  /**
+   * Git remote URL pattern to validate against (e.g. 'github.com/supaku/agentfactory').
+   * When set, the orchestrator validates that the git remote origin contains this pattern
+   * at startup and before spawning agents. Supports both HTTPS and SSH URL formats.
+   */
+  repository?: string
 }
 
 export interface OrchestratorIssue {
