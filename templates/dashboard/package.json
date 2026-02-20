@@ -1,0 +1,38 @@
+{
+  "name": "agentfactory-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "worker": "tsx cli/worker.ts",
+    "orchestrator": "tsx cli/orchestrator.ts",
+    "worker-fleet": "tsx cli/worker-fleet.ts",
+    "cleanup": "tsx cli/cleanup.ts"
+  },
+  "dependencies": {
+    "@supaku/agentfactory": "0.7.3",
+    "@supaku/agentfactory-cli": "0.7.3",
+    "@supaku/agentfactory-dashboard": "0.7.3",
+    "@supaku/agentfactory-linear": "0.7.3",
+    "@supaku/agentfactory-nextjs": "0.7.3",
+    "@supaku/agentfactory-server": "0.7.3",
+    "next": "^16.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "dotenv": "^16",
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

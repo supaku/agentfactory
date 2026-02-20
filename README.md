@@ -71,7 +71,18 @@ Configuration and integration health at a glance. Shows connection status for th
 
 ## Quick Start
 
-### Create a new project (recommended)
+### One-click deploy (fastest)
+
+Deploy the dashboard with a single click — no local setup required:
+
+| Platform | Deploy | Redis |
+|----------|--------|-------|
+| **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template%23environment-variables&project-name=agentfactory-dashboard) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/agentfactory?referralCode=supaku) | Bundled automatically |
+
+> See the [dashboard template repository](https://github.com/supaku-org/agentfactory-dashboard-template) for full setup instructions.
+
+### Create a new project (recommended for customization)
 
 ```bash
 npx @supaku/create-agentfactory-app my-agent

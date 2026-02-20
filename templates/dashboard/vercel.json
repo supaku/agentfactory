@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "env": {
+    "LINEAR_ACCESS_TOKEN": {
+      "description": "Linear API key — create at Settings > API > Personal API Keys",
+      "required": true
+    },
+    "LINEAR_WEBHOOK_SECRET": {
+      "description": "Webhook signing secret (32+ chars) — create at Settings > API > Webhooks",
+      "required": true
+    },
+    "REDIS_URL": {
+      "description": "Redis connection URL — add Vercel KV or Upstash Redis, then paste the connection string",
+      "required": true
+    },
+    "NEXT_PUBLIC_APP_URL": {
+      "description": "Public URL of your deployment (e.g., https://your-app.vercel.app)",
+      "required": true
+    },
+    "WORKER_API_KEY": {
+      "description": "Bearer token for worker authentication (generate a random 32+ char string)",
+      "required": false
+    },
+    "CRON_SECRET": {
+      "description": "Secret token for cron endpoint authentication",
+      "required": false
+    },
+    "SESSION_HASH_SALT": {
+      "description": "Salt for session ID hashing (generate a random string)",
+      "required": false
+    }
+  }
+}
