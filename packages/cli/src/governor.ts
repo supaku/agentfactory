@@ -62,6 +62,7 @@ function createStubDependencies(): GovernorDependencies {
     isWithinCooldown: async (_issueId: string): Promise<boolean> => false,
     isParentIssue: async (_issueId: string): Promise<boolean> => false,
     isHeld: async (_issueId: string): Promise<boolean> => false,
+    getOverridePriority: async (_issueId: string) => null,
     getWorkflowStrategy: async (_issueId: string): Promise<string | undefined> => undefined,
     isResearchCompleted: async (_issueId: string): Promise<boolean> => false,
     isBacklogCreationCompleted: async (_issueId: string): Promise<boolean> => false,
