@@ -21,6 +21,7 @@ import {
   WORK_TYPE_START_STATUS,
   WORK_TYPE_COMPLETE_STATUS,
   WORK_TYPE_FAIL_STATUS,
+  TERMINAL_STATUSES,
 } from './types.js'
 import {
   LinearSessionError,
@@ -147,10 +148,18 @@ export class AgentSession {
 
       this.state = 'active'
 
-      // Transition based on work type
+      // Transition based on work type — guard against terminal states
       const startStatus = WORK_TYPE_START_STATUS[this.workType]
       if (this.autoTransition && startStatus) {
-        await this.client.updateIssueStatus(this.issueId, startStatus)
+        const currentState = await this.issue.state
+        const currentStateName = currentState?.name
+        if (currentStateName && TERMINAL_STATUSES.includes(currentStateName as typeof TERMINAL_STATUSES[number])) {
+          console.warn(
+            `[AgentSession] Refusing to transition issue ${this.issueId} from terminal state "${currentStateName}" to "${startStatus}"`
+          )
+        } else {
+          await this.client.updateIssueStatus(this.issueId, startStatus)
+        }
       }
 
       return { success: true, sessionId: this.sessionId }
@@ -221,29 +230,47 @@ export class AgentSession {
         )
       }
 
-      // Transition based on work type
+      // Transition based on work type — guard against terminal states
       if (this.autoTransition) {
-        const isResultSensitive = this.workType === 'qa' || this.workType === 'acceptance'
+        // Re-fetch current state to guard against transitioning out of terminal states
+        let isTerminal = false
+        try {
+          const freshIssue = await this.client.getIssue(this.issueId)
+          const currentState = await freshIssue.state
+          const currentStateName = currentState?.name
+          if (currentStateName && TERMINAL_STATUSES.includes(currentStateName as typeof TERMINAL_STATUSES[number])) {
+            isTerminal = true
+            console.warn(
+              `[AgentSession] Refusing to transition issue ${this.issueId} from terminal state "${currentStateName}" on completion`
+            )
+          }
+        } catch (err) {
+          console.warn('[AgentSession] Failed to check terminal state before completion transition:', err)
+        }
 
-        if (isResultSensitive) {
-          // For QA/acceptance: only transition if workResult is explicitly set
-          if (workResult === 'passed') {
+        if (!isTerminal) {
+          const isResultSensitive = this.workType === 'qa' || this.workType === 'acceptance'
+
+          if (isResultSensitive) {
+            // For QA/acceptance: only transition if workResult is explicitly set
+            if (workResult === 'passed') {
+              const completeStatus = WORK_TYPE_COMPLETE_STATUS[this.workType]
+              if (completeStatus) {
+                await this.client.updateIssueStatus(this.issueId, completeStatus)
+              }
+            } else if (workResult === 'failed') {
+              const failStatus = WORK_TYPE_FAIL_STATUS[this.workType]
+              if (failStatus) {
+                await this.client.updateIssueStatus(this.issueId, failStatus)
+              }
+            }
+            // undefined workResult -> skip transition (safe default)
+          } else {
+            // Non-QA/acceptance: unchanged behavior
             const completeStatus = WORK_TYPE_COMPLETE_STATUS[this.workType]
             if (completeStatus) {
               await this.client.updateIssueStatus(this.issueId, completeStatus)
             }
-          } else if (workResult === 'failed') {
-            const failStatus = WORK_TYPE_FAIL_STATUS[this.workType]
-            if (failStatus) {
-              await this.client.updateIssueStatus(this.issueId, failStatus)
-            }
-          }
-          // undefined workResult -> skip transition (safe default)
-        } else {
-          // Non-QA/acceptance: unchanged behavior
-          const completeStatus = WORK_TYPE_COMPLETE_STATUS[this.workType]
-          if (completeStatus) {
-            await this.client.updateIssueStatus(this.issueId, completeStatus)
           }
         }
       }

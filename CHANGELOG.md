@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.13
+
+### Fixes
+
+- **Terminal state guard on AgentSession** — `AgentSession.start()` and `AgentSession.complete()` now check the issue's current status before auto-transitioning. If the issue is in a terminal state (Accepted, Canceled, Duplicate), the transition is refused with a warning. This prevents stale or rogue sessions from pulling completed issues back into active workflow states.
+
 ## v0.7.12
 
 ### Fixes
