@@ -51,6 +51,7 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, ClaudeToolPermissionAdapter } from '../templates/index.js'
+import { loadRepositoryConfig } from '../config/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
   OrchestratorConfig,
@@ -739,8 +740,9 @@ export function getWorktreeIdentifier(
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
     project?: string
+    repository?: string
     streamConfig: OrchestratorStreamConfig
     apiActivityConfig?: OrchestratorConfig['apiActivityConfig']
     workTypeTimeouts?: OrchestratorConfig['workTypeTimeouts']
@@ -767,6 +769,8 @@ export class AgentOrchestrator {
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
+  // Allowlisted project names from .agentfactory/config.yaml
+  private allowedProjects?: string[]
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -829,6 +833,27 @@ export class AgentOrchestrator {
       // If template loading fails, fall back to hardcoded prompts
       this.templateRegistry = null
     }
+
+    // Auto-load .agentfactory/config.yaml from repository root
+    try {
+      const repoRoot = findRepoRoot(process.cwd())
+      if (repoRoot) {
+        const repoConfig = loadRepositoryConfig(repoRoot)
+        if (repoConfig) {
+          // Use repository from config as fallback if not set in OrchestratorConfig
+          if (!this.config.repository && repoConfig.repository) {
+            this.config.repository = repoConfig.repository
+            validateGitRemote(this.config.repository)
+          }
+          // Store allowedProjects for backlog filtering
+          if (repoConfig.allowedProjects) {
+            this.allowedProjects = repoConfig.allowedProjects
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
+    }
   }
 
   /**
@@ -887,6 +912,31 @@ export class AgentOrchestrator {
       })
       if (projects.nodes.length > 0) {
         filter.project = { id: { eq: projects.nodes[0].id } }
+
+        // Cross-reference project repo metadata with config (SUP-725)
+        if (this.config.repository) {
+          try {
+            const projectRepoUrl = await this.client.getProjectRepositoryUrl(projects.nodes[0].id)
+            if (projectRepoUrl) {
+              const normalizedProjectRepo = projectRepoUrl
+                .replace(/^https?:\/\//, '')
+                .replace(/\.git$/, '')
+              const normalizedConfigRepo = this.config.repository
+                .replace(/^https?:\/\//, '')
+                .replace(/\.git$/, '')
+              if (!normalizedProjectRepo.includes(normalizedConfigRepo) && !normalizedConfigRepo.includes(normalizedProjectRepo)) {
+                console.warn(
+                  `Warning: Project '${this.config.project}' repository metadata '${projectRepoUrl}' ` +
+                  `does not match configured repository '${this.config.repository}'. Skipping issues.`
+                )
+                return []
+              }
+            }
+          } catch (error) {
+            // Non-fatal: log warning but continue if metadata check fails
+            console.warn('Warning: Could not check project repository metadata:', error instanceof Error ? error.message : String(error))
+          }
+        }
       }
     }
 
@@ -898,6 +948,18 @@ export class AgentOrchestrator {
     const results: OrchestratorIssue[] = []
     for (const issue of issues.nodes) {
       if (results.length >= maxIssues) break
+
+      // Filter by allowedProjects from .agentfactory/config.yaml
+      if (this.allowedProjects && this.allowedProjects.length > 0) {
+        const project = await issue.project
+        const projectName = project?.name
+        if (!projectName || !this.allowedProjects.includes(projectName)) {
+          console.warn(
+            `[orchestrator] Skipping issue ${issue.identifier} — project "${projectName ?? '(none)'}" is not in allowedProjects: [${this.allowedProjects.join(', ')}]`
+          )
+          continue
+        }
+      }
 
       const labels = await issue.labels()
       const team = await issue.team
