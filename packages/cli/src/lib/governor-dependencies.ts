@@ -74,60 +74,6 @@ function actionToWorkType(action: GovernorAction): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Terminal statuses (issues in these states are excluded from scans)
-// ---------------------------------------------------------------------------
-
-const TERMINAL_STATUSES = ['Accepted', 'Canceled', 'Duplicate'] as const
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Convert a Linear SDK Issue to a GovernorIssue.
- * Resolves lazy-loaded relations (state, labels, parent, project).
- *
- * Uses `unknown` + explicit casts to avoid importing `Issue` from
- * `@linear/sdk`, keeping the CLI package dependency graph clean.
- */
-async function sdkIssueToGovernorIssue(issue: unknown): Promise<GovernorIssue> {
-  // The Linear SDK Issue type uses LinearFetch (thenable) for lazy-loaded relations.
-  // We cast to `any` to access these properties without importing the SDK types.
-  const i = issue as {
-    id: string
-    identifier: string
-    title: string
-    description?: string | null
-    createdAt: Date
-    state: PromiseLike<{ name: string } | undefined>
-    labels: () => PromiseLike<{ nodes: Array<{ name: string }> }>
-    parent: PromiseLike<{ id: string } | undefined | null>
-    project: PromiseLike<{ name: string } | undefined | null>
-  }
-
-  const state = await i.state
-  const labels = await i.labels()
-  const parent = await i.parent
-  const project = await i.project
-
-  return {
-    id: i.id,
-    identifier: i.identifier,
-    title: i.title,
-    description: i.description ?? undefined,
-    status: state?.name ?? 'Backlog',
-    labels: labels.nodes.map((l) => l.name),
-    createdAt: i.createdAt.getTime(),
-    parentId: parent?.id,
-    project: project?.name,
-  }
-}
-
 /**
  * Create real GovernorDependencies backed by the Linear SDK and Redis.
  *
@@ -139,26 +85,37 @@ export function createRealDependencies(
 ): GovernorDependencies {
   const processingState = new RedisProcessingStateStorage()
 
+  // Cache of parent issue IDs populated by listIssues() single GraphQL query.
+  // Eliminates per-issue isParentIssue() API calls during governor scans.
+  const parentIssueIds = new Set<string>()
+
   return {
     // -----------------------------------------------------------------------
-    // 1. listIssues -- scan Linear project for non-terminal issues
+    // 1. listIssues -- scan Linear project using single GraphQL query
     // -----------------------------------------------------------------------
     listIssues: async (project: string): Promise<GovernorIssue[]> => {
       try {
-        const linearClient = config.linearClient.linearClient
+        const rawIssues = await config.linearClient.listProjectIssues(project)
 
-        const issueConnection = await linearClient.issues({
-          filter: {
-            project: { name: { eq: project } },
-            state: { name: { nin: [...TERMINAL_STATUSES] } },
-          },
-        })
-
-        const results: GovernorIssue[] = []
-        for (const issue of issueConnection.nodes) {
-          results.push(await sdkIssueToGovernorIssue(issue))
+        // Cache parent issue IDs for isParentIssue() lookups
+        parentIssueIds.clear()
+        for (const issue of rawIssues) {
+          if (issue.childCount > 0) {
+            parentIssueIds.add(issue.id)
+          }
         }
-        return results
+
+        return rawIssues.map((issue) => ({
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          description: issue.description,
+          status: issue.status,
+          labels: issue.labels,
+          createdAt: issue.createdAt,
+          parentId: issue.parentId,
+          project: issue.project,
+        }))
       } catch (err) {
         log.error('listIssues failed', {
           project,
@@ -202,9 +159,13 @@ export function createRealDependencies(
     },
 
     // -----------------------------------------------------------------------
-    // 4. isParentIssue -- check via Linear API
+    // 4. isParentIssue -- check cache first, fall back to API
     // -----------------------------------------------------------------------
     isParentIssue: async (issueId: string): Promise<boolean> => {
+      // Check cached parent IDs from listIssues (populated by single GraphQL query)
+      if (parentIssueIds.has(issueId)) return true
+
+      // Fall back to API for issues not in the last scan (e.g., webhook-driven)
       try {
         return await config.linearClient.isParentIssue(issueId)
       } catch (err) {

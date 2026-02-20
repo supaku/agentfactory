@@ -2,7 +2,7 @@
 
 Scaffold a new [AgentFactory](https://github.com/supaku/agentfactory) project — a Next.js webhook server that processes Linear issues with coding agents.
 
-> **Just want to deploy?** Skip scaffolding and use one-click deploy: [Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template%23environment-variables&project-name=agentfactory-dashboard) | [Railway](https://railway.com/template/agentfactory?referralCode=supaku) (includes Redis). See the [dashboard template](https://github.com/supaku-org/agentfactory-dashboard-template) for details.
+> **Just want to deploy?** Skip scaffolding and use one-click deploy: [Vercel](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | [Railway](https://railway.com/template/agentfactory?referralCode=supaku) (includes Redis). See the [dashboard template](https://github.com/supaku/agentfactory/tree/main/templates/dashboard) for details.
 
 ## Usage
 

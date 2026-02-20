@@ -83,6 +83,7 @@ function createMockClient(): {
     createAgentSessionOnIssue: vi.fn(),
     updateAgentSession: vi.fn(),
     createAgentActivity: vi.fn(),
+    listProjectIssues: vi.fn(),
   }
 
   const linearClient = {
@@ -419,14 +420,41 @@ describe('LinearPlatformAdapter', () => {
   // ========================================================================
 
   describe('scanProjectIssues', () => {
+    /** Helper: create a listProjectIssues result entry */
+    function mockListProjectIssue(overrides: {
+      id?: string
+      identifier?: string
+      title?: string
+      description?: string
+      status?: string
+      labels?: string[]
+      createdAt?: number
+      parentId?: string
+      project?: string
+      childCount?: number
+    } = {}) {
+      return {
+        id: overrides.id ?? 'issue-uuid-1',
+        identifier: overrides.identifier ?? 'SUP-100',
+        title: overrides.title ?? 'Test Issue',
+        description: overrides.description ?? 'A test issue description',
+        status: overrides.status ?? 'Backlog',
+        labels: overrides.labels ?? ['Feature'],
+        createdAt: overrides.createdAt ?? Date.now(),
+        parentId: overrides.parentId,
+        project: overrides.project ?? 'MyProject',
+        childCount: overrides.childCount ?? 0,
+      }
+    }
+
     it('returns GovernorIssues for all non-terminal issues', async () => {
       const issues = [
-        mockLinearIssue({ id: 'i-1', identifier: 'SUP-1', stateName: 'Backlog' }),
-        mockLinearIssue({ id: 'i-2', identifier: 'SUP-2', stateName: 'Started' }),
-        mockLinearIssue({ id: 'i-3', identifier: 'SUP-3', stateName: 'Finished' }),
+        mockListProjectIssue({ id: 'i-1', identifier: 'SUP-1', status: 'Backlog' }),
+        mockListProjectIssue({ id: 'i-2', identifier: 'SUP-2', status: 'Started' }),
+        mockListProjectIssue({ id: 'i-3', identifier: 'SUP-3', status: 'Finished' }),
       ]
 
-      mocks.linearClientIssues.mockResolvedValue({ nodes: issues })
+      mocks.listProjectIssues.mockResolvedValue(issues)
 
       const result = await adapter.scanProjectIssues('MyProject')
 
@@ -440,34 +468,29 @@ describe('LinearPlatformAdapter', () => {
       expect(result[2].status).toBe('Finished')
     })
 
-    it('passes correct filter to Linear API', async () => {
-      mocks.linearClientIssues.mockResolvedValue({ nodes: [] })
+    it('delegates to listProjectIssues with project name', async () => {
+      mocks.listProjectIssues.mockResolvedValue([])
 
       await adapter.scanProjectIssues('TestProject')
 
-      expect(mocks.linearClientIssues).toHaveBeenCalledWith({
-        filter: {
-          project: { name: { eq: 'TestProject' } },
-          state: { name: { nin: ['Accepted', 'Canceled', 'Duplicate'] } },
-        },
-      })
+      expect(mocks.listProjectIssues).toHaveBeenCalledWith('TestProject')
     })
 
     it('returns empty array when no issues found', async () => {
-      mocks.linearClientIssues.mockResolvedValue({ nodes: [] })
+      mocks.listProjectIssues.mockResolvedValue([])
 
       const result = await adapter.scanProjectIssues('EmptyProject')
 
       expect(result).toEqual([])
     })
 
-    it('resolves lazy-loaded issue properties', async () => {
-      const issue = mockLinearIssue({
+    it('maps issue properties correctly', async () => {
+      const issue = mockListProjectIssue({
         labels: ['Bug', 'Urgent'],
         parentId: 'parent-1',
-        projectName: 'MyProject',
+        project: 'MyProject',
       })
-      mocks.linearClientIssues.mockResolvedValue({ nodes: [issue] })
+      mocks.listProjectIssues.mockResolvedValue([issue])
 
       const result = await adapter.scanProjectIssues('MyProject')
 
@@ -476,15 +499,41 @@ describe('LinearPlatformAdapter', () => {
       expect(result[0].project).toBe('MyProject')
     })
 
-    it('converts createdAt Date to epoch milliseconds', async () => {
-      const issue = mockLinearIssue({
-        createdAt: new Date('2025-03-01T08:00:00Z'),
-      })
-      mocks.linearClientIssues.mockResolvedValue({ nodes: [issue] })
+    it('preserves createdAt as epoch milliseconds', async () => {
+      const createdAt = new Date('2025-03-01T08:00:00Z').getTime()
+      const issue = mockListProjectIssue({ createdAt })
+      mocks.listProjectIssues.mockResolvedValue([issue])
 
       const result = await adapter.scanProjectIssues('MyProject')
 
-      expect(result[0].createdAt).toBe(new Date('2025-03-01T08:00:00Z').getTime())
+      expect(result[0].createdAt).toBe(createdAt)
+    })
+  })
+
+  // ========================================================================
+  // scanProjectIssuesWithParents
+  // ========================================================================
+
+  describe('scanProjectIssuesWithParents', () => {
+    it('returns issues and parent IDs set', async () => {
+      mocks.listProjectIssues.mockResolvedValue([
+        {
+          id: 'p-1', identifier: 'SUP-10', title: 'Parent',
+          status: 'Backlog', labels: [], createdAt: Date.now(),
+          project: 'MyProject', childCount: 3,
+        },
+        {
+          id: 'c-1', identifier: 'SUP-11', title: 'Child',
+          status: 'Backlog', labels: [], createdAt: Date.now(),
+          parentId: 'p-1', project: 'MyProject', childCount: 0,
+        },
+      ])
+
+      const { issues, parentIssueIds } = await adapter.scanProjectIssuesWithParents('MyProject')
+
+      expect(issues).toHaveLength(2)
+      expect(parentIssueIds.has('p-1')).toBe(true)
+      expect(parentIssueIds.has('c-1')).toBe(false)
     })
   })
 

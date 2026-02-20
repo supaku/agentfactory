@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { LinearAgentClient } from './agent-client.js'
+import { TokenBucket } from './rate-limiter.js'
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -41,6 +42,7 @@ function createClientWithProject(project: ReturnType<typeof mockProject>): Linea
     value: { maxRetries: 0, baseDelay: 0, maxDelay: 0 },
     writable: false,
   })
+  Object.defineProperty(client, 'rateLimiter', { value: new TokenBucket(), writable: false })
   Object.defineProperty(client, 'statusCache', { value: new Map(), writable: false })
 
   return client

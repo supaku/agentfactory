@@ -118,6 +118,10 @@ export {
 } from './checkbox-utils.js'
 export type { CheckboxItem, CheckboxUpdate } from './checkbox-utils.js'
 
+// Rate limiter
+export { TokenBucket, DEFAULT_RATE_LIMIT_CONFIG, extractRetryAfterMs } from './rate-limiter.js'
+export type { TokenBucketConfig } from './rate-limiter.js'
+
 // Client
 export { LinearAgentClient, createLinearAgentClient } from './agent-client.js'
 

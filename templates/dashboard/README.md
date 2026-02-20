@@ -1,12 +1,12 @@
 # AgentFactory Dashboard
 
-AI agent fleet management dashboard powered by [AgentFactory](https://github.com/supaku-org/agentfactory).
+AI agent fleet management dashboard powered by [AgentFactory](https://github.com/supaku/agentfactory).
 
 ## One-Click Deploy
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku-org%2Fagentfactory-dashboard-template%23environment-variables&project-name=agentfactory-dashboard)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
 
 > **Note:** Vercel does not include built-in Redis. After deploying, add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) from the Storage tab or create an [Upstash Redis](https://upstash.com/) database, then set the `REDIS_URL` environment variable.
 
@@ -33,9 +33,12 @@ AI agent fleet management dashboard powered by [AgentFactory](https://github.com
 ## Quick Start (Local)
 
 ```bash
-# Clone this repository
-git clone https://github.com/supaku-org/agentfactory-dashboard-template.git
-cd agentfactory-dashboard-template
+# Clone the template from the monorepo
+git clone --depth 1 --filter=blob:none --sparse https://github.com/supaku/agentfactory.git agentfactory-dashboard
+cd agentfactory-dashboard
+git sparse-checkout set templates/dashboard
+cp -r templates/dashboard/* .
+rm -rf templates .git
 
 # Install dependencies
 npm install
@@ -130,7 +133,7 @@ This is a [Next.js](https://nextjs.org) application that provides:
 
 ## Staying Up to Date
 
-This template is kept in sync with the [AgentFactory monorepo](https://github.com/supaku-org/agentfactory) via automated CI. When new versions of `@supaku/agentfactory-*` packages are released, a PR is automatically opened to update this template.
+This template lives in the [AgentFactory monorepo](https://github.com/supaku/agentfactory/tree/main/templates/dashboard). When new versions of `@supaku/agentfactory-*` packages are released, this template is updated in-tree.
 
 To manually update package versions:
 

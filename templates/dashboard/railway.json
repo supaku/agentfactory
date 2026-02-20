@@ -15,7 +15,7 @@
   "services": {
     "web": {
       "source": {
-        "repo": "supaku-org/agentfactory-dashboard-template"
+        "repo": "supaku/agentfactory"
       },
       "variables": {
         "LINEAR_ACCESS_TOKEN": {

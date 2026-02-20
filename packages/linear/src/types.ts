@@ -194,6 +194,8 @@ export interface LinearAgentClientConfig {
   apiKey: string
   baseUrl?: string
   retry?: RetryConfig
+  /** Token bucket rate limiter configuration. Applied to all API calls. */
+  rateLimit?: Partial<import('./rate-limiter.js').TokenBucketConfig>
 }
 
 /**

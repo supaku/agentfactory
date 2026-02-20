@@ -53,10 +53,26 @@ export interface WithRetryOptions {
   config?: RetryConfig
   onRetry?: RetryCallback
   shouldRetry?: (error: unknown) => boolean
+  /**
+   * Optional callback to extract a rate-limit delay (in ms) from an error.
+   * When provided and returns a positive number, that delay is used instead
+   * of the standard exponential backoff for that retry attempt.
+   */
+  getRetryAfterMs?: (error: unknown) => number | null
+  /**
+   * Optional callback invoked when a rate limit is detected (getRetryAfterMs
+   * returned a value). Use this to penalize a shared token bucket so other
+   * concurrent callers also back off.
+   */
+  onRateLimited?: (retryAfterMs: number) => void
 }
 
 /**
- * Execute an async function with exponential backoff retry logic
+ * Execute an async function with exponential backoff retry logic.
+ *
+ * When `getRetryAfterMs` is provided and returns a positive delay for an
+ * error, that delay is used instead of exponential backoff. This allows
+ * honoring HTTP 429 Retry-After headers from upstream APIs.
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
@@ -83,7 +99,13 @@ export async function withRetry<T>(
         throw lastError
       }
 
-      const delay = calculateDelay(attempt, config)
+      // Check for rate-limit-specific delay (Retry-After)
+      const retryAfterMs = options.getRetryAfterMs?.(error) ?? null
+      const delay = retryAfterMs ?? calculateDelay(attempt, config)
+
+      if (retryAfterMs !== null && options.onRateLimited) {
+        options.onRateLimited(retryAfterMs)
+      }
 
       if (options.onRetry) {
         options.onRetry({

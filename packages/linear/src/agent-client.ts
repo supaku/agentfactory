@@ -27,6 +27,7 @@ import type {
 } from './types.js'
 import { LinearApiError, LinearStatusTransitionError } from './errors.js'
 import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
+import { TokenBucket, extractRetryAfterMs } from './rate-limiter.js'
 
 /**
  * Core Linear Agent Client
@@ -35,6 +36,7 @@ import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
 export class LinearAgentClient {
   private readonly client: LinearClient
   private readonly retryConfig: Required<RetryConfig>
+  private readonly rateLimiter: TokenBucket
   private statusCache: Map<string, StatusMapping> = new Map()
 
   constructor(config: LinearAgentClientConfig) {
@@ -46,6 +48,7 @@ export class LinearAgentClient {
       ...DEFAULT_RETRY_CONFIG,
       ...config.retry,
     }
+    this.rateLimiter = new TokenBucket(config.rateLimit)
   }
 
   /**
@@ -56,18 +59,36 @@ export class LinearAgentClient {
   }
 
   /**
-   * Execute an operation with retry logic
+   * Execute an operation with retry logic and rate limiting.
+   *
+   * On HTTP 429 (rate limited):
+   * - Uses the Retry-After header value for the wait delay (falls back to 60s)
+   * - Penalizes the token bucket so concurrent callers also back off
    */
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    return withRetry(fn, {
-      config: this.retryConfig,
-      onRetry: ({ attempt, delay }) => {
-        console.log(
-          `[LinearAgentClient] Retry attempt ${attempt + 1}/${this.retryConfig.maxRetries}, ` +
-            `waiting ${delay}ms`
-        )
+    return withRetry(
+      async () => {
+        await this.rateLimiter.acquire()
+        return fn()
       },
-    })
+      {
+        config: this.retryConfig,
+        getRetryAfterMs: extractRetryAfterMs,
+        onRateLimited: (retryAfterMs) => {
+          const seconds = retryAfterMs / 1000
+          console.warn(
+            `[LinearAgentClient] Rate limited by Linear API, backing off ${seconds}s`
+          )
+          this.rateLimiter.penalize(seconds)
+        },
+        onRetry: ({ attempt, delay }) => {
+          console.log(
+            `[LinearAgentClient] Retry attempt ${attempt + 1}/${this.retryConfig.maxRetries}, ` +
+              `waiting ${delay}ms`
+          )
+        },
+      }
+    )
   }
 
   /**
@@ -589,6 +610,92 @@ export class LinearAgentClient {
       const parent = await issue.parent
       return parent != null
     })
+  }
+
+  /**
+   * Fetch all non-terminal issues in a project using a single GraphQL query.
+   *
+   * Replaces the N+1 pattern of fetching issues then lazy-loading state/labels/parent/project
+   * for each one. Returns pre-resolved data suitable for GovernorIssue construction.
+   *
+   * @param project - Linear project name
+   * @returns Array of issue data with childCount for parent detection
+   */
+  async listProjectIssues(project: string): Promise<
+    Array<{
+      id: string
+      identifier: string
+      title: string
+      description?: string
+      status: string
+      labels: string[]
+      createdAt: number
+      parentId?: string
+      project?: string
+      childCount: number
+    }>
+  > {
+    await this.rateLimiter.acquire()
+
+    const query = `
+      query ListProjectIssues($filter: IssueFilter!) {
+        issues(filter: $filter, first: 250) {
+          nodes {
+            id
+            identifier
+            title
+            description
+            createdAt
+            state { name }
+            labels { nodes { name } }
+            parent { id }
+            project { name }
+            children { nodes { id } }
+          }
+        }
+      }
+    `
+
+    const terminalStatuses = ['Accepted', 'Canceled', 'Duplicate']
+
+    const result = await (this.client as unknown as {
+      client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
+    }).client.rawRequest(query, {
+      filter: {
+        project: { name: { eq: project } },
+        state: { name: { nin: terminalStatuses } },
+      },
+    })
+
+    const data = result.data as {
+      issues: {
+        nodes: Array<{
+          id: string
+          identifier: string
+          title: string
+          description?: string | null
+          createdAt: string
+          state: { name: string } | null
+          labels: { nodes: Array<{ name: string }> }
+          parent: { id: string } | null
+          project: { name: string } | null
+          children: { nodes: Array<{ id: string }> }
+        }>
+      }
+    }
+
+    return data.issues.nodes.map((node) => ({
+      id: node.id,
+      identifier: node.identifier,
+      title: node.title,
+      description: node.description ?? undefined,
+      status: node.state?.name ?? 'Backlog',
+      labels: node.labels.nodes.map((l) => l.name),
+      createdAt: new Date(node.createdAt).getTime(),
+      parentId: node.parent?.id ?? undefined,
+      project: node.project?.name ?? undefined,
+      childCount: node.children.nodes.length,
+    }))
   }
 
   /**

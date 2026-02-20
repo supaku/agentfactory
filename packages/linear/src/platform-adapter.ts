@@ -321,29 +321,64 @@ export class LinearPlatformAdapter extends LinearFrontendAdapter {
   /**
    * Scan a Linear project for all non-terminal issues.
    *
-   * Queries the Linear API with a filter that excludes terminal statuses
-   * (Accepted, Canceled, Duplicate). Each issue is converted to a
-   * GovernorIssue for evaluation by the Governor.
+   * Uses a single GraphQL query via `listProjectIssues()` to fetch all
+   * issue data in one API call, eliminating the N+1 problem of lazy-loading
+   * state/labels/parent/project for each issue.
    *
    * @param project - Linear project name to scan
    * @returns Array of GovernorIssue for all active issues
    */
   async scanProjectIssues(project: string): Promise<GovernorIssue[]> {
-    const linearClient = this.linearAgentClient.linearClient
+    const issues = await this.linearAgentClient.listProjectIssues(project)
 
-    const issueConnection = await linearClient.issues({
-      filter: {
-        project: { name: { eq: project } },
-        state: { name: { nin: [...TERMINAL_STATUSES] } },
-      },
-    })
+    return issues.map((issue) => ({
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      description: issue.description,
+      status: issue.status,
+      labels: issue.labels,
+      createdAt: issue.createdAt,
+      parentId: issue.parentId,
+      project: issue.project,
+    }))
+  }
 
-    const results: GovernorIssue[] = []
-    for (const issue of issueConnection.nodes) {
-      results.push(await sdkIssueToGovernorIssue(issue))
+  /**
+   * Scan a project and return both GovernorIssues and a set of parent issue IDs.
+   *
+   * The parent issue IDs are derived from `childCount > 0` in the single
+   * GraphQL query, allowing callers to skip per-issue `isParentIssue()` API calls.
+   *
+   * @param project - Linear project name to scan
+   * @returns Issues and a set of parent issue IDs
+   */
+  async scanProjectIssuesWithParents(
+    project: string
+  ): Promise<{ issues: GovernorIssue[]; parentIssueIds: Set<string> }> {
+    const rawIssues = await this.linearAgentClient.listProjectIssues(project)
+
+    const parentIssueIds = new Set<string>()
+    const issues: GovernorIssue[] = []
+
+    for (const issue of rawIssues) {
+      if (issue.childCount > 0) {
+        parentIssueIds.add(issue.id)
+      }
+      issues.push({
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        description: issue.description,
+        status: issue.status,
+        labels: issue.labels,
+        createdAt: issue.createdAt,
+        parentId: issue.parentId,
+        project: issue.project,
+      })
     }
 
-    return results
+    return { issues, parentIssueIds }
   }
 
   /**
