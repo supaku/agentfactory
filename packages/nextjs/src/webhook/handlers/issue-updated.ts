@@ -363,12 +363,66 @@ export async function handleIssueUpdated(
             issueLog.error('Failed to post escalation comment', { error: err })
           }
 
-          // Note: The create-blocker CLI command should be invoked, but since we're in a webhook handler
-          // and don't have CLI access, we add the 'Needs Human' label directly if possible
-          issueLog.info('Escalation ladder: issue marked for human intervention', {
-            issueId,
-            cycleCount,
-          })
+          // Create a blocker issue in Icebox with 'Needs Human' label
+          try {
+            const issue = await linearClient.getIssue(issueId)
+            const team = await issue.team
+            if (team) {
+              const statuses = await linearClient.getTeamStatuses(team.id)
+              const iceboxStateId = statuses['Icebox']
+
+              // Find 'Needs Human' label
+              const allLabels = await linearClient.linearClient.issueLabels()
+              const needsHumanLabel = allLabels.nodes.find(
+                (l) => l.name.toLowerCase() === 'needs human'
+              )
+
+              const blockerTitle = `Human review needed: ${issueIdentifier} failed ${cycleCount} automated cycles`
+              const blockerDescription = [
+                `This issue has failed **${cycleCount} automated dev-QA-rejected cycles** and requires human intervention.`,
+                '',
+                '### Failure History',
+                failureSummary ?? 'No failure details recorded.',
+                '',
+                '---',
+                `*Source issue: ${issueIdentifier}*`,
+              ].join('\n')
+
+              const createPayload: Parameters<typeof linearClient.createIssue>[0] = {
+                title: blockerTitle,
+                description: blockerDescription,
+                teamId: team.id,
+                ...(iceboxStateId && { stateId: iceboxStateId }),
+                ...(needsHumanLabel && { labelIds: [needsHumanLabel.id] }),
+              }
+
+              // Add project if available
+              const project = await issue.project
+              if (project) {
+                createPayload.projectId = project.id
+              }
+
+              const blockerIssue = await linearClient.createIssue(createPayload)
+
+              // Create blocking relation: blocker blocks source issue
+              await linearClient.createIssueRelation({
+                issueId: blockerIssue.id,
+                relatedIssueId: issueId,
+                type: 'blocks',
+              })
+
+              issueLog.info('Escalation ladder: blocker issue created', {
+                issueId,
+                blockerIssueId: blockerIssue.id,
+                blockerIdentifier: blockerIssue.identifier,
+                cycleCount,
+              })
+            } else {
+              issueLog.warn('Escalation ladder: could not resolve team for blocker creation', { issueId })
+            }
+          } catch (err) {
+            issueLog.error('Failed to create blocker issue for escalation', { error: err })
+          }
 
         } else if (strategy === 'decompose') {
           issueLog.info('Escalation ladder: decompose strategy — refinement will attempt decomposition', {
