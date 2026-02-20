@@ -319,6 +319,38 @@ await session.emitThought('Analyzing requirements...')
 await session.complete('Feature implemented with tests')
 ```
 
+### Setting Up Linear
+
+**1. Create a Linear API Key**
+
+Go to [Linear Settings > API](https://linear.app/settings/api) and create a **Personal API Key** (starts with `lin_api_`).
+
+**2. Configure the Webhook**
+
+In Linear Settings > API > Webhooks, create a webhook:
+
+- **URL:** `https://your-app.example.com/webhook`
+- **Events to subscribe:** `AgentSession` (created, updated, prompted) and `Issue` (updated)
+- Copy the **Signing Secret** — this is your `LINEAR_WEBHOOK_SECRET`
+
+The webhook signature is verified using HMAC-SHA256 via the `linear-signature` header. Verification is enforced in production and optional in development.
+
+**3. Set Environment Variables**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINEAR_ACCESS_TOKEN` | Yes | API key for the Next.js webhook server |
+| `LINEAR_API_KEY` | Yes | API key for CLI tools (can be the same value as above) |
+| `LINEAR_WEBHOOK_SECRET` | Production | Signing secret from your Linear webhook |
+| `LINEAR_CLIENT_ID` | No | OAuth app client ID (multi-workspace only) |
+| `LINEAR_CLIENT_SECRET` | No | OAuth app client secret (multi-workspace only) |
+| `NEXT_PUBLIC_APP_URL` | No | App URL for OAuth redirects (default: `http://localhost:3000`) |
+| `REDIS_URL` | Distributed mode | Redis connection URL for worker pool and OAuth token storage |
+
+> **Tip:** `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` can be the same key. The server uses `LINEAR_ACCESS_TOKEN`; CLI tools use `LINEAR_API_KEY`.
+
+For the full environment variable reference and OAuth setup, see the [Getting Started guide](./docs/getting-started.md) and [Configuration reference](./docs/configuration.md).
+
 ## Agent Definitions
 
 Agent definitions tell coding agents how to behave at each stage of the pipeline. See [examples/agent-definitions](./examples/agent-definitions) for ready-to-use templates:

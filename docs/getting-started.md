@@ -74,14 +74,67 @@ WORKER_API_KEY=your-api-key
 
 ### Linear Setup
 
-1. Go to **Settings > API** in Linear
-2. Create a Personal API Key
-3. Set it as `LINEAR_ACCESS_TOKEN`
+#### Step 1: Create a Linear API Key
 
-For webhook-based triggers (production), you'll also need:
-- A Linear webhook pointing to your `/webhook` endpoint
-- Set the webhook secret as `LINEAR_WEBHOOK_SECRET`
-- Optionally, a Linear OAuth application for multi-workspace support
+1. Go to [Linear Settings > API](https://linear.app/settings/api)
+2. Under **Personal API Keys**, click "Create key"
+3. Copy the key (starts with `lin_api_`)
+4. Set it as both `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` in your `.env.local`
+
+> **Note:** `LINEAR_ACCESS_TOKEN` is used by the Next.js webhook server. `LINEAR_API_KEY` is used by CLI tools. They can be the same key.
+
+#### Step 2: Configure the Webhook
+
+1. In Linear, go to **Settings > API > Webhooks**
+2. Click "New webhook" and configure:
+   - **Label:** AgentFactory (or any name)
+   - **URL:** `https://your-app.example.com/webhook` (your deployed app URL + `/webhook`)
+   - **Events:** Enable the following:
+     - `AgentSession` — created, updated, prompted (triggers agent work)
+     - `Issue` — updated (triggers auto-QA and auto-acceptance on status transitions)
+3. Copy the **Signing Secret** and set it as `LINEAR_WEBHOOK_SECRET`
+
+The webhook handler verifies every request in production using HMAC-SHA256 via the `linear-signature` header. In development, verification is logged as a warning but not enforced.
+
+#### Step 3: Verify the Webhook
+
+After deploying, confirm the webhook is working:
+
+```bash
+# The GET endpoint returns a health check
+curl https://your-app.example.com/webhook
+# Should return: {"status":"ok",...}
+```
+
+Then trigger a test event in Linear (e.g., move an issue to Backlog). Check your server logs for incoming webhook events.
+
+#### OAuth Setup (Optional — Multi-Workspace)
+
+For teams managing multiple Linear workspaces from a single AgentFactory instance:
+
+1. In Linear, go to **Settings > API > OAuth applications**
+2. Create a new OAuth app:
+   - **Redirect URI:** `https://your-app.example.com/callback`
+   - **Scopes:** `read`, `write`, `issues:create`, `comments:create`
+3. Set the credentials:
+   ```bash
+   LINEAR_CLIENT_ID=your-oauth-client-id
+   LINEAR_CLIENT_SECRET=your-oauth-client-secret
+   NEXT_PUBLIC_APP_URL=https://your-app.example.com
+   ```
+4. OAuth tokens are stored in Redis (requires `REDIS_URL`) and auto-refreshed before expiration
+
+When an `organizationId` is present on a webhook event, AgentFactory checks Redis for a workspace-specific OAuth token before falling back to `LINEAR_ACCESS_TOKEN`.
+
+#### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| 503 on `/webhook` POST | `LINEAR_WEBHOOK_SECRET` not set in production — add it to your environment |
+| 401 on `/webhook` POST | Webhook signing secret mismatch — copy the secret from Linear Settings > API > Webhooks |
+| Webhook events not arriving | Verify the URL is publicly accessible and matches `/webhook` exactly |
+| Agent not triggered on issue move | Check that `Issue` updated events are enabled on the webhook |
+| OAuth callback fails | Ensure `NEXT_PUBLIC_APP_URL` matches the redirect URI in your Linear OAuth app |
 
 ## Webhook Server Setup
 
