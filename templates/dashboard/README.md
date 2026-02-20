@@ -6,7 +6,7 @@ AI agent fleet management dashboard powered by [AgentFactory](https://github.com
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
 
 > **Note:** Vercel does not include built-in Redis. After deploying, add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) from the Storage tab or create an [Upstash Redis](https://upstash.com/) database, then set the `REDIS_URL` environment variable.
 
@@ -61,7 +61,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the dashboard.
 | `LINEAR_ACCESS_TOKEN` | Yes | Linear API key ([create here](https://linear.app/settings/api)) |
 | `LINEAR_WEBHOOK_SECRET` | Yes | Webhook signature verification (32+ chars) |
 | `REDIS_URL` | Yes | Redis connection string |
-| `NEXT_PUBLIC_APP_URL` | Yes | Public URL of your deployment |
+| `NEXT_PUBLIC_APP_URL` | No | Public URL (auto-detected on Vercel) |
 | `WORKER_API_KEY` | Production | Worker authentication bearer token |
 | `CRON_SECRET` | Production | Cron endpoint auth token |
 | `SESSION_HASH_SALT` | Production | Session hashing salt |

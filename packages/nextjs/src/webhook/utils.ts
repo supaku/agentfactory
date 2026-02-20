@@ -179,7 +179,11 @@ export function defaultGetPriority(workType: AgentWorkType): number {
  * Get the app URL for constructing dashboard links.
  */
 export function getAppUrl(config: ResolvedWebhookConfig): string {
-  return config.appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? 'https://agent.supaku.dev'
+  return config.appUrl
+    ?? process.env.NEXT_PUBLIC_APP_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
+    ?? (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
+    ?? 'https://agent.supaku.dev'
 }
 
 /**

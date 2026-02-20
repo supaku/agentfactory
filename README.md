@@ -10,54 +10,6 @@
 
 AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Amp) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
 
-### Fleet Overview
-
-Real-time view of your agent fleet. Track worker count, active/queued sessions, completed work, available capacity, and total cost at a glance. Each agent card shows the issue it's working on, work type, status, duration, and cost — click any card to jump to its session detail.
-
-<p align="center">
-  <img src="docs/assets/dashboard-fleet.png" alt="Fleet Overview — real-time agent metrics and session cards" width="800" />
-</p>
-
-### Pipeline
-
-Kanban-style board that groups sessions by stage: Backlog, Started, Finished, Failed, and Stopped. Visualize where work is flowing and where it's stuck across your entire factory.
-
-<p align="center">
-  <img src="docs/assets/dashboard-pipeline.png" alt="Pipeline — kanban board of agent sessions by stage" width="800" />
-</p>
-
-### Sessions
-
-Sortable table of every agent session with issue identifier, status, work type, duration, cost, and start time. Click any row to drill into the full session timeline with token usage and event history.
-
-<p align="center">
-  <img src="docs/assets/dashboard-sessions.png" alt="Sessions — detailed table of all agent sessions" width="800" />
-</p>
-
-### Settings
-
-Configuration and integration health at a glance. Shows connection status for the Linear webhook, public API, and worker API endpoints, lists connected workers, and displays fleet capacity.
-
-<p align="center">
-  <img src="docs/assets/dashboard-settings.png" alt="Settings — integration status and fleet configuration" width="800" />
-</p>
-
-## The Software Factory
-
-| Factory Concept | AgentFactory Equivalent |
-|----------------|------------------------|
-| Assembly line | Issue backlog → Started → Finished → Delivered → Accepted |
-| Work orders | Issues with requirements |
-| Factory workers | Coding agents (Claude, Codex, Amp) |
-| Work stations | Work types: development, QA, acceptance |
-| Floor manager | Orchestrator — dispatches, monitors, recovers |
-| Shift workers | Distributed worker pool (Redis-coordinated) |
-| Quality control | QA agents that validate work before promotion |
-| Factory floor | Git worktrees — isolated workspaces per agent |
-| Time clock | Heartbeat + inactivity timeout |
-| Incident reports | Crash recovery + session resume |
-| Cost accounting | Per-session token/cost tracking |
-
 ## Packages
 
 | Package | npm | Description |
@@ -77,7 +29,7 @@ Deploy the dashboard with a single click — no local setup required:
 
 | Platform | Deploy | Redis |
 |----------|--------|-------|
-| **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL,NEXT_PUBLIC_APP_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
+| **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
 | **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/A7hIuF?referralCode=MwgIWL) | Bundled automatically |
 
 > See the [dashboard template](https://github.com/supaku/agentfactory/tree/main/templates/dashboard) for full setup instructions.

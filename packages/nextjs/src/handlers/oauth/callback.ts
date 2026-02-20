@@ -52,7 +52,11 @@ export function createOAuthCallbackHandler(config?: OAuthConfig): { GET: RouteHa
 
       const clientId = config?.clientId ?? process.env.LINEAR_CLIENT_ID
       const clientSecret = config?.clientSecret ?? process.env.LINEAR_CLIENT_SECRET
-      const appUrl = config?.appUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3002'
+      const appUrl = config?.appUrl
+        ?? process.env.NEXT_PUBLIC_APP_URL
+        ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
+        ?? (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
+        ?? 'http://localhost:3002'
       const successRedirect = config?.successRedirect ?? '/?oauth=success'
 
       const code = request.nextUrl.searchParams.get('code')
