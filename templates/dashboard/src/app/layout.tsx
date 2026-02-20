@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import '@supaku/agentfactory-dashboard/styles'
 import './globals.css'
 
 export const metadata: Metadata = {
