@@ -152,3 +152,7 @@ export {
   type DefaultAutoTriggerConfig,
   type WorkflowContext,
 } from './defaults/index.js'
+
+// Platform adapter (Governor event integration)
+export { LinearPlatformAdapter } from './platform-adapter.js'
+export type { GovernorIssue as LinearGovernorIssue } from './platform-adapter.js'

@@ -59,6 +59,13 @@ export interface WebhookConfig extends RouteConfig {
    * Templates in this directory override built-in defaults per work type.
    */
   templateDir?: string
+  /**
+   * Governor integration mode:
+   * - 'direct' (default): Today's behavior -- webhooks dispatch work directly
+   * - 'event-bridge': Dual-write -- webhooks dispatch AND publish governor events
+   * - 'governor-only': Events only -- webhooks publish to governor, no direct dispatch
+   */
+  governorMode?: 'direct' | 'event-bridge' | 'governor-only'
 }
 
 /**
@@ -75,6 +82,13 @@ export interface ResolvedWebhookConfig extends RouteConfig {
   buildParentAcceptanceContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
   /** Linear project names this server handles. Empty/undefined = all projects. */
   projects?: string[]
+  /**
+   * Governor integration mode:
+   * - 'direct' (default): Today's behavior -- webhooks dispatch work directly
+   * - 'event-bridge': Dual-write -- webhooks dispatch AND publish governor events
+   * - 'governor-only': Events only -- webhooks publish to governor, no direct dispatch
+   */
+  governorMode?: 'direct' | 'event-bridge' | 'governor-only'
 }
 
 /**
