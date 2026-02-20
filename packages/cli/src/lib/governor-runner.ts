@@ -33,9 +33,9 @@ export interface GovernorRunnerConfig {
   scanIntervalMs?: number
   /** Maximum concurrent dispatches per scan (default: 3) */
   maxConcurrentDispatches?: number
-  /** Enable auto-research from Icebox (default: true) */
+  /** Enable auto-research from Icebox (default: false) */
   enableAutoResearch?: boolean
-  /** Enable auto-backlog-creation from Icebox (default: true) */
+  /** Enable auto-backlog-creation from Icebox (default: false) */
   enableAutoBacklogCreation?: boolean
   /** Enable auto-development from Backlog (default: true) */
   enableAutoDevelopment?: boolean
@@ -113,8 +113,8 @@ export async function runGovernor(
         projects: config.projects,
         scanIntervalMs: config.scanIntervalMs ?? 60_000,
         maxConcurrentDispatches: config.maxConcurrentDispatches ?? 3,
-        enableAutoResearch: config.enableAutoResearch ?? true,
-        enableAutoBacklogCreation: config.enableAutoBacklogCreation ?? true,
+        enableAutoResearch: config.enableAutoResearch ?? false,
+        enableAutoBacklogCreation: config.enableAutoBacklogCreation ?? false,
         enableAutoDevelopment: config.enableAutoDevelopment ?? true,
         enableAutoQA: config.enableAutoQA ?? true,
         enableAutoAcceptance: config.enableAutoAcceptance ?? true,
@@ -171,8 +171,10 @@ export interface GovernorCLIArgs {
  *   --project <name>            Project to scan (can be repeated)
  *   --scan-interval <ms>        Scan interval in milliseconds (default: 60000)
  *   --max-dispatches <n>        Maximum concurrent dispatches per scan (default: 3)
- *   --no-auto-research          Disable auto-research from Icebox
- *   --no-auto-backlog-creation  Disable auto-backlog-creation from Icebox
+ *   --auto-research              Enable auto-research from Icebox (default: off)
+ *   --auto-backlog-creation      Enable auto-backlog-creation from Icebox (default: off)
+ *   --no-auto-research           Disable auto-research (explicit override)
+ *   --no-auto-backlog-creation   Disable auto-backlog-creation (explicit override)
  *   --no-auto-development       Disable auto-development from Backlog
  *   --no-auto-qa                Disable auto-QA from Finished
  *   --no-auto-acceptance        Disable auto-acceptance from Delivered
@@ -184,8 +186,8 @@ export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): Gover
     projects: [],
     scanIntervalMs: 60_000,
     maxConcurrentDispatches: 3,
-    enableAutoResearch: true,
-    enableAutoBacklogCreation: true,
+    enableAutoResearch: false,
+    enableAutoBacklogCreation: false,
     enableAutoDevelopment: true,
     enableAutoQA: true,
     enableAutoAcceptance: true,
@@ -205,8 +207,14 @@ export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): Gover
       case '--max-dispatches':
         result.maxConcurrentDispatches = parseInt(argv[++i]!, 10)
         break
+      case '--auto-research':
+        result.enableAutoResearch = true
+        break
       case '--no-auto-research':
         result.enableAutoResearch = false
+        break
+      case '--auto-backlog-creation':
+        result.enableAutoBacklogCreation = true
         break
       case '--no-auto-backlog-creation':
         result.enableAutoBacklogCreation = false
@@ -251,8 +259,8 @@ Options:
   --scan-interval <ms>        Scan interval in milliseconds (default: 60000)
   --max-dispatches <n>        Maximum concurrent dispatches per scan (default: 3)
   --mode <mode>               Execution mode: poll-only (default) or event-driven
-  --no-auto-research          Disable auto-research from Icebox
-  --no-auto-backlog-creation  Disable auto-backlog-creation from Icebox
+  --auto-research             Enable auto-research from Icebox (default: off)
+  --auto-backlog-creation     Enable auto-backlog-creation from Icebox (default: off)
   --no-auto-development       Disable auto-development from Backlog
   --no-auto-qa                Disable auto-QA from Finished
   --no-auto-acceptance        Disable auto-acceptance from Delivered

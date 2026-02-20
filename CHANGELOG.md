@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.7.12
+
+### Fixes
+
+- **Governor dispatch loop** — `dispatchWork()` now calls `storeSessionState()` before `queueWork()`, so `hasActiveSession()` correctly returns true on subsequent poll sweeps. Previously, the governor would re-dispatch the same issue every poll cycle because no session was registered in Redis.
+- **Worker claim failures** — Workers could never claim governor-dispatched work because `claimSession()` requires a pending session in Redis. The session is now registered before the queue entry, eliminating the race window.
+- **Phase completion signal** — When research or backlog-creation sessions complete, `markPhaseCompleted()` is now called in the session status handler. This prevents the governor from re-dispatching top-of-funnel work for the same issue after each poll sweep.
+- **Project name on dispatched work** — Governor-dispatched queue items now include `projectName`, enabling correct worker routing across multi-project deployments.
+
+### Changes
+
+- **Icebox auto-triggers default to off** — `enableAutoResearch` and `enableAutoBacklogCreation` now default to `false`. The Icebox is a space for ideation and iterative refinement via @ mentions; automated research/backlog-creation is opt-in via `--auto-research` / `--auto-backlog-creation` CLI flags. The governor's default scope is Backlog → development, Finished → QA, Delivered → acceptance.
+
 ## v0.7.11
 
 ### Features

@@ -236,7 +236,12 @@ describe('isReadyForBacklogCreation', () => {
 // ---------------------------------------------------------------------------
 
 describe('determineTopOfFunnelAction', () => {
-  const config = DEFAULT_TOP_OF_FUNNEL_CONFIG
+  // Enable both auto-triggers for testing (defaults are off)
+  const config: TopOfFunnelConfig = {
+    ...DEFAULT_TOP_OF_FUNNEL_CONFIG,
+    enableAutoResearch: true,
+    enableAutoBacklogCreation: true,
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()

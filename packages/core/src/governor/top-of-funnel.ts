@@ -46,8 +46,8 @@ export const DEFAULT_TOP_OF_FUNNEL_CONFIG: TopOfFunnelConfig = {
     '## Requirements',
   ],
   researchRequestLabels: ['Needs Research'],
-  enableAutoResearch: true,
-  enableAutoBacklogCreation: true,
+  enableAutoResearch: false,
+  enableAutoBacklogCreation: false,
 }
 
 // ---------------------------------------------------------------------------

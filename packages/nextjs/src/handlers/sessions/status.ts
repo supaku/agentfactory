@@ -18,6 +18,7 @@ import {
   markAgentWorked,
   releaseIssueLock,
   promoteNextPendingWork,
+  RedisProcessingStateStorage,
   createLogger,
 } from '@supaku/agentfactory-server'
 
@@ -122,6 +123,30 @@ export function createSessionStatusPostHandler() {
             })
           } catch (err) {
             log.error('Failed to mark agent-worked', { sessionId, error: err })
+          }
+
+          // Mark research/backlog-creation phases as completed so the
+          // governor does not re-dispatch the same top-of-funnel work.
+          const phase = session.workType === 'research' ? 'research'
+            : session.workType === 'backlog-creation' ? 'backlog-creation'
+            : null
+          if (phase) {
+            try {
+              const processingState = new RedisProcessingStateStorage()
+              await processingState.markPhaseCompleted(session.issueId, phase, sessionId)
+              log.info('Processing phase marked complete', {
+                issueId: session.issueId,
+                phase,
+                sessionId,
+              })
+            } catch (err) {
+              log.error('Failed to mark processing phase complete', {
+                sessionId,
+                issueId: session.issueId,
+                phase,
+                error: err,
+              })
+            }
           }
         }
 

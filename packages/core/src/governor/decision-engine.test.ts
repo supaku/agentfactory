@@ -137,6 +137,13 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
     vi.useRealTimers()
   })
 
+  const iceboxConfig = {
+    ...DEFAULT_GOVERNOR_CONFIG,
+    projects: ['TestProject'],
+    enableAutoResearch: true,
+    enableAutoBacklogCreation: true,
+  }
+
   it('triggers research for sparse Icebox issue', () => {
     const ctx = makeContext({
       issue: makeIssue({
@@ -144,6 +151,7 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
         description: sparseDescription(),
         createdAt: Date.now() - 2 * 60 * 60 * 1000,
       }),
+      config: iceboxConfig,
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('trigger-research')
@@ -156,6 +164,7 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
         description: wellResearchedDescription(),
         createdAt: Date.now() - 2 * 60 * 60 * 1000,
       }),
+      config: iceboxConfig,
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('trigger-backlog-creation')
@@ -230,6 +239,7 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
         description: sparseDescription(),
         createdAt: Date.now() - 10 * 60 * 1000, // 10 minutes ago
       }),
+      config: iceboxConfig,
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('none')
@@ -246,6 +256,7 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
       config: {
         ...DEFAULT_GOVERNOR_CONFIG,
         projects: ['TestProject'],
+        enableAutoResearch: true,
         topOfFunnel: {
           iceboxResearchDelayMs: 5 * 60 * 1000, // 5 minutes
         },

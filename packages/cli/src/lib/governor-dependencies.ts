@@ -22,6 +22,7 @@ import {
   getWorkflowState,
   RedisProcessingStateStorage,
   queueWork,
+  storeSessionState,
 } from '@supaku/agentfactory-server'
 import type { QueuedWork } from '@supaku/agentfactory-server'
 
@@ -300,13 +301,16 @@ export function createRealDependencies(
 
         log.info('Dispatching work', { issueId, action, workType })
 
-        // Fetch the issue to get its identifier for the queue entry
+        // Fetch the issue to get its identifier and project for the queue entry
         let issueIdentifier = issueId
+        let projectName: string | undefined
         try {
           const issue = await config.linearClient.getIssue(issueId)
           issueIdentifier = issue.identifier
+          const project = await (issue as unknown as { project: PromiseLike<{ name: string } | null> }).project
+          projectName = project?.name
         } catch {
-          log.warn('Could not fetch issue identifier, using issueId', { issueId })
+          log.warn('Could not fetch issue details, using issueId', { issueId })
         }
 
         // Create a Linear Agent Session on the issue so the UI shows activity
@@ -323,14 +327,33 @@ export function createRealDependencies(
           })
         }
 
-        // Queue the work item for a worker to pick up
-        const queuedWork: QueuedWork = {
-          sessionId: sessionId ?? `governor-${issueId}-${Date.now()}`,
+        const finalSessionId = sessionId ?? `governor-${issueId}-${Date.now()}`
+        const now = Date.now()
+
+        // Register a pending session FIRST so hasActiveSession() returns true
+        // immediately, preventing re-dispatch on subsequent poll sweeps.
+        await storeSessionState(finalSessionId, {
           issueId,
           issueIdentifier,
-          priority: 3, // Default priority; PRIORITY overrides are handled by the governor sort
-          queuedAt: Date.now(),
+          claudeSessionId: null,
+          worktreePath: '',
+          status: 'pending',
+          workerId: null,
+          queuedAt: now,
+          priority: 3,
           workType: workType as QueuedWork['workType'],
+          projectName,
+        })
+
+        // Queue the work item for a worker to pick up
+        const queuedWork: QueuedWork = {
+          sessionId: finalSessionId,
+          issueId,
+          issueIdentifier,
+          priority: 3,
+          queuedAt: now,
+          workType: workType as QueuedWork['workType'],
+          projectName,
         }
 
         const queued = await queueWork(queuedWork)
@@ -345,7 +368,8 @@ export function createRealDependencies(
             issueIdentifier,
             action,
             workType,
-            sessionId: queuedWork.sessionId,
+            projectName,
+            sessionId: finalSessionId,
           })
         }
       } catch (err) {
