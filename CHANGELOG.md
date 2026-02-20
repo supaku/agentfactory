@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.7.10
+
+### Features
+
+- **Workflow Governor** — Autonomous lifecycle management with human-in-the-loop. Replaces manual @mention-driven triggers with a deterministic state machine that surfaces high-value decision points for human input. Includes:
+  - **WorkSchedulingFrontend interface** with AbstractStatus (8 statuses, 16 methods) for frontend-agnostic work scheduling
+  - **LinearFrontendAdapter** wrapping LinearAgentClient through the abstract interface
+  - **Governor scan loop** — Polling-based scheduler with configurable intervals, decision engine, and priority-aware dispatch
+  - **Human touchpoint system** — Structured override directives (HOLD, RESUME, SKIP QA, DECOMPOSE, REASSIGN, PRIORITY) with configurable timeouts
+  - **Auto top-of-funnel** — Automatic research and backlog-creation for Icebox issues based on description quality heuristics
+  - **Strategy-aware template selection** — Escalation-driven template resolution (normal → context-enriched → decompose → escalate-human)
+  - **`af-governor` CLI** — New binary entry point for running the Governor scan loop
+  - **PM curation workflow documentation** — Docs for PM interaction with the top-of-funnel pipeline
+
+### Improvements
+
+- **Workflow state machine and QA loop circuit breaker** — Added `WorkflowState` tracking and escalation ladder for QA cycles
+- **YAML-based workflow template system** — Agent prompts driven by YAML templates with Handlebars interpolation, overridable per project
+
+### Chores
+
+- Aligned all package versions to 0.7.10 across the monorepo.
+
 ## v0.7.9
 
 ### Features
