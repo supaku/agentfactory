@@ -38,16 +38,95 @@ Issues may have multiple PRs. Select the correct one:
 6. If no PR found, emit WORK_RESULT:failed with explanation`
 
 /**
+ * Context from the workflow state machine for retry enrichment.
+ * Injected when an issue has been through previous dev-QA-rejected cycles.
+ */
+export interface WorkflowContext {
+  cycleCount: number
+  strategy: string
+  failureSummary: string | null
+  qaAttemptCount?: number
+}
+
+/**
+ * Build the failure context block to append to prompts for retries.
+ */
+export function buildFailureContextBlock(
+  workType: AgentWorkType,
+  context: WorkflowContext
+): string {
+  if (context.cycleCount <= 0) return ''
+
+  switch (workType) {
+    case 'refinement': {
+      if (context.strategy === 'decompose') {
+        return `\n\n## Decomposition Required (Cycle ${context.cycleCount})
+
+This issue has been through ${context.cycleCount} development-QA cycle(s) and keeps failing.
+Instead of refining, DECOMPOSE this issue into smaller, independently testable pieces.
+
+### Failure History
+${context.failureSummary ?? 'No details recorded.'}
+
+### Decomposition Instructions
+- Break this issue into smaller sub-issues (use --parentId to make them children)
+- Each sub-issue must have clear, unambiguous acceptance criteria
+- Each sub-issue must be testable in isolation
+- Address one specific concern that previous attempts failed on
+- After creating sub-issues, move the PARENT issue to Backlog status`
+      }
+
+      return `\n\n## Previous Failure Context
+
+This issue has been through ${context.cycleCount} development-QA cycle(s).
+
+### Failure History
+${context.failureSummary ?? 'No details recorded.'}
+
+### Instructions
+- Read the failure history carefully before making changes
+- Do NOT repeat approaches that already failed
+- If the acceptance criteria are ambiguous, update them to be testable before fixing code
+- Focus on the ROOT CAUSE, not symptoms`
+    }
+
+    case 'development':
+    case 'coordination': {
+      return `\n\n## Retry Context
+
+This is retry #${context.cycleCount} for this issue. Previous QA failures:
+${context.failureSummary ?? 'No details recorded.'}
+
+Pay special attention to the areas that failed QA previously.`
+    }
+
+    case 'qa':
+    case 'qa-coordination': {
+      if (!context.failureSummary) return ''
+      return `\n\n## Previous QA Results
+This issue has been QA'd ${context.qaAttemptCount ?? context.cycleCount} times previously.
+${context.failureSummary}
+Focus validation on these previously failing areas.`
+    }
+
+    default:
+      return ''
+  }
+}
+
+/**
  * Generate a default prompt for a given work type and issue identifier.
  *
  * @param identifier - The issue identifier (e.g., "PROJ-123")
  * @param workType - The type of work to perform
  * @param mentionContext - Optional additional context from a user mention
+ * @param workflowContext - Optional workflow state context for retry enrichment
  */
 export function defaultGeneratePrompt(
   identifier: string,
   workType: AgentWorkType,
-  mentionContext?: string
+  mentionContext?: string,
+  workflowContext?: WorkflowContext
 ): string {
   let basePrompt: string
 
@@ -125,6 +204,11 @@ ${WORK_RESULT_MARKER_INSTRUCTION}`
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION
+
+  // Inject workflow failure context for retries
+  if (workflowContext) {
+    basePrompt += buildFailureContextBlock(workType, workflowContext)
+  }
 
   if (mentionContext) {
     return `${basePrompt}\n\nAdditional context from the user's mention:\n${mentionContext}`

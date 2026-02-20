@@ -10,6 +10,8 @@ import {
   WORK_TYPE_ALLOWED_STATUSES,
   STATUS_WORK_TYPE_MAP,
   getValidWorkTypesForStatus,
+  buildFailureContextBlock,
+  type WorkflowContext,
 } from '@supaku/agentfactory-linear'
 import {
   generateIdempotencyKey,
@@ -19,6 +21,7 @@ import {
   updateSessionStatus,
   dispatchWork,
   type QueuedWork,
+  getWorkflowState,
 } from '@supaku/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -337,6 +340,31 @@ export async function handleSessionCreated(
     projectName,
   })
 
+  // Enrich prompt with workflow failure context for retries (refinement, development)
+  let workflowContextBlock = ''
+  if (workType === 'refinement' || (workType === 'development' && currentStatus === 'Backlog')) {
+    try {
+      const workflowState = await getWorkflowState(issueId)
+      if (workflowState && workflowState.cycleCount > 0) {
+        const wfContext: WorkflowContext = {
+          cycleCount: workflowState.cycleCount,
+          strategy: workflowState.strategy,
+          failureSummary: workflowState.failureSummary,
+        }
+        workflowContextBlock = buildFailureContextBlock(workType, wfContext)
+        if (workflowContextBlock) {
+          sessionLog.info('Prompt enriched with workflow failure context', {
+            workType,
+            cycleCount: workflowState.cycleCount,
+            strategy: workflowState.strategy,
+          })
+        }
+      }
+    } catch (err) {
+      sessionLog.warn('Failed to enrich prompt with workflow context', { error: err })
+    }
+  }
+
   // Queue work
   const work: QueuedWork = {
     sessionId,
@@ -345,7 +373,7 @@ export async function handleSessionCreated(
     priority,
     queuedAt: Date.now(),
     workType,
-    prompt: config.generatePrompt(issueIdentifier, workType, enhancedPromptContext),
+    prompt: config.generatePrompt(issueIdentifier, workType, enhancedPromptContext) + workflowContextBlock,
     projectName,
   }
 

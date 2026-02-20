@@ -422,7 +422,7 @@ function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
 function generatePromptForWorkType(
   identifier: string,
   workType: AgentWorkType,
-  options?: { parentContext?: string; mentionContext?: string }
+  options?: { parentContext?: string; mentionContext?: string; failureContext?: string }
 ): string {
   // Use enriched parent context for QA/acceptance if provided
   if (options?.parentContext && (workType === 'qa' || workType === 'acceptance')) {
@@ -654,6 +654,11 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
 See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
       break
+  }
+
+  // Inject workflow failure context for retries
+  if (options?.failureContext) {
+    basePrompt += options.failureContext
   }
 
   if (options?.mentionContext) {
