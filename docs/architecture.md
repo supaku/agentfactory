@@ -204,6 +204,124 @@ Instead of fixed session timeouts, AgentFactory uses inactivity-based monitoring
 
 This allows long-running agents (large test suites, big refactors) to run as long as they're making progress.
 
+## Workflow Governor
+
+The Workflow Governor (`packages/core/src/governor/`) is the central lifecycle manager. It observes all issues across projects and decides what work to dispatch based on issue status, active sessions, cooldowns, and human overrides.
+
+### Architecture
+
+```
+Platform Webhooks ──► PlatformAdapter.normalizeWebhookEvent()
+                              │
+                              ▼
+                      GovernorEventBus (Redis Stream)
+                              │
+                    ┌─────────┴──────────┐
+                    │                    │
+             webhook events        poll-snapshot events
+             (real-time)           (every 5 min safety net)
+                    │                    │
+                    └─────────┬──────────┘
+                              │
+                    EventDeduplicator
+                       (skip if same issue+status within 10s)
+                              │
+                    Decision Engine (decideAction)
+                              │
+                    dispatchWork → Redis work queue → Workers
+```
+
+### Two Governor Classes
+
+| Class | Mode | Use Case |
+|-------|------|----------|
+| `WorkflowGovernor` | Poll-only | Simple periodic scan loop, CLI `--once` mode |
+| `EventDrivenGovernor` | Hybrid event + poll | Production: real-time webhook events with periodic safety net |
+
+Both share the same `decideAction()` pure function and dependency injection interface.
+
+### Decision Engine
+
+For each issue, the governor evaluates:
+
+1. **Status** — maps to a potential action (e.g., Backlog → `trigger-development`)
+2. **Active session** — skip if an agent is already running
+3. **Cooldown** — skip if QA just failed (prevents retry loops)
+4. **Parent issue** — routes to coordination work types
+5. **Hold override** — skip if a human commented `HOLD`
+6. **Priority override** — reorder if `PRIORITY HIGH` / `PRIORITY URGENT`
+7. **Workflow strategy** — considers top-of-funnel phases (research, backlog-creation)
+
+### GovernorDependencies
+
+All external state is injected through the `GovernorDependencies` interface:
+
+```typescript
+interface GovernorDependencies {
+  listIssues(project: string): Promise<GovernorIssue[]>
+  hasActiveSession(issueId: string): Promise<boolean>
+  isWithinCooldown(issueId: string): Promise<boolean>
+  isParentIssue(issueId: string): Promise<boolean>
+  isHeld(issueId: string): Promise<boolean>
+  getOverridePriority(issueId: string): Promise<OverridePriority | null>
+  getWorkflowStrategy(issueId: string): Promise<string | undefined>
+  isResearchCompleted(issueId: string): Promise<boolean>
+  isBacklogCreationCompleted(issueId: string): Promise<boolean>
+  dispatchWork(issueId: string, action: GovernorAction): Promise<void>
+}
+```
+
+### PlatformAdapter
+
+The `PlatformAdapter` interface abstracts platform-specific operations for multi-platform support:
+
+```typescript
+interface PlatformAdapter {
+  readonly name: string
+  normalizeWebhookEvent(payload: unknown): GovernorEvent[] | null
+  scanProjectIssues(project: string): Promise<GovernorIssue[]>
+  toGovernorIssue(native: unknown): Promise<GovernorIssue>
+  isParentIssue(issueId: string): Promise<boolean>
+}
+```
+
+`LinearPlatformAdapter` (in `packages/linear`) implements this for Linear. Additional adapters (Asana, Jira, etc.) would follow the same pattern.
+
+### GovernorEventBus
+
+Events flow through the `GovernorEventBus` interface:
+
+```typescript
+interface GovernorEventBus {
+  publish(event: GovernorEvent): Promise<string>
+  subscribe(): AsyncIterable<{ id: string; event: GovernorEvent }>
+  ack(eventId: string): Promise<void>
+  close(): Promise<void>
+}
+```
+
+Two implementations:
+- `InMemoryEventBus` — for testing and single-process CLI
+- `RedisEventBus` — production, uses Redis Streams with consumer groups
+
+### Governor Mode
+
+The webhook server supports three modes via `governorMode` in `WebhookConfig`:
+
+| Mode | Webhooks | Governor Events | Use Case |
+|------|----------|----------------|----------|
+| `direct` | Dispatch directly | Not published | Default, no governor needed |
+| `event-bridge` | Dispatch AND publish events | Published to Redis Stream | Dual-write for safe rollout |
+| `governor-only` | Only publish events | Published to Redis Stream | Governor handles all lifecycle |
+
+### Human Override Commands
+
+Users can override the governor by adding Linear comments:
+
+- `HOLD` — Pause all automated processing
+- `RESUME` — Resume automated processing
+- `PRIORITY HIGH` / `PRIORITY URGENT` — Override priority for next dispatch
+
 ## Distributed Architecture
 
 For horizontal scaling, AgentFactory supports a coordinator + worker topology:

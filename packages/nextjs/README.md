@@ -94,10 +94,30 @@ const routes = createAllRoutes({
     autoAcceptanceExcludeLabels: [],
   },
 
+  // Optional: governor integration
+  // 'direct' (default) — webhooks dispatch work directly
+  // 'event-bridge' — dispatch AND publish governor events (dual-write)
+  // 'governor-only' — only publish events, governor handles all dispatch
+  governorMode: 'event-bridge',
+
   // Optional: OAuth
   oauth: { clientId: '...', clientSecret: '...' },
 })
 ```
+
+### Governor Event Bridge
+
+When `governorMode` is `event-bridge` or `governor-only`, webhook handlers publish events to a `GovernorEventBus`. Wire the bus at server startup:
+
+```typescript
+import { RedisEventBus } from '@supaku/agentfactory-server'
+import { setGovernorEventBus } from '@supaku/agentfactory-nextjs'
+
+const eventBus = new RedisEventBus()
+setGovernorEventBus(eventBus)
+```
+
+The governor process (running `af-governor`) consumes from the same Redis Stream and dispatches work through the shared Redis queue.
 
 ## Middleware
 

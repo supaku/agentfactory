@@ -76,6 +76,41 @@ const orchestrator = createOrchestrator({
 })
 ```
 
+## Workflow Governor
+
+The core package includes the Workflow Governor — a central lifecycle manager that observes all issues and decides what work to dispatch.
+
+```typescript
+import {
+  WorkflowGovernor,
+  EventDrivenGovernor,
+  InMemoryEventBus,
+  InMemoryEventDeduplicator,
+  type GovernorDependencies,
+} from '@supaku/agentfactory'
+
+// Poll-only mode (simple)
+const governor = new WorkflowGovernor(
+  { projects: ['MyProject'], scanIntervalMs: 60_000 },
+  myDependencies,
+)
+governor.start()
+
+// Event-driven mode (production)
+const eventGovernor = new EventDrivenGovernor(
+  {
+    projects: ['MyProject'],
+    eventBus: new InMemoryEventBus(),        // or RedisEventBus
+    deduplicator: new InMemoryEventDeduplicator(), // or RedisEventDeduplicator
+    pollIntervalMs: 300_000,                 // 5 min safety net
+  },
+  myDependencies,
+)
+await eventGovernor.start()
+```
+
+The governor evaluates each issue against status, active sessions, cooldowns, human overrides (HOLD/RESUME/PRIORITY), and workflow strategy to decide what action to take. See [Architecture docs](https://github.com/supaku/agentfactory/blob/main/docs/architecture.md#workflow-governor) for details.
+
 ## Related Packages
 
 | Package | Description |

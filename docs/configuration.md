@@ -61,6 +61,14 @@ Complete reference for all AgentFactory configuration options.
 | `AUTO_QA_EXCLUDE_LABELS` | — | Labels that exclude from auto-QA |
 | `AUTO_ACCEPTANCE_EXCLUDE_LABELS` | — | Labels that exclude from auto-acceptance |
 
+### Governor
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GOVERNOR_MODE` | `direct` | Webhook governor mode: `direct`, `event-bridge`, `governor-only` |
+| `GOVERNOR_PROJECTS` | — | Comma-separated projects to scan |
+| `GOVERNOR_POLL_INTERVAL_MS` | `300000` (5 min) | Poll sweep interval for event-driven mode safety net |
+
 ## Route Factory Configuration
 
 ### `createAllRoutes(config)`
@@ -98,6 +106,12 @@ const routes = createAllRoutes({
   // Optional: build context for parent QA/acceptance coordination
   buildParentQAContext: (identifier, subIssues) => string,
   buildParentAcceptanceContext: (identifier, subIssues) => string,
+
+  // Optional: governor integration mode
+  // 'direct' (default) — webhooks dispatch work directly
+  // 'event-bridge' — dual-write: dispatch AND publish governor events
+  // 'governor-only' — only publish events, governor handles all dispatch
+  governorMode: 'event-bridge',
 
   // Optional: OAuth configuration
   oauth: {

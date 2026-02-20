@@ -23,6 +23,10 @@ Requires a Redis instance (works with Redis, Upstash, Vercel KV, or any Redis-co
 | **TokenStorage** | OAuth token storage and retrieval |
 | **RateLimit** | Token bucket rate limiting |
 | **WorkerAuth** | API key verification for workers |
+| **RedisEventBus** | Governor event bus backed by Redis Streams (consumer groups, MAXLEN trim) |
+| **RedisEventDeduplicator** | Governor event dedup using SETNX with TTL |
+| **RedisOverrideStorage** | Governor human override state (HOLD, PRIORITY) |
+| **RedisProcessingStateStorage** | Top-of-funnel phase tracking (research, backlog-creation) |
 
 ## Quick Start
 

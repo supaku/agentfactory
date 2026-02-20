@@ -24,6 +24,15 @@ af-orchestrator --single PROJ-123
 # Dry run — preview what would be processed
 af-orchestrator --project MyProject --dry-run
 
+# Start the Workflow Governor (event-driven + poll sweep)
+af-governor --project MyProject --project OtherProject
+
+# Governor: single scan and exit (for cron jobs)
+af-governor --project MyProject --once
+
+# Governor: poll-only mode (no event bus)
+af-governor --project MyProject --mode poll-only
+
 # Start a remote worker
 af-worker --api-url https://your-app.vercel.app --api-key your-key
 
@@ -40,6 +49,30 @@ af-queue-admin drain
 # Analyze agent session logs
 af-analyze-logs --follow
 ```
+
+### Governor
+
+The Workflow Governor scans projects and decides what work to dispatch based on issue status, active sessions, cooldowns, and human overrides.
+
+**Modes:**
+- `event-driven` (default) — Listens to a GovernorEventBus for real-time webhook events, with a periodic poll sweep as safety net
+- `poll-only` — Periodic scan loop only
+
+**Options:**
+```
+--project <name>            Project to scan (repeatable)
+--scan-interval <ms>        Poll interval (default: 60000 for poll-only, 300000 for event-driven)
+--max-dispatches <n>        Max concurrent dispatches per scan (default: 3)
+--mode <mode>               poll-only or event-driven (default: event-driven)
+--once                      Single scan pass and exit
+--no-auto-research          Disable Icebox → research
+--no-auto-backlog-creation  Disable Icebox → backlog-creation
+--no-auto-development       Disable Backlog → development
+--no-auto-qa                Disable Finished → QA
+--no-auto-acceptance        Disable Delivered → acceptance
+```
+
+When `LINEAR_API_KEY` and `REDIS_URL` are set, the governor uses real dependencies (Linear SDK + Redis). Without them, it falls back to stub dependencies for testing.
 
 ## Programmatic Usage
 
@@ -72,10 +105,10 @@ Each function accepts a config object and returns a Promise — use them to buil
 
 | Variable | Used By | Description |
 |----------|---------|-------------|
-| `LINEAR_API_KEY` | orchestrator | Linear API key |
+| `LINEAR_API_KEY` | orchestrator, governor | Linear API key |
+| `REDIS_URL` | governor, queue-admin | Redis connection URL |
 | `WORKER_API_URL` | worker, fleet | Webhook server URL |
 | `WORKER_API_KEY` | worker, fleet | API key for authentication |
-| `REDIS_URL` | queue-admin | Redis connection URL |
 
 ## Related Packages
 
