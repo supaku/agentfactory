@@ -6,6 +6,7 @@ import {
   setOverrideState,
   clearOverrideState,
   isHeld,
+  getOverridePriority,
   generateReviewRequest,
   generateDecompositionProposal,
   generateEscalationAlert,
@@ -110,6 +111,43 @@ describe('Override State Management', () => {
       await storage.set('issue-1', expiredState)
 
       expect(await isHeld('issue-1')).toBe(false)
+    })
+  })
+
+  describe('getOverridePriority', () => {
+    it('returns priority when PRIORITY override is active', async () => {
+      await setOverrideState('issue-1', makeDirective({ type: 'priority', priority: 'high' }))
+      expect(await getOverridePriority('issue-1')).toBe('high')
+    })
+
+    it('returns null when no override exists', async () => {
+      expect(await getOverridePriority('issue-1')).toBeNull()
+    })
+
+    it('returns null when override is non-priority type', async () => {
+      await setOverrideState('issue-1', makeDirective({ type: 'hold' }))
+      expect(await getOverridePriority('issue-1')).toBeNull()
+    })
+
+    it('returns correct level for medium priority', async () => {
+      await setOverrideState('issue-1', makeDirective({ type: 'priority', priority: 'medium' }))
+      expect(await getOverridePriority('issue-1')).toBe('medium')
+    })
+
+    it('returns correct level for low priority', async () => {
+      await setOverrideState('issue-1', makeDirective({ type: 'priority', priority: 'low' }))
+      expect(await getOverridePriority('issue-1')).toBe('low')
+    })
+
+    it('returns null for expired priority override', async () => {
+      const expiredState: OverrideState = {
+        issueId: 'issue-1',
+        directive: makeDirective({ type: 'priority', priority: 'high' }),
+        isActive: true,
+        expiresAt: Date.now() - 1000,
+      }
+      await storage.set('issue-1', expiredState)
+      expect(await getOverridePriority('issue-1')).toBeNull()
     })
   })
 
@@ -226,6 +264,17 @@ describe('Notification Generation', () => {
       })
 
       expect(notification.body).toContain('No failure details available')
+    })
+
+    it('lists PRIORITY directive in available actions', () => {
+      const notification = generateReviewRequest({
+        issueIdentifier: 'SUP-123',
+        cycleCount: 2,
+        failureSummary: 'fail',
+        strategy: 'normal',
+      })
+
+      expect(notification.body).toContain('PRIORITY: high|medium|low')
     })
 
     it('uses custom config timeout', () => {

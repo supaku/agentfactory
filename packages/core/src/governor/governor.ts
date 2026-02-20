@@ -17,6 +17,7 @@ import type {
 } from './governor-types.js'
 import { DEFAULT_GOVERNOR_CONFIG } from './governor-types.js'
 import { decideAction, type DecisionContext } from './decision-engine.js'
+import type { OverridePriority } from './override-parser.js'
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -30,6 +31,24 @@ const log = {
   error: (msg: string, data?: Record<string, unknown>) =>
     console.error(`[governor] ${msg}`, data ? JSON.stringify(data) : ''),
   debug: (_msg: string, _data?: Record<string, unknown>) => {},
+}
+
+// ---------------------------------------------------------------------------
+// Priority ordering
+// ---------------------------------------------------------------------------
+
+/** Map priority to a sort weight (lower = higher priority = dispatched first) */
+function priorityWeight(priority: OverridePriority | null): number {
+  switch (priority) {
+    case 'high':
+      return 0
+    case 'medium':
+      return 1
+    case 'low':
+      return 2
+    default:
+      return 3
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +73,8 @@ export interface GovernorDependencies {
   isParentIssue: (issueId: string) => Promise<boolean>
   /** Check if an issue has a HOLD override active */
   isHeld: (issueId: string) => Promise<boolean>
+  /** Get the PRIORITY override for an issue (high > medium > low) */
+  getOverridePriority: (issueId: string) => Promise<OverridePriority | null>
   /** Get the workflow escalation strategy for an issue */
   getWorkflowStrategy: (issueId: string) => Promise<string | undefined>
   /** Check if the research phase has been completed for an issue */
@@ -186,6 +207,11 @@ export class WorkflowGovernor {
 
   /**
    * Scan a single project and dispatch actions.
+   *
+   * Issues are evaluated in two passes:
+   * 1. Evaluate all issues to determine actions and gather priority overrides
+   * 2. Sort actionable issues by PRIORITY override (high > medium > low > none)
+   *    and dispatch up to `maxConcurrentDispatches`
    */
   private async scanProject(project: string): Promise<ScanResult> {
     const result: ScanResult = {
@@ -213,8 +239,47 @@ export class WorkflowGovernor {
       issueCount: issues.length,
     })
 
+    // Pass 1: Evaluate all issues and gather priority overrides
+    const actionable: Array<{
+      issue: GovernorIssue
+      action: GovernorAction
+      reason: string
+      priority: OverridePriority | null
+    }> = []
+
     for (const issue of issues) {
-      // Respect the per-scan dispatch limit
+      try {
+        const [decision, priority] = await Promise.all([
+          this.evaluateIssue(issue),
+          this.deps.getOverridePriority(issue.id),
+        ])
+
+        if (decision.action === 'none') {
+          result.skippedReasons.set(issue.identifier, decision.reason)
+          continue
+        }
+
+        actionable.push({
+          issue,
+          action: decision.action,
+          reason: decision.reason,
+          priority,
+        })
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        log.error('Error evaluating issue', {
+          issueIdentifier: issue.identifier,
+          error: errorMsg,
+        })
+        result.errors.push({ issueId: issue.identifier, error: errorMsg })
+      }
+    }
+
+    // Pass 2: Sort by priority override (high > medium > low > none)
+    actionable.sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority))
+
+    // Pass 3: Dispatch up to the limit
+    for (const item of actionable) {
       if (result.actionsDispatched >= this.config.maxConcurrentDispatches) {
         log.info('Dispatch limit reached', {
           project,
@@ -225,30 +290,22 @@ export class WorkflowGovernor {
       }
 
       try {
-        const decision = await this.evaluateIssue(issue)
-
-        if (decision.action === 'none') {
-          result.skippedReasons.set(issue.identifier, decision.reason)
-          continue
-        }
-
-        // Dispatch the action
-        await this.deps.dispatchWork(issue.id, decision.action)
+        await this.deps.dispatchWork(item.issue.id, item.action)
         result.actionsDispatched++
 
         log.info('Dispatched action', {
-          issueIdentifier: issue.identifier,
-          action: decision.action,
-          reason: decision.reason,
+          issueIdentifier: item.issue.identifier,
+          action: item.action,
+          reason: item.reason,
+          priority: item.priority ?? 'none',
         })
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
-        log.error('Error evaluating/dispatching issue', {
-          issueIdentifier: issue.identifier,
+        log.error('Error dispatching issue', {
+          issueIdentifier: item.issue.identifier,
           error: errorMsg,
         })
-        result.errors.push({ issueId: issue.identifier, error: errorMsg })
-        // Continue scanning — a single issue failure should not stop the scan
+        result.errors.push({ issueId: item.issue.identifier, error: errorMsg })
       }
     }
 

@@ -31,6 +31,7 @@ function makeMockDeps(overrides: Partial<GovernorDependencies> = {}): GovernorDe
     isWithinCooldown: vi.fn().mockResolvedValue(false),
     isParentIssue: vi.fn().mockResolvedValue(false),
     isHeld: vi.fn().mockResolvedValue(false),
+    getOverridePriority: vi.fn().mockResolvedValue(null),
     getWorkflowStrategy: vi.fn().mockResolvedValue(undefined),
     isResearchCompleted: vi.fn().mockResolvedValue(false),
     isBacklogCreationCompleted: vi.fn().mockResolvedValue(false),
@@ -538,5 +539,123 @@ describe('WorkflowGovernor.scanOnce — mixed statuses', () => {
     expect(results[0]!.scannedIssues).toBe(5)
     expect(results[0]!.actionsDispatched).toBe(2) // Backlog + Finished
     expect(results[0]!.skippedReasons.size).toBe(3) // Accepted + Started + Canceled
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PRIORITY override affects processing order
+// ---------------------------------------------------------------------------
+
+describe('WorkflowGovernor.scanOnce — PRIORITY override sorting', () => {
+  it('dispatches high-priority issues before low-priority ones', async () => {
+    const issues = [
+      makeIssue({ id: 'low-1', identifier: 'SUP-1', status: 'Backlog' }),
+      makeIssue({ id: 'high-1', identifier: 'SUP-2', status: 'Backlog' }),
+      makeIssue({ id: 'med-1', identifier: 'SUP-3', status: 'Backlog' }),
+    ]
+
+    const getOverridePriority = vi.fn().mockImplementation((issueId: string) => {
+      if (issueId === 'high-1') return Promise.resolve('high')
+      if (issueId === 'med-1') return Promise.resolve('medium')
+      if (issueId === 'low-1') return Promise.resolve('low')
+      return Promise.resolve(null)
+    })
+
+    const dispatchWork = vi.fn().mockResolvedValue(undefined)
+    const deps = makeMockDeps({
+      listIssues: vi.fn().mockResolvedValue(issues),
+      getOverridePriority,
+      dispatchWork,
+    })
+
+    const governor = new WorkflowGovernor(makeConfig(), deps)
+    await governor.scanOnce()
+
+    expect(dispatchWork).toHaveBeenCalledTimes(3)
+    // high-1 dispatched first, then med-1, then low-1
+    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
+    expect(dispatchWork.mock.calls[1]![0]).toBe('med-1')
+    expect(dispatchWork.mock.calls[2]![0]).toBe('low-1')
+  })
+
+  it('dispatches priority-overridden issues before non-overridden ones', async () => {
+    const issues = [
+      makeIssue({ id: 'none-1', identifier: 'SUP-1', status: 'Backlog' }),
+      makeIssue({ id: 'none-2', identifier: 'SUP-2', status: 'Backlog' }),
+      makeIssue({ id: 'high-1', identifier: 'SUP-3', status: 'Backlog' }),
+    ]
+
+    const getOverridePriority = vi.fn().mockImplementation((issueId: string) => {
+      if (issueId === 'high-1') return Promise.resolve('high')
+      return Promise.resolve(null)
+    })
+
+    const dispatchWork = vi.fn().mockResolvedValue(undefined)
+    const deps = makeMockDeps({
+      listIssues: vi.fn().mockResolvedValue(issues),
+      getOverridePriority,
+      dispatchWork,
+    })
+
+    const governor = new WorkflowGovernor(makeConfig(), deps)
+    await governor.scanOnce()
+
+    expect(dispatchWork).toHaveBeenCalledTimes(3)
+    // high-1 dispatched first, regardless of list order
+    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
+  })
+
+  it('priority sorting affects which issues get dispatched under the limit', async () => {
+    const issues = [
+      makeIssue({ id: 'none-1', identifier: 'SUP-1', status: 'Backlog' }),
+      makeIssue({ id: 'none-2', identifier: 'SUP-2', status: 'Backlog' }),
+      makeIssue({ id: 'high-1', identifier: 'SUP-3', status: 'Backlog' }),
+    ]
+
+    const getOverridePriority = vi.fn().mockImplementation((issueId: string) => {
+      if (issueId === 'high-1') return Promise.resolve('high')
+      return Promise.resolve(null)
+    })
+
+    const dispatchWork = vi.fn().mockResolvedValue(undefined)
+    const deps = makeMockDeps({
+      listIssues: vi.fn().mockResolvedValue(issues),
+      getOverridePriority,
+      dispatchWork,
+    })
+
+    // Only dispatch 1 — the high-priority issue should win
+    const governor = new WorkflowGovernor(
+      makeConfig({ maxConcurrentDispatches: 1 }),
+      deps,
+    )
+    await governor.scanOnce()
+
+    expect(dispatchWork).toHaveBeenCalledTimes(1)
+    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
+  })
+
+  it('issues with equal priority maintain stable order', async () => {
+    const issues = [
+      makeIssue({ id: 'a', identifier: 'SUP-1', status: 'Backlog' }),
+      makeIssue({ id: 'b', identifier: 'SUP-2', status: 'Backlog' }),
+      makeIssue({ id: 'c', identifier: 'SUP-3', status: 'Backlog' }),
+    ]
+
+    // All have no priority override
+    const dispatchWork = vi.fn().mockResolvedValue(undefined)
+    const deps = makeMockDeps({
+      listIssues: vi.fn().mockResolvedValue(issues),
+      dispatchWork,
+    })
+
+    const governor = new WorkflowGovernor(makeConfig(), deps)
+    await governor.scanOnce()
+
+    expect(dispatchWork).toHaveBeenCalledTimes(3)
+    // Original order preserved for equal priority
+    expect(dispatchWork.mock.calls[0]![0]).toBe('a')
+    expect(dispatchWork.mock.calls[1]![0]).toBe('b')
+    expect(dispatchWork.mock.calls[2]![0]).toBe('c')
   })
 })

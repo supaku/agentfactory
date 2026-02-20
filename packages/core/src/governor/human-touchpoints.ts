@@ -6,7 +6,7 @@
  * packages/server (Redis) directly.
  */
 
-import type { OverrideDirective } from './override-parser.js'
+import type { OverrideDirective, OverridePriority } from './override-parser.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[touchpoints] ${msg}`, data ? JSON.stringify(data) : ''),
@@ -178,6 +178,18 @@ export async function isHeld(issueId: string): Promise<boolean> {
   return state !== null && state.isActive && state.directive.type === 'hold'
 }
 
+/**
+ * Get the PRIORITY override for an issue, if one is active.
+ * Returns the priority level ('high' | 'medium' | 'low') or null if no priority override.
+ */
+export async function getOverridePriority(issueId: string): Promise<OverridePriority | null> {
+  const state = await getOverrideState(issueId)
+  if (state && state.isActive && state.directive.type === 'priority' && state.directive.priority) {
+    return state.directive.priority
+  }
+  return null
+}
+
 // ============================================
 // Notification Generation
 // ============================================
@@ -224,6 +236,7 @@ Reply with one of the following directives:
 - **SKIP QA** — Skip QA and proceed to acceptance
 - **DECOMPOSE** — Trigger task decomposition
 - **REASSIGN** — Stop agent work, assign to a human
+- **PRIORITY: high|medium|low** — Adjust scheduling priority
 - **RESUME** — Continue with current strategy
 
 _This request will auto-proceed in ${Math.round(config.reviewRequestTimeoutMs / (60 * 60 * 1000))} hour(s) if no response is received._`
@@ -268,6 +281,7 @@ Reply with a directive to override:
 - **HOLD** — Pause and review manually
 - **SKIP QA** — Skip QA and proceed to acceptance
 - **REASSIGN** — Stop agent work entirely
+- **PRIORITY: high|medium|low** — Adjust scheduling priority
 - **RESUME** — Proceed with decomposition (default)
 
 _Decomposition will auto-proceed in ${Math.round(config.decompositionProposalTimeoutMs / (60 * 60 * 1000))} hour(s) if no response is received._`
@@ -315,6 +329,7 @@ This issue has exhausted automated resolution strategies. A human must review an
 - **HOLD** — Keep paused (current state)
 - **DECOMPOSE** — Request agent decomposition
 - **REASSIGN** — Assign to a specific person
+- **PRIORITY: high|medium|low** — Adjust scheduling priority
 - **RESUME** — Retry with normal strategy (resets cycle count)
 
 _This issue will remain paused until a human responds._`
