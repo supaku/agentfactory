@@ -85,6 +85,12 @@ export interface OrchestratorConfig {
    * Different work types (e.g., QA, development) can have different thresholds.
    */
   workTypeTimeouts?: Partial<Record<AgentWorkType, WorkTypeTimeoutConfig>>
+  /**
+   * Path to a directory containing custom workflow template YAML files.
+   * Templates in this directory override built-in defaults per work type.
+   * Supports .agentfactory/templates/ convention.
+   */
+  templateDir?: string
 }
 
 export interface OrchestratorIssue {

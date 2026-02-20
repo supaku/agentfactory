@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: qa
+  description: Validate implementation against acceptance criteria
+  workType: qa
+
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  QA {{identifier}}.
+  Validate the implementation against acceptance criteria.
+  Run tests, check for regressions, verify the PR meets requirements.
+  {{> partials/work-result-marker}}
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

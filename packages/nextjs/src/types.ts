@@ -54,6 +54,11 @@ export interface WebhookConfig extends RouteConfig {
   buildParentAcceptanceContext?: (identifier: string, subIssues: SubIssueStatus[]) => string
   /** Linear project names this server handles. Empty/undefined = all projects. */
   projects?: string[]
+  /**
+   * Path to a directory containing custom workflow template YAML files.
+   * Templates in this directory override built-in defaults per work type.
+   */
+  templateDir?: string
 }
 
 /**

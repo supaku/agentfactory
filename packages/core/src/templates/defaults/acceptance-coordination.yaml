@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: acceptance-coordination
+  description: Coordinate acceptance across sub-issues for parent issues
+  workType: acceptance-coordination
+
+tools:
+  allow:
+    - shell: "gh pr *"
+    - shell: "git push *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Coordinate acceptance across sub-issues for parent issue {{identifier}}.
+
+  WORKFLOW:
+  1. Verify all sub-issues are in Delivered status: pnpm af-linear list-sub-issue-statuses {{identifier}}
+  2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
+  3. Validate the PR:
+     - CI checks are passing
+     - No merge conflicts
+     - Preview deployment succeeded (if applicable)
+  4. Merge the PR: gh pr merge <PR_NUMBER> --squash
+  5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+  6. Bulk-update all sub-issues to Accepted: for each sub-issue, run pnpm af-linear update-sub-issue <id> --state Accepted
+  7. Mark parent as complete (transitions to Accepted)
+
+  IMPORTANT CONSTRAINTS:
+  - ALL sub-issues must be in Delivered status before proceeding
+  - The PR must pass CI and have no conflicts
+  - If merge fails, report the error and do not mark as Accepted
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

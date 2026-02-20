@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: qa-coordination
+  description: Coordinate QA across sub-issues for parent issues
+  workType: qa-coordination
+
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Coordinate QA across sub-issues for parent issue {{identifier}}.
+
+  WORKFLOW:
+  1. Fetch sub-issues: pnpm af-linear list-sub-issues {{identifier}}
+  2. Create Claude Code Tasks for each sub-issue's QA verification
+  3. Spawn qa-reviewer sub-agents in parallel — no dependency graph needed, all sub-issues are already Finished
+  4. Each sub-agent: reads sub-issue requirements, runs scoped tests, validates implementation, emits pass/fail
+  5. Collect results — ALL sub-issues must pass QA for the parent to pass
+
+  RESULT HANDLING:
+  - If ALL pass: Mark parent as complete (transitions to Delivered). Update each sub-issue to Delivered.
+  - If ANY fail: Post rollup comment listing per-sub-issue results. Parent stays in Finished status.
+
+  IMPORTANT CONSTRAINTS:
+  - This is READ-ONLY validation — do NOT create PRs or make git commits
+  - The PR already exists from the development coordination phase
+  - Run pnpm test, pnpm typecheck, and pnpm build as part of validation
+  - Verify each sub-issue's acceptance criteria against the actual code changes
+  {{> partials/shared-worktree-safety}}
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

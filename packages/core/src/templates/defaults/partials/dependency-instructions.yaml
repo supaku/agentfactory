@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: dependency-instructions
+  description: Instructions for handling dependencies in agent worktrees
+content: |
+
+  DEPENDENCY INSTALLATION:
+  Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+  If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
+  (never with run_in_background). Never use sleep or polling loops to wait for commands.

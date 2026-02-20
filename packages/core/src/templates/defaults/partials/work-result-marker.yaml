@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: work-result-marker
+  description: Structured result marker instruction for QA/acceptance work types
+content: |
+
+  STRUCTURED RESULT MARKER (REQUIRED):
+  You MUST include a structured result marker in your final output message.
+  The orchestrator parses your output to determine whether to promote or reject the issue.
+  Without this marker, the issue status will NOT be updated automatically.
+  - On pass: Include <!-- WORK_RESULT:passed --> in your final message
+  - On fail: Include <!-- WORK_RESULT:failed --> in your final message

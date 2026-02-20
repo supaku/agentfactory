@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: pr-selection
+  description: Guidance for selecting the correct PR when multiple PRs exist
+content: |
+
+  PR Selection (Multi-PR Handling):
+  Issues may have multiple PRs. Select the correct one:
+  1. Check linked PRs in the issue attachments/links for GitHub PR URLs
+  2. Filter by state — prefer OPEN over MERGED over CLOSED: gh pr view NNN --json state
+  3. If multiple OPEN PRs, pick the most recently created one
+  4. Fallback search by branch: gh pr list --head "$(git branch --show-current)" --state open
+  5. Last resort search by issue ID: gh pr list --state open --search "[issue-id]"
+  6. If no PR found, emit WORK_RESULT:failed with explanation

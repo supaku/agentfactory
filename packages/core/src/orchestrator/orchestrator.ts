@@ -50,6 +50,8 @@ import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
+import { TemplateRegistry, ClaudeToolPermissionAdapter } from '../templates/index.js'
+import type { TemplateContext } from '../templates/index.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -69,7 +71,7 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
 // Default max session timeout: unlimited (undefined)
 const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -693,7 +695,7 @@ export function getWorktreeIdentifier(
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir'>> & {
     project?: string
     streamConfig: OrchestratorStreamConfig
     apiActivityConfig?: OrchestratorConfig['apiActivityConfig']
@@ -719,6 +721,8 @@ export class AgentOrchestrator {
   private readonly progressLoggers: Map<string, ProgressLogger> = new Map()
   // Session loggers per agent for verbose analysis logging
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
+  // Template registry for configurable workflow prompts
+  private readonly templateRegistry: TemplateRegistry | null
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -754,6 +758,28 @@ export class AgentOrchestrator {
     // Initialize agent provider — defaults to Claude, configurable via env
     const providerName = resolveProviderName({ project: config.project })
     this.provider = config.provider ?? createProvider(providerName)
+
+    // Initialize template registry for configurable workflow prompts
+    try {
+      const templateDirs: string[] = []
+      if (config.templateDir) {
+        templateDirs.push(config.templateDir)
+      }
+      // Auto-detect .agentfactory/templates/ in working directory
+      const projectTemplateDir = resolve(process.cwd(), '.agentfactory', 'templates')
+      if (existsSync(projectTemplateDir) && !templateDirs.includes(projectTemplateDir)) {
+        templateDirs.push(projectTemplateDir)
+      }
+      this.templateRegistry = TemplateRegistry.create({
+        templateDirs,
+        useBuiltinDefaults: true,
+        frontend: 'linear',
+      })
+      this.templateRegistry.setToolPermissionAdapter(new ClaudeToolPermissionAdapter())
+    } catch {
+      // If template loading fails, fall back to hardcoded prompts
+      this.templateRegistry = null
+    }
   }
 
   /**
@@ -1402,7 +1428,17 @@ export class AgentOrchestrator {
     } = options
 
     // Generate prompt based on work type, or use custom prompt if provided
-    const prompt = customPrompt ?? generatePromptForWorkType(identifier, workType)
+    // Try template registry first, fall back to hardcoded prompts
+    let prompt: string
+    if (customPrompt) {
+      prompt = customPrompt
+    } else if (this.templateRegistry?.hasTemplate(workType)) {
+      const context: TemplateContext = { identifier }
+      const rendered = this.templateRegistry.renderPrompt(workType, context)
+      prompt = rendered ?? generatePromptForWorkType(identifier, workType)
+    } else {
+      prompt = generatePromptForWorkType(identifier, workType)
+    }
 
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
