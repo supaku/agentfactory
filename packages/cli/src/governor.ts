@@ -35,9 +35,9 @@ import {
   type GovernorRunnerConfig,
 } from './lib/governor-runner.js'
 import { createRealDependencies } from './lib/governor-dependencies.js'
-import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient, type LinearAgentClient } from '@supaku/agentfactory-linear'
 import { initTouchpointStorage } from '@supaku/agentfactory'
-import { RedisOverrideStorage } from '@supaku/agentfactory-server'
+import { RedisOverrideStorage, listStoredWorkspaces, getAccessToken } from '@supaku/agentfactory-server'
 import type { GovernorDependencies, GovernorIssue, GovernorAction, ScanResult } from '@supaku/agentfactory'
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,23 @@ function createStubDependencies(): GovernorDependencies {
       log.warn('dispatchWork stub called', { issueId: _issueId, action: _action })
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// Default prompt generator (used when no external generator is provided)
+// ---------------------------------------------------------------------------
+
+function defaultGeneratePrompt(identifier: string, workType: string): string {
+  const prompts: Record<string, string> = {
+    research: `Research and analyze ${identifier}.`,
+    'backlog-creation': `Create backlog issues for ${identifier}.`,
+    development: `Start work on ${identifier}.`,
+    qa: `QA ${identifier}.`,
+    acceptance: `Process acceptance for ${identifier}.`,
+    refinement: `Refine ${identifier} based on feedback.`,
+    coordination: `Coordinate sub-issue execution for ${identifier}.`,
+  }
+  return prompts[workType] || `Process ${workType} for ${identifier}.`
 }
 
 // ---------------------------------------------------------------------------
@@ -116,15 +133,43 @@ async function main(): Promise<void> {
 
     const linearClient = createLinearAgentClient({ apiKey: linearApiKey })
 
+    // Resolve OAuth token from Redis for Agent API operations
+    let oauthClient: LinearAgentClient | undefined
+    let organizationId: string | undefined
+
     // Initialize touchpoint storage (for isHeld / getOverridePriority) when Redis is available
     if (redisUrl) {
       console.log('REDIS_URL detected — initializing Redis-backed touchpoint storage')
       initTouchpointStorage(new RedisOverrideStorage())
+
+      // Resolve OAuth token for Linear Agent API (createAgentSessionOnIssue)
+      try {
+        const workspaces = await listStoredWorkspaces()
+        if (workspaces.length > 0) {
+          organizationId = workspaces[0]  // Use first workspace (single-tenant)
+          const accessToken = await getAccessToken(organizationId)
+          if (accessToken) {
+            oauthClient = createLinearAgentClient({ apiKey: accessToken })
+            console.log(`OAuth token resolved for workspace ${organizationId}`)
+          } else {
+            console.warn('Warning: No OAuth access token found — agent sessions will use personal API key')
+          }
+        } else {
+          console.warn('Warning: No stored workspaces found — agent sessions will use personal API key')
+        }
+      } catch (err) {
+        console.warn('Warning: Failed to resolve OAuth token —', err instanceof Error ? err.message : err)
+      }
     } else {
       console.warn('Warning: REDIS_URL not set — touchpoint overrides (HOLD, PRIORITY) will not persist')
     }
 
-    dependencies = createRealDependencies({ linearClient })
+    dependencies = createRealDependencies({
+      linearClient,
+      oauthClient,
+      organizationId,
+      generatePrompt: defaultGeneratePrompt,
+    })
   } else {
     console.warn('Warning: LINEAR_API_KEY not set — using stub dependencies (no real work will be dispatched)')
     dependencies = createStubDependencies()

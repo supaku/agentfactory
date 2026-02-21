@@ -44,7 +44,10 @@ const log = {
 // ---------------------------------------------------------------------------
 
 export interface RealDependenciesConfig {
-  linearClient: LinearAgentClient
+  linearClient: LinearAgentClient          // For read operations (listIssues, isParentIssue, etc.)
+  oauthClient?: LinearAgentClient          // For Agent API (createAgentSessionOnIssue) - resolved from Redis
+  organizationId?: string                  // Workspace ID for session state storage
+  generatePrompt?: (identifier: string, workType: string, mentionContext?: string) => string
 }
 
 // ---------------------------------------------------------------------------
@@ -275,9 +278,11 @@ export function createRealDependencies(
         }
 
         // Create a Linear Agent Session on the issue so the UI shows activity
+        // Use OAuth client (Agent API) if available, fall back to personal API key
+        const sessionClient = config.oauthClient ?? config.linearClient
         let sessionId: string | undefined
         try {
-          const sessionResult = await config.linearClient.createAgentSessionOnIssue({
+          const sessionResult = await sessionClient.createAgentSessionOnIssue({
             issueId,
           })
           sessionId = sessionResult.sessionId
@@ -290,6 +295,9 @@ export function createRealDependencies(
 
         const finalSessionId = sessionId ?? `governor-${issueId}-${Date.now()}`
         const now = Date.now()
+
+        // Generate prompt for the work type
+        const prompt = config.generatePrompt?.(issueIdentifier, workType)
 
         // Register a pending session FIRST so hasActiveSession() returns true
         // immediately, preventing re-dispatch on subsequent poll sweeps.
@@ -304,6 +312,8 @@ export function createRealDependencies(
           priority: 3,
           workType: workType as QueuedWork['workType'],
           projectName,
+          organizationId: config.organizationId,
+          promptContext: prompt,
         })
 
         // Queue the work item for a worker to pick up
@@ -315,6 +325,7 @@ export function createRealDependencies(
           queuedAt: now,
           workType: workType as QueuedWork['workType'],
           projectName,
+          prompt,
         }
 
         const queued = await queueWork(queuedWork)

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.18
+
+### Fixes
+
+- **Governor uses OAuth tokens from Redis for Linear Agent API** — The governor now resolves OAuth access tokens from Redis at startup and uses them for `createAgentSessionOnIssue`, fixing "Failed to post to Linear" errors caused by using a personal API key for the Agent API. Falls back to personal API key when no OAuth token is available.
+- **Governor stores `organizationId` on session state** — Workers can now resolve the correct OAuth token for progress/activity posting since the workspace ID is persisted alongside the session.
+- **Governor includes `prompt` in queued work items** — Agents receive work-type-specific prompts instead of generic fallbacks, improving agent behavior on pickup.
+
+### Chores
+
+- Aligned all package versions to 0.7.18 across the monorepo.
+
 ## v0.7.17
 
 ### Fixes
