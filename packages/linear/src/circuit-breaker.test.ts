@@ -85,13 +85,13 @@ describe('CircuitBreaker', () => {
     expect(cb.state).toBe('open')
   })
 
-  it('ignores non-auth status codes for failure counting', () => {
+  it('always counts failures regardless of status code (isAuthError already vetted)', () => {
     const cb = new CircuitBreaker({ failureThreshold: 2 })
 
-    cb.recordAuthFailure(500) // not in authErrorCodes
-    cb.recordAuthFailure(502)
-    expect(cb.state).toBe('closed')
-    expect(cb.getStatus().consecutiveFailures).toBe(0)
+    cb.recordAuthFailure(200) // e.g., GraphQL 200 with auth error in body
+    expect(cb.getStatus().consecutiveFailures).toBe(1)
+    cb.recordAuthFailure() // no status code at all
+    expect(cb.state).toBe('open')
   })
 
   it('resets failure count on success', () => {

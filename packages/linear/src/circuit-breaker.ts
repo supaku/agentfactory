@@ -83,14 +83,10 @@ export class CircuitBreaker implements CircuitBreakerStrategy {
 
   /**
    * Record an auth failure. May trip the circuit to open.
+   * Called after isAuthError() returns true, so the error is already vetted.
    */
-  recordAuthFailure(statusCode: number): void {
+  recordAuthFailure(_statusCode?: number): void {
     this.probeInFlight = false
-
-    if (!this.config.authErrorCodes.includes(statusCode)) {
-      return
-    }
-
     this.consecutiveFailures++
 
     if (this._state === 'half-open') {

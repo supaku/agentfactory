@@ -211,7 +211,7 @@ export interface RateLimiterStrategy {
 export interface CircuitBreakerStrategy {
   canProceed(): boolean | Promise<boolean>
   recordSuccess(): void | Promise<void>
-  recordAuthFailure(statusCode: number): void | Promise<void>
+  recordAuthFailure(statusCode?: number): void | Promise<void>
   isAuthError(error: unknown): boolean
   reset(): void | Promise<void>
 }

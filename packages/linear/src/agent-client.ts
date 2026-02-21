@@ -100,8 +100,9 @@ export class LinearAgentClient {
           if (this.circuitBreaker.isAuthError(error)) {
             const statusCode = extractAuthStatusCode(error)
             await this.circuitBreaker.recordAuthFailure(statusCode)
+            const msg = error instanceof Error ? error.message : String(error)
             console.warn(
-              `[LinearAgentClient] Auth error detected (status ${statusCode}), circuit breaker notified`
+              `[LinearAgentClient] Auth error detected (status ${statusCode}), circuit breaker notified: ${msg}`
             )
           }
           throw error

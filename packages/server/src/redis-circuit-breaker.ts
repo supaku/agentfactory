@@ -203,11 +203,7 @@ export class RedisCircuitBreaker implements CircuitBreakerStrategy {
   /**
    * Record an auth failure. May trip the circuit to open.
    */
-  async recordAuthFailure(statusCode: number): Promise<void> {
-    if (!this.config.authErrorCodes.includes(statusCode)) {
-      return
-    }
-
+  async recordAuthFailure(_statusCode?: number): Promise<void> {
     try {
       const redis = getRedisClient()
       const result = await redis.eval(
@@ -227,7 +223,6 @@ export class RedisCircuitBreaker implements CircuitBreakerStrategy {
       if (result === 'open') {
         log.warn('Circuit breaker tripped to OPEN', {
           workspaceId: this.config.workspaceId,
-          statusCode,
         })
       }
     } catch (err) {
