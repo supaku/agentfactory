@@ -36,7 +36,7 @@ const isAutonomous = !!process.env.LINEAR_SESSION_ID
 4. **Status Management**:
    - Single issue: Source issue moves from **Icebox** -> **Backlog**
    - Multiple independent issues: New issues created in **Backlog**, source stays in **Icebox**
-   - Sub-issues: Source becomes parent in **Backlog**, sub-issues created in **Backlog** with `--parentId`
+   - Sub-issues: Source stays in **Icebox** as parent, sub-issues created in **Icebox** with `--parentId`. The user promotes the parent to Backlog when ready (sub-issues follow in Linear).
 5. **Output**: Post summary comment explaining what was done
 
 ### Autonomous Workflow
@@ -107,17 +107,16 @@ You may now close or archive this Icebox issue."
 
 # 4c. SUB-ISSUES (COORDINATION-READY) - Create children of source
 # When work is a single concern with sequential/parallel phases:
-# First, move the source issue to Backlog (it becomes the parent)
-pnpm af-linear update-issue [source-issue-id] --state "Backlog"
+# Source stays in Icebox as parent. User promotes to Backlog when ready.
 
-# Create sub-issues as children using --parentId
+# Create sub-issues as children using --parentId (in Icebox to match parent)
 pnpm af-linear create-issue \
   --title "[Type]: [step description]" \
   --description "[generated description]" \
   --team "[TeamName]" \
   --project "[inherit from source]" \
   --labels "[Label]" \
-  --state "Backlog" \
+  --state "Icebox" \
   --parentId "[source-issue-id]"
 # Returns: { "id": "uuid", "identifier": "PROJ-XX" }
 
@@ -139,7 +138,8 @@ Created N sub-issues for coordinated execution:
 Dependency graph:
 PROJ-XX -> PROJ-YY -> PROJ-ZZ
 
-Delegate this parent issue to the agent to trigger coordinated execution."
+Promote this parent issue to Backlog when ready — sub-issues will follow.
+The governor will then trigger coordinated execution."
 ```
 
 ### Single Issue Rewrite Criteria
@@ -188,7 +188,7 @@ Rewrite the source issue in-place when ALL of these apply:
 | Input | Plan file path | Source issue description |
 | Confirmation | Ask user before creating | Create/update automatically |
 | User Interaction | Interactive Q&A | No questions allowed |
-| Source Issue | N/A | Rewrite (single), keep in Icebox (independent), or promote to parent (sub-issues) |
+| Source Issue | N/A | Rewrite (single), keep in Icebox (independent), or keep in Icebox as parent (sub-issues) |
 | Project | User specifies | Inherit from source |
 | Single Issue | Creates new issue | Rewrites source issue in-place |
 
@@ -526,15 +526,15 @@ Agent:
 4. Scope: Sub-issues (3 phases with dependencies, shared context)
 5. Decision: Create sub-issues under source (coordination-ready)
 
-Moving PROJ-60 to Backlog (becomes parent).
-Creating sub-issues with --parentId PROJ-60:
+PROJ-60 stays in Icebox as parent.
+Creating sub-issues in Icebox with --parentId PROJ-60:
 - PROJ-61: "Feature: Add user preferences schema migration" (unblocked)
 - PROJ-62: "Feature: Add preferences API endpoints" (blocked by PROJ-61)
 - PROJ-63: "Feature: Add preferences UI settings page" (blocked by PROJ-61, PROJ-62)
 
 Posted comment on PROJ-60:
-"Created 3 sub-issues for coordinated execution. Delegate this parent
- issue to the agent to trigger the coordinator."
+"Created 3 sub-issues for coordinated execution. Promote this parent
+ issue to Backlog when ready — sub-issues will follow."
 ```
 
 ### Autonomous Mode - Multiple Independent Issues

@@ -14,10 +14,10 @@ tools:
 prompt: |
   Create backlog issues from the researched story {{identifier}}.
   Read the issue description, identify distinct work items, classify each as bug/feature/chore,
-  and create appropriately scoped Linear issues in Backlog status.
+  and create appropriately scoped Linear issues.
   Choose the correct issue structure based on the work:
-  - Sub-issues (--parentId): When work is a single concern with sequential/parallel phases sharing context and dependencies. Move source to Backlog as parent. Add blocking relations (--type blocks) between sub-issues to define execution order for the coordinator.
-  - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context. Source stays in Icebox.
+  - Sub-issues (--parentId): When work is a single concern with sequential/parallel phases sharing context and dependencies. Create sub-issues in Icebox (--state "Icebox") so they stay grouped with the parent. The user will promote the parent to Backlog when ready, and sub-issues follow. Add blocking relations (--type blocks) between sub-issues to define execution order for the coordinator.
+  - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context. Create in Backlog status (--state "Backlog"). Source stays in Icebox.
   - Single issue rewrite: When scope is atomic (single concern, ≤3 files, no phases). Rewrite source in-place and move to Backlog.
   IMPORTANT: When creating multiple issues (sub-issues or independent), always add "related" links between them AND blocking relations where one step depends on another. This informs sub-agents and the coordinator of execution order.
   Do NOT wait for user approval - create issues automatically.{{> partials/cli-instructions}}

@@ -173,16 +173,27 @@ function decideIcebox(ctx: DecisionContext): DecisionResult {
 /**
  * Handle Backlog issues — trigger development if enabled.
  * Parent issues use the coordination template.
+ * Sub-issues are skipped — only top-level/parent issues are dispatched directly.
+ * The coordinator handles sub-issue lifecycle once the parent is being worked.
  */
 function decideBacklog(ctx: DecisionContext): DecisionResult {
   const { issue, config } = ctx
+
+  // Sub-issues should not be dispatched directly — the coordinator manages them
+  // when the parent issue is picked up. This prevents invisible backlog sprawl
+  // when sub-issues are in Backlog but their parent is still in Icebox.
+  if (issue.parentId !== undefined) {
+    return {
+      action: 'none',
+      reason: `Sub-issue ${issue.identifier} skipped — only parent issues are dispatched directly`,
+    }
+  }
 
   if (!config.enableAutoDevelopment) {
     return { action: 'none', reason: `Auto-development is disabled for ${issue.identifier}` }
   }
 
-  // Both parent and non-parent issues trigger development.
-  // The dispatch layer selects the coordination template for parents.
+  // Parent issues use the coordination template for sub-issue orchestration.
   if (ctx.isParentIssue) {
     return {
       action: 'trigger-development',

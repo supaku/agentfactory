@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.17
+
+### Fixes
+
+- **Governor skips sub-issues in Backlog** — The decision engine now checks `parentId` and skips sub-issues, dispatching only top-level and parent issues. This prevents invisible backlog sprawl when sub-issues are in Backlog but their parent is still in Icebox.
+- **Backlog-writer creates sub-issues in Icebox** — Sub-issues are now created with `--state "Icebox"` to match their parent. The user promotes the parent to Backlog when ready and sub-issues follow via Linear's built-in behavior. Independent issues still default to Backlog.
+
+### Tests
+
+- Added decision engine tests for sub-issue skip behavior and precedence over `enableAutoDevelopment`.
+
+### Chores
+
+- Aligned all package versions to 0.7.17 across the monorepo.
+
 ## v0.7.16
 
 ### Fixes

@@ -291,6 +291,30 @@ describe('decideAction — Backlog', () => {
     expect(result.reason).toContain('coordination')
   })
 
+  it('skips sub-issues in Backlog (only parent issues dispatched directly)', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Backlog', parentId: 'parent-issue-id' }),
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('Sub-issue')
+    expect(result.reason).toContain('only parent issues are dispatched directly')
+  })
+
+  it('skips sub-issues before checking enableAutoDevelopment', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Backlog', parentId: 'parent-issue-id' }),
+      config: {
+        ...DEFAULT_GOVERNOR_CONFIG,
+        projects: ['TestProject'],
+        enableAutoDevelopment: false,
+      },
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('Sub-issue')
+  })
+
   it('returns none when auto-development is disabled', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Backlog' }),
