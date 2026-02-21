@@ -187,6 +187,51 @@ export interface AgentSignals {
   [key: string]: unknown
 }
 
+// ============================================================================
+// RATE LIMITER & CIRCUIT BREAKER STRATEGY INTERFACES
+// ============================================================================
+
+/**
+ * Pluggable rate limiter strategy.
+ *
+ * The default in-memory TokenBucket implements this. Consumers can provide
+ * a Redis-backed implementation for shared rate limiting across processes.
+ */
+export interface RateLimiterStrategy {
+  acquire(): Promise<void>
+  penalize(seconds: number): void | Promise<void>
+}
+
+/**
+ * Pluggable circuit breaker strategy.
+ *
+ * The default in-memory CircuitBreaker implements this. Consumers can provide
+ * a Redis-backed implementation for shared circuit state across processes.
+ */
+export interface CircuitBreakerStrategy {
+  canProceed(): boolean | Promise<boolean>
+  recordSuccess(): void | Promise<void>
+  recordAuthFailure(statusCode: number): void | Promise<void>
+  isAuthError(error: unknown): boolean
+  reset(): void | Promise<void>
+}
+
+/**
+ * Configuration for the circuit breaker
+ */
+export interface CircuitBreakerConfig {
+  /** Consecutive auth failures before opening (default: 2) */
+  failureThreshold: number
+  /** Milliseconds before half-open probe (default: 60_000) */
+  resetTimeoutMs: number
+  /** Maximum reset timeout after exponential backoff (default: 300_000) */
+  maxResetTimeoutMs: number
+  /** Backoff multiplier for reset timeout after probe failure (default: 2) */
+  backoffMultiplier: number
+  /** HTTP status codes that count as auth failures (default: [400, 401, 403]) */
+  authErrorCodes: number[]
+}
+
 /**
  * Configuration for the Linear Agent Client
  */
@@ -196,6 +241,18 @@ export interface LinearAgentClientConfig {
   retry?: RetryConfig
   /** Token bucket rate limiter configuration. Applied to all API calls. */
   rateLimit?: Partial<import('./rate-limiter.js').TokenBucketConfig>
+  /** Circuit breaker configuration. */
+  circuitBreaker?: Partial<CircuitBreakerConfig>
+  /**
+   * Injectable rate limiter strategy (e.g., Redis-backed).
+   * When provided, replaces the default in-memory TokenBucket.
+   */
+  rateLimiterStrategy?: RateLimiterStrategy
+  /**
+   * Injectable circuit breaker strategy (e.g., Redis-backed).
+   * When provided, replaces the default in-memory CircuitBreaker.
+   */
+  circuitBreakerStrategy?: CircuitBreakerStrategy
 }
 
 /**

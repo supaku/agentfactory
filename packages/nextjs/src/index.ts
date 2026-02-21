@@ -98,3 +98,7 @@ export { createCleanupHandler } from './handlers/cleanup.js'
 
 // Config handler
 export { createConfigHandler } from './handlers/config.js'
+
+// Issue tracker proxy handler (centralized API gateway for agents/governors)
+export { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
+export type { ProxyHandlerConfig } from './handlers/issue-tracker-proxy/types.js'

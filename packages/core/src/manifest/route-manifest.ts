@@ -145,6 +145,12 @@ export const ROUTE_MANIFEST: RouteManifest = {
       path: 'src/app/api/cleanup/route.ts',
       methods: { POST: 'routes.cleanup.POST', GET: 'routes.cleanup.GET' },
     },
+
+    // Issue tracker proxy (centralized API gateway for agents/governors)
+    {
+      path: 'src/app/api/issue-tracker-proxy/route.ts',
+      methods: { POST: 'routes.issueTrackerProxy.POST', GET: 'routes.issueTrackerProxy.GET' },
+    },
   ],
   pages: [
     {

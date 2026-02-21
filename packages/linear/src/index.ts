@@ -41,6 +41,10 @@ export type {
   SubIssueGraphNode,
   SubIssueGraph,
   SubIssueStatus,
+  // Rate limiter & circuit breaker strategy interfaces
+  RateLimiterStrategy,
+  CircuitBreakerStrategy,
+  CircuitBreakerConfig,
 } from './types.js'
 
 // Work type mappings for status-based routing
@@ -68,9 +72,11 @@ export {
   LinearPlanError,
   LinearStatusTransitionError,
   AgentSpawnError,
+  CircuitOpenError,
   isLinearAgentError,
   isRetryableError,
   isAgentSpawnError,
+  isCircuitOpenError,
 } from './errors.js'
 
 // Retry utilities
@@ -121,6 +127,26 @@ export type { CheckboxItem, CheckboxUpdate } from './checkbox-utils.js'
 // Rate limiter
 export { TokenBucket, DEFAULT_RATE_LIMIT_CONFIG, extractRetryAfterMs } from './rate-limiter.js'
 export type { TokenBucketConfig } from './rate-limiter.js'
+
+// Circuit breaker
+export { CircuitBreaker, DEFAULT_CIRCUIT_BREAKER_CONFIG } from './circuit-breaker.js'
+export type { CircuitState } from './circuit-breaker.js'
+
+// Platform-agnostic issue tracker proxy types
+export type {
+  ProxyRequest,
+  ProxyResponse,
+  IssueTrackerMethod,
+  SerializedIssue,
+  SerializedComment,
+  SerializedViewer,
+  SerializedTeam,
+  ProxyHealthStatus,
+} from './issue-tracker-proxy.js'
+
+// Proxy client (routes calls through dashboard instead of Linear directly)
+export { ProxyIssueTrackerClient, createProxyClientIfConfigured } from './proxy-client.js'
+export type { ProxyClientConfig } from './proxy-client.js'
 
 // Client
 export { LinearAgentClient, createLinearAgentClient } from './agent-client.js'

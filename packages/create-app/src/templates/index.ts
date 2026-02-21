@@ -65,6 +65,9 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
   // Cleanup route
   files['src/app/api/cleanup/route.ts'] = routeReexport('routes.cleanup.POST', 'routes.cleanup.GET')
 
+  // Issue tracker proxy (centralized API gateway for agents/governors)
+  files['src/app/api/issue-tracker-proxy/route.ts'] = routeReexport('routes.issueTrackerProxy.POST', 'routes.issueTrackerProxy.GET')
+
   // ── Dashboard ──────────────────────────────────────────────────
 
   if (opts.includeDashboard) {

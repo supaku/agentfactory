@@ -57,3 +57,12 @@ export * from './governor-event-bus.js'
 
 // Governor event deduplicator (Redis SETNX)
 export * from './governor-dedup.js'
+
+// Redis-backed Linear API rate limiter (shared across processes)
+export * from './redis-rate-limiter.js'
+
+// Redis-backed circuit breaker (shared across processes)
+export * from './redis-circuit-breaker.js'
+
+// Linear API quota tracker (reads rate limit headers)
+export * from './quota-tracker.js'

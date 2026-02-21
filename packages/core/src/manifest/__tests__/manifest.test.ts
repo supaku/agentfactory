@@ -7,7 +7,7 @@ import {
 
 describe('ROUTE_MANIFEST', () => {
   it('has the expected number of route entries', () => {
-    expect(ROUTE_MANIFEST.routes.length).toBe(24)
+    expect(ROUTE_MANIFEST.routes.length).toBe(25)
   })
 
   it('has the expected number of page entries', () => {

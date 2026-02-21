@@ -37,8 +37,15 @@ import {
 import { createRealDependencies } from './lib/governor-dependencies.js'
 import { createLinearAgentClient, type LinearAgentClient } from '@supaku/agentfactory-linear'
 import { initTouchpointStorage } from '@supaku/agentfactory'
-import { RedisOverrideStorage, listStoredWorkspaces, getAccessToken } from '@supaku/agentfactory-server'
+import {
+  RedisOverrideStorage,
+  listStoredWorkspaces,
+  getAccessToken,
+  createRedisTokenBucket,
+  createRedisCircuitBreaker,
+} from '@supaku/agentfactory-server'
 import type { GovernorDependencies, GovernorIssue, GovernorAction, ScanResult } from '@supaku/agentfactory'
+import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@supaku/agentfactory-linear'
 
 // ---------------------------------------------------------------------------
 // Stub dependencies
@@ -131,11 +138,13 @@ async function main(): Promise<void> {
   if (linearApiKey) {
     console.log('LINEAR_API_KEY detected — using real dependencies')
 
-    const linearClient = createLinearAgentClient({ apiKey: linearApiKey })
-
     // Resolve OAuth token from Redis for Agent API operations
     let oauthClient: LinearAgentClient | undefined
     let organizationId: string | undefined
+
+    // Shared rate limiter and circuit breaker strategies (Redis-backed when available)
+    let rateLimiterStrategy: RateLimiterStrategy | undefined
+    let circuitBreakerStrategy: CircuitBreakerStrategy | undefined
 
     // Initialize touchpoint storage (for isHeld / getOverridePriority) when Redis is available
     if (redisUrl) {
@@ -147,9 +156,19 @@ async function main(): Promise<void> {
         const workspaces = await listStoredWorkspaces()
         if (workspaces.length > 0) {
           organizationId = workspaces[0]  // Use first workspace (single-tenant)
+
+          // Create shared Redis rate limiter and circuit breaker for this workspace
+          rateLimiterStrategy = createRedisTokenBucket(organizationId)
+          circuitBreakerStrategy = createRedisCircuitBreaker(organizationId)
+          console.log(`Redis rate limiter + circuit breaker initialized for workspace ${organizationId}`)
+
           const accessToken = await getAccessToken(organizationId)
           if (accessToken) {
-            oauthClient = createLinearAgentClient({ apiKey: accessToken })
+            oauthClient = createLinearAgentClient({
+              apiKey: accessToken,
+              rateLimiterStrategy,
+              circuitBreakerStrategy,
+            })
             console.log(`OAuth token resolved for workspace ${organizationId}`)
           } else {
             console.warn('Warning: No OAuth access token found — agent sessions will use personal API key')
@@ -163,6 +182,12 @@ async function main(): Promise<void> {
     } else {
       console.warn('Warning: REDIS_URL not set — touchpoint overrides (HOLD, PRIORITY) will not persist')
     }
+
+    const linearClient = createLinearAgentClient({
+      apiKey: linearApiKey,
+      rateLimiterStrategy,
+      circuitBreakerStrategy,
+    })
 
     dependencies = createRealDependencies({
       linearClient,

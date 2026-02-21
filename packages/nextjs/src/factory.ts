@@ -58,6 +58,9 @@ import { createWebhookHandler } from './webhook/processor.js'
 // OAuth handler
 import { createOAuthCallbackHandler, type OAuthConfig } from './handlers/oauth/callback.js'
 
+// Issue tracker proxy handler
+import { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
+
 export interface AllRoutes {
   workers: {
     register: { POST: RouteHandler }
@@ -91,6 +94,7 @@ export interface AllRoutes {
   oauth: {
     callback: { GET: RouteHandler }
   }
+  issueTrackerProxy: { POST: RouteHandler; GET: RouteHandler }
 }
 
 /**
@@ -149,6 +153,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
   const webhook = createWebhookHandler(webhookConfig)
   const oauth = createOAuthCallbackHandler(config.oauth)
   const configHandler = createConfigHandler(config.projects)
+  const issueTrackerProxy = createIssueTrackerProxyHandler(routeConfig)
 
   return {
     workers: {
@@ -183,5 +188,6 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
     oauth: {
       callback: { GET: oauth.GET },
     },
+    issueTrackerProxy: { POST: issueTrackerProxy.POST, GET: issueTrackerProxy.GET },
   }
 }

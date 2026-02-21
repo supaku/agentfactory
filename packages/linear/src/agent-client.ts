@@ -24,10 +24,13 @@ import type {
   SubIssueGraphNode,
   SubIssueGraph,
   SubIssueStatus,
+  RateLimiterStrategy,
+  CircuitBreakerStrategy,
 } from './types.js'
 import { LinearApiError, LinearStatusTransitionError } from './errors.js'
 import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
 import { TokenBucket, extractRetryAfterMs } from './rate-limiter.js'
+import { CircuitBreaker } from './circuit-breaker.js'
 
 /**
  * Core Linear Agent Client
@@ -36,7 +39,8 @@ import { TokenBucket, extractRetryAfterMs } from './rate-limiter.js'
 export class LinearAgentClient {
   private readonly client: LinearClient
   private readonly retryConfig: Required<RetryConfig>
-  private readonly rateLimiter: TokenBucket
+  private readonly rateLimiter: RateLimiterStrategy
+  private readonly circuitBreaker: CircuitBreakerStrategy
   private statusCache: Map<string, StatusMapping> = new Map()
 
   constructor(config: LinearAgentClientConfig) {
@@ -48,7 +52,8 @@ export class LinearAgentClient {
       ...DEFAULT_RETRY_CONFIG,
       ...config.retry,
     }
-    this.rateLimiter = new TokenBucket(config.rateLimit)
+    this.rateLimiter = config.rateLimiterStrategy ?? new TokenBucket(config.rateLimit)
+    this.circuitBreaker = config.circuitBreakerStrategy ?? new CircuitBreaker(config.circuitBreaker)
   }
 
   /**
@@ -59,17 +64,48 @@ export class LinearAgentClient {
   }
 
   /**
-   * Execute an operation with retry logic and rate limiting.
+   * Execute an operation with circuit breaker, rate limiting, and retry logic.
    *
-   * On HTTP 429 (rate limited):
-   * - Uses the Retry-After header value for the wait delay (falls back to 60s)
-   * - Penalizes the token bucket so concurrent callers also back off
+   * Order of operations:
+   * 1. Check circuit breaker — if open, throw CircuitOpenError (zero quota consumed)
+   * 2. Acquire rate limit token
+   * 3. Execute the operation
+   * 4. On success: record success on circuit breaker
+   * 5. On auth error: record failure on circuit breaker (may trip it)
+   * 6. On retryable error: retry with exponential backoff
    */
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
     return withRetry(
       async () => {
+        // Check circuit breaker BEFORE acquiring a rate limit token
+        const canProceed = await this.circuitBreaker.canProceed()
+        if (!canProceed) {
+          // Create a descriptive error; if the breaker is a CircuitBreaker instance, use its helper
+          const breaker = this.circuitBreaker as CircuitBreaker & { createOpenError?: () => Error }
+          if (typeof breaker.createOpenError === 'function') {
+            throw breaker.createOpenError()
+          }
+          throw new LinearApiError('Circuit breaker is open — API calls blocked', 503)
+        }
+
         await this.rateLimiter.acquire()
-        return fn()
+
+        try {
+          const result = await fn()
+          // Record success to close/reset the circuit
+          await this.circuitBreaker.recordSuccess()
+          return result
+        } catch (error) {
+          // Check if this is an auth error that should trip the circuit
+          if (this.circuitBreaker.isAuthError(error)) {
+            const statusCode = extractAuthStatusCode(error)
+            await this.circuitBreaker.recordAuthFailure(statusCode)
+            console.warn(
+              `[LinearAgentClient] Auth error detected (status ${statusCode}), circuit breaker notified`
+            )
+          }
+          throw error
+        }
       },
       {
         config: this.retryConfig,
@@ -635,6 +671,16 @@ export class LinearAgentClient {
       childCount: number
     }>
   > {
+    // Check circuit breaker before consuming rate limit token
+    const canProceed = await this.circuitBreaker.canProceed()
+    if (!canProceed) {
+      const breaker = this.circuitBreaker as CircuitBreaker & { createOpenError?: () => Error }
+      if (typeof breaker.createOpenError === 'function') {
+        throw breaker.createOpenError()
+      }
+      throw new LinearApiError('Circuit breaker is open — API calls blocked', 503)
+    }
+
     await this.rateLimiter.acquire()
 
     const query = `
@@ -658,44 +704,55 @@ export class LinearAgentClient {
 
     const terminalStatuses = ['Accepted', 'Canceled', 'Duplicate']
 
-    const result = await (this.client as unknown as {
-      client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
-    }).client.rawRequest(query, {
-      filter: {
-        project: { name: { eq: project } },
-        state: { name: { nin: terminalStatuses } },
-      },
-    })
+    try {
+      const result = await (this.client as unknown as {
+        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
+      }).client.rawRequest(query, {
+        filter: {
+          project: { name: { eq: project } },
+          state: { name: { nin: terminalStatuses } },
+        },
+      })
 
-    const data = result.data as {
-      issues: {
-        nodes: Array<{
-          id: string
-          identifier: string
-          title: string
-          description?: string | null
-          createdAt: string
-          state: { name: string } | null
-          labels: { nodes: Array<{ name: string }> }
-          parent: { id: string } | null
-          project: { name: string } | null
-          children: { nodes: Array<{ id: string }> }
-        }>
+      // Record success on circuit breaker
+      await this.circuitBreaker.recordSuccess()
+
+      const data = result.data as {
+        issues: {
+          nodes: Array<{
+            id: string
+            identifier: string
+            title: string
+            description?: string | null
+            createdAt: string
+            state: { name: string } | null
+            labels: { nodes: Array<{ name: string }> }
+            parent: { id: string } | null
+            project: { name: string } | null
+            children: { nodes: Array<{ id: string }> }
+          }>
+        }
       }
-    }
 
-    return data.issues.nodes.map((node) => ({
-      id: node.id,
-      identifier: node.identifier,
-      title: node.title,
-      description: node.description ?? undefined,
-      status: node.state?.name ?? 'Backlog',
-      labels: node.labels.nodes.map((l) => l.name),
-      createdAt: new Date(node.createdAt).getTime(),
-      parentId: node.parent?.id ?? undefined,
-      project: node.project?.name ?? undefined,
-      childCount: node.children.nodes.length,
-    }))
+      return data.issues.nodes.map((node) => ({
+        id: node.id,
+        identifier: node.identifier,
+        title: node.title,
+        description: node.description ?? undefined,
+        status: node.state?.name ?? 'Backlog',
+        labels: node.labels.nodes.map((l) => l.name),
+        createdAt: new Date(node.createdAt).getTime(),
+        parentId: node.parent?.id ?? undefined,
+        project: node.project?.name ?? undefined,
+        childCount: node.children.nodes.length,
+      }))
+    } catch (error) {
+      if (this.circuitBreaker.isAuthError(error)) {
+        const statusCode = extractAuthStatusCode(error)
+        await this.circuitBreaker.recordAuthFailure(statusCode)
+      }
+      throw error
+    }
   }
 
   /**
@@ -883,4 +940,25 @@ export function createLinearAgentClient(
   config: LinearAgentClientConfig
 ): LinearAgentClient {
   return new LinearAgentClient(config)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract HTTP status code from an error for circuit breaker recording.
+ */
+function extractAuthStatusCode(error: unknown): number {
+  if (typeof error !== 'object' || error === null) return 0
+  const err = error as Record<string, unknown>
+  if (typeof err.status === 'number') return err.status
+  if (typeof err.statusCode === 'number') return err.statusCode
+  const response = err.response as Record<string, unknown> | undefined
+  if (response) {
+    if (typeof response.status === 'number') return response.status
+    if (typeof response.statusCode === 'number') return response.statusCode
+  }
+  // Default to 400 for auth errors detected by message pattern
+  return 400
 }

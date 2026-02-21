@@ -104,6 +104,20 @@ export class LinearStatusTransitionError extends LinearAgentError {
 }
 
 /**
+ * Error thrown when the circuit breaker is open.
+ * All API calls are blocked to prevent wasting rate limit quota.
+ */
+export class CircuitOpenError extends LinearAgentError {
+  constructor(
+    message: string,
+    public readonly retryAfterMs: number
+  ) {
+    super(message, 'CIRCUIT_OPEN', { retryAfterMs })
+    this.name = 'CircuitOpenError'
+  }
+}
+
+/**
  * Error thrown when agent spawning fails
  */
 export class AgentSpawnError extends LinearAgentError {
@@ -136,6 +150,13 @@ export function isLinearAgentError(error: unknown): error is LinearAgentError {
  */
 export function isAgentSpawnError(error: unknown): error is AgentSpawnError {
   return error instanceof AgentSpawnError
+}
+
+/**
+ * Type guard to check if an error is a CircuitOpenError
+ */
+export function isCircuitOpenError(error: unknown): error is CircuitOpenError {
+  return error instanceof CircuitOpenError
 }
 
 /**
