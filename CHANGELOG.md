@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.7.19
+
+### Features
+
+- **Circuit breaker for Linear API** — New `CircuitBreaker` class in `@supaku/agentfactory-linear` with closed→open→half-open state machine and exponential backoff. Detects auth errors (400/401/403), GraphQL `RATELIMITED` responses, and error message patterns. Integrated into `LinearAgentClient.withRetry()` — checks circuit before acquiring a rate limit token, so no quota is consumed when the circuit is open.
+- **Pluggable rate limiter & circuit breaker strategies** — New `RateLimiterStrategy` and `CircuitBreakerStrategy` interfaces allow swapping in-memory defaults for Redis-backed implementations. `LinearAgentClient` accepts optional strategy overrides via config.
+- **Redis-backed shared rate limiter** — New `RedisTokenBucket` in `@supaku/agentfactory-server` uses atomic Lua scripts to share a single token bucket across all processes (dashboard, governor, agents). Key: `linear:rate-limit:{workspaceId}`.
+- **Redis-backed shared circuit breaker** — New `RedisCircuitBreaker` in `@supaku/agentfactory-server` shares circuit state across processes via Redis. Supports exponential backoff on reset timeout.
+- **Linear quota tracker** — New `QuotaTracker` in `@supaku/agentfactory-server` reads and stores Linear's `X-RateLimit-Requests-Remaining` and `X-RateLimit-Complexity-Remaining` headers in Redis for proactive throttling. Warns when quota drops below threshold.
+- **Centralized issue tracker proxy** — New `POST /api/issue-tracker-proxy` endpoint in `@supaku/agentfactory-nextjs` acts as a single gateway for all Linear API calls. Agents, governors, and CLI tools call this endpoint instead of Linear directly, centralizing rate limiting, circuit breaking, and OAuth token management. Includes a health endpoint at `GET /api/issue-tracker-proxy`.
+- **Platform-agnostic proxy types** — New `IssueTrackerMethod`, `SerializedIssue`, `SerializedComment`, `ProxyRequest`, and `ProxyResponse` types in `@supaku/agentfactory-linear` are Linear-agnostic, enabling future issue tracker backends without changing consumer code.
+- **Proxy client** — New `ProxyIssueTrackerClient` in `@supaku/agentfactory-linear` is a drop-in replacement that routes all calls through the dashboard proxy. Activated when `AGENTFACTORY_API_URL` env var is set.
+
+### Fixes
+
+- **Removed harmful OAuth fallback** — The Linear client resolver no longer falls back to a personal API key when OAuth token lookup fails. Personal API keys cannot call Agent API endpoints (`createAgentActivity`, etc.), so the fallback guaranteed 400 errors that wasted rate limit quota.
+- **Workspace client caching** — The Linear client resolver now caches workspace clients with a 5-minute TTL, so all requests within the dashboard process share one client (and one token bucket + circuit breaker) per workspace.
+- **Governor uses Redis strategies** — When `REDIS_URL` is available, the governor injects `RedisTokenBucket` and `RedisCircuitBreaker` into its Linear clients for coordinated rate limiting across processes.
+
+### Tests
+
+- Circuit breaker unit tests (23 tests) — state transitions, auth error detection, GraphQL RATELIMITED detection, exponential backoff, half-open probe, reset, diagnostics.
+- Updated manifest route count (24→25) and create-app template parity for the new proxy route.
+
+### Chores
+
+- Aligned all package versions to 0.7.19 across the monorepo.
+
 ## v0.7.18
 
 ### Fixes
