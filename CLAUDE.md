@@ -171,23 +171,39 @@ The orchestrator validates that agents only push to the correct repository. Conf
 Checked into each repository to define allowed projects and repository identity:
 
 ```yaml
+# Single-project repo
 apiVersion: v1
 kind: RepositoryConfig
 repository: github.com/supaku/agentfactory
 allowedProjects:
   - Agent
+
+# Monorepo with path scoping
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/supaku/supaku
+projectPaths:
+  Social: apps/social
+  Family: apps/family
+  Extension: apps/social-capture-extension
+sharedPaths:
+  - packages/ui
+  - packages/lexical
 ```
 
 - `repository`: Git remote URL pattern validated at startup against `git remote get-url origin`
 - `allowedProjects`: Only issues from these Linear projects are processed
+- `projectPaths`: Maps project names to their root directory (mutually exclusive with `allowedProjects`). When set, allowed projects are auto-derived from keys. Agents receive directory scoping instructions in their prompts.
+- `sharedPaths`: Directories any project's agent may modify (only used with `projectPaths`)
 
 ### Validation layers
 
 1. **OrchestratorConfig.repository** — validates git remote at constructor time and before spawning agents
 2. **CLI `--repo` flag** — passes repository to OrchestratorConfig from the command line
-3. **.agentfactory/config.yaml** — auto-loaded at startup, filters issues by `allowedProjects`
+3. **.agentfactory/config.yaml** — auto-loaded at startup, filters issues by `allowedProjects` or `projectPaths` keys
 4. **Template partial `{{> partials/repo-validation}}`** — agents verify git remote before any push
-5. **Linear project metadata** — cross-references project repo link with config
+5. **Template partial `{{> partials/path-scoping}}`** — agents verify file changes are within project scope
+6. **Linear project metadata** — cross-references project repo link with config
 
 ## Workflow Template System
 
@@ -252,6 +268,8 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{parentContext}}` | Parent issue context for coordination |
 | `{{subIssueList}}` | Formatted sub-issue list |
 | `{{repository}}` | Git repository URL pattern for pre-push validation |
+| `{{projectPath}}` | Root directory for this project in a monorepo (e.g., `apps/family`) |
+| `{{sharedPaths}}` | Shared directories any project may modify (array) |
 
 ### Available Partials
 
@@ -264,6 +282,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/shared-worktree-safety}}` | Shared worktree safety rules |
 | `{{> partials/pr-selection}}` | PR selection guidance |
 | `{{> partials/repo-validation}}` | Pre-push git remote URL validation |
+| `{{> partials/path-scoping}}` | Monorepo directory scoping instructions |
 
 ### Tool Permissions
 

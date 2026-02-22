@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: path-scoping
+  description: Directory scoping instructions for monorepo projects
+content: |
+  {{#if projectPath}}
+
+  ## Project Path Scoping (CRITICAL)
+  You are working in a MONOREPO. Your code changes MUST be scoped to the correct directories.
+
+  **Your project directory:** `{{projectPath}}`
+  Focus all code changes within this directory.
+  {{#if sharedPaths}}
+
+  **Shared directories you may also modify:**
+  {{#each sharedPaths}}
+  - `{{this}}`
+  {{/each}}
+  {{/if}}
+
+  **Before every commit**, verify your changes are scoped correctly:
+  ```bash
+  git diff --name-only --cached | head -50
+  ```
+  Every changed file must be under `{{projectPath}}`{{#if sharedPaths}} or one of the shared directories listed above{{/if}}.
+
+  If you need to modify files outside these directories, STOP and post a Linear comment:
+  'BLOCKED: Need to modify files outside project scope ({{projectPath}}). Files: [list]. Requesting human review.'
+  {{/if}}

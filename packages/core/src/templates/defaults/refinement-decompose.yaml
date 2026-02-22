@@ -34,6 +34,7 @@ prompt: |
   5. Add blocking relations if sub-issues have dependencies
   6. Report the decomposition in your WORK_RESULT
 
+  {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/cli-instructions}}
   {{> partials/work-result-marker}}

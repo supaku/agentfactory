@@ -109,6 +109,8 @@ export interface OrchestratorIssue {
   labels: string[]
   /** Team name resolved from the issue (used to set LINEAR_TEAM_NAME env var) */
   teamName?: string
+  /** Project name resolved from the issue (used for path scoping in monorepos) */
+  projectName?: string
 }
 
 export interface AgentProcess {
@@ -177,6 +179,8 @@ export interface SpawnAgentOptions {
   prompt?: string
   /** Team name to set as LINEAR_TEAM_NAME env var for agents */
   teamName?: string
+  /** Project name for path scoping in monorepos */
+  projectName?: string
 }
 
 export interface OrchestratorStreamConfig {
@@ -230,4 +234,6 @@ export interface SpawnAgentWithResumeOptions {
   workType?: AgentWorkType
   /** Team name to set as LINEAR_TEAM_NAME env var for agents */
   teamName?: string
+  /** Project name for path scoping in monorepos */
+  projectName?: string
 }

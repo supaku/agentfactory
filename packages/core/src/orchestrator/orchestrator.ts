@@ -797,6 +797,10 @@ export class AgentOrchestrator {
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
   private allowedProjects?: string[]
+  // Project-to-path mapping from .agentfactory/config.yaml (monorepo support)
+  private projectPaths?: Record<string, string>
+  // Shared paths from .agentfactory/config.yaml (monorepo support)
+  private sharedPaths?: string[]
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -872,7 +876,11 @@ export class AgentOrchestrator {
             validateGitRemote(this.config.repository)
           }
           // Store allowedProjects for backlog filtering
-          if (repoConfig.allowedProjects) {
+          if (repoConfig.projectPaths) {
+            this.projectPaths = repoConfig.projectPaths
+            this.sharedPaths = repoConfig.sharedPaths
+            this.allowedProjects = Object.keys(repoConfig.projectPaths)
+          } else if (repoConfig.allowedProjects) {
             this.allowedProjects = repoConfig.allowedProjects
           }
         }
@@ -978,6 +986,7 @@ export class AgentOrchestrator {
       if (results.length >= maxIssues) break
 
       // Filter by allowedProjects from .agentfactory/config.yaml
+      let resolvedProjectName: string | undefined
       if (this.allowedProjects && this.allowedProjects.length > 0) {
         const project = await issue.project
         const projectName = project?.name
@@ -987,6 +996,13 @@ export class AgentOrchestrator {
           )
           continue
         }
+        resolvedProjectName = projectName
+      }
+
+      // Resolve project name for path scoping even when not filtering by allowedProjects
+      if (!resolvedProjectName && this.projectPaths) {
+        const project = await issue.project
+        resolvedProjectName = project?.name
       }
 
       const labels = await issue.labels()
@@ -1000,6 +1016,7 @@ export class AgentOrchestrator {
         priority: issue.priority,
         labels: labels.nodes.map((l: { name: string }) => l.name),
         teamName: team?.name,
+        projectName: resolvedProjectName,
       })
     }
 
@@ -1564,6 +1581,7 @@ export class AgentOrchestrator {
       workType = 'development',
       prompt: customPrompt,
       teamName,
+      projectName,
     } = options
 
     // Generate prompt based on work type, or use custom prompt if provided
@@ -1572,7 +1590,12 @@ export class AgentOrchestrator {
     if (customPrompt) {
       prompt = customPrompt
     } else if (this.templateRegistry?.hasTemplate(workType)) {
-      const context: TemplateContext = { identifier, repository: this.config.repository }
+      const context: TemplateContext = {
+        identifier,
+        repository: this.config.repository,
+        projectPath: this.projectPaths?.[projectName ?? ''],
+        sharedPaths: this.sharedPaths,
+      }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
     } else {
@@ -2515,6 +2538,7 @@ export class AgentOrchestrator {
           worktreePath,
           workType,
           teamName: issue.teamName,
+          projectName: issue.projectName,
         })
 
         result.agents.push(agent)
@@ -2555,6 +2579,13 @@ export class AgentOrchestrator {
     const issueId = issue.id // Use the actual UUID
     const team = await issue.team
     const teamName = team?.name
+
+    // Resolve project name for path scoping in monorepos
+    let projectName: string | undefined
+    if (this.projectPaths) {
+      const project = await issue.project
+      projectName = project?.name
+    }
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
 
@@ -2632,6 +2663,7 @@ export class AgentOrchestrator {
         claudeSessionId,
         workType: recoveryWorkType,
         teamName,
+        projectName,
       })
     }
 
@@ -2657,6 +2689,7 @@ export class AgentOrchestrator {
       workType: effectiveWorkType,
       prompt,
       teamName,
+      projectName,
     })
   }
 

@@ -34,6 +34,7 @@ prompt: |
   4. Run tests to verify: `pnpm test` and `pnpm typecheck`
   5. Create a PR
 
+  {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/cli-instructions}}
   {{> partials/work-result-marker}}

@@ -32,6 +32,7 @@ prompt: |
   5. Run tests to verify: `pnpm test` and `pnpm typecheck`
   6. Create a PR with clear description of what was wrong and how you fixed it
 
+  {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/cli-instructions}}
   {{> partials/work-result-marker}}

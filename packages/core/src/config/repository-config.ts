@@ -21,13 +21,36 @@ export const RepositoryConfigSchema = z.object({
   kind: z.literal('RepositoryConfig'),
   repository: z.string().optional(),
   allowedProjects: z.array(z.string()).optional(),
-})
+  /** Maps Linear project names to their root directory within the repo (e.g., { Family: 'apps/family' }) */
+  projectPaths: z.record(z.string(), z.string()).optional(),
+  /** Shared directories that any project's agent may modify (e.g., ['packages/ui']) */
+  sharedPaths: z.array(z.string()).optional(),
+}).refine(
+  (data) => !(data.allowedProjects && data.projectPaths),
+  { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },
+)
 
 // ---------------------------------------------------------------------------
 // TypeScript Type
 // ---------------------------------------------------------------------------
 
 export type RepositoryConfig = z.infer<typeof RepositoryConfigSchema>
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the effective list of allowed project names.
+ * When `projectPaths` is set, the keys are the allowed projects.
+ * Otherwise falls back to `allowedProjects`.
+ */
+export function getEffectiveAllowedProjects(config: RepositoryConfig): string[] | undefined {
+  if (config.projectPaths) {
+    return Object.keys(config.projectPaths)
+  }
+  return config.allowedProjects
+}
 
 // ---------------------------------------------------------------------------
 // Loader

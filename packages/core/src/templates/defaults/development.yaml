@@ -19,6 +19,7 @@ prompt: |
   Start work on {{identifier}}.
   Implement the feature/fix as specified in the issue description.
   {{> partials/repo-validation}}
+  {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}

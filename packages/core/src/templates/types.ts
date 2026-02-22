@@ -128,6 +128,12 @@ export interface TemplateContext {
   // Repository validation variables
   /** Git repository URL pattern for pre-push validation (e.g. 'github.com/org/repo') */
   repository?: string
+
+  // Project path scoping variables (monorepo support)
+  /** Root directory for this project within the repo (e.g. 'apps/family') */
+  projectPath?: string
+  /** Shared directories that any project's agent may modify (e.g. ['packages/ui']) */
+  sharedPaths?: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +245,9 @@ export const TemplateContextSchema = z.object({
   team: z.string().optional(),
   // Repository validation variables
   repository: z.string().optional(),
+  // Project path scoping variables (monorepo support)
+  projectPath: z.string().optional(),
+  sharedPaths: z.array(z.string()).optional(),
 })
 
 // ---------------------------------------------------------------------------
