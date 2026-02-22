@@ -73,6 +73,18 @@ export function createSessionToolErrorHandler(config: RouteConfig) {
         )
       }
 
+      // Skip Linear forwarding for governor-generated fake session IDs.
+      if (sessionId.startsWith('governor-')) {
+        log.debug('Skipping Linear tool error report for governor-generated session', {
+          sessionId,
+          toolName,
+        })
+        return NextResponse.json({
+          created: false,
+          reason: 'Governor-generated session — no Linear agent session exists',
+        })
+      }
+
       try {
         const linearClient = await config.linearClient.getClient(session.organizationId)
 
@@ -120,14 +132,15 @@ export function createSessionToolErrorHandler(config: RouteConfig) {
           reason: 'Failed to create issue in Linear',
         })
       } catch (linearError) {
+        const errorMessage2 = linearError instanceof Error ? linearError.message : String(linearError)
         log.error('Failed to report tool error to Linear', {
-          error: linearError,
+          error: errorMessage2,
           sessionId,
           toolName,
         })
         return NextResponse.json({
           created: false,
-          reason: 'Failed to report to Linear',
+          reason: `Failed to report to Linear: ${errorMessage2}`,
         })
       }
     } catch (error) {

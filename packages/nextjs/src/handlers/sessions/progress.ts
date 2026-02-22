@@ -72,6 +72,18 @@ export function createSessionProgressHandler(config: RouteConfig) {
         )
       }
 
+      // Skip Linear forwarding for governor-generated fake session IDs.
+      if (sessionId.startsWith('governor-')) {
+        log.debug('Skipping Linear progress post for governor-generated session', {
+          sessionId,
+          milestone,
+        })
+        return NextResponse.json({
+          posted: false,
+          reason: 'Governor-generated session — no Linear agent session exists',
+        })
+      }
+
       const emoji = milestone ? MILESTONE_EMOJI[milestone] || '\u2139\ufe0f' : ''
       const formattedMessage = emoji ? `${emoji} ${message}` : message
 
@@ -96,15 +108,16 @@ export function createSessionProgressHandler(config: RouteConfig) {
           milestone,
         })
       } catch (linearError) {
+        const errorMessage = linearError instanceof Error ? linearError.message : String(linearError)
         log.error('Failed to post progress activity to Linear', {
-          error: linearError,
+          error: errorMessage,
           sessionId,
           linearSessionId: session.linearSessionId,
           milestone,
         })
         return NextResponse.json({
           posted: false,
-          reason: 'Failed to post to Linear',
+          reason: `Failed to post to Linear: ${errorMessage}`,
         })
       }
     } catch (error) {

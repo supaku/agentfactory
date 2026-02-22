@@ -58,6 +58,17 @@ export function createSessionExternalUrlsHandler(config: RouteConfig) {
         )
       }
 
+      // Skip Linear forwarding for governor-generated fake session IDs.
+      if (sessionId.startsWith('governor-')) {
+        log.debug('Skipping Linear external URLs update for governor-generated session', {
+          sessionId,
+        })
+        return NextResponse.json({
+          updated: false,
+          reason: 'Governor-generated session — no Linear agent session exists',
+        })
+      }
+
       const effectiveWorkspaceId = workspaceId || session.organizationId
 
       if (!effectiveWorkspaceId) {
@@ -86,9 +97,10 @@ export function createSessionExternalUrlsHandler(config: RouteConfig) {
         externalUrls,
       })
     } catch (error) {
-      log.error('Failed to update external URLs', { error, sessionId })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      log.error('Failed to update external URLs', { error: errorMessage, sessionId })
       return NextResponse.json(
-        { error: 'Internal Server Error', message: 'Failed to update external URLs' },
+        { error: 'Internal Server Error', message: `Failed to update external URLs: ${errorMessage}` },
         { status: 500 }
       )
     }

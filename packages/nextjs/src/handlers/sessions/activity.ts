@@ -67,6 +67,21 @@ export function createSessionActivityHandler(config: RouteConfig) {
         )
       }
 
+      // Skip Linear forwarding for governor-generated fake session IDs.
+      // When the governor can't create a real agent session on Linear (e.g., OAuth
+      // token issue), it generates a local ID prefixed with "governor-". There's no
+      // corresponding session on Linear's side, so forwarding would always fail.
+      if (sessionId.startsWith('governor-')) {
+        log.debug('Skipping Linear forwarding for governor-generated session', {
+          sessionId,
+          activityType: activity.type,
+        })
+        return NextResponse.json({
+          forwarded: false,
+          reason: 'Governor-generated session — no Linear agent session exists',
+        })
+      }
+
       try {
         const linearClient = await config.linearClient.getClient(session.organizationId)
 
@@ -102,13 +117,15 @@ export function createSessionActivityHandler(config: RouteConfig) {
           forwarded: true,
         })
       } catch (linearError) {
+        const errorMessage = linearError instanceof Error ? linearError.message : String(linearError)
         log.error('Failed to forward activity to Linear', {
-          error: linearError,
+          error: errorMessage,
           sessionId,
+          issueId: session.issueId,
         })
         return NextResponse.json({
           forwarded: false,
-          reason: 'Failed to forward to Linear',
+          reason: `Failed to forward to Linear: ${errorMessage}`,
         })
       }
     } catch (error) {
