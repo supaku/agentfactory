@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.20
+
+### Fixes
+
+- **Strip Anthropic API keys from agent environments** — App `.env.local` files (e.g. `apps/social/.env.local`) may contain `ANTHROPIC_API_KEY` for runtime use. The orchestrator was loading these and passing them into Claude Code agent processes, causing Claude Code to switch from Max subscription billing to API-key billing. Added `AGENT_ENV_BLOCKLIST` that strips `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and `OPENCLAW_GATEWAY_TOKEN` from all three env sources (`process.env`, app env files, and `settings.local.json`) before spawning agents. Applied to both `spawnAgent()` and `forwardPrompt()` code paths.
+- **Governor skips sub-issues in all statuses** — Previously only skipped sub-issues in Backlog; now skips in all statuses to prevent double-dispatch.
+- **Optimize N+1 GraphQL queries** — Reduced Linear API calls for sub-issue graph, relations, and status fetching from O(N) to O(1) using raw GraphQL queries with nested fields.
+- **Skip Linear forwarding for governor-generated fake session IDs** — Prevents 404 errors when the governor creates synthetic sessions for internal use.
+- **Record all auth failures in circuit breaker** — Circuit breaker now records auth failures regardless of HTTP status code, improving detection of degraded Linear API states.
+
+### Chores
+
+- Aligned all package versions to 0.7.20 across the monorepo.
+
 ## v0.7.19
 
 ### Features

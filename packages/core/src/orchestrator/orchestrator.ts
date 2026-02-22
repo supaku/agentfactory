@@ -72,6 +72,18 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
 // Default max session timeout: unlimited (undefined)
 const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
+// Env vars that Claude Code interprets for authentication/routing. If these
+// leak into agent processes from app .env.local files, Claude Code switches
+// from Max subscription billing to API-key billing. Apps that need an
+// Anthropic API key should use a namespaced name instead (e.g.
+// SUPAKU_SOCIAL_ANTHROPIC_API_KEY) which won't be recognised by Claude Code.
+const AGENT_ENV_BLOCKLIST = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'OPENCLAW_GATEWAY_TOKEN',
+]
+
 /**
  * Validate that the git remote origin URL contains the expected repository pattern.
  * Supports both HTTPS (github.com/org/repo) and SSH (git@github.com:org/repo) formats.
@@ -1701,15 +1713,22 @@ export class AgentOrchestrator {
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
     const processEnvFiltered: Record<string, string> = {}
     for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') {
+      if (typeof value === 'string' && !AGENT_ENV_BLOCKLIST.includes(key)) {
         processEnvFiltered[key] = value
       }
     }
 
+    const filteredAppEnv = Object.fromEntries(
+      Object.entries(appEnv).filter(([key]) => !AGENT_ENV_BLOCKLIST.includes(key))
+    )
+    const filteredSettingsEnv = Object.fromEntries(
+      Object.entries(settingsEnv).filter(([key]) => !AGENT_ENV_BLOCKLIST.includes(key))
+    )
+
     const env: Record<string, string> = {
       ...processEnvFiltered, // Include all parent env vars (PATH, NODE_PATH, etc.)
-      ...appEnv, // Include app env vars (.env.local or .env.test.local based on work type)
-      ...settingsEnv, // Include all env vars from settings.local.json (highest priority)
+      ...filteredAppEnv, // Include app env vars (blocklisted keys stripped)
+      ...filteredSettingsEnv, // Include settings.local.json env vars (blocklisted keys stripped)
       LINEAR_ISSUE_ID: issueId,
       // Disable user .npmrc to prevent picking up expired auth tokens from ~/.npmrc
       // Point to a non-existent file so npm/pnpm won't try to use stale credentials
@@ -3118,17 +3137,25 @@ export class AgentOrchestrator {
 
     // Build environment variables - inherit ALL from process.env (required for node to be found)
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
+    // Apply the same blocklist as spawnAgent() to prevent API key leakage
     const processEnvFiltered: Record<string, string> = {}
     for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === 'string') {
+      if (typeof value === 'string' && !AGENT_ENV_BLOCKLIST.includes(key)) {
         processEnvFiltered[key] = value
       }
     }
 
+    const filteredAppEnv = Object.fromEntries(
+      Object.entries(appEnv).filter(([key]) => !AGENT_ENV_BLOCKLIST.includes(key))
+    )
+    const filteredSettingsEnv = Object.fromEntries(
+      Object.entries(settingsEnv).filter(([key]) => !AGENT_ENV_BLOCKLIST.includes(key))
+    )
+
     const env: Record<string, string> = {
       ...processEnvFiltered, // Include all parent env vars (PATH, NODE_PATH, etc.)
-      ...appEnv, // Include app env vars (.env.local or .env.test.local based on work type)
-      ...settingsEnv, // Include all env vars from settings.local.json (highest priority)
+      ...filteredAppEnv, // Include app env vars (blocklisted keys stripped)
+      ...filteredSettingsEnv, // Include settings.local.json env vars (blocklisted keys stripped)
       LINEAR_ISSUE_ID: issueId,
       LINEAR_SESSION_ID: sessionId,
       // Set work type so agent knows if it's doing QA or development work
