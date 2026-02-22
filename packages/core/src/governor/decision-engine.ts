@@ -95,6 +95,18 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
     return { action: 'none', reason: `Issue ${issue.identifier} is in terminal status: ${issue.status}` }
   }
 
+  // --- Sub-issue guard ---
+  // Sub-issues are managed exclusively by the coordinator (or qa-coordinator /
+  // acceptance-coordinator) via the parent issue. The governor must never
+  // dispatch workflows on sub-issues directly, regardless of their status,
+  // to prevent duplicate work.
+  if (issue.parentId !== undefined) {
+    return {
+      action: 'none',
+      reason: `Sub-issue ${issue.identifier} skipped — coordinator manages sub-issues via parent`,
+    }
+  }
+
   // --- Status-specific decisions ---
 
   switch (issue.status) {
@@ -178,16 +190,6 @@ function decideIcebox(ctx: DecisionContext): DecisionResult {
  */
 function decideBacklog(ctx: DecisionContext): DecisionResult {
   const { issue, config } = ctx
-
-  // Sub-issues should not be dispatched directly — the coordinator manages them
-  // when the parent issue is picked up. This prevents invisible backlog sprawl
-  // when sub-issues are in Backlog but their parent is still in Icebox.
-  if (issue.parentId !== undefined) {
-    return {
-      action: 'none',
-      reason: `Sub-issue ${issue.identifier} skipped — only parent issues are dispatched directly`,
-    }
-  }
 
   if (!config.enableAutoDevelopment) {
     return { action: 'none', reason: `Auto-development is disabled for ${issue.identifier}` }

@@ -291,14 +291,14 @@ describe('decideAction — Backlog', () => {
     expect(result.reason).toContain('coordination')
   })
 
-  it('skips sub-issues in Backlog (only parent issues dispatched directly)', () => {
+  it('skips sub-issues in Backlog (coordinator manages via parent)', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Backlog', parentId: 'parent-issue-id' }),
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('none')
     expect(result.reason).toContain('Sub-issue')
-    expect(result.reason).toContain('only parent issues are dispatched directly')
+    expect(result.reason).toContain('coordinator manages sub-issues via parent')
   })
 
   it('skips sub-issues before checking enableAutoDevelopment', () => {
@@ -313,6 +313,36 @@ describe('decideAction — Backlog', () => {
     const result = decideAction(ctx)
     expect(result.action).toBe('none')
     expect(result.reason).toContain('Sub-issue')
+  })
+
+  it('skips sub-issues in Finished (coordinator manages QA via parent)', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished', parentId: 'parent-issue-id' }),
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('Sub-issue')
+    expect(result.reason).toContain('coordinator manages sub-issues via parent')
+  })
+
+  it('skips sub-issues in Delivered (coordinator manages acceptance via parent)', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Delivered', parentId: 'parent-issue-id' }),
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('Sub-issue')
+    expect(result.reason).toContain('coordinator manages sub-issues via parent')
+  })
+
+  it('skips sub-issues in Rejected (coordinator manages refinement via parent)', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Rejected', parentId: 'parent-issue-id' }),
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('Sub-issue')
+    expect(result.reason).toContain('coordinator manages sub-issues via parent')
   })
 
   it('returns none when auto-development is disabled', () => {
