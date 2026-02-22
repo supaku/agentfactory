@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.21
+
+### Fixes
+
+- **Add WORK_RESULT marker instructions to coordination prompts** — The `qa-coordination` and `acceptance-coordination` work types were treated as result-sensitive by the orchestrator (requiring `<!-- WORK_RESULT:passed/failed -->` in the agent's final output), but neither prompt template included the structured result marker instructions. This caused the orchestrator to post a false "no structured result marker detected" warning even when the QA coordinator successfully moved the issue to Delivered. Fixed in both the hardcoded prompts (`orchestrator.ts`) and the YAML templates (`qa-coordination.yaml`, `acceptance-coordination.yaml`).
+
 ## v0.7.20
 
 ### Fixes

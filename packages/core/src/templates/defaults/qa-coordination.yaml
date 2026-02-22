@@ -32,6 +32,7 @@ prompt: |
   - The PR already exists from the development coordination phase
   - Run pnpm test, pnpm typecheck, and pnpm build as part of validation
   - Verify each sub-issue's acceptance criteria against the actual code changes
+  {{> partials/work-result-marker}}
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}

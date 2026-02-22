@@ -668,6 +668,13 @@ Every sub-agent prompt you construct MUST include these rules:
 5. Work only on files relevant to your sub-issue to minimize conflicts
 Prefix every sub-agent prompt with: "SHARED WORKTREE \u2014 DO NOT MODIFY GIT STATE"
 
+STRUCTURED RESULT MARKER (REQUIRED):
+You MUST include a structured result marker in your final output message.
+The orchestrator parses your output to determine whether to promote or reject the issue.
+Without this marker, the issue status will NOT be updated automatically.
+- On QA pass: Include <!-- WORK_RESULT:passed --> in your final message
+- On QA fail: Include <!-- WORK_RESULT:failed --> in your final message
+
 DEPENDENCY INSTALLATION:
 Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
 If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
@@ -699,6 +706,13 @@ IMPORTANT CONSTRAINTS:
 - ALL sub-issues must be in Delivered status before proceeding
 - The PR must pass CI and have no conflicts
 - If merge fails, report the error and do not mark as Accepted
+
+STRUCTURED RESULT MARKER (REQUIRED):
+You MUST include a structured result marker in your final output message.
+The orchestrator parses your output to determine whether to promote or reject the issue.
+Without this marker, the issue status will NOT be updated automatically.
+- On acceptance pass: Include <!-- WORK_RESULT:passed --> in your final message
+- On acceptance fail: Include <!-- WORK_RESULT:failed --> in your final message
 
 IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
 - Use Grep to search for specific code patterns instead of reading entire files
