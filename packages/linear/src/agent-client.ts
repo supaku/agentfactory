@@ -533,52 +533,110 @@ export class LinearAgentClient {
   /**
    * Get all relations for an issue (both outgoing and incoming)
    *
+   * Uses a single raw GraphQL query instead of N+1 lazy-loaded SDK calls.
+   *
    * @param issueId - The issue ID or identifier (e.g., "SUP-123")
    * @returns Relations result with both directions of relationships
    */
   async getIssueRelations(issueId: string): Promise<IssueRelationsResult> {
-    return this.withRetry(async () => {
-      const issue = await this.client.issue(issueId)
-      if (!issue) {
+    const canProceed = await this.circuitBreaker.canProceed()
+    if (!canProceed) {
+      const breaker = this.circuitBreaker as CircuitBreaker & { createOpenError?: () => Error }
+      if (typeof breaker.createOpenError === 'function') {
+        throw breaker.createOpenError()
+      }
+      throw new LinearApiError('Circuit breaker is open — API calls blocked', 503)
+    }
+
+    await this.rateLimiter.acquire()
+
+    const query = `
+      query IssueRelations($id: String!) {
+        issue(id: $id) {
+          id
+          identifier
+          relations(first: 50) {
+            nodes {
+              id
+              type
+              createdAt
+              relatedIssue { id identifier }
+            }
+          }
+          inverseRelations(first: 50) {
+            nodes {
+              id
+              type
+              createdAt
+              issue { id identifier }
+            }
+          }
+        }
+      }
+    `
+
+    try {
+      const result = await (this.client as unknown as {
+        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
+      }).client.rawRequest(query, { id: issueId })
+
+      await this.circuitBreaker.recordSuccess()
+
+      const data = result.data as {
+        issue: {
+          id: string
+          identifier: string
+          relations: {
+            nodes: Array<{
+              id: string
+              type: string
+              createdAt: string
+              relatedIssue: { id: string; identifier: string } | null
+            }>
+          }
+          inverseRelations: {
+            nodes: Array<{
+              id: string
+              type: string
+              createdAt: string
+              issue: { id: string; identifier: string } | null
+            }>
+          }
+        } | null
+      }
+
+      if (!data.issue) {
         throw new LinearApiError(`Issue not found: ${issueId}`, 404)
       }
 
-      // Get outgoing relations (this issue -> other issues)
-      const relationsConnection = await issue.relations()
-      const relations: IssueRelationInfo[] = []
+      const relations: IssueRelationInfo[] = data.issue.relations.nodes.map((rel) => ({
+        id: rel.id,
+        type: rel.type,
+        issueId: data.issue!.id,
+        issueIdentifier: data.issue!.identifier,
+        relatedIssueId: rel.relatedIssue?.id ?? '',
+        relatedIssueIdentifier: rel.relatedIssue?.identifier,
+        createdAt: new Date(rel.createdAt),
+      }))
 
-      for (const relation of relationsConnection.nodes) {
-        const relatedIssue = await relation.relatedIssue
-        relations.push({
-          id: relation.id,
-          type: relation.type,
-          issueId: issue.id,
-          issueIdentifier: issue.identifier,
-          relatedIssueId: relatedIssue?.id ?? '',
-          relatedIssueIdentifier: relatedIssue?.identifier,
-          createdAt: relation.createdAt,
-        })
-      }
-
-      // Get incoming relations (other issues -> this issue)
-      const inverseRelationsConnection = await issue.inverseRelations()
-      const inverseRelations: IssueRelationInfo[] = []
-
-      for (const relation of inverseRelationsConnection.nodes) {
-        const sourceIssue = await relation.issue
-        inverseRelations.push({
-          id: relation.id,
-          type: relation.type,
-          issueId: sourceIssue?.id ?? '',
-          issueIdentifier: sourceIssue?.identifier,
-          relatedIssueId: issue.id,
-          relatedIssueIdentifier: issue.identifier,
-          createdAt: relation.createdAt,
-        })
-      }
+      const inverseRelations: IssueRelationInfo[] = data.issue.inverseRelations.nodes.map((rel) => ({
+        id: rel.id,
+        type: rel.type,
+        issueId: rel.issue?.id ?? '',
+        issueIdentifier: rel.issue?.identifier,
+        relatedIssueId: data.issue!.id,
+        relatedIssueIdentifier: data.issue!.identifier,
+        createdAt: new Date(rel.createdAt),
+      }))
 
       return { relations, inverseRelations }
-    })
+    } catch (error) {
+      if (this.circuitBreaker.isAuthError(error)) {
+        const statusCode = extractAuthStatusCode(error)
+        await this.circuitBreaker.recordAuthFailure(statusCode)
+      }
+      throw error
+    }
   }
 
   /**
@@ -780,6 +838,7 @@ export class LinearAgentClient {
   /**
    * Get lightweight sub-issue statuses (no blocking relations)
    *
+   * Uses a single raw GraphQL query instead of N+1 lazy-loaded SDK calls.
    * Returns identifier, title, and status for each sub-issue.
    * Used by QA and acceptance agents to validate sub-issue completion
    * without the overhead of fetching the full dependency graph.
@@ -788,29 +847,69 @@ export class LinearAgentClient {
    * @returns Array of sub-issue statuses
    */
   async getSubIssueStatuses(issueIdOrIdentifier: string): Promise<SubIssueStatus[]> {
-    return this.withRetry(async () => {
-      const parentIssue = await this.client.issue(issueIdOrIdentifier)
-      if (!parentIssue) {
+    const canProceed = await this.circuitBreaker.canProceed()
+    if (!canProceed) {
+      const breaker = this.circuitBreaker as CircuitBreaker & { createOpenError?: () => Error }
+      if (typeof breaker.createOpenError === 'function') {
+        throw breaker.createOpenError()
+      }
+      throw new LinearApiError('Circuit breaker is open — API calls blocked', 503)
+    }
+
+    await this.rateLimiter.acquire()
+
+    const query = `
+      query SubIssueStatuses($id: String!) {
+        issue(id: $id) {
+          children(first: 50) {
+            nodes {
+              identifier
+              title
+              state { name }
+            }
+          }
+        }
+      }
+    `
+
+    try {
+      const result = await (this.client as unknown as {
+        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
+      }).client.rawRequest(query, { id: issueIdOrIdentifier })
+
+      await this.circuitBreaker.recordSuccess()
+
+      const data = result.data as {
+        issue: {
+          children: {
+            nodes: Array<{
+              identifier: string
+              title: string
+              state: { name: string } | null
+            }>
+          }
+        } | null
+      }
+
+      if (!data.issue) {
         throw new LinearApiError(
           `Issue not found: ${issueIdOrIdentifier}`,
           404
         )
       }
 
-      const children = await parentIssue.children()
-      const results: SubIssueStatus[] = []
-
-      for (const child of children.nodes) {
-        const state = await child.state
-        results.push({
-          identifier: child.identifier,
-          title: child.title,
-          status: state?.name ?? 'Unknown',
-        })
+      return data.issue.children.nodes.map((child) => ({
+        identifier: child.identifier,
+        title: child.title,
+        status: child.state?.name ?? 'Unknown',
+      }))
+    } catch (error) {
+      if (this.circuitBreaker.isAuthError(error)) {
+        const statusCode = extractAuthStatusCode(error)
+        await this.circuitBreaker.recordAuthFailure(statusCode)
       }
-
-      return results
-    })
+      throw error
+    }
   }
 
   /**
@@ -850,6 +949,10 @@ export class LinearAgentClient {
   /**
    * Get sub-issues with their blocking relations for dependency graph building
    *
+   * Uses a single raw GraphQL query instead of N+1 lazy-loaded SDK calls.
+   * Previous implementation made 2 + 4N + M API calls (where N = children,
+   * M = total relations). This version makes exactly 1 API call.
+   *
    * Builds a complete dependency graph of a parent issue's children, including
    * which sub-issues block which other sub-issues. This is used by the coordinator
    * agent to determine execution order.
@@ -858,79 +961,144 @@ export class LinearAgentClient {
    * @returns The sub-issue dependency graph
    */
   async getSubIssueGraph(issueIdOrIdentifier: string): Promise<SubIssueGraph> {
-    return this.withRetry(async () => {
-      const parentIssue = await this.client.issue(issueIdOrIdentifier)
-      if (!parentIssue) {
+    const canProceed = await this.circuitBreaker.canProceed()
+    if (!canProceed) {
+      const breaker = this.circuitBreaker as CircuitBreaker & { createOpenError?: () => Error }
+      if (typeof breaker.createOpenError === 'function') {
+        throw breaker.createOpenError()
+      }
+      throw new LinearApiError('Circuit breaker is open — API calls blocked', 503)
+    }
+
+    await this.rateLimiter.acquire()
+
+    const query = `
+      query SubIssueGraph($id: String!) {
+        issue(id: $id) {
+          id
+          identifier
+          children(first: 50) {
+            nodes {
+              id
+              identifier
+              title
+              description
+              priority
+              url
+              state { name }
+              labels(first: 20) { nodes { name } }
+              relations(first: 50) {
+                nodes {
+                  type
+                  relatedIssue { id identifier }
+                }
+              }
+              inverseRelations(first: 50) {
+                nodes {
+                  type
+                  issue { id identifier }
+                }
+              }
+            }
+          }
+        }
+      }
+    `
+
+    try {
+      const result = await (this.client as unknown as {
+        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
+      }).client.rawRequest(query, { id: issueIdOrIdentifier })
+
+      await this.circuitBreaker.recordSuccess()
+
+      const data = result.data as {
+        issue: {
+          id: string
+          identifier: string
+          children: {
+            nodes: Array<{
+              id: string
+              identifier: string
+              title: string
+              description: string | null
+              priority: number
+              url: string
+              state: { name: string } | null
+              labels: { nodes: Array<{ name: string }> }
+              relations: {
+                nodes: Array<{
+                  type: string
+                  relatedIssue: { id: string; identifier: string } | null
+                }>
+              }
+              inverseRelations: {
+                nodes: Array<{
+                  type: string
+                  issue: { id: string; identifier: string } | null
+                }>
+              }
+            }>
+          }
+        } | null
+      }
+
+      if (!data.issue) {
         throw new LinearApiError(
           `Issue not found: ${issueIdOrIdentifier}`,
           404
         )
       }
 
-      const children = await parentIssue.children()
-      const subIssueIds = new Set(children.nodes.map((c) => c.id))
-      const subIssueIdentifiers = new Map<string, string>()
+      const parentIssue = data.issue
+      const subIssueIds = new Set(parentIssue.children.nodes.map((c) => c.id))
 
-      // Build identifier map for all sub-issues
-      for (const child of children.nodes) {
-        subIssueIdentifiers.set(child.id, child.identifier)
-      }
-
-      const graphNodes: SubIssueGraphNode[] = []
-
-      for (const child of children.nodes) {
-        const state = await child.state
-        const labels = await child.labels()
-
-        // Get relations to find blocking dependencies
-        const relations = await child.relations()
-        const inverseRelations = await child.inverseRelations()
-
+      const graphNodes: SubIssueGraphNode[] = parentIssue.children.nodes.map((child) => {
         const blockedBy: string[] = []
         const blocks: string[] = []
 
-        // Check inverse relations - other issues blocking this one
-        for (const rel of inverseRelations.nodes) {
-          if (rel.type === 'blocks') {
-            const sourceIssue = await rel.issue
-            if (sourceIssue && subIssueIds.has(sourceIssue.id)) {
-              blockedBy.push(sourceIssue.identifier)
-            }
+        // Inverse relations: other issues blocking this one
+        for (const rel of child.inverseRelations.nodes) {
+          if (rel.type === 'blocks' && rel.issue && subIssueIds.has(rel.issue.id)) {
+            blockedBy.push(rel.issue.identifier)
           }
         }
 
-        // Check outgoing relations - this issue blocking others
-        for (const rel of relations.nodes) {
-          if (rel.type === 'blocks') {
-            const relatedIssue = await rel.relatedIssue
-            if (relatedIssue && subIssueIds.has(relatedIssue.id)) {
-              blocks.push(relatedIssue.identifier)
-            }
+        // Outgoing relations: this issue blocking others
+        for (const rel of child.relations.nodes) {
+          if (rel.type === 'blocks' && rel.relatedIssue && subIssueIds.has(rel.relatedIssue.id)) {
+            blocks.push(rel.relatedIssue.identifier)
           }
         }
 
-        graphNodes.push({
+        return {
           issue: {
             id: child.id,
             identifier: child.identifier,
             title: child.title,
             description: child.description ?? undefined,
-            status: state?.name,
+            status: child.state?.name,
             priority: child.priority,
-            labels: labels.nodes.map((l) => l.name),
+            labels: child.labels.nodes.map((l) => l.name),
             url: child.url,
           },
           blockedBy,
           blocks,
-        })
-      }
+        }
+      })
 
       return {
         parentId: parentIssue.id,
         parentIdentifier: parentIssue.identifier,
         subIssues: graphNodes,
       }
-    })
+    } catch (error) {
+      if (this.circuitBreaker.isAuthError(error)) {
+        const statusCode = extractAuthStatusCode(error)
+        await this.circuitBreaker.recordAuthFailure(statusCode)
+      }
+      throw error
+    }
   }
 }
 
