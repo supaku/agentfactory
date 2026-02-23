@@ -516,6 +516,14 @@ export async function runWorker(
     }
   }
 
+  async function checkSessionOwnership(
+    sessionId: string,
+  ): Promise<{ workerId?: string; status?: string } | null> {
+    return apiRequest<{ workerId?: string; status?: string }>(
+      `/api/sessions/${sessionId}/status`,
+    )
+  }
+
   async function checkSessionStopped(sessionId: string): Promise<boolean> {
     const result = await apiRequest<{ status: string }>(
       `/api/sessions/${sessionId}/status`,
@@ -674,7 +682,7 @@ export async function runWorker(
       let spawnedAgent: AgentProcess
 
       // Retry configuration for "agent already running" conflicts
-      const MAX_SPAWN_RETRIES = 6
+      const MAX_SPAWN_RETRIES = 3
       const SPAWN_RETRY_DELAY_MS = 15000
 
       if (work.claudeSessionId) {
@@ -726,6 +734,25 @@ export async function runWorker(
             const isRetriable = isAgentRunning || isBranchConflict
 
             if (isRetriable && attempt < MAX_SPAWN_RETRIES) {
+              // For "agent already running" errors, check if another worker owns this session
+              // If so, bail immediately instead of wasting retries
+              if (isAgentRunning && !isBranchConflict) {
+                try {
+                  const sessionStatus = await checkSessionOwnership(work.sessionId)
+                  if (sessionStatus?.workerId && sessionStatus.workerId !== workerId) {
+                    agentLog.warn('Session owned by another worker, abandoning spawn', {
+                      ownerWorkerId: sessionStatus.workerId.substring(0, 8),
+                    })
+                    throw new Error(`Session owned by another worker: ${sessionStatus.workerId}`)
+                  }
+                } catch (ownershipErr) {
+                  // Re-throw ownership errors, swallow check failures
+                  if (ownershipErr instanceof Error && ownershipErr.message.includes('Session owned by another worker')) {
+                    throw ownershipErr
+                  }
+                }
+              }
+
               const reason = isBranchConflict
                 ? 'Branch in use by another agent'
                 : 'Agent still running'

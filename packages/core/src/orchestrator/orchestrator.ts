@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, symlinkSync } from 'fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { config as loadDotenv } from 'dotenv'
 import {
@@ -1316,7 +1316,7 @@ export class AgentOrchestrator {
       // Invalid/incomplete worktree - must clean up
       console.log(`Removing invalid worktree: ${worktreePath} (${validation.reason})`)
       try {
-        execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe', encoding: 'utf-8' })
+        rmSync(worktreePath, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 })
       } catch (cleanupError) {
         throw new Error(
           `Failed to clean up invalid worktree at ${worktreePath}: ` +

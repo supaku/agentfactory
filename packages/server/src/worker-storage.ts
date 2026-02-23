@@ -30,13 +30,16 @@ const log = {
 const WORKER_PREFIX = 'work:worker:'
 const WORKER_SESSIONS_SUFFIX = ':sessions'
 
-// Default TTL for worker registration (120 seconds)
-// Worker must send heartbeat within this time or be considered offline
-const WORKER_TTL = parseInt(process.env.WORKER_TTL ?? '120', 10)
+// Default TTL for worker registration (300 seconds = 5 minutes)
+// Worker must send heartbeat within this time or be considered offline.
+// 120s was too tight — busy workers processing long agents can miss heartbeats,
+// causing Redis key expiry, 404s, and re-registration cascades.
+const WORKER_TTL = parseInt(process.env.WORKER_TTL ?? '300', 10)
 
-// Heartbeat timeout (90 seconds = 3 missed 30-second heartbeats)
+// Heartbeat timeout (180 seconds = 6 missed 30-second heartbeats)
+// Increased from 90s to match the higher WORKER_TTL and prevent spurious offline detection.
 const HEARTBEAT_TIMEOUT = parseInt(
-  process.env.WORKER_HEARTBEAT_TIMEOUT ?? '90000',
+  process.env.WORKER_HEARTBEAT_TIMEOUT ?? '180000',
   10
 )
 

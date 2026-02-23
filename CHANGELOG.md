@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.22
+
+### Features
+
+- **Monorepo path scoping for orchestrator** — New `projectPaths` and `sharedPaths` fields in `.agentfactory/config.yaml` allow mapping Linear projects to specific directories in a monorepo. Agents receive directory scoping instructions via `{{projectPath}}` and `{{sharedPaths}}` template variables, and a new `{{> partials/path-scoping}}` partial validates file changes at push time.
+
+### Fixes
+
+- **403 circuit breaker for ApiActivityEmitter** — When a session's ownership is transferred to another worker, the old worker's emitter now detects the 403 "owned by another worker" response, trips an `ownershipRevoked` circuit breaker, and stops all further activity/progress emission. Previously it would spam 403 errors for the entire agent lifetime. New `onOwnershipRevoked` callback allows the worker to request agent shutdown.
+- **Reduce retry waste in agent spawn loop** — Reduced `MAX_SPAWN_RETRIES` from 6 to 3 (45s total instead of 90s). For "agent already running" errors, the retry loop now checks session ownership on the server before retrying — if another worker owns the session, it bails immediately instead of wasting API calls and dependency linking on each attempt.
+- **Orphan cleanup grace period** — `findOrphanedSessions()` now skips sessions updated within the last 2 minutes (`ORPHAN_THRESHOLD_MS`), preventing the race condition where a worker re-registers with a new ID but hasn't transferred session ownership yet.
+- **Increase worker TTL and heartbeat timeout** — `WORKER_TTL` increased from 120s to 300s, `HEARTBEAT_TIMEOUT` from 90s to 180s. The previous values were too tight — busy workers processing long agents could miss heartbeats, causing Redis key expiry, 404 errors, and re-registration cascades.
+- **Use Node.js rmSync for worktree cleanup** — Replaced `execSync('rm -rf ...')` with `rmSync()` with `maxRetries: 3` and `retryDelay: 1000` for more resilient cleanup on mounted volumes and cross-platform compatibility.
+
 ## v0.7.21
 
 ### Fixes

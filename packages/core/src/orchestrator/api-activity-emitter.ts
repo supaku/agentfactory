@@ -51,6 +51,8 @@ export interface ApiActivityEmitterConfig {
   onActivityError?: (type: string, error: Error) => void
   /** Optional callback when a progress update is posted */
   onProgressPosted?: (milestone: string, message: string) => void
+  /** Optional callback when session ownership is revoked (403 from another worker) */
+  onOwnershipRevoked?: () => void
 }
 
 /** Progress milestone types */
@@ -95,6 +97,10 @@ export class ApiActivityEmitter {
   private readonly onActivityThrottled?: (type: string, content: string) => void
   private readonly onActivityError?: (type: string, error: Error) => void
   private readonly onProgressPosted?: (milestone: string, message: string) => void
+  private readonly onOwnershipRevoked?: () => void
+
+  /** Circuit breaker: set when 403 ownership error is received */
+  private ownershipRevoked = false
 
   private lastEmitTime = 0
   private queue: QueuedActivity[] = []
@@ -115,6 +121,7 @@ export class ApiActivityEmitter {
     this.onActivityThrottled = config.onActivityThrottled
     this.onActivityError = config.onActivityError
     this.onProgressPosted = config.onProgressPosted
+    this.onOwnershipRevoked = config.onOwnershipRevoked
   }
 
   /**
@@ -131,6 +138,13 @@ export class ApiActivityEmitter {
    */
   getWorkerId(): string {
     return this.workerId
+  }
+
+  /**
+   * Check if ownership has been revoked (circuit breaker tripped)
+   */
+  isOwnershipRevoked(): boolean {
+    return this.ownershipRevoked
   }
 
   /**
@@ -197,6 +211,8 @@ export class ApiActivityEmitter {
     milestone: ProgressMilestone,
     message: string
   ): Promise<boolean> {
+    if (this.ownershipRevoked) return false
+
     try {
       const response = await fetch(
         `${this.apiBaseUrl}/api/sessions/${this.sessionId}/progress`,
@@ -373,6 +389,8 @@ export class ApiActivityEmitter {
    * Queue an activity for emission with rate limiting
    */
   private async queueActivity(activity: QueuedActivity): Promise<void> {
+    if (this.ownershipRevoked) return
+
     this.queue.push(activity)
 
     // Schedule flush if not already scheduled
@@ -477,6 +495,8 @@ export class ApiActivityEmitter {
    * Emit a single activity to Linear via API
    */
   private async emitActivity(activity: QueuedActivity): Promise<void> {
+    if (this.ownershipRevoked) return
+
     try {
       const content = this.includeTimestamps
         ? `[${new Date().toISOString()}] ${activity.content}`
@@ -516,6 +536,15 @@ export class ApiActivityEmitter {
       this.onActivityEmitted?.(activity.type, content)
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error))
+
+      // Circuit breaker: stop emitting if session ownership was revoked
+      if (err.message.includes('403') && err.message.includes('owned by another worker')) {
+        this.ownershipRevoked = true
+        console.warn(`[${this.sessionId}] Session ownership revoked — stopping activity emission`)
+        this.onOwnershipRevoked?.()
+        return
+      }
+
       console.error(`Failed to emit ${activity.type} activity via API:`, err)
       this.onActivityError?.(activity.type, err)
     }

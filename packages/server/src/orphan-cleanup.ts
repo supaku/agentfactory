@@ -84,6 +84,17 @@ export async function findOrphanedSessions(): Promise<AgentSessionState[]> {
       continue
     }
 
+    // Grace period: skip sessions updated recently — prevents race when a worker
+    // re-registers with a new ID but hasn't transferred session ownership yet
+    const sessionAge = Date.now() - session.updatedAt
+    if (sessionAge < ORPHAN_THRESHOLD_MS) {
+      log.debug('Session recently updated, skipping orphan check', {
+        sessionId: session.linearSessionId,
+        ageMs: sessionAge,
+      })
+      continue
+    }
+
     // If session has no worker assigned, it's orphaned
     if (!session.workerId) {
       log.debug('Session has no worker assigned', {
