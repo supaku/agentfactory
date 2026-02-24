@@ -19,6 +19,7 @@ prompt: |
   Verify PR is ready to merge (CI passing, no conflicts).
   Merge the PR using: gh pr merge <PR_NUMBER> --squash
   After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+
   {{> partials/repo-validation}}
   {{> partials/work-result-marker}}{{> partials/cli-instructions}}
   {{#if mentionContext}}

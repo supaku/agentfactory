@@ -32,6 +32,7 @@ prompt: |
   - ALL sub-issues must be in Delivered status before proceeding
   - The PR must pass CI and have no conflicts
   - If merge fails, report the error and do not mark as Accepted
+  - NEVER manually change the parent issue status. The orchestrator manages all status transitions based on your WORK_RESULT marker.
   {{> partials/work-result-marker}}
   {{> partials/repo-validation}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}

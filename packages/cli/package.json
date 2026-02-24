@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-cli",
-  "version": "0.7.26",
+  "version": "0.7.27",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Supaku (https://supaku.com)",

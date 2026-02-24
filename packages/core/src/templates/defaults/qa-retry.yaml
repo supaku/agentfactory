@@ -28,4 +28,5 @@ prompt: |
   4. If issues persist, provide detailed failure reasons
   5. If all checks pass, report QA_PASSED
 
+
   {{> partials/work-result-marker}}

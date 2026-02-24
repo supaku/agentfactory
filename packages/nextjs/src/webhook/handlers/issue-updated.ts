@@ -337,7 +337,7 @@ export async function handleIssueUpdated(
       try {
         await linearClient.createComment(
           issueId,
-          `## Automated QA Started\n\nQA attempt #${attemptCount + 1} has been queued.\n\nThe QA agent will:\n1. Checkout the PR branch\n2. Run tests and validation\n3. Verify implementation against requirements\n4. Update status to Delivered (pass) or Backlog (fail)`
+          `## Automated QA Started\n\nQA attempt #${attemptCount + 1} has been queued.\n\nThe QA agent will:\n1. Checkout the PR branch\n2. Run tests and validation\n3. Verify implementation against requirements\n4. Promote to Delivered (pass) or return to Backlog (fail)`
         )
       } catch (err) {
         issueLog.error('Failed to post QA start comment', { error: err })
@@ -483,11 +483,12 @@ export async function handleIssueUpdated(
 
     // Skip transitions from states that don't indicate readiness for development
     // (e.g., Backlog → Backlog is a no-op, Started → Backlog means work was abandoned)
-    const allowedPreviousStates = ['Icebox', 'Rejected', 'Canceled']
+    // Finished → Backlog is a QA failure (QA fail status is now Backlog instead of Rejected)
+    const allowedPreviousStates = ['Icebox', 'Rejected', 'Canceled', 'Finished']
     if (!allowedPreviousStates.includes(previousStateName ?? '')) {
       issueLog.debug('Issue transitioned to Backlog from non-triggering state', { previousStateName })
     } else {
-      const isRetry = previousStateName === 'Rejected'
+      const isRetry = previousStateName === 'Rejected' || previousStateName === 'Finished'
 
       issueLog.info('Issue transitioned to Backlog', {
         previousStateName,

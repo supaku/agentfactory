@@ -19,6 +19,8 @@ const QA_PASS_PATTERNS = [
   /QA\s+Result:\s*Pass/i,
   /QA\s+Status:\s*Passed/i,
   /QA\s+(?:Result|Status|Verdict):\s*✅/i,
+  /Overall\s+(?:QA\s+)?Result:\s*PASS/i,
+  /Roll-?Up\s+Verdict:\s*PASS/i,
 ]
 
 const QA_FAIL_PATTERNS = [
@@ -27,6 +29,9 @@ const QA_FAIL_PATTERNS = [
   /QA\s+Result:\s*Fail/i,
   /QA\s+Status:\s*Failed/i,
   /QA\s+(?:Result|Status|Verdict):\s*❌/i,
+  /Overall\s+(?:QA\s+)?Result:\s*FAIL/i,
+  /Roll-?Up\s+Verdict:\s*FAIL/i,
+  /Parent\s+QA\s+verdict:\s*FAIL/i,
 ]
 
 const ACCEPTANCE_PASS_PATTERNS = [

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.27
+
+### Fixes
+
+- **Prevent QA state loop caused by agents manually changing issue status** — QA coordination agents were bypassing the orchestrator by calling `pnpm af-linear update-issue --state` directly, creating a Finished→Backlog→Started→Finished loop. Added explicit "never manually change status" instruction to the `work-result-marker` partial (included in all QA/acceptance templates) and reinforced in coordination templates.
+- **Route QA failures to Backlog instead of Rejected** — Changed `WORK_TYPE_FAIL_STATUS` for `qa` and `qa-coordination` from `Rejected` to `Backlog`, so failed QA issues go directly back to the developer/coordinator with failure context instead of requiring a refinement intermediary. Updated the webhook handler to accept `Finished→Backlog` as a valid retry path with circuit breaker checks.
+- **Detect coordination-style QA output in work result parser** — Added heuristic patterns for `Overall Result: FAIL`, `Roll-Up Verdict: FAIL`, and `Parent QA verdict: FAIL` (and PASS counterparts) so the orchestrator correctly detects pass/fail from QA coordination agents even without the structured marker.
+
 ## v0.7.26
 
 ### Fixes

@@ -24,14 +24,15 @@ prompt: |
   5. Collect results — ALL sub-issues must pass QA for the parent to pass
 
   RESULT HANDLING:
-  - If ALL pass: Mark parent as complete (transitions to Delivered). Update each sub-issue to Delivered.
-  - If ANY fail: Post rollup comment listing per-sub-issue results. Parent stays in Finished status.
+  - If ALL pass: Emit <!-- WORK_RESULT:passed --> in your final message. The orchestrator will promote to Delivered.
+  - If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed --> in your final message. The orchestrator will move the issue to Backlog for remediation.
 
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT create PRs or make git commits
   - The PR already exists from the development coordination phase
   - Run pnpm test, pnpm typecheck, and pnpm build as part of validation
   - Verify each sub-issue's acceptance criteria against the actual code changes
+  - NEVER manually change the parent issue status. The orchestrator manages all status transitions based on your WORK_RESULT marker.
   {{> partials/work-result-marker}}
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}

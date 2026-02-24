@@ -91,6 +91,30 @@ describe('parseWorkResult', () => {
         'failed'
       )
     })
+
+    it('detects "Overall Result: FAIL" (coordination style)', () => {
+      expect(parseWorkResult('**Overall Result: FAIL** — 4 of 6 phases failed', 'qa-coordination')).toBe('failed')
+    })
+
+    it('detects "Overall QA Result: FAIL" (coordination style)', () => {
+      expect(parseWorkResult('**Overall QA Result: FAIL (0/6 sub-issues pass)**', 'qa-coordination')).toBe('failed')
+    })
+
+    it('detects "Roll-Up Verdict: FAIL"', () => {
+      expect(parseWorkResult('### Roll-Up Verdict: FAIL (0/6 sub-issues pass)', 'qa-coordination')).toBe('failed')
+    })
+
+    it('detects "Parent QA verdict: FAIL"', () => {
+      expect(parseWorkResult('**Parent QA verdict: FAIL — requires fixes**', 'qa-coordination')).toBe('failed')
+    })
+
+    it('detects "Overall Result: PASS" (coordination style)', () => {
+      expect(parseWorkResult('**Overall Result: PASS** — all phases passed', 'qa-coordination')).toBe('passed')
+    })
+
+    it('detects "Roll-Up Verdict: PASS"', () => {
+      expect(parseWorkResult('### Roll-Up Verdict: PASS (6/6 sub-issues pass)', 'qa-coordination')).toBe('passed')
+    })
   })
 
   // Acceptance heuristic pattern tests
