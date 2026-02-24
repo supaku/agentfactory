@@ -107,7 +107,7 @@ export interface OrchestratorIssue {
   url: string
   priority: number
   labels: string[]
-  /** Team name resolved from the issue (used to set LINEAR_TEAM_NAME env var) */
+  /** Team key resolved from the issue (used to set LINEAR_TEAM_NAME env var) */
   teamName?: string
   /** Project name resolved from the issue (used for path scoping in monorepos) */
   projectName?: string
@@ -177,7 +177,7 @@ export interface SpawnAgentOptions {
   workType?: AgentWorkType
   /** Custom prompt override. If not provided, generates prompt based on workType */
   prompt?: string
-  /** Team name to set as LINEAR_TEAM_NAME env var for agents */
+  /** Team key to set as LINEAR_TEAM_NAME env var for agents */
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string
@@ -232,7 +232,7 @@ export interface SpawnAgentWithResumeOptions {
   claudeSessionId?: string
   /** Type of work: determines transitions and agent behavior (defaults to 'development') */
   workType?: AgentWorkType
-  /** Team name to set as LINEAR_TEAM_NAME env var for agents */
+  /** Team key to set as LINEAR_TEAM_NAME env var for agents */
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string

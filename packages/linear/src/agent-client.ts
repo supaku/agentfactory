@@ -338,10 +338,23 @@ export class LinearAgentClient {
   }
 
   /**
-   * Get a team by ID or key
+   * Get a team by ID, key, or display name
    */
-  async getTeam(teamIdOrKey: string) {
-    return this.withRetry(() => this.client.team(teamIdOrKey))
+  async getTeam(teamIdOrKeyOrName: string) {
+    return this.withRetry(async () => {
+      try {
+        return await this.client.team(teamIdOrKeyOrName)
+      } catch {
+        // Fallback: search by display name
+        const teams = await this.client.teams({
+          filter: { name: { eqIgnoreCase: teamIdOrKeyOrName } },
+        })
+        if (teams.nodes.length === 0) {
+          throw new Error(`Team not found: "${teamIdOrKeyOrName}"`)
+        }
+        return teams.nodes[0]
+      }
+    })
   }
 
   /**

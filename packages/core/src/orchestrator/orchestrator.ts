@@ -1015,7 +1015,7 @@ export class AgentOrchestrator {
         url: issue.url,
         priority: issue.priority,
         labels: labels.nodes.map((l: { name: string }) => l.name),
-        teamName: team?.name,
+        teamName: team?.key,
         projectName: resolvedProjectName,
       })
     }
@@ -2625,7 +2625,7 @@ export class AgentOrchestrator {
     const identifier = issue.identifier
     const issueId = issue.id // Use the actual UUID
     const team = await issue.team
-    const teamName = team?.name
+    const teamName = team?.key
 
     // Resolve project name for path scoping in monorepos
     let projectName: string | undefined
@@ -2920,7 +2920,7 @@ export class AgentOrchestrator {
         const issue = await this.client.getIssue(issueId)
         identifier = issue.identifier
         const issueTeam = await issue.team
-        teamName = issueTeam?.name
+        teamName = issueTeam?.key
 
         // Auto-detect work type from issue status if not provided
         // This prevents defaulting to 'development' which would cause

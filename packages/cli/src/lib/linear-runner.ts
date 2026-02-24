@@ -562,7 +562,7 @@ async function createBlocker(
   const sourceTeam = await sourceIssue.team
   const sourceProject = await sourceIssue.project
 
-  const teamName = options.team ?? sourceTeam?.name
+  const teamName = options.team ?? sourceTeam?.key
   if (!teamName) {
     throw new Error('Could not resolve team from source issue. Provide --team explicitly.')
   }

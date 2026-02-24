@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.26
+
+### Fixes
+
+- **Fix Linear CLI team resolution (name vs key)** — The orchestrator passed the team display name (e.g., "Supaku") as `LINEAR_TEAM_NAME`, but the Linear SDK's `team()` method only accepts team keys ("SUP") or UUIDs. Agents wasted many turns reverse-engineering the correct key. Now passes `team?.key` instead of `team?.name` in all three orchestrator locations and the `createBlocker` CLI fallback.
+- **Make `getTeam()` resilient to display names** — `AgentClient.getTeam()` now falls back to a name search when key/ID lookup fails, so agents manually passing `--team "Supaku"` also work.
+
 ## v0.7.25
 
 ### Fixes
