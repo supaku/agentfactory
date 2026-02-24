@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.23
+
+### Features
+
+- **Governor production logging** — New colorized, structured output for the governor CLI replacing plain `console.log`. Startup banner with version/config/integration status, per-scan summary with dispatched/skipped counts, and Linear API quota progress bars (request + complexity) with green/yellow/red thresholds.
+- **API call counting for leak diagnosis** — `LinearAgentClient` now tracks per-scan API call counts (`apiCallCount`/`resetApiCallCount()`) and extracts quota headers via `onApiResponse` callback. Displayed alongside quota bars to help diagnose rate limit consumption.
+
+### Fixes
+
+- **Eliminate 2 redundant API calls per dispatch** — `dispatchWork` now receives the full `GovernorIssue` (already resolved during scan) instead of an `issueId` string. Removes the `getIssue()` + lazy project resolution calls that were re-fetching data already available from the scan query.
+- **Consolidated rawRequest type** — Replaced 4 inline `this.client as unknown as { client: { rawRequest... } }` casts with a shared `RawGraphQLClient` type alias in `agent-client.ts`.
+
 ## v0.7.22
 
 ### Features

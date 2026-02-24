@@ -258,24 +258,18 @@ export function createRealDependencies(
 
     // -----------------------------------------------------------------------
     // 10. dispatchWork -- create Linear session and queue work
+    //     Accepts GovernorIssue directly (already resolved in the scan),
+    //     eliminating 2 redundant API calls per dispatch.
     // -----------------------------------------------------------------------
-    dispatchWork: async (issueId: string, action: GovernorAction): Promise<void> => {
+    dispatchWork: async (issue: GovernorIssue, action: GovernorAction): Promise<void> => {
+      const issueId = issue.id
+      const issueIdentifier = issue.identifier
+      const projectName = issue.project
+
       try {
         const workType = actionToWorkType(action)
 
-        log.info('Dispatching work', { issueId, action, workType })
-
-        // Fetch the issue to get its identifier and project for the queue entry
-        let issueIdentifier = issueId
-        let projectName: string | undefined
-        try {
-          const issue = await config.linearClient.getIssue(issueId)
-          issueIdentifier = issue.identifier
-          const project = await (issue as unknown as { project: PromiseLike<{ name: string } | null> }).project
-          projectName = project?.name
-        } catch {
-          log.warn('Could not fetch issue details, using issueId', { issueId })
-        }
+        log.info('Dispatching work', { issueId, issueIdentifier, action, workType })
 
         // Create a Linear Agent Session on the issue so the UI shows activity
         // Use OAuth client (Agent API) if available, fall back to personal API key

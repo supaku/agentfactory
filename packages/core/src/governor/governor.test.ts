@@ -93,7 +93,7 @@ describe('WorkflowGovernor.scanOnce', () => {
     const results = await governor.scanOnce()
 
     expect(results[0]!.actionsDispatched).toBe(1)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
   })
 
   it('dispatches QA for Finished issues', async () => {
@@ -106,7 +106,7 @@ describe('WorkflowGovernor.scanOnce', () => {
     const results = await governor.scanOnce()
 
     expect(results[0]!.actionsDispatched).toBe(1)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-qa')
   })
 
   it('dispatches acceptance for Delivered issues', async () => {
@@ -119,7 +119,7 @@ describe('WorkflowGovernor.scanOnce', () => {
     const results = await governor.scanOnce()
 
     expect(results[0]!.actionsDispatched).toBe(1)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-acceptance')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-acceptance')
   })
 
   it('dispatches refinement for Rejected issues', async () => {
@@ -132,7 +132,7 @@ describe('WorkflowGovernor.scanOnce', () => {
     const results = await governor.scanOnce()
 
     expect(results[0]!.actionsDispatched).toBe(1)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-refinement')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-refinement')
   })
 
   it('skips issues with active sessions', async () => {
@@ -573,9 +573,9 @@ describe('WorkflowGovernor.scanOnce — PRIORITY override sorting', () => {
 
     expect(dispatchWork).toHaveBeenCalledTimes(3)
     // high-1 dispatched first, then med-1, then low-1
-    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
-    expect(dispatchWork.mock.calls[1]![0]).toBe('med-1')
-    expect(dispatchWork.mock.calls[2]![0]).toBe('low-1')
+    expect(dispatchWork.mock.calls[0]![0]).toEqual(expect.objectContaining({ id: 'high-1' }))
+    expect(dispatchWork.mock.calls[1]![0]).toEqual(expect.objectContaining({ id: 'med-1' }))
+    expect(dispatchWork.mock.calls[2]![0]).toEqual(expect.objectContaining({ id: 'low-1' }))
   })
 
   it('dispatches priority-overridden issues before non-overridden ones', async () => {
@@ -602,7 +602,7 @@ describe('WorkflowGovernor.scanOnce — PRIORITY override sorting', () => {
 
     expect(dispatchWork).toHaveBeenCalledTimes(3)
     // high-1 dispatched first, regardless of list order
-    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
+    expect(dispatchWork.mock.calls[0]![0]).toEqual(expect.objectContaining({ id: 'high-1' }))
   })
 
   it('priority sorting affects which issues get dispatched under the limit', async () => {
@@ -632,7 +632,7 @@ describe('WorkflowGovernor.scanOnce — PRIORITY override sorting', () => {
     await governor.scanOnce()
 
     expect(dispatchWork).toHaveBeenCalledTimes(1)
-    expect(dispatchWork.mock.calls[0]![0]).toBe('high-1')
+    expect(dispatchWork.mock.calls[0]![0]).toEqual(expect.objectContaining({ id: 'high-1' }))
   })
 
   it('issues with equal priority maintain stable order', async () => {
@@ -654,8 +654,8 @@ describe('WorkflowGovernor.scanOnce — PRIORITY override sorting', () => {
 
     expect(dispatchWork).toHaveBeenCalledTimes(3)
     // Original order preserved for equal priority
-    expect(dispatchWork.mock.calls[0]![0]).toBe('a')
-    expect(dispatchWork.mock.calls[1]![0]).toBe('b')
-    expect(dispatchWork.mock.calls[2]![0]).toBe('c')
+    expect(dispatchWork.mock.calls[0]![0]).toEqual(expect.objectContaining({ id: 'a' }))
+    expect(dispatchWork.mock.calls[1]![0]).toEqual(expect.objectContaining({ id: 'b' }))
+    expect(dispatchWork.mock.calls[2]![0]).toEqual(expect.objectContaining({ id: 'c' }))
   })
 })

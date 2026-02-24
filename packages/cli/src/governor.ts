@@ -24,6 +24,8 @@
  */
 
 import path from 'path'
+import { fileURLToPath } from 'url'
+import { readFileSync } from 'fs'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local
@@ -35,8 +37,13 @@ import {
   type GovernorRunnerConfig,
 } from './lib/governor-runner.js'
 import { createRealDependencies } from './lib/governor-dependencies.js'
-import { createLinearAgentClient, type LinearAgentClient } from '@supaku/agentfactory-linear'
-import { initTouchpointStorage } from '@supaku/agentfactory'
+import {
+  printStartupBanner,
+  printScanSummary,
+  printCircuitBreakerWarning,
+} from './lib/governor-logger.js'
+import { createLinearAgentClient, type LinearAgentClient, type LinearApiQuota } from '@supaku/agentfactory-linear'
+import { createLogger, initTouchpointStorage } from '@supaku/agentfactory'
 import {
   RedisOverrideStorage,
   listStoredWorkspaces,
@@ -46,6 +53,27 @@ import {
 } from '@supaku/agentfactory-server'
 import type { GovernorDependencies, GovernorIssue, GovernorAction, ScanResult } from '@supaku/agentfactory'
 import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@supaku/agentfactory-linear'
+
+// ---------------------------------------------------------------------------
+// Logger
+// ---------------------------------------------------------------------------
+
+const log = createLogger({ workerShortId: 'governor' })
+
+// ---------------------------------------------------------------------------
+// Version
+// ---------------------------------------------------------------------------
+
+function getVersion(): string {
+  try {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url))
+    const pkgPath = path.resolve(__dirname, '..', 'package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    return pkg.version ?? 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Stub dependencies
@@ -60,11 +88,6 @@ import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@supaku/agentf
  * Wave 3) will provide the real implementations.
  */
 function createStubDependencies(): GovernorDependencies {
-  const log = {
-    warn: (msg: string, data?: Record<string, unknown>) =>
-      console.warn(`[governor-stub] ${msg}`, data ? JSON.stringify(data) : ''),
-  }
-
   return {
     listIssues: async (_project: string): Promise<GovernorIssue[]> => {
       log.warn('listIssues stub called — no issues returned', { project: _project })
@@ -78,8 +101,8 @@ function createStubDependencies(): GovernorDependencies {
     getWorkflowStrategy: async (_issueId: string): Promise<string | undefined> => undefined,
     isResearchCompleted: async (_issueId: string): Promise<boolean> => false,
     isBacklogCreationCompleted: async (_issueId: string): Promise<boolean> => false,
-    dispatchWork: async (_issueId: string, _action: GovernorAction): Promise<void> => {
-      log.warn('dispatchWork stub called', { issueId: _issueId, action: _action })
+    dispatchWork: async (_issue: GovernorIssue, _action: GovernorAction): Promise<void> => {
+      log.warn('dispatchWork stub called', { issueId: _issue.id, action: _action })
     },
   }
 }
@@ -118,26 +141,24 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  console.log('AgentFactory Governor')
-  console.log('=====================')
-  console.log(`Projects: ${args.projects.join(', ')}`)
-  console.log(`Scan interval: ${args.scanIntervalMs}ms`)
-  console.log(`Max dispatches per scan: ${args.maxConcurrentDispatches}`)
-  console.log(`Execution mode: ${args.mode}`)
-  console.log(`Mode: ${args.once ? 'single scan' : 'continuous'}`)
-  console.log('')
+  const version = getVersion()
 
   // -----------------------------------------------------------------------
   // Choose real or stub dependencies based on environment
   // -----------------------------------------------------------------------
   let dependencies: GovernorDependencies
+  let linearClient: ReturnType<typeof createLinearAgentClient> | undefined
 
   const linearApiKey = process.env.LINEAR_API_KEY
   const redisUrl = process.env.REDIS_URL
 
-  if (linearApiKey) {
-    console.log('LINEAR_API_KEY detected — using real dependencies')
+  // Track latest quota from API responses
+  let latestQuota: LinearApiQuota | undefined
 
+  let redisConnected = false
+  let oauthResolved = false
+
+  if (linearApiKey) {
     // Resolve OAuth token from Redis for Agent API operations
     let oauthClient: LinearAgentClient | undefined
     let organizationId: string | undefined
@@ -148,7 +169,7 @@ async function main(): Promise<void> {
 
     // Initialize touchpoint storage (for isHeld / getOverridePriority) when Redis is available
     if (redisUrl) {
-      console.log('REDIS_URL detected — initializing Redis-backed touchpoint storage')
+      redisConnected = true
       initTouchpointStorage(new RedisOverrideStorage())
 
       // Resolve OAuth token for Linear Agent API (createAgentSessionOnIssue)
@@ -160,7 +181,6 @@ async function main(): Promise<void> {
           // Create shared Redis rate limiter and circuit breaker for this workspace
           rateLimiterStrategy = createRedisTokenBucket(organizationId)
           circuitBreakerStrategy = createRedisCircuitBreaker(organizationId)
-          console.log(`Redis rate limiter + circuit breaker initialized for workspace ${organizationId}`)
 
           const accessToken = await getAccessToken(organizationId)
           if (accessToken) {
@@ -169,24 +189,23 @@ async function main(): Promise<void> {
               rateLimiterStrategy,
               circuitBreakerStrategy,
             })
-            console.log(`OAuth token resolved for workspace ${organizationId}`)
-          } else {
-            console.warn('Warning: No OAuth access token found — agent sessions will use personal API key')
+            oauthResolved = true
           }
-        } else {
-          console.warn('Warning: No stored workspaces found — agent sessions will use personal API key')
         }
       } catch (err) {
-        console.warn('Warning: Failed to resolve OAuth token —', err instanceof Error ? err.message : err)
+        log.warn('Failed to resolve OAuth token', {
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
-    } else {
-      console.warn('Warning: REDIS_URL not set — touchpoint overrides (HOLD, PRIORITY) will not persist')
     }
 
-    const linearClient = createLinearAgentClient({
+    linearClient = createLinearAgentClient({
       apiKey: linearApiKey,
       rateLimiterStrategy,
       circuitBreakerStrategy,
+      onApiResponse: (quota) => {
+        latestQuota = quota
+      },
     })
 
     dependencies = createRealDependencies({
@@ -196,10 +215,34 @@ async function main(): Promise<void> {
       generatePrompt: defaultGeneratePrompt,
     })
   } else {
-    console.warn('Warning: LINEAR_API_KEY not set — using stub dependencies (no real work will be dispatched)')
+    log.warn('LINEAR_API_KEY not set — using stub dependencies (no real work will be dispatched)')
     dependencies = createStubDependencies()
   }
 
+  // -----------------------------------------------------------------------
+  // Print startup banner
+  // -----------------------------------------------------------------------
+  printStartupBanner({
+    version,
+    projects: args.projects,
+    scanIntervalMs: args.scanIntervalMs,
+    maxConcurrentDispatches: args.maxConcurrentDispatches,
+    mode: args.mode,
+    once: args.once,
+    features: {
+      autoResearch: args.enableAutoResearch,
+      autoBacklogCreation: args.enableAutoBacklogCreation,
+      autoDevelopment: args.enableAutoDevelopment,
+      autoQA: args.enableAutoQA,
+      autoAcceptance: args.enableAutoAcceptance,
+    },
+    redisConnected,
+    oauthResolved,
+  })
+
+  // -----------------------------------------------------------------------
+  // Configure and run
+  // -----------------------------------------------------------------------
   const runnerConfig: GovernorRunnerConfig = {
     projects: args.projects,
     scanIntervalMs: args.scanIntervalMs,
@@ -214,17 +257,24 @@ async function main(): Promise<void> {
     dependencies,
     callbacks: {
       onScanComplete: (results: ScanResult[]) => {
-        for (const result of results) {
-          console.log(`[${result.project}] Scanned ${result.scannedIssues} issues, dispatched ${result.actionsDispatched}`)
-          if (result.errors.length > 0) {
-            for (const err of result.errors) {
-              console.error(`  Error: ${err.issueId} — ${err.error}`)
-            }
+        const apiCalls = linearClient?.apiCallCount
+        printScanSummary(results, 0, latestQuota, apiCalls)
+
+        // Check circuit breaker status if available
+        // (CircuitBreaker instances expose a .state getter)
+        if (linearClient) {
+          const breaker = (linearClient as unknown as { circuitBreaker?: { state?: string } }).circuitBreaker
+          if (breaker?.state && breaker.state !== 'closed') {
+            printCircuitBreakerWarning(breaker.state)
           }
         }
+
+        // Reset for next scan
+        linearClient?.resetApiCallCount()
+        latestQuota = undefined
       },
       onError: (error: Error) => {
-        console.error('Governor error:', error.message)
+        log.error('Governor error', { error: error.message })
       },
     },
   }
@@ -234,22 +284,24 @@ async function main(): Promise<void> {
 
     if (args.once && scanResults) {
       // Print summary and exit
+      const apiCalls = linearClient?.apiCallCount
+      printScanSummary(scanResults, 0, latestQuota, apiCalls)
+
       let totalDispatched = 0
       let totalErrors = 0
       for (const result of scanResults) {
         totalDispatched += result.actionsDispatched
         totalErrors += result.errors.length
       }
-      console.log('')
-      console.log(`Scan complete: ${totalDispatched} actions dispatched, ${totalErrors} errors`)
+      log.info(`Scan complete: ${totalDispatched} dispatched, ${totalErrors} errors`)
       return
     }
 
     // Continuous mode — handle graceful shutdown
-    console.log('Governor running. Press Ctrl+C to stop.')
+    log.info('Governor running. Press Ctrl+C to stop.')
 
     const shutdown = () => {
-      console.log('\nShutting down governor...')
+      log.info('Shutting down governor...')
       governor.stop()
       process.exit(0)
     }
@@ -257,12 +309,12 @@ async function main(): Promise<void> {
     process.on('SIGINT', shutdown)
     process.on('SIGTERM', shutdown)
   } catch (error) {
-    console.error('Governor failed:', error instanceof Error ? error.message : error)
+    log.error('Governor failed', { error: error instanceof Error ? error.message : String(error) })
     process.exit(1)
   }
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error)
+  log.error('Fatal error', { error: error instanceof Error ? error.message : String(error) })
   process.exit(1)
 })

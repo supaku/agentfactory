@@ -215,7 +215,7 @@ describe('EventDrivenGovernor — issue-status-changed events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
 
     await governor.stop()
   })
@@ -232,7 +232,7 @@ describe('EventDrivenGovernor — issue-status-changed events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-qa')
 
     await governor.stop()
   })
@@ -249,7 +249,7 @@ describe('EventDrivenGovernor — issue-status-changed events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-acceptance')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-acceptance')
 
     await governor.stop()
   })
@@ -266,7 +266,7 @@ describe('EventDrivenGovernor — issue-status-changed events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-refinement')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-refinement')
 
     await governor.stop()
   })
@@ -344,7 +344,7 @@ describe('EventDrivenGovernor — session-completed events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-qa')
 
     await governor.stop()
   })
@@ -367,7 +367,7 @@ describe('EventDrivenGovernor — poll-snapshot events', () => {
     await bus.publish(event)
     await waitForProcessing()
 
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
 
     await governor.stop()
   })
@@ -449,7 +449,7 @@ describe('EventDrivenGovernor — comment-added events', () => {
     expect(state).toBeNull()
 
     // Issue should have been re-evaluated and dispatched
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
 
     await governor.stop()
   })
@@ -487,7 +487,7 @@ describe('EventDrivenGovernor — comment-added events', () => {
     await waitForProcessing()
 
     // Should still evaluate the issue
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
 
     await governor.stop()
   })
@@ -681,7 +681,7 @@ describe('EventDrivenGovernor — error handling', () => {
 
     // First event failed during context gathering, second event dispatched
     expect(deps.dispatchWork).toHaveBeenCalledTimes(1)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-2', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-2' }), 'trigger-development')
 
     await governor.stop()
   })
@@ -709,9 +709,9 @@ describe('EventDrivenGovernor — sequential event processing', () => {
     await waitForProcessing()
 
     expect(deps.dispatchWork).toHaveBeenCalledTimes(3)
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-2', 'trigger-qa')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-3', 'trigger-acceptance')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-2' }), 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-3' }), 'trigger-acceptance')
 
     await governor.stop()
   })
@@ -742,8 +742,8 @@ describe('EventDrivenGovernor — pollSweep', () => {
 
     // The poll sweep publishes events that get processed by the event loop
     expect(deps.listIssues).toHaveBeenCalledWith('ProjectA')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-1', 'trigger-development')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('issue-2', 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-1' }), 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'issue-2' }), 'trigger-qa')
 
     await governor.stop()
   })
@@ -771,8 +771,8 @@ describe('EventDrivenGovernor — pollSweep', () => {
 
     expect(listIssues).toHaveBeenCalledWith('ProjectA')
     expect(listIssues).toHaveBeenCalledWith('ProjectB')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('a-1', 'trigger-development')
-    expect(deps.dispatchWork).toHaveBeenCalledWith('b-1', 'trigger-qa')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-1' }), 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-1' }), 'trigger-qa')
 
     await governor.stop()
   })
@@ -794,7 +794,7 @@ describe('EventDrivenGovernor — pollSweep', () => {
     await waitForProcessing()
 
     // ProjectB's issue should still be published and processed
-    expect(deps.dispatchWork).toHaveBeenCalledWith('b-1', 'trigger-development')
+    expect(deps.dispatchWork).toHaveBeenCalledWith(expect.objectContaining({ id: 'b-1' }), 'trigger-development')
 
     await governor.stop()
   })

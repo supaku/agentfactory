@@ -6,6 +6,7 @@ import {
 import type { Issue, Comment } from '@linear/sdk'
 import type {
   LinearAgentClientConfig,
+  LinearApiQuota,
   LinearWorkflowStatus,
   StatusMapping,
   RetryConfig,
@@ -41,7 +42,9 @@ export class LinearAgentClient {
   private readonly retryConfig: Required<RetryConfig>
   private readonly rateLimiter: RateLimiterStrategy
   private readonly circuitBreaker: CircuitBreakerStrategy
+  private readonly onApiResponse?: (quota: LinearApiQuota) => void
   private statusCache: Map<string, StatusMapping> = new Map()
+  private _apiCallCount = 0
 
   constructor(config: LinearAgentClientConfig) {
     this.client = new LinearClient({
@@ -54,6 +57,17 @@ export class LinearAgentClient {
     }
     this.rateLimiter = config.rateLimiterStrategy ?? new TokenBucket(config.rateLimit)
     this.circuitBreaker = config.circuitBreakerStrategy ?? new CircuitBreaker(config.circuitBreaker)
+    this.onApiResponse = config.onApiResponse
+  }
+
+  /** Number of successful API calls since last reset */
+  get apiCallCount(): number {
+    return this._apiCallCount
+  }
+
+  /** Reset the API call counter (typically called at the start of each scan) */
+  resetApiCallCount(): void {
+    this._apiCallCount = 0
   }
 
   /**
@@ -94,6 +108,7 @@ export class LinearAgentClient {
           const result = await fn()
           // Record success to close/reset the circuit
           await this.circuitBreaker.recordSuccess()
+          this._apiCallCount++
           return result
         } catch (error) {
           // Check if this is an auth error that should trip the circuit
@@ -576,11 +591,13 @@ export class LinearAgentClient {
     `
 
     try {
-      const result = await (this.client as unknown as {
-        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
-      }).client.rawRequest(query, { id: issueId })
+      const result = await (this.client as unknown as { client: RawGraphQLClient }).client.rawRequest(query, { id: issueId })
 
       await this.circuitBreaker.recordSuccess()
+      this._apiCallCount++
+
+      const quota = extractQuotaFromHeaders(result.headers)
+      if (quota) this.onApiResponse?.(quota)
 
       const data = result.data as {
         issue: {
@@ -764,9 +781,7 @@ export class LinearAgentClient {
     const terminalStatuses = ['Accepted', 'Canceled', 'Duplicate']
 
     try {
-      const result = await (this.client as unknown as {
-        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
-      }).client.rawRequest(query, {
+      const result = await (this.client as unknown as { client: RawGraphQLClient }).client.rawRequest(query, {
         filter: {
           project: { name: { eq: project } },
           state: { name: { nin: terminalStatuses } },
@@ -775,6 +790,11 @@ export class LinearAgentClient {
 
       // Record success on circuit breaker
       await this.circuitBreaker.recordSuccess()
+      this._apiCallCount++
+
+      // Extract and report quota
+      const quota = extractQuotaFromHeaders(result.headers)
+      if (quota) this.onApiResponse?.(quota)
 
       const data = result.data as {
         issues: {
@@ -873,11 +893,13 @@ export class LinearAgentClient {
     `
 
     try {
-      const result = await (this.client as unknown as {
-        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
-      }).client.rawRequest(query, { id: issueIdOrIdentifier })
+      const result = await (this.client as unknown as { client: RawGraphQLClient }).client.rawRequest(query, { id: issueIdOrIdentifier })
 
       await this.circuitBreaker.recordSuccess()
+      this._apiCallCount++
+
+      const quota = extractQuotaFromHeaders(result.headers)
+      if (quota) this.onApiResponse?.(quota)
 
       const data = result.data as {
         issue: {
@@ -1006,11 +1028,13 @@ export class LinearAgentClient {
     `
 
     try {
-      const result = await (this.client as unknown as {
-        client: { rawRequest: (query: string, variables: Record<string, unknown>) => Promise<{ data: unknown }> }
-      }).client.rawRequest(query, { id: issueIdOrIdentifier })
+      const result = await (this.client as unknown as { client: RawGraphQLClient }).client.rawRequest(query, { id: issueIdOrIdentifier })
 
       await this.circuitBreaker.recordSuccess()
+      this._apiCallCount++
+
+      const quota = extractQuotaFromHeaders(result.headers)
+      if (quota) this.onApiResponse?.(quota)
 
       const data = result.data as {
         issue: {
@@ -1109,6 +1133,53 @@ export function createLinearAgentClient(
   config: LinearAgentClientConfig
 ): LinearAgentClient {
   return new LinearAgentClient(config)
+}
+
+// ---------------------------------------------------------------------------
+// Raw GraphQL client type
+// ---------------------------------------------------------------------------
+
+/**
+ * Type for the inner GraphQL client used by rawRequest calls.
+ * The response may include headers from the Linear API.
+ */
+type RawGraphQLClient = {
+  rawRequest: (
+    query: string,
+    variables: Record<string, unknown>,
+  ) => Promise<{ data: unknown; headers?: Headers | Map<string, string> }>
+}
+
+/**
+ * Extract quota information from Linear API response headers.
+ */
+function extractQuotaFromHeaders(
+  headers?: Headers | Map<string, string>,
+): LinearApiQuota | undefined {
+  if (!headers) return undefined
+
+  const get = (key: string): string | undefined | null => {
+    if (headers instanceof Map) return headers.get(key) ?? undefined
+    if (typeof (headers as Headers).get === 'function') return (headers as Headers).get(key)
+    return undefined
+  }
+
+  const requestsRemaining = get('x-ratelimit-requests-remaining')
+  const requestsLimit = get('x-ratelimit-requests-limit')
+  const complexityRemaining = get('x-ratelimit-complexity-remaining')
+  const complexityLimit = get('x-ratelimit-complexity-limit')
+  const resetSeconds = get('x-ratelimit-requests-reset')
+
+  // Only return if we got at least one header
+  if (!requestsRemaining && !complexityRemaining) return undefined
+
+  return {
+    requestsRemaining: requestsRemaining ? parseInt(requestsRemaining, 10) : undefined,
+    requestsLimit: requestsLimit ? parseInt(requestsLimit, 10) : undefined,
+    complexityRemaining: complexityRemaining ? parseInt(complexityRemaining, 10) : undefined,
+    complexityLimit: complexityLimit ? parseInt(complexityLimit, 10) : undefined,
+    resetSeconds: resetSeconds ? parseInt(resetSeconds, 10) : undefined,
+  }
 }
 
 // ---------------------------------------------------------------------------

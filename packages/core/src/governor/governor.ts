@@ -82,7 +82,7 @@ export interface GovernorDependencies {
   /** Check if the backlog-creation phase has been completed for an issue */
   isBacklogCreationCompleted: (issueId: string) => Promise<boolean>
   /** Dispatch work for an issue with a specific action */
-  dispatchWork: (issueId: string, action: GovernorAction) => Promise<void>
+  dispatchWork: (issue: GovernorIssue, action: GovernorAction) => Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +290,7 @@ export class WorkflowGovernor {
       }
 
       try {
-        await this.deps.dispatchWork(item.issue.id, item.action)
+        await this.deps.dispatchWork(item.issue, item.action)
         result.actionsDispatched++
 
         log.info('Dispatched action', {

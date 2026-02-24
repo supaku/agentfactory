@@ -235,6 +235,22 @@ export interface CircuitBreakerConfig {
 /**
  * Configuration for the Linear Agent Client
  */
+/**
+ * Quota information extracted from Linear API response headers.
+ */
+export interface LinearApiQuota {
+  /** Remaining requests in the current window */
+  requestsRemaining?: number
+  /** Total request limit for the current window */
+  requestsLimit?: number
+  /** Remaining complexity points in the current window */
+  complexityRemaining?: number
+  /** Total complexity limit for the current window */
+  complexityLimit?: number
+  /** Seconds until the rate limit window resets */
+  resetSeconds?: number
+}
+
 export interface LinearAgentClientConfig {
   apiKey: string
   baseUrl?: string
@@ -253,6 +269,12 @@ export interface LinearAgentClientConfig {
    * When provided, replaces the default in-memory CircuitBreaker.
    */
   circuitBreakerStrategy?: CircuitBreakerStrategy
+  /**
+   * Optional callback invoked after each successful API response.
+   * Receives quota information extracted from response headers.
+   * Use this to track API consumption across scans.
+   */
+  onApiResponse?: (quota: LinearApiQuota) => void
 }
 
 /**

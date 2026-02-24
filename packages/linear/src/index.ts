@@ -45,6 +45,8 @@ export type {
   RateLimiterStrategy,
   CircuitBreakerStrategy,
   CircuitBreakerConfig,
+  // API quota tracking
+  LinearApiQuota,
 } from './types.js'
 
 // Work type mappings for status-based routing

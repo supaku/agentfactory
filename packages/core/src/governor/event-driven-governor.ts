@@ -397,7 +397,7 @@ export class EventDrivenGovernor {
       reason: decision.reason,
     })
 
-    await this.deps.dispatchWork(issue.id, decision.action)
+    await this.deps.dispatchWork(issue, decision.action)
   }
 
   // -------------------------------------------------------------------------
