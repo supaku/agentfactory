@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.25
+
+### Fixes
+
+- **Fix governor version display showing "vunknown"** — `getVersion()` resolved `package.json` one directory level too shallow from the compiled `dist/src/` output, landing in `dist/` instead of the package root. Fixed path to go up two levels.
+- **Eliminate per-issue isParentIssue API calls burning Linear quota** — The `parentIssueIds` cache only tracked parent issues, so every non-parent issue (the majority) fell through to an individual API call. With 128 issues in a single project scanned every 60s, this easily exceeded the 5,000 req/hr limit. Added a `scannedIssueIds` set so issues already seen in the batch query return immediately without an API fallback.
+- **Wire onScanComplete callback in continuous governor mode** — `WorkflowGovernor.start()` discarded `scanOnce()` results in fire-and-forget mode, so `printScanSummary` with its colorized output and quota progress bars never rendered. Added `WorkflowGovernorCallbacks` to the governor constructor so the CLI receives scan results on every cycle.
+
 ## v0.7.24
 
 ### Fixes

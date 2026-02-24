@@ -88,9 +88,12 @@ export function createRealDependencies(
 ): GovernorDependencies {
   const processingState = new RedisProcessingStateStorage()
 
-  // Cache of parent issue IDs populated by listIssues() single GraphQL query.
-  // Eliminates per-issue isParentIssue() API calls during governor scans.
+  // Caches populated by listIssues() single GraphQL query.
+  // parentIssueIds: issues with children (isParent = true)
+  // scannedIssueIds: all issues returned by the last scan (isParent known definitively)
+  // Only issues NOT in scannedIssueIds need an API fallback (e.g., webhook-driven).
   const parentIssueIds = new Set<string>()
+  const scannedIssueIds = new Set<string>()
 
   return {
     // -----------------------------------------------------------------------
@@ -100,9 +103,11 @@ export function createRealDependencies(
       try {
         const rawIssues = await config.linearClient.listProjectIssues(project)
 
-        // Cache parent issue IDs for isParentIssue() lookups
+        // Cache issue IDs for isParentIssue() lookups — avoids per-issue API calls
         parentIssueIds.clear()
+        scannedIssueIds.clear()
         for (const issue of rawIssues) {
+          scannedIssueIds.add(issue.id)
           if (issue.childCount > 0) {
             parentIssueIds.add(issue.id)
           }
@@ -168,7 +173,10 @@ export function createRealDependencies(
       // Check cached parent IDs from listIssues (populated by single GraphQL query)
       if (parentIssueIds.has(issueId)) return true
 
-      // Fall back to API for issues not in the last scan (e.g., webhook-driven)
+      // If the issue was in the scan, we know definitively it's not a parent
+      if (scannedIssueIds.has(issueId)) return false
+
+      // Fall back to API only for issues not in the last scan (e.g., webhook-driven)
       try {
         return await config.linearClient.isParentIssue(issueId)
       } catch (err) {

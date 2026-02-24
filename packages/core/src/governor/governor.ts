@@ -94,16 +94,22 @@ export interface GovernorDependencies {
  * evaluates each issue against the decision engine, and dispatches
  * agent work for actionable issues.
  */
+export interface WorkflowGovernorCallbacks {
+  onScanComplete?: (results: ScanResult[]) => void
+}
+
 export class WorkflowGovernor {
   private readonly config: GovernorConfig
   private readonly deps: GovernorDependencies
+  private readonly callbacks: WorkflowGovernorCallbacks
   private intervalHandle: ReturnType<typeof setInterval> | null = null
   private running = false
   private scanning = false
 
-  constructor(config: Partial<GovernorConfig>, deps: GovernorDependencies) {
+  constructor(config: Partial<GovernorConfig>, deps: GovernorDependencies, callbacks?: WorkflowGovernorCallbacks) {
     this.config = { ...DEFAULT_GOVERNOR_CONFIG, ...config }
     this.deps = deps
+    this.callbacks = callbacks ?? {}
   }
 
   // -------------------------------------------------------------------------
@@ -197,6 +203,8 @@ export class WorkflowGovernor {
     } finally {
       this.scanning = false
     }
+
+    this.callbacks.onScanComplete?.(results)
 
     return results
   }

@@ -14,6 +14,7 @@ import {
   type GovernorDependencies,
   type GovernorEventBus,
   type EventDeduplicator,
+  type WorkflowGovernorCallbacks,
 } from '@supaku/agentfactory'
 import type {
   GovernorConfig,
@@ -130,12 +131,14 @@ export async function runGovernor(
   }
 
   // -- Poll-only mode (default) --
-  const governor = new WorkflowGovernor(governorConfig, config.dependencies)
+  const governorCallbacks: WorkflowGovernorCallbacks = {
+    onScanComplete: config.callbacks?.onScanComplete,
+  }
+  const governor = new WorkflowGovernor(governorConfig, config.dependencies, governorCallbacks)
 
   // -- Single scan mode (--once) --
   if (config.once) {
     const results = await governor.scanOnce()
-    config.callbacks?.onScanComplete?.(results)
     return { governor, scanResults: results }
   }
 
