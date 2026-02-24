@@ -40,6 +40,7 @@ import {
   appendFailureSummary,
   clearWorkflowState,
   extractFailureReason,
+  markAcceptanceCompleted,
   type WorkflowPhase,
 } from '@supaku/agentfactory-server'
 import { formatErrorForComment } from './error-formatting.js'
@@ -231,9 +232,11 @@ export function createWebhookOrchestrator(
 
                 // On QA/acceptance failure: increment cycle count and append failure summary
                 const isResultSensitive = phase === 'qa' || phase === 'acceptance'
-                if (isResultSensitive && agent.workResult === 'failed') {
+                if (isResultSensitive && (agent.workResult === 'failed' || agent.workResult === 'unknown')) {
                   const state = await incrementCycleCount(agent.issueId)
-                  const failureReason = extractFailureReason(agent.resultMessage)
+                  const failureReason = agent.workResult === 'unknown'
+                    ? 'Agent completed without a structured WORK_RESULT marker (treated as failure)'
+                    : extractFailureReason(agent.resultMessage)
                   const formattedFailure = `--- Cycle ${state.cycleCount}, ${phase} (${new Date().toISOString()}) ---\n${failureReason}`
                   await appendFailureSummary(agent.issueId, formattedFailure)
 
@@ -242,12 +245,14 @@ export function createWebhookOrchestrator(
                     cycleCount: state.cycleCount,
                     strategy: state.strategy,
                     phase,
+                    workResult: agent.workResult,
                   })
                 }
 
                 // On acceptance pass: clear workflow state (issue is done)
                 if (phase === 'acceptance' && agent.workResult === 'passed') {
                   await clearWorkflowState(agent.issueId)
+                  await markAcceptanceCompleted(agent.issueId)
                   log.info('Workflow state cleared after acceptance pass', {
                     issueId: agent.issueId,
                   })

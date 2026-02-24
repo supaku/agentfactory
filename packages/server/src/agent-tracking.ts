@@ -20,14 +20,16 @@ const QA_ATTEMPT_PREFIX = 'qa:attempt:'
 const QA_FAILED_PREFIX = 'qa:failed:'
 const DEV_QUEUED_PREFIX = 'agent:dev-queued:'
 const ACCEPTANCE_QUEUED_PREFIX = 'agent:acceptance-queued:'
+const ACCEPTANCE_COMPLETED_PREFIX = 'agent:acceptance-completed:'
 const WORKFLOW_STATE_PREFIX = 'workflow:state:'
 
 // TTLs in seconds
 const AGENT_WORKED_TTL = 7 * 24 * 60 * 60 // 7 days
 const QA_ATTEMPT_TTL = 24 * 60 * 60 // 24 hours
 const QA_FAILED_TTL = 60 * 60 // 1 hour
-const DEV_QUEUED_TTL = 10 // 10 seconds - just enough to prevent duplicate webhooks
-const ACCEPTANCE_QUEUED_TTL = 10 // 10 seconds - just enough to prevent duplicate webhooks
+const DEV_QUEUED_TTL = 300 // 5 minutes
+const ACCEPTANCE_QUEUED_TTL = 300 // 5 minutes
+const ACCEPTANCE_COMPLETED_TTL = 30 * 60 // 30 minutes
 const WORKFLOW_STATE_TTL = 30 * 24 * 60 * 60 // 30 days
 
 /**
@@ -426,9 +428,59 @@ export async function cleanupAcceptedIssue(issueId: string): Promise<void> {
     `${QA_FAILED_PREFIX}${issueId}`,
     `${DEV_QUEUED_PREFIX}${issueId}`,
     `${ACCEPTANCE_QUEUED_PREFIX}${issueId}`,
+    `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`,
     `${WORKFLOW_STATE_PREFIX}${issueId}`,
   ]
 
   await Promise.all(keysToDelete.map((key) => redisDel(key)))
   log.info('Cleaned up all tracking data for accepted issue', { issueId })
+}
+
+/**
+ * Maximum total sessions (across all phases) allowed per issue.
+ * Once reached, no more automated sessions will be created.
+ */
+export const MAX_TOTAL_SESSIONS = 8
+
+/**
+ * Get the total number of sessions across all workflow phases for an issue.
+ * Returns 0 if no workflow state exists.
+ */
+export async function getTotalSessionCount(issueId: string): Promise<number> {
+  const state = await getWorkflowState(issueId)
+  if (!state) return 0
+
+  return (
+    state.phases.development.length +
+    state.phases.qa.length +
+    state.phases.refinement.length +
+    state.phases.acceptance.length
+  )
+}
+
+/**
+ * Mark an issue as having just completed acceptance.
+ * Prevents re-triggering acceptance within the cooldown window.
+ */
+export async function markAcceptanceCompleted(issueId: string): Promise<void> {
+  const key = `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`
+  await redisSet(key, { completedAt: Date.now() }, ACCEPTANCE_COMPLETED_TTL)
+  log.info('Marked acceptance completed', { issueId })
+}
+
+/**
+ * Check if acceptance was recently completed for an issue (within cooldown period)
+ */
+export async function didAcceptanceJustComplete(issueId: string): Promise<boolean> {
+  const key = `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`
+  return redisExists(key)
+}
+
+/**
+ * Clear acceptance completed marker
+ */
+export async function clearAcceptanceCompleted(issueId: string): Promise<void> {
+  const key = `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`
+  await redisDel(key)
+  log.debug('Cleared acceptance completed marker', { issueId })
 }

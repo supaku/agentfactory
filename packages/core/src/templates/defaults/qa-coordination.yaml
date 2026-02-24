@@ -33,6 +33,12 @@ prompt: |
   - Run pnpm test, pnpm typecheck, and pnpm build as part of validation
   - Verify each sub-issue's acceptance criteria against the actual code changes
   - NEVER manually change the parent issue status. The orchestrator manages all status transitions based on your WORK_RESULT marker.
+
+  HARD FAIL RULE — BUILD FAILURES:
+  If `pnpm typecheck` or `pnpm build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
+  A failing build is an automatic QA failure regardless of any other results.
+
   {{> partials/work-result-marker}}
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}

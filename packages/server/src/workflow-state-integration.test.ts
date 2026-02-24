@@ -35,6 +35,11 @@ import {
   appendFailureSummary,
   clearWorkflowState,
   extractFailureReason,
+  getTotalSessionCount,
+  MAX_TOTAL_SESSIONS,
+  markAcceptanceCompleted,
+  didAcceptanceJustComplete,
+  clearAcceptanceCompleted,
   type EscalationStrategy,
 } from './agent-tracking.js'
 
@@ -349,5 +354,80 @@ describe('escalate-human blocker creation data', () => {
       // Verify computeStrategy matches what's stored
       expect(computeStrategy(state.cycleCount)).toBe(state.strategy)
     }
+  })
+})
+
+describe('getTotalSessionCount', () => {
+  const issueId = 'session-count-test-001'
+  const issueIdentifier = 'TEST-SC'
+
+  it('returns 0 for nonexistent issue', async () => {
+    const count = await getTotalSessionCount('nonexistent-issue-id')
+    expect(count).toBe(0)
+  })
+
+  it('correctly sums across all phases', async () => {
+    await updateWorkflowState(issueId, { issueIdentifier })
+
+    // Add 2 development, 2 qa, 1 refinement, 1 acceptance
+    await recordPhaseAttempt(issueId, 'development', {
+      attempt: 1, sessionId: 'dev-1', startedAt: Date.now(), result: 'passed', costUsd: 1.0,
+    })
+    await recordPhaseAttempt(issueId, 'development', {
+      attempt: 2, sessionId: 'dev-2', startedAt: Date.now(), result: 'passed', costUsd: 1.0,
+    })
+    await recordPhaseAttempt(issueId, 'qa', {
+      attempt: 1, sessionId: 'qa-1', startedAt: Date.now(), result: 'failed', costUsd: 0.5,
+    })
+    await recordPhaseAttempt(issueId, 'qa', {
+      attempt: 2, sessionId: 'qa-2', startedAt: Date.now(), result: 'passed', costUsd: 0.5,
+    })
+    await recordPhaseAttempt(issueId, 'refinement', {
+      attempt: 1, sessionId: 'ref-1', startedAt: Date.now(), result: 'passed', costUsd: 0.3,
+    })
+    await recordPhaseAttempt(issueId, 'acceptance', {
+      attempt: 1, sessionId: 'acc-1', startedAt: Date.now(), result: 'passed', costUsd: 0.2,
+    })
+
+    const count = await getTotalSessionCount(issueId)
+    expect(count).toBe(6) // 2 + 2 + 1 + 1
+  })
+
+  it('returns count that would hit MAX_TOTAL_SESSIONS', async () => {
+    await updateWorkflowState(issueId, { issueIdentifier })
+
+    // Add exactly MAX_TOTAL_SESSIONS phase records
+    for (let i = 0; i < MAX_TOTAL_SESSIONS; i++) {
+      const phase = i % 2 === 0 ? 'development' : 'qa'
+      await recordPhaseAttempt(issueId, phase as 'development' | 'qa', {
+        attempt: i + 1, sessionId: `session-${i}`, startedAt: Date.now(), result: 'passed',
+      })
+    }
+
+    const count = await getTotalSessionCount(issueId)
+    expect(count).toBe(MAX_TOTAL_SESSIONS)
+    expect(count >= MAX_TOTAL_SESSIONS).toBe(true)
+  })
+})
+
+describe('acceptance completion lock', () => {
+  const issueId = 'acceptance-lock-test-001'
+
+  it('returns false before marking, true after marking', async () => {
+    const beforeMark = await didAcceptanceJustComplete(issueId)
+    expect(beforeMark).toBe(false)
+
+    await markAcceptanceCompleted(issueId)
+
+    const afterMark = await didAcceptanceJustComplete(issueId)
+    expect(afterMark).toBe(true)
+  })
+
+  it('returns false after clearing', async () => {
+    await markAcceptanceCompleted(issueId)
+    expect(await didAcceptanceJustComplete(issueId)).toBe(true)
+
+    await clearAcceptanceCompleted(issueId)
+    expect(await didAcceptanceJustComplete(issueId)).toBe(false)
   })
 })

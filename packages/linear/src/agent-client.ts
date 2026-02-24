@@ -869,6 +869,22 @@ export class LinearAgentClient {
   }
 
   /**
+   * Check if any sub-issues have been worked on (moved beyond unworked states).
+   *
+   * Used to decide whether to use acceptance-coordination (for parent issues
+   * whose sub-issues were actually worked) vs regular acceptance (for parent
+   * issues with only unworked sub-issues).
+   *
+   * @param issueId - The parent issue ID or identifier
+   * @returns True if at least one sub-issue has moved beyond Backlog/Icebox/Triage
+   */
+  async hasWorkedSubIssues(issueId: string): Promise<boolean> {
+    const statuses = await this.getSubIssueStatuses(issueId)
+    const unworkedStates = new Set(['Backlog', 'Icebox', 'Triage'])
+    return statuses.some(s => !unworkedStates.has(s.status))
+  }
+
+  /**
    * Get lightweight sub-issue statuses (no blocking relations)
    *
    * Uses a single raw GraphQL query instead of N+1 lazy-loaded SDK calls.

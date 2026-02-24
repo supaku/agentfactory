@@ -35,6 +35,9 @@ import {
   didJustQueueAcceptance,
   markAcceptanceQueued,
   getWorkflowState,
+  getTotalSessionCount,
+  MAX_TOTAL_SESSIONS,
+  didAcceptanceJustComplete,
 } from '@supaku/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -185,6 +188,13 @@ export async function handleIssueUpdated(
         issueLog.error('Failed to post QA limit comment', { error: err })
       }
       return NextResponse.json({ success: true, skipped: true, reason: 'qa_limit_reached' })
+    }
+
+    const totalSessionsQA = await getTotalSessionCount(issueId)
+    if (totalSessionsQA >= MAX_TOTAL_SESSIONS) {
+      const agentClient = await config.linearClient.getClient(payload.organizationId)
+      await agentClient.createComment(issueId, `\u26a0\ufe0f **Session hard cap reached** (${totalSessionsQA}/${MAX_TOTAL_SESSIONS}). No more automated sessions will be created for this issue. Manual intervention required.`)
+      return NextResponse.json({ success: true, skipped: true, reason: 'session_hard_cap' })
     }
 
     const idempotencyKey = generateIdempotencyKey(webhookId, `qa:${issueId}:${Date.now()}`)
@@ -518,6 +528,13 @@ export async function handleIssueUpdated(
         }
       }
 
+      const totalSessionsDev = await getTotalSessionCount(issueId)
+      if (totalSessionsDev >= MAX_TOTAL_SESSIONS) {
+        const agentClient = await config.linearClient.getClient(payload.organizationId)
+        await agentClient.createComment(issueId, `\u26a0\ufe0f **Session hard cap reached** (${totalSessionsDev}/${MAX_TOTAL_SESSIONS}). No more automated sessions will be created for this issue. Manual intervention required.`)
+        return NextResponse.json({ success: true, skipped: true, reason: 'session_hard_cap' })
+      }
+
       const existingSession = await getSessionStateByIssue(issueId)
       if (existingSession && ['running', 'claimed', 'pending'].includes(existingSession.status)) {
         issueLog.info('Session already active, skipping development trigger')
@@ -714,6 +731,17 @@ export async function handleIssueUpdated(
         return NextResponse.json({ success: true, skipped: true, reason: 'acceptance_cooldown' })
       }
 
+      if (await didAcceptanceJustComplete(issueId)) {
+        return NextResponse.json({ success: true, skipped: true, reason: 'acceptance_recently_completed' })
+      }
+
+      const totalSessionsAcc = await getTotalSessionCount(issueId)
+      if (totalSessionsAcc >= MAX_TOTAL_SESSIONS) {
+        const agentClient = await config.linearClient.getClient(payload.organizationId)
+        await agentClient.createComment(issueId, `\u26a0\ufe0f **Session hard cap reached** (${totalSessionsAcc}/${MAX_TOTAL_SESSIONS}). No more automated sessions will be created for this issue. Manual intervention required.`)
+        return NextResponse.json({ success: true, skipped: true, reason: 'session_hard_cap' })
+      }
+
       const idempotencyKey = generateIdempotencyKey(webhookId, `acceptance:${issueId}:${Date.now()}`)
       if (await isWebhookProcessed(idempotencyKey)) {
         issueLog.info('Duplicate acceptance trigger ignored', { idempotencyKey })
@@ -748,15 +776,20 @@ export async function handleIssueUpdated(
 
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
-      // Detect parent → acceptance-coordination
+      // Detect parent → acceptance-coordination (only if sub-issues were actually worked)
       let acceptanceWorkType: AgentWorkType = 'acceptance'
       let acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance')
       try {
         const isParent = await linearClient.isParentIssue(issueId)
         if (isParent) {
-          acceptanceWorkType = 'acceptance-coordination'
-          acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance-coordination')
-          issueLog.info('Parent issue detected, using acceptance-coordination work type')
+          const hasWorked = await linearClient.hasWorkedSubIssues(issueId)
+          if (hasWorked) {
+            acceptanceWorkType = 'acceptance-coordination'
+            acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance-coordination')
+            issueLog.info('Parent issue with worked sub-issues detected, using acceptance-coordination work type')
+          } else {
+            issueLog.info('Parent issue with no worked sub-issues, using regular acceptance work type')
+          }
         }
       } catch (err) {
         issueLog.warn('Failed to detect parent issue for acceptance routing', { error: err })

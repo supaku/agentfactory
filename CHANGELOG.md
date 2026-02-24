@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.28
+
+### Fixes
+
+- **Prevent runaway agent loops (SUP-855 post-mortem)** — Six fixes to stop multi-session spirals:
+  - Count `unknown` work results as failures so the 4-cycle escalation ladder fires correctly
+  - Increase cooldown TTLs from 10 seconds to 5 minutes to prevent immediate re-triggering
+  - Add per-issue hard cap of 8 total sessions with automatic escalation comment
+  - Harden QA templates to hard-fail on build/typecheck errors instead of rationalizing them
+  - Skip acceptance-coordination when sub-issues were never actually worked
+  - Add 30-minute post-acceptance lock to prevent re-triggering after merge
+
 ## v0.7.27
 
 ### Fixes
