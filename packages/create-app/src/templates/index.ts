@@ -97,6 +97,7 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
   // ── Agent definitions ──────────────────────────────────────────
 
   files['.claude/CLAUDE.md'] = claudeMd(opts)
+  files['AGENTS.md'] = agentsMd(opts)
   files['.claude/agents/developer.md'] = agentDefinitionDeveloper()
 
   return files
@@ -757,6 +758,41 @@ pnpm af-linear check-deployment <pr-number> [--format json|markdown]
 ## Environment
 
 Requires \`LINEAR_API_KEY\` or \`LINEAR_ACCESS_TOKEN\` in \`.env.local\`.
+
+## Build & Test
+
+\`\`\`bash
+pnpm dev          # Start dev server
+pnpm build        # Production build
+pnpm typecheck    # Type-check
+pnpm test         # Run tests
+\`\`\`
+`
+}
+
+function agentsMd(opts: TemplateOptions): string {
+  return `# ${opts.projectName}
+
+AgentFactory-powered project. Uses Linear for issue tracking.
+This file is used by OpenAI Codex agents (equivalent to .claude/CLAUDE.md for Claude agents).
+
+## Linear CLI
+
+Use \`pnpm af-linear\` for ALL Linear operations. All commands return JSON to stdout.
+
+\`\`\`bash
+pnpm af-linear get-issue <id>
+pnpm af-linear create-issue --title "Title" --team "${opts.teamKey}" [--description "..."]
+pnpm af-linear update-issue <id> [--title "..."] [--description "..."] [--state "..."]
+pnpm af-linear create-comment <issue-id> --body "Comment text"
+\`\`\`
+
+### Key Rules
+
+- \`--team\` is always required for \`create-issue\`
+- Use \`--state\` not \`--status\`
+- Use label names not UUIDs
+- All commands return JSON to stdout
 
 ## Build & Test
 

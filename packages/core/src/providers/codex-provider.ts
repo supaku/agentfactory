@@ -135,6 +135,204 @@ type CodexItem =
   | CodexTodoList
   | CodexErrorItem
 
+/** Exported for testing */
+export type { CodexEvent, CodexItem, CodexItemEvent }
+
+// ---------------------------------------------------------------------------
+// Event Mapping (exported for unit testing)
+// ---------------------------------------------------------------------------
+
+export interface CodexEventMapperState {
+  sessionId: string | null
+  totalInputTokens: number
+  totalOutputTokens: number
+  turnCount: number
+}
+
+/**
+ * Map a single Codex JSONL event to one or more normalized AgentEvents.
+ * Exported for unit testing — the AgentHandle uses this internally.
+ */
+export function mapCodexEvent(
+  event: CodexEvent,
+  state: CodexEventMapperState,
+): AgentEvent[] {
+  switch (event.type) {
+    case 'thread.started':
+      state.sessionId = event.thread_id
+      return [{
+        type: 'init',
+        sessionId: event.thread_id,
+        raw: event,
+      }]
+
+    case 'turn.started':
+      state.turnCount++
+      return [{
+        type: 'system',
+        subtype: 'turn_started',
+        message: `Turn ${state.turnCount} started`,
+        raw: event,
+      }]
+
+    case 'turn.completed':
+      if (event.usage) {
+        state.totalInputTokens += event.usage.input_tokens ?? 0
+        state.totalOutputTokens += event.usage.output_tokens ?? 0
+      }
+      return [{
+        type: 'result',
+        success: true,
+        cost: {
+          inputTokens: state.totalInputTokens || undefined,
+          outputTokens: state.totalOutputTokens || undefined,
+          numTurns: state.turnCount || undefined,
+        },
+        raw: event,
+      }]
+
+    case 'turn.failed':
+      return [{
+        type: 'result',
+        success: false,
+        errors: [event.error?.message ?? 'Turn failed'],
+        errorSubtype: 'turn_failed',
+        raw: event,
+      }]
+
+    case 'item.started':
+    case 'item.updated':
+    case 'item.completed':
+      return mapCodexItemEvent(event)
+
+    case 'error':
+      return [{
+        type: 'error',
+        message: event.message ?? 'Unknown error',
+        raw: event,
+      }]
+
+    default:
+      return [{
+        type: 'system',
+        subtype: 'unknown',
+        message: `Unhandled Codex event type: ${(event as { type: string }).type}`,
+        raw: event,
+      }]
+  }
+}
+
+/**
+ * Map a Codex item event to AgentEvents.
+ * Exported for unit testing.
+ */
+export function mapCodexItemEvent(event: CodexItemEvent): AgentEvent[] {
+  const item = event.item
+  const eventType = event.type
+
+  switch (item.type) {
+    case 'agent_message':
+      return [{
+        type: 'assistant_text',
+        text: item.text,
+        raw: event,
+      }]
+
+    case 'reasoning':
+      return [{
+        type: 'system',
+        subtype: 'reasoning',
+        message: item.text,
+        raw: event,
+      }]
+
+    case 'command_execution':
+      if (eventType === 'item.started') {
+        return [{
+          type: 'tool_use',
+          toolName: 'shell',
+          toolUseId: item.id,
+          input: { command: item.command },
+          raw: event,
+        }]
+      }
+      if (eventType === 'item.completed') {
+        return [{
+          type: 'tool_result',
+          toolName: 'shell',
+          toolUseId: item.id,
+          content: item.aggregated_output || '',
+          isError: item.status === 'failed' || (item.exit_code !== undefined && item.exit_code !== 0),
+          raw: event,
+        }]
+      }
+      return [{
+        type: 'system',
+        subtype: 'command_progress',
+        message: `Command: ${item.command} (${item.status})`,
+        raw: event,
+      }]
+
+    case 'file_change':
+      return [{
+        type: 'tool_result',
+        toolName: 'file_change',
+        toolUseId: item.id,
+        content: item.changes.map((c) => `${c.kind}: ${c.path}`).join('\n'),
+        isError: item.status === 'failed',
+        raw: event,
+      }]
+
+    case 'mcp_tool_call':
+      if (eventType === 'item.started') {
+        return [{
+          type: 'tool_use',
+          toolName: `mcp:${item.server}/${item.tool}`,
+          toolUseId: item.id,
+          input: (item.arguments ?? {}) as Record<string, unknown>,
+          raw: event,
+        }]
+      }
+      if (eventType === 'item.completed') {
+        const isError = item.status === 'failed' || !!item.error
+        const content = item.error?.message
+          ?? (item.result?.content ? JSON.stringify(item.result.content) : '')
+        return [{
+          type: 'tool_result',
+          toolName: `mcp:${item.server}/${item.tool}`,
+          toolUseId: item.id,
+          content,
+          isError,
+          raw: event,
+        }]
+      }
+      return []
+
+    case 'todo_list':
+      return [{
+        type: 'system',
+        subtype: 'todo_list',
+        message: item.items.map((t) => `${t.completed ? '[x]' : '[ ]'} ${t.text}`).join('\n'),
+        raw: event,
+      }]
+
+    case 'error':
+      return [{
+        type: 'error',
+        message: item.message,
+        raw: event,
+      }]
+
+    default:
+      return [{
+        type: 'system',
+        subtype: 'unknown_item',
+        message: `Unhandled Codex item type: ${(item as { type: string }).type}`,
+        raw: event,
+      }]
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -164,6 +362,12 @@ export class CodexProvider implements AgentProvider {
       // Sandbox and approval mode
       if (config.autonomous) {
         args.push('--full-auto')
+      } else {
+        // Non-autonomous: use suggest-equivalent approval mode
+        args.push('--approval-mode', 'untrusted')
+        if (config.sandboxEnabled) {
+          args.push('--sandbox', 'workspace-write')
+        }
       }
       args.push(resumeSessionId)
       // Prompt is the final positional arg
@@ -174,7 +378,13 @@ export class CodexProvider implements AgentProvider {
       args.push('--json')
       // Sandbox and approval mode
       if (config.autonomous) {
+        // --full-auto sets sandbox=workspace-write + approval=on-request
         args.push('--full-auto')
+      } else {
+        args.push('--approval-mode', 'untrusted')
+        if (config.sandboxEnabled) {
+          args.push('--sandbox', 'workspace-write')
+        }
       }
       // Working directory
       args.push('-C', config.cwd)
@@ -219,10 +429,12 @@ class CodexAgentHandle implements AgentHandle {
   sessionId: string | null = null
   private readonly child: ChildProcess
   private readonly abortController: AbortController
-  /** Accumulated usage across turns */
-  private totalInputTokens = 0
-  private totalOutputTokens = 0
-  private turnCount = 0
+  private readonly mapperState: CodexEventMapperState = {
+    sessionId: null,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    turnCount: 0,
+  }
 
   constructor(child: ChildProcess, abortController: AbortController) {
     this.child = child
@@ -286,8 +498,11 @@ class CodexAgentHandle implements AgentHandle {
         continue
       }
 
-      const mapped = this.mapEvent(event)
+      const mapped = mapCodexEvent(event, this.mapperState)
       for (const agentEvent of mapped) {
+        if (agentEvent.type === 'init') {
+          this.sessionId = this.mapperState.sessionId
+        }
         if (agentEvent.type === 'result') {
           hasResult = true
         }
@@ -311,9 +526,9 @@ class CodexAgentHandle implements AgentHandle {
           type: 'result',
           success: true,
           cost: {
-            inputTokens: this.totalInputTokens || undefined,
-            outputTokens: this.totalOutputTokens || undefined,
-            numTurns: this.turnCount || undefined,
+            inputTokens: this.mapperState.totalInputTokens || undefined,
+            outputTokens: this.mapperState.totalOutputTokens || undefined,
+            numTurns: this.mapperState.turnCount || undefined,
           },
           raw: { exitCode },
         }
@@ -329,179 +544,6 @@ class CodexAgentHandle implements AgentHandle {
     }
   }
 
-  private mapEvent(event: CodexEvent): AgentEvent[] {
-    switch (event.type) {
-      case 'thread.started':
-        this.sessionId = event.thread_id
-        return [{
-          type: 'init',
-          sessionId: event.thread_id,
-          raw: event,
-        }]
-
-      case 'turn.started':
-        this.turnCount++
-        return [{
-          type: 'system',
-          subtype: 'turn_started',
-          message: `Turn ${this.turnCount} started`,
-          raw: event,
-        }]
-
-      case 'turn.completed':
-        if (event.usage) {
-          this.totalInputTokens += event.usage.input_tokens ?? 0
-          this.totalOutputTokens += event.usage.output_tokens ?? 0
-        }
-        return [{
-          type: 'result',
-          success: true,
-          cost: {
-            inputTokens: this.totalInputTokens || undefined,
-            outputTokens: this.totalOutputTokens || undefined,
-            numTurns: this.turnCount || undefined,
-          },
-          raw: event,
-        }]
-
-      case 'turn.failed':
-        return [{
-          type: 'result',
-          success: false,
-          errors: [event.error?.message ?? 'Turn failed'],
-          errorSubtype: 'turn_failed',
-          raw: event,
-        }]
-
-      case 'item.started':
-      case 'item.updated':
-      case 'item.completed':
-        return this.mapItemEvent(event)
-
-      case 'error':
-        return [{
-          type: 'error',
-          message: event.message ?? 'Unknown error',
-          raw: event,
-        }]
-
-      default:
-        return [{
-          type: 'system',
-          subtype: 'unknown',
-          message: `Unhandled Codex event type: ${(event as { type: string }).type}`,
-          raw: event,
-        }]
-    }
-  }
-
-  private mapItemEvent(event: CodexItemEvent): AgentEvent[] {
-    const item = event.item
-    const eventType = event.type // 'item.started' | 'item.updated' | 'item.completed'
-
-    switch (item.type) {
-      case 'agent_message':
-        return [{
-          type: 'assistant_text',
-          text: item.text,
-          raw: event,
-        }]
-
-      case 'reasoning':
-        return [{
-          type: 'system',
-          subtype: 'reasoning',
-          message: item.text,
-          raw: event,
-        }]
-
-      case 'command_execution':
-        if (eventType === 'item.started') {
-          return [{
-            type: 'tool_use',
-            toolName: 'shell',
-            toolUseId: item.id,
-            input: { command: item.command },
-            raw: event,
-          }]
-        }
-        if (eventType === 'item.completed') {
-          return [{
-            type: 'tool_result',
-            toolName: 'shell',
-            toolUseId: item.id,
-            content: item.aggregated_output || '',
-            isError: item.status === 'failed' || (item.exit_code !== undefined && item.exit_code !== 0),
-            raw: event,
-          }]
-        }
-        // item.updated for commands — treat as progress
-        return [{
-          type: 'system',
-          subtype: 'command_progress',
-          message: `Command: ${item.command} (${item.status})`,
-          raw: event,
-        }]
-
-      case 'file_change':
-        return [{
-          type: 'tool_result',
-          toolName: 'file_change',
-          toolUseId: item.id,
-          content: item.changes.map((c) => `${c.kind}: ${c.path}`).join('\n'),
-          isError: item.status === 'failed',
-          raw: event,
-        }]
-
-      case 'mcp_tool_call':
-        if (eventType === 'item.started') {
-          return [{
-            type: 'tool_use',
-            toolName: `mcp:${item.server}/${item.tool}`,
-            toolUseId: item.id,
-            input: (item.arguments ?? {}) as Record<string, unknown>,
-            raw: event,
-          }]
-        }
-        if (eventType === 'item.completed') {
-          const isError = item.status === 'failed' || !!item.error
-          const content = item.error?.message
-            ?? (item.result?.content ? JSON.stringify(item.result.content) : '')
-          return [{
-            type: 'tool_result',
-            toolName: `mcp:${item.server}/${item.tool}`,
-            toolUseId: item.id,
-            content,
-            isError,
-            raw: event,
-          }]
-        }
-        return []
-
-      case 'todo_list':
-        return [{
-          type: 'system',
-          subtype: 'todo_list',
-          message: item.items.map((t) => `${t.completed ? '[x]' : '[ ]'} ${t.text}`).join('\n'),
-          raw: event,
-        }]
-
-      case 'error':
-        return [{
-          type: 'error',
-          message: item.message,
-          raw: event,
-        }]
-
-      default:
-        return [{
-          type: 'system',
-          subtype: 'unknown_item',
-          message: `Unhandled Codex item type: ${(item as { type: string }).type}`,
-          raw: event,
-        }]
-    }
-  }
 }
 
 /**
