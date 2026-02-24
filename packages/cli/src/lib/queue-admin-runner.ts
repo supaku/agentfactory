@@ -100,15 +100,15 @@ async function listQueue(): Promise<void> {
           queuedAt?: number
           workType?: string
           prompt?: string
-          claudeSessionId?: string
+          providerSessionId?: string
         }
         console.log(`- ${work.issueIdentifier ?? sessionId.slice(0, 8)} (session: ${sessionId.slice(0, 8)}...)`)
         console.log(`  Priority: ${work.priority ?? 'none'}, WorkType: ${work.workType ?? 'development'}`)
         if (work.queuedAt) {
           console.log(`  Queued: ${new Date(work.queuedAt).toISOString()}`)
         }
-        if (work.claudeSessionId) {
-          console.log(`  ${C.yellow}Has claudeSessionId: ${work.claudeSessionId.substring(0, 12)}${C.reset}`)
+        if (work.providerSessionId) {
+          console.log(`  ${C.yellow}Has providerSessionId: ${work.providerSessionId.substring(0, 12)}${C.reset}`)
         }
         if (work.prompt) {
           console.log(`  Prompt: "${work.prompt.slice(0, 50)}..."`)
@@ -251,10 +251,10 @@ async function clearQueue(): Promise<void> {
   // Show what we're clearing
   for (const [sessionId, itemJson] of Object.entries(workItems)) {
     try {
-      const work = JSON.parse(itemJson) as { issueIdentifier?: string; workType?: string; claudeSessionId?: string }
+      const work = JSON.parse(itemJson) as { issueIdentifier?: string; workType?: string; providerSessionId?: string }
       console.log(`  - ${work.issueIdentifier ?? sessionId.slice(0, 8)} (workType: ${work.workType || 'development'})`)
-      if (work.claudeSessionId) {
-        console.log(`    ${C.yellow}Has claudeSessionId: ${work.claudeSessionId.substring(0, 12)}${C.reset}`)
+      if (work.providerSessionId) {
+        console.log(`    ${C.yellow}Has providerSessionId: ${work.providerSessionId.substring(0, 12)}${C.reset}`)
       }
     } catch {
       console.log(`  - [invalid JSON]: ${sessionId}`)
@@ -375,7 +375,7 @@ async function resetWorkState(): Promise<void> {
       issueIdentifier?: string
       status: string
       workerId?: string
-      claudeSessionId?: string
+      providerSessionId?: string
       [key: string]: unknown
     }>(key)
 
@@ -390,7 +390,7 @@ async function resetWorkState(): Promise<void> {
         status: 'pending',
         workerId: undefined,
         claimedAt: undefined,
-        claudeSessionId: undefined,
+        providerSessionId: undefined,
         updatedAt: Math.floor(Date.now() / 1000),
       }
 

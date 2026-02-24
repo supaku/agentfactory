@@ -29,8 +29,8 @@ export interface WorktreeState {
   issueIdentifier: string
   /** Linear AgentSession ID (if available) */
   linearSessionId: string | null
-  /** Claude CLI session ID for --resume (if available) */
-  claudeSessionId: string | null
+  /** Provider CLI session ID for --resume (if available) */
+  providerSessionId: string | null
   /** Type of work being performed */
   workType: AgentWorkType
   /** The prompt that was given to the agent */

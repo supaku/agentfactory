@@ -18,6 +18,7 @@ export interface PublicSessionResponse {
   startedAt: string
   duration: number
   costUsd?: number
+  provider?: string
 }
 
 export interface PublicSessionsListResponse {

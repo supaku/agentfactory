@@ -328,7 +328,7 @@ export async function handleSessionCreated(
   await storeSessionState(sessionId, {
     issueId,
     issueIdentifier,
-    claudeSessionId: null,
+    providerSessionId: null,
     worktreePath: '',
     status: 'pending',
     queuedAt: Date.now(),

@@ -33,6 +33,6 @@ export {
   getBuiltinPartialsDir,
 } from './loader.js'
 
-export { ClaudeToolPermissionAdapter } from './adapters.js'
+export { ClaudeToolPermissionAdapter, CodexToolPermissionAdapter, createToolPermissionAdapter } from './adapters.js'
 
 export { renderPromptWithFallback } from './renderer.js'

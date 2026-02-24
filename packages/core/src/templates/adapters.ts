@@ -5,6 +5,7 @@
  */
 
 import type { ToolPermission, ToolPermissionAdapter } from './types.js'
+import type { AgentProviderName } from '../providers/types.js'
 
 /**
  * Claude Code tool permission adapter.
@@ -42,5 +43,50 @@ export class ClaudeToolPermissionAdapter implements ToolPermissionAdapter {
     }
 
     return String(permission)
+  }
+}
+
+/**
+ * OpenAI Codex tool permission adapter.
+ *
+ * Codex uses sandbox policies (--full-auto / workspace-write / read-only)
+ * and TOML-based sandbox_permissions rather than per-tool allowlists.
+ * Shell permissions are passed through as command patterns for documentation
+ * and future granular support.
+ *
+ *   { shell: "pnpm *" }  → "shell:pnpm *"
+ *   "user-input" → "user-input" (no-op — Codex exec is non-interactive)
+ */
+export class CodexToolPermissionAdapter implements ToolPermissionAdapter {
+  translatePermissions(permissions: ToolPermission[]): string[] {
+    return permissions.map(p => this.translateOne(p))
+  }
+
+  private translateOne(permission: ToolPermission): string {
+    if (typeof permission === 'string') {
+      return permission
+    }
+
+    if ('shell' in permission) {
+      return `shell:${permission.shell}`
+    }
+
+    return String(permission)
+  }
+}
+
+/**
+ * Create a tool permission adapter for the given provider.
+ */
+export function createToolPermissionAdapter(provider: AgentProviderName): ToolPermissionAdapter {
+  switch (provider) {
+    case 'claude':
+      return new ClaudeToolPermissionAdapter()
+    case 'codex':
+      return new CodexToolPermissionAdapter()
+    case 'amp':
+      return new ClaudeToolPermissionAdapter()
+    default:
+      return new ClaudeToolPermissionAdapter()
   }
 }

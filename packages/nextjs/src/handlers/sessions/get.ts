@@ -19,7 +19,7 @@ function toResponse(session: AgentSessionState): AgentSessionResponse {
     linearSessionId: session.linearSessionId,
     issueId: session.issueId,
     identifier: session.issueIdentifier || session.issueId.slice(0, 8),
-    claudeSessionId: session.claudeSessionId || undefined,
+    providerSessionId: session.providerSessionId || undefined,
     status: session.status,
     createdAt: new Date(session.createdAt * 1000).toISOString(),
     updatedAt: new Date(session.updatedAt * 1000).toISOString(),

@@ -306,7 +306,7 @@ export function createRealDependencies(
         await storeSessionState(finalSessionId, {
           issueId,
           issueIdentifier,
-          claudeSessionId: null,
+          providerSessionId: null,
           worktreePath: '',
           status: 'pending',
           workerId: null,

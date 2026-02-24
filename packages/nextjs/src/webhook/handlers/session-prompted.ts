@@ -118,7 +118,7 @@ export async function handleSessionPrompted(
       priority: 2,
       queuedAt: Date.now(),
       prompt: resumePrompt,
-      claudeSessionId: existingSession?.claudeSessionId || undefined,
+      providerSessionId: existingSession?.providerSessionId || undefined,
       workType,
       projectName: existingSession?.projectName,
     }
@@ -231,7 +231,7 @@ export async function handleSessionPrompted(
       priority: 2,
       queuedAt: Date.now(),
       prompt: effectivePrompt,
-      claudeSessionId: existingSession?.claudeSessionId || undefined,
+      providerSessionId: existingSession?.providerSessionId || undefined,
       workType: existingSession?.workType || 'inflight',
       projectName: existingSession?.projectName,
     }

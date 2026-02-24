@@ -54,7 +54,7 @@ export function AgentCard({ session, className, onSelect }: AgentCardProps) {
             {session.identifier}
           </span>
         </div>
-        <ProviderIcon size={14} className="shrink-0 opacity-40 group-hover:opacity-70 transition-opacity" />
+        <ProviderIcon provider={session.provider} size={14} className="shrink-0 opacity-40 group-hover:opacity-70 transition-opacity" />
       </div>
 
       {/* Badges */}

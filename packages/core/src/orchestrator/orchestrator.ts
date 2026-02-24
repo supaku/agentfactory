@@ -50,7 +50,7 @@ import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
-import { TemplateRegistry, ClaudeToolPermissionAdapter } from '../templates/index.js'
+import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
 import { loadRepositoryConfig } from '../config/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
@@ -485,7 +485,7 @@ function generatePromptForWorkType(
 
 LINEAR CLI (CRITICAL):
 Use the Linear CLI (\`pnpm af-linear\`) for ALL Linear operations. Do NOT use Linear MCP tools.
-See CLAUDE.md for the full command reference.
+See the project documentation (CLAUDE.md / AGENTS.md) for the full command reference.
 
 HUMAN-NEEDED BLOCKERS:
 If you encounter work that requires human action and cannot be resolved autonomously
@@ -530,7 +530,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'inflight':
@@ -546,7 +546,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'qa':
@@ -570,7 +570,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'acceptance':
@@ -635,7 +635,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'qa-coordination':
@@ -684,7 +684,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'acceptance-coordination':
@@ -718,7 +718,7 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in CLAUDE.md for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
   }
 
@@ -858,7 +858,7 @@ export class AgentOrchestrator {
         useBuiltinDefaults: true,
         frontend: 'linear',
       })
-      this.templateRegistry.setToolPermissionAdapter(new ClaudeToolPermissionAdapter())
+      this.templateRegistry.setToolPermissionAdapter(createToolPermissionAdapter(this.provider.name))
     } catch {
       // If template loading fails, fall back to hardcoded prompts
       this.templateRegistry = null
@@ -2141,13 +2141,13 @@ export class AgentOrchestrator {
     switch (event.type) {
       case 'init':
         log?.success('Agent initialized', { session: event.sessionId.substring(0, 12) })
-        agent.claudeSessionId = event.sessionId
+        agent.providerSessionId = event.sessionId
         this.updateLastActivity(issueId, 'init')
 
         // Update state with provider session ID
         try {
           updateState(agent.worktreePath, {
-            claudeSessionId: event.sessionId,
+            providerSessionId: event.sessionId,
             status: 'running',
             pid: agent.pid ?? null,
           })
@@ -2157,7 +2157,7 @@ export class AgentOrchestrator {
 
         // Notify via callback for external persistence
         if (sessionId) {
-          await this.events.onClaudeSessionId?.(sessionId, event.sessionId)
+          await this.events.onProviderSessionId?.(sessionId, event.sessionId)
         }
         break
 
@@ -2683,8 +2683,8 @@ export class AgentOrchestrator {
       // Build recovery prompt
       const recoveryPrompt = prompt ?? buildRecoveryPrompt(recoveryCheck.state, recoveryCheck.todos)
 
-      // Use existing Claude session ID for resume if available
-      const claudeSessionId = recoveryCheck.state.claudeSessionId ?? undefined
+      // Use existing provider session ID for resume if available
+      const providerSessionId = recoveryCheck.state.providerSessionId ?? undefined
 
       // Inherit work type from previous state if not provided
       const recoveryWorkType = workType ?? recoveryCheck.state.workType ?? effectiveWorkType
@@ -2707,7 +2707,7 @@ export class AgentOrchestrator {
         sessionId: effectiveSessionId,
         worktreePath,
         prompt: recoveryPrompt,
-        claudeSessionId,
+        providerSessionId,
         workType: recoveryWorkType,
         teamName,
         projectName,
@@ -2876,7 +2876,7 @@ export class AgentOrchestrator {
     issueId: string,
     sessionId: string,
     prompt: string,
-    claudeSessionId?: string,
+    providerSessionId?: string,
     workType?: AgentWorkType
   ): Promise<ForwardPromptResult> {
     const existingAgent = this.activeAgents.get(issueId)
@@ -2910,8 +2910,8 @@ export class AgentOrchestrator {
       worktreePath = existingAgent.worktreePath
       worktreeIdentifier = existingAgent.worktreeIdentifier
       identifier = existingAgent.identifier
-      // Use existing Claude session ID if not provided
-      claudeSessionId = claudeSessionId ?? existingAgent.claudeSessionId
+      // Use existing provider session ID if not provided
+      providerSessionId = providerSessionId ?? existingAgent.providerSessionId
       // Inherit work type from existing agent if not provided
       workType = workType ?? existingAgent.workType
     } else {
@@ -2966,7 +2966,7 @@ export class AgentOrchestrator {
       }
     }
 
-    // Spawn agent with resume if we have a Claude session ID
+    // Spawn agent with resume if we have a provider session ID
     try {
       const agent = await this.spawnAgentWithResume({
         issueId,
@@ -2975,14 +2975,14 @@ export class AgentOrchestrator {
         sessionId,
         worktreePath,
         prompt,
-        claudeSessionId,
+        providerSessionId,
         workType,
         teamName,
       })
 
       return {
         forwarded: true,
-        resumed: !!claudeSessionId,
+        resumed: !!providerSessionId,
         agent,
       }
     } catch (error) {
@@ -3068,7 +3068,7 @@ export class AgentOrchestrator {
    * If autoTransition is enabled, also transitions the issue status to the appropriate working state
    */
   async spawnAgentWithResume(options: SpawnAgentWithResumeOptions): Promise<AgentProcess> {
-    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, claudeSessionId, workType, teamName } = options
+    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName } = options
 
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
@@ -3097,7 +3097,7 @@ export class AgentOrchestrator {
       identifier,
       worktreeIdentifier,
       sessionId,
-      claudeSessionId,
+      providerSessionId,
       worktreePath,
       pid: undefined,
       status: 'starting',
@@ -3123,9 +3123,9 @@ export class AgentOrchestrator {
         workerId: this.config.apiActivityConfig?.workerId ?? null,
         pid: null, // Will be updated when process spawns
       })
-      // Preserve Claude session ID if resuming
-      if (claudeSessionId) {
-        initialState.claudeSessionId = claudeSessionId
+      // Preserve provider session ID if resuming
+      if (providerSessionId) {
+        initialState.providerSessionId = providerSessionId
       }
       writeState(worktreePath, initialState)
 
@@ -3261,7 +3261,7 @@ export class AgentOrchestrator {
     log.info('Starting agent via provider', {
       provider: this.provider.name,
       worktreePath,
-      resuming: !!claudeSessionId,
+      resuming: !!providerSessionId,
       workType: workType ?? 'development',
     })
 
@@ -3279,8 +3279,8 @@ export class AgentOrchestrator {
       },
     }
 
-    const handle = claudeSessionId
-      ? this.provider.resume(claudeSessionId, spawnConfig)
+    const handle = providerSessionId
+      ? this.provider.resume(providerSessionId, spawnConfig)
       : this.provider.spawn(spawnConfig)
 
     this.agentHandles.set(issueId, handle)

@@ -10,7 +10,7 @@ import {
   getSessionState,
   updateSessionStatus,
   updateSessionCostData,
-  updateClaudeSessionId,
+  updateProviderSessionId,
   startSession,
   type AgentSessionStatus,
   removeWorkerSession,
@@ -47,10 +47,10 @@ export function createSessionStatusPostHandler() {
 
     try {
       const body = await request.json()
-      const { workerId, status, claudeSessionId, worktreePath, error: errorInfo, totalCostUsd, inputTokens, outputTokens } = body as {
+      const { workerId, status, providerSessionId, worktreePath, error: errorInfo, totalCostUsd, inputTokens, outputTokens } = body as {
         workerId: string
         status: AgentSessionStatus
-        claudeSessionId?: string
+        providerSessionId?: string
         worktreePath?: string
         error?: unknown
         totalCostUsd?: number
@@ -97,8 +97,8 @@ export function createSessionStatusPostHandler() {
           await updateSessionStatus(sessionId, 'running')
         }
 
-        if (claudeSessionId) {
-          await updateClaudeSessionId(sessionId, claudeSessionId)
+        if (providerSessionId) {
+          await updateProviderSessionId(sessionId, providerSessionId)
         }
       } else if (status === 'finalizing') {
         await updateSessionStatus(sessionId, 'finalizing')
@@ -178,7 +178,7 @@ export function createSessionStatusPostHandler() {
         sessionId,
         workerId,
         status,
-        hasClaudeSessionId: !!claudeSessionId,
+        hasProviderSessionId: !!providerSessionId,
         hasError: !!errorInfo,
       })
 
