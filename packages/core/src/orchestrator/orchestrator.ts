@@ -1505,20 +1505,37 @@ export class AgentOrchestrator {
       }
 
       // Symlink per-workspace node_modules (apps/*, packages/*)
+      let skipped = 0
       for (const subdir of ['apps', 'packages']) {
         const mainSubdir = resolve(repoRoot, subdir)
         if (!existsSync(mainSubdir)) continue
 
         for (const entry of readdirSync(mainSubdir)) {
           const src = resolve(mainSubdir, entry, 'node_modules')
-          const dest = resolve(worktreePath, subdir, entry, 'node_modules')
-          if (existsSync(src) && !existsSync(dest)) {
+          const destParent = resolve(worktreePath, subdir, entry)
+          const dest = resolve(destParent, 'node_modules')
+
+          if (!existsSync(src)) continue
+
+          // Skip entries where the app/package doesn't exist on this branch
+          if (!existsSync(destParent)) {
+            skipped++
+            continue
+          }
+
+          if (!existsSync(dest)) {
             symlinkSync(src, dest)
           }
         }
       }
 
-      console.log(`[${identifier}] Dependencies linked successfully`)
+      if (skipped > 0) {
+        console.log(
+          `[${identifier}] Dependencies linked successfully (${skipped} workspace(s) skipped — not on this branch)`
+        )
+      } else {
+        console.log(`[${identifier}] Dependencies linked successfully`)
+      }
     } catch (error) {
       console.warn(
         `[${identifier}] Symlink failed, falling back to install:`,
@@ -1534,6 +1551,36 @@ export class AgentOrchestrator {
    */
   private installDependencies(worktreePath: string, identifier: string): void {
     console.log(`[${identifier}] Installing dependencies via pnpm...`)
+
+    // Remove any root node_modules symlink from a partial linkDependencies attempt.
+    // Without this, pnpm install writes through the symlink into the main repo's
+    // node_modules, corrupting it and forcing the user to re-run pnpm install.
+    const destRoot = resolve(worktreePath, 'node_modules')
+    try {
+      if (existsSync(destRoot) && lstatSync(destRoot).isSymbolicLink()) {
+        rmSync(destRoot)
+        console.log(`[${identifier}] Removed partial node_modules symlink before install`)
+      }
+    } catch {
+      // Ignore cleanup errors — pnpm install may still work
+    }
+
+    // Also remove any per-workspace symlinks that were partially created
+    for (const subdir of ['apps', 'packages']) {
+      const subPath = resolve(worktreePath, subdir)
+      if (!existsSync(subPath)) continue
+      try {
+        for (const entry of readdirSync(subPath)) {
+          const nm = resolve(subPath, entry, 'node_modules')
+          if (existsSync(nm) && lstatSync(nm).isSymbolicLink()) {
+            rmSync(nm)
+          }
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+
     try {
       execSync('pnpm install --frozen-lockfile 2>&1', {
         cwd: worktreePath,

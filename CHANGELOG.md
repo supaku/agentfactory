@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.24
+
+### Fixes
+
+- **Fix worktree symlink crash for missing apps** — `linkDependencies` now checks if the destination parent directory exists before creating per-workspace `node_modules` symlinks. When a branch doesn't contain all apps from `main` (e.g., `family-mobile` missing on a feature branch), the entry is skipped instead of throwing ENOENT and falling back to a full `pnpm install`.
+- **Prevent `pnpm install` fallback from corrupting main repo** — `installDependencies` now removes any partial `node_modules` symlinks (root + per-workspace) before running `pnpm install`. Previously, the root `node_modules` symlink created by `linkDependencies` before the error would cause `pnpm install` to write through it into the main repo's `node_modules`, requiring the user to re-run `pnpm install` after agent work.
+- **Release claim key on partial failure to prevent work queue deadlock** — When `claimWork()` succeeded at SETNX but a subsequent Redis operation threw, the claim key was left stuck for its full 1-hour TTL while the work item remained in the queue. All workers would then fail SETNX, causing infinite claim failures. Similarly, if the claim handler threw after removing the item from the queue, neither the claim key nor the work item was cleaned up.
+
 ## v0.7.23
 
 ### Features
