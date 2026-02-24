@@ -209,9 +209,11 @@ export async function claimWork(
     return null
   }
 
+  const claimKey = `${WORK_CLAIM_PREFIX}${sessionId}`
+  let claimAcquired = false
+
   try {
     // Try to atomically set the claim
-    const claimKey = `${WORK_CLAIM_PREFIX}${sessionId}`
     const claimed = await redisSetNX(claimKey, workerId, WORK_CLAIM_TTL)
 
     if (!claimed) {
@@ -219,12 +221,15 @@ export async function claimWork(
       return null
     }
 
+    claimAcquired = true
+
     // Get work item from hash (O(1))
     const itemJson = await redisHGet(WORK_ITEMS_KEY, sessionId)
 
     if (!itemJson) {
       // Work item not found - release the claim
       await redisDel(claimKey)
+      claimAcquired = false
       log.warn('Work item not found in hash after claim', { sessionId })
       return null
     }
@@ -245,6 +250,20 @@ export async function claimWork(
 
     return work
   } catch (error) {
+    // Release the claim key if we acquired it to prevent deadlock.
+    // Without this, a transient Redis error after SETNX would leave the
+    // claim key stuck for its full TTL (1 hour), blocking all workers
+    // from claiming this work item while it remains in the queue.
+    if (claimAcquired) {
+      try {
+        await redisDel(claimKey)
+      } catch (cleanupError) {
+        log.error('Failed to release claim during error cleanup', {
+          cleanupError,
+          sessionId,
+        })
+      }
+    }
     log.error('Failed to claim work', { error, sessionId, workerId })
     return null
   }
