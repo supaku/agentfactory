@@ -9,4 +9,4 @@ content: |
   - Use Grep to search for specific code patterns instead of reading entire files
   - Use Read with offset/limit parameters to paginate through large files
   - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-  See the "Working with Large Files" section in CLAUDE.md for details.
+  See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.

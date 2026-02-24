@@ -13,7 +13,8 @@ export interface AgentSessionResponse {
   linearSessionId: string
   issueId: string
   identifier: string
-  claudeSessionId?: string
+  providerSessionId?: string
+  provider?: string
   status: 'pending' | 'claimed' | 'running' | 'finalizing' | 'completed' | 'failed' | 'stopped'
   createdAt: string
   updatedAt: string
@@ -30,7 +31,8 @@ function toResponse(session: AgentSessionState): AgentSessionResponse {
     linearSessionId: session.linearSessionId,
     issueId: session.issueId,
     identifier: session.issueIdentifier || session.issueId.slice(0, 8),
-    claudeSessionId: session.claudeSessionId || undefined,
+    providerSessionId: session.providerSessionId || undefined,
+    provider: session.provider || undefined,
     status: session.status,
     createdAt: new Date(session.createdAt * 1000).toISOString(),
     updatedAt: new Date(session.updatedAt * 1000).toISOString(),

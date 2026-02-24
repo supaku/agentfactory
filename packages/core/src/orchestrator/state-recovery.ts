@@ -247,7 +247,7 @@ export function createInitialState(options: {
     issueId: options.issueId,
     issueIdentifier: options.issueIdentifier,
     linearSessionId: options.linearSessionId,
-    claudeSessionId: null,
+    providerSessionId: null,
     workType: options.workType,
     prompt: options.prompt,
     startedAt: now,

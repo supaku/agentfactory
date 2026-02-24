@@ -61,7 +61,7 @@ interface WorkItem {
   priority: number
   queuedAt: number
   prompt?: string
-  claudeSessionId?: string
+  providerSessionId?: string
   workType?: AgentWorkType
 }
 
@@ -474,7 +474,7 @@ export async function runWorker(
   async function reportStatus(
     sessionId: string,
     status: 'running' | 'finalizing' | 'completed' | 'failed' | 'stopped',
-    extra?: { claudeSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number },
+    extra?: { providerSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number },
   ): Promise<void> {
     if (!workerId) return
 
@@ -564,7 +564,7 @@ export async function runWorker(
 
   async function executeWork(work: WorkItem): Promise<void> {
     const agentLog = createAgentLogger(work.issueIdentifier)
-    const isResume = !!work.claudeSessionId
+    const isResume = !!work.providerSessionId
 
     agentLog.section(`${isResume ? 'Resuming' : 'Starting'} work on ${work.issueIdentifier}`)
     agentLog.info('Work details', {
@@ -577,7 +577,7 @@ export async function runWorker(
 
     // Two-phase completion: set in try/catch, read in finally
     let finalStatus: 'completed' | 'failed' | 'stopped' = 'failed'
-    let statusPayload: { claudeSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number } | undefined
+    let statusPayload: { providerSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number } | undefined
 
     // Issue lock TTL refresher
     let lockRefresher: ReturnType<typeof setInterval> | null = null
@@ -639,7 +639,7 @@ export async function runWorker(
             })
 
             reportStatus(work.sessionId, 'running', {
-              claudeSessionId: agent.sessionId,
+              providerSessionId: agent.sessionId,
               worktreePath: agent.worktreePath,
             })
 
@@ -664,10 +664,10 @@ export async function runWorker(
               worktreePath: agent.worktreePath,
             })
           },
-          onClaudeSessionId: (_linearSessionId: string, claudeSessionId: string) => {
-            agentLog.debug('Claude session captured', { claudeSessionId })
+          onProviderSessionId: (_linearSessionId: string, providerSessionId: string) => {
+            agentLog.debug('Provider session captured', { providerSessionId })
             reportStatus(work.sessionId, 'running', {
-              claudeSessionId,
+              providerSessionId,
             })
           },
         },
@@ -685,10 +685,10 @@ export async function runWorker(
       const MAX_SPAWN_RETRIES = 3
       const SPAWN_RETRY_DELAY_MS = 15000
 
-      if (work.claudeSessionId) {
+      if (work.providerSessionId) {
         // Resume existing Claude session
-        agentLog.info('Resuming Claude session', {
-          claudeSessionId: work.claudeSessionId.substring(0, 12),
+        agentLog.info('Resuming provider session', {
+          providerSessionId: work.providerSessionId.substring(0, 12),
         })
 
         const prompt = work.prompt || `Continue work on ${work.issueIdentifier}`
@@ -696,7 +696,7 @@ export async function runWorker(
           work.issueId,
           work.sessionId,
           prompt,
-          work.claudeSessionId,
+          work.providerSessionId,
           work.workType,
         )
 
@@ -825,7 +825,7 @@ export async function runWorker(
       } else if (agent?.status === 'completed') {
         finalStatus = 'completed'
         statusPayload = {
-          claudeSessionId: agent.sessionId,
+          providerSessionId: agent.sessionId,
           worktreePath: agent.worktreePath,
           totalCostUsd: agent.totalCostUsd,
           inputTokens: agent.inputTokens,
@@ -983,12 +983,12 @@ export async function runWorker(
               }
 
               const agent = orchestrator.getAgentBySession(sessionId)
-              const claudeSessionId = agent?.claudeSessionId
+              const providerSessionId = agent?.providerSessionId
 
-              log.info('Forwarding prompt to Claude session', {
+              log.info('Forwarding prompt to provider session', {
                 sessionId: sessionId.substring(0, 8),
                 promptId: prompt.id,
-                hasClaudeSession: !!claudeSessionId,
+                hasProviderSession: !!providerSessionId,
                 agentStatus: agent?.status,
               })
 
@@ -997,7 +997,7 @@ export async function runWorker(
                   prompt.issueId,
                   sessionId,
                   prompt.prompt,
-                  claudeSessionId,
+                  providerSessionId,
                   agent?.workType,
                 )
 

@@ -213,7 +213,7 @@ export async function cleanupOrphanedSessions(
 
         // Re-queue the work with higher priority
         // IMPORTANT: Preserve workType to prevent incorrect status transitions
-        // NOTE: Do NOT preserve claudeSessionId - the old session may be corrupted
+        // NOTE: Do NOT preserve providerSessionId - the old session may be corrupted
         // from the crash that caused the orphan. Starting fresh is safer.
         const work: QueuedWork = {
           sessionId: session.linearSessionId,
@@ -222,7 +222,7 @@ export async function cleanupOrphanedSessions(
           priority: Math.max(1, (session.priority || 3) - 1), // Boost priority
           queuedAt: Date.now(),
           prompt: session.promptContext,
-          // claudeSessionId intentionally omitted - don't resume crashed sessions
+          // providerSessionId intentionally omitted - don't resume crashed sessions
           workType: session.workType,
         }
 

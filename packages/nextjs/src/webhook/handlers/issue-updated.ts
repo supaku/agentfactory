@@ -288,7 +288,7 @@ export async function handleIssueUpdated(
     await storeSessionState(qaSessionId, {
       issueId,
       issueIdentifier,
-      claudeSessionId: null,
+      providerSessionId: null,
       worktreePath: '',
       status: 'pending',
       queuedAt: Date.now(),
@@ -600,7 +600,7 @@ export async function handleIssueUpdated(
       await storeSessionState(devSessionId, {
         issueId,
         issueIdentifier,
-        claudeSessionId: null,
+        providerSessionId: null,
         worktreePath: '',
         status: 'pending',
         queuedAt: Date.now(),
@@ -786,7 +786,7 @@ export async function handleIssueUpdated(
       await storeSessionState(acceptanceSessionId, {
         issueId,
         issueIdentifier,
-        claudeSessionId: null,
+        providerSessionId: null,
         worktreePath: '',
         status: 'pending',
         queuedAt: Date.now(),

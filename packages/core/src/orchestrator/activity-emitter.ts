@@ -14,16 +14,6 @@
  */
 
 import type { AgentSession } from '@supaku/agentfactory-linear'
-import type {
-  ClaudeAssistantEvent,
-  ClaudeToolUseEvent,
-  ClaudeToolResultEvent,
-  ClaudeResultEvent,
-  ClaudeErrorEvent,
-  ClaudeTodoItem,
-  ClaudeStreamHandlers,
-} from './stream-parser.js'
-import type { AgentPlanItemState } from '@supaku/agentfactory-linear'
 import { ENVIRONMENT_ISSUE_TYPES } from '@supaku/agentfactory-linear'
 
 /** Configuration for the activity emitter */
@@ -53,24 +43,6 @@ interface QueuedActivity {
 
 const DEFAULT_MIN_INTERVAL = 500
 const DEFAULT_MAX_OUTPUT_LENGTH = 2000
-
-/**
- * Map Claude todo status to Linear plan item state
- */
-function mapTodoStatusToLinearState(
-  status: ClaudeTodoItem['status']
-): AgentPlanItemState {
-  switch (status) {
-    case 'pending':
-      return 'pending'
-    case 'in_progress':
-      return 'inProgress'
-    case 'completed':
-      return 'completed'
-    default:
-      return 'pending'
-  }
-}
 
 /**
  * Activity Emitter
@@ -193,83 +165,6 @@ export class ActivityEmitter {
     } catch (error) {
       console.error('[ActivityEmitter] Failed to report tool error:', error)
       return null
-    }
-  }
-
-  /**
-   * Get Claude stream handlers that emit to Linear
-   */
-  getStreamHandlers(): ClaudeStreamHandlers {
-    return {
-      onAssistant: async (event: ClaudeAssistantEvent) => {
-        // Skip partial messages (streaming updates)
-        if (event.partial) return
-
-        // Assistant messages are user-directed communication, emit as response (persisted)
-        await this.queueActivity({
-          type: 'response',
-          content: event.message,
-          ephemeral: false,
-        })
-      },
-
-      onToolUse: async (event: ClaudeToolUseEvent) => {
-        const inputSummary = this.summarizeToolInput(event.tool, event.input)
-        await this.queueActivity({
-          type: 'action',
-          content: `${event.tool}: ${inputSummary}`,
-          ephemeral: true,
-          toolName: event.tool,
-          toolInput: event.input,
-        })
-      },
-
-      onToolResult: async (event: ClaudeToolResultEvent) => {
-        const output = this.truncateOutput(event.output)
-        const prefix = event.is_error ? 'Error' : 'Result'
-        await this.queueActivity({
-          type: 'action',
-          content: `${event.tool} ${prefix}: ${output}`,
-          ephemeral: true,
-          toolName: event.tool,
-          toolOutput: output,
-        })
-      },
-
-      onResult: async (event: ClaudeResultEvent) => {
-        // Final result - persisted as response
-        const content = this.formatResultContent(event)
-        await this.queueActivity({
-          type: 'response',
-          content,
-          ephemeral: false,
-        })
-      },
-
-      onError: async (event: ClaudeErrorEvent) => {
-        // Errors are persisted
-        await this.queueActivity({
-          type: 'error',
-          content: event.error.message,
-          ephemeral: false,
-        })
-      },
-
-      onTodo: async (newTodos: ClaudeTodoItem[]) => {
-        // Map Claude todos to Linear plan items
-        const planItems = newTodos.map((todo) => ({
-          title: todo.content,
-          state: mapTodoStatusToLinearState(todo.status),
-          details: todo.activeForm,
-        }))
-
-        // Update the plan via session
-        try {
-          await this.session.updatePlan(planItems)
-        } catch (error) {
-          console.error('Failed to update plan:', error)
-        }
-      },
     }
   }
 
@@ -473,24 +368,6 @@ export class ActivityEmitter {
       output.substring(0, this.maxOutputLength) +
       `\n\n... (truncated ${output.length - this.maxOutputLength} chars)`
     )
-  }
-
-  /**
-   * Format the final result content
-   */
-  private formatResultContent(event: ClaudeResultEvent): string {
-    let content = event.result
-
-    if (event.cost) {
-      content += `\n\n---\n*Tokens: ${event.cost.input_tokens} in / ${event.cost.output_tokens} out*`
-    }
-
-    if (event.duration_ms) {
-      const seconds = (event.duration_ms / 1000).toFixed(1)
-      content += event.cost ? ` | *Duration: ${seconds}s*` : `\n\n---\n*Duration: ${seconds}s*`
-    }
-
-    return content
   }
 
   /**

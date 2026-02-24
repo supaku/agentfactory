@@ -37,8 +37,8 @@ export interface AgentSessionState {
   issueId: string
   /** Issue identifier (e.g., SUP-123) */
   issueIdentifier?: string
-  /** Claude CLI session ID for resuming with --resume */
-  claudeSessionId: string | null
+  /** Provider CLI session ID for resuming with --resume */
+  providerSessionId: string | null
   /** Git worktree path */
   worktreePath: string
   /** Current agent status */
@@ -74,6 +74,9 @@ export interface AgentSessionState {
 
   /** Linear project name (for routing and dashboard visibility) */
   projectName?: string
+
+  /** Agent provider name (claude, codex, amp) — set by worker on claim */
+  provider?: string
 
   // Cost tracking (populated from provider result events)
   /** Total cost in USD for this session */
@@ -142,7 +145,7 @@ export async function storeSessionState(
     linearSessionId,
     issueId: state.issueId,
     status: state.status,
-    hasClaudeSessionId: !!state.claudeSessionId,
+    hasProviderSessionId: !!state.providerSessionId,
   })
 
   return sessionState
@@ -177,24 +180,24 @@ export async function getSessionState(
 }
 
 /**
- * Update the Claude session ID for a session
+ * Update the provider session ID for a session
  * Called when the Claude init event is received with the session ID
  *
  * @param linearSessionId - The Linear session ID
- * @param claudeSessionId - The Claude CLI session ID
+ * @param providerSessionId - The Provider CLI session ID
  */
-export async function updateClaudeSessionId(
+export async function updateProviderSessionId(
   linearSessionId: string,
-  claudeSessionId: string
+  providerSessionId: string
 ): Promise<boolean> {
   if (!isRedisConfigured()) {
-    log.warn('Redis not configured, cannot update Claude session ID')
+    log.warn('Redis not configured, cannot update provider session ID')
     return false
   }
 
   const existing = await getSessionState(linearSessionId)
   if (!existing) {
-    log.warn('Session not found for Claude session ID update', { linearSessionId })
+    log.warn('Session not found for provider session ID update', { linearSessionId })
     return false
   }
 
@@ -203,13 +206,13 @@ export async function updateClaudeSessionId(
 
   const updated: AgentSessionState = {
     ...existing,
-    claudeSessionId,
+    providerSessionId,
     updatedAt: now,
   }
 
   await redisSet(key, updated, SESSION_TTL_SECONDS)
 
-  log.info('Updated Claude session ID', { linearSessionId, claudeSessionId })
+  log.info('Updated provider session ID', { linearSessionId, providerSessionId })
 
   return true
 }

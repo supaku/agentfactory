@@ -1,6 +1,11 @@
 /**
  * Claude Stream-JSON Parser
  *
+ * @deprecated This module is dead code — providers now emit normalized AgentEvents
+ * directly (see providers/types.ts). Activity emitters consume AgentEvent streams,
+ * not ClaudeStreamEvent. Retained for backward compatibility of public type exports.
+ * Will be removed in v1.0.
+ *
  * Parses Claude's stream-json output format and maps events to handler callbacks.
  * The stream-json format emits newline-delimited JSON events during execution.
  *
@@ -135,8 +140,9 @@ export interface ClaudeStreamHandlers {
 /**
  * Claude Stream Parser
  *
- * Handles parsing of newline-delimited JSON stream from Claude,
- * including buffering for partial lines.
+ * @deprecated Providers now emit normalized AgentEvents directly.
+ * Activity emitters consume AgentEvent streams, not ClaudeStreamEvent.
+ * This class is retained for backward compatibility and will be removed in v1.0.
  */
 export class ClaudeStreamParser {
   private buffer = ''

@@ -23,6 +23,7 @@ export interface PublicSessionResponse {
   startedAt: string
   duration: number
   costUsd?: number
+  provider?: string
 }
 
 function toPublicStatus(
@@ -72,6 +73,7 @@ async function toPublicSession(
     startedAt: new Date(startTime * 1000).toISOString(),
     duration: endTime - startTime,
     costUsd: session.totalCostUsd,
+    provider: session.provider,
   }
 }
 

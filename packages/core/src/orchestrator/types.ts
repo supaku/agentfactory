@@ -119,8 +119,8 @@ export interface AgentProcess {
   /** Worktree identifier includes work type suffix (e.g., "SUP-294-QA") */
   worktreeIdentifier: string
   sessionId?: string
-  /** Claude CLI session ID for resuming sessions with --resume */
-  claudeSessionId?: string
+  /** Provider CLI session ID for resuming sessions with --resume */
+  providerSessionId?: string
   worktreePath: string
   pid: number | undefined
   status: 'starting' | 'running' | 'completed' | 'failed' | 'stopped' | 'incomplete'
@@ -158,8 +158,8 @@ export interface OrchestratorEvents {
   /** Called when agent work is incomplete (no PR, uncommitted changes, etc.) */
   onAgentIncomplete?: (agent: AgentProcess) => void
   onIssueSelected?: (issue: OrchestratorIssue) => void
-  /** Called when Claude session ID is captured from init event */
-  onClaudeSessionId?: (linearSessionId: string, claudeSessionId: string) => void | Promise<void>
+  /** Called when provider session ID is captured from init event */
+  onProviderSessionId?: (linearSessionId: string, providerSessionId: string) => void | Promise<void>
   /** Called when an activity is emitted for an agent (used for timeout tracking) */
   onActivityEmitted?: (agent: AgentProcess, activityType: string) => void
 }
@@ -229,7 +229,7 @@ export interface SpawnAgentWithResumeOptions {
   sessionId: string
   worktreePath: string
   prompt: string
-  claudeSessionId?: string
+  providerSessionId?: string
   /** Type of work: determines transitions and agent behavior (defaults to 'development') */
   workType?: AgentWorkType
   /** Team key to set as LINEAR_TEAM_NAME env var for agents */

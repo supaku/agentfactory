@@ -71,7 +71,7 @@ export interface QueuedWork {
   priority: number // 1-5, lower is higher priority
   queuedAt: number // Unix timestamp
   prompt?: string // For follow-up prompts
-  claudeSessionId?: string // For resuming sessions
+  providerSessionId?: string // For resuming sessions
   workType?: AgentWorkType // Type of work (defaults to 'development')
   sourceSessionId?: string // For QA: the dev session that completed this work
   projectName?: string // Linear project name, for worker routing

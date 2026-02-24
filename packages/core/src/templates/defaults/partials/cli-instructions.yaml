@@ -8,7 +8,7 @@ content: |
 
   LINEAR CLI (CRITICAL):
   Use the Linear CLI (`pnpm af-linear`) for ALL Linear operations. Do NOT use Linear MCP tools.
-  See CLAUDE.md for the full command reference.
+  See the project documentation (CLAUDE.md / AGENTS.md) for the full command reference.
 
   HUMAN-NEEDED BLOCKERS:
   If you encounter work that requires human action and cannot be resolved autonomously

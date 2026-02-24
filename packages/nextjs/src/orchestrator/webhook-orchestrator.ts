@@ -30,7 +30,7 @@ import {
   unmarkWebhookProcessed,
   storeSessionState,
   getSessionState,
-  updateClaudeSessionId,
+  updateProviderSessionId,
   updateSessionStatus,
   updateSessionCostData,
   getWorkflowState,
@@ -292,9 +292,9 @@ export function createWebhookOrchestrator(
             }
             hooks?.onAgentStopped?.(agent)
           },
-          onClaudeSessionId: async (linearSessionId: string, claudeSessionId: string) => {
-            log.info('Claude session ID captured', { linearSessionId, claudeSessionId })
-            await updateClaudeSessionId(linearSessionId, claudeSessionId)
+          onProviderSessionId: async (linearSessionId: string, providerSessionId: string) => {
+            log.info('Provider session ID captured', { linearSessionId, providerSessionId })
+            await updateProviderSessionId(linearSessionId, providerSessionId)
           },
         }
       )
@@ -345,7 +345,7 @@ export function createWebhookOrchestrator(
 
         await storeSessionState(sessionId, {
           issueId,
-          claudeSessionId: agent.claudeSessionId ?? null,
+          providerSessionId: agent.providerSessionId ?? null,
           worktreePath: agent.worktreePath,
           status: 'running',
         })
@@ -409,7 +409,7 @@ export function createWebhookOrchestrator(
 
         promptLog.info('Forwarding prompt to agent', {
           hasSessionState: !!sessionState,
-          hasClaudeSessionId: !!sessionState?.claudeSessionId,
+          hasProviderSessionId: !!sessionState?.providerSessionId,
           promptLength: promptText.length,
           workType: sessionState?.workType ?? 'development',
         })
@@ -419,7 +419,7 @@ export function createWebhookOrchestrator(
           issueId,
           sessionId,
           promptText,
-          sessionState?.claudeSessionId ?? undefined,
+          sessionState?.providerSessionId ?? undefined,
           sessionState?.workType
         )
 
@@ -433,7 +433,7 @@ export function createWebhookOrchestrator(
           if (result.agent) {
             await storeSessionState(sessionId, {
               issueId,
-              claudeSessionId: result.agent.claudeSessionId ?? null,
+              providerSessionId: result.agent.providerSessionId ?? null,
               worktreePath: result.agent.worktreePath,
               status: 'running',
               workType: sessionState?.workType,

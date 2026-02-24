@@ -17,16 +17,6 @@
  * - error → error (persisted)
  */
 
-import type {
-  ClaudeAssistantEvent,
-  ClaudeToolUseEvent,
-  ClaudeToolResultEvent,
-  ClaudeResultEvent,
-  ClaudeErrorEvent,
-  ClaudeTodoItem,
-  ClaudeStreamHandlers,
-} from './stream-parser.js'
-
 /** Configuration for the API activity emitter */
 export interface ApiActivityEmitterConfig {
   /** Linear session ID */
@@ -319,73 +309,6 @@ export class ApiActivityEmitter {
   }
 
   /**
-   * Get Claude stream handlers that emit to Linear via API
-   */
-  getStreamHandlers(): ClaudeStreamHandlers {
-    return {
-      onAssistant: async (event: ClaudeAssistantEvent) => {
-        // Skip partial messages (streaming updates)
-        if (event.partial) return
-
-        // Assistant messages are user-directed communication, emit as response (persisted)
-        await this.queueActivity({
-          type: 'response',
-          content: event.message,
-          ephemeral: false,
-        })
-      },
-
-      onToolUse: async (event: ClaudeToolUseEvent) => {
-        const inputSummary = this.summarizeToolInput(event.tool, event.input)
-        await this.queueActivity({
-          type: 'action',
-          content: `${event.tool}: ${inputSummary}`,
-          ephemeral: true,
-          toolName: event.tool,
-          toolInput: event.input,
-        })
-      },
-
-      onToolResult: async (event: ClaudeToolResultEvent) => {
-        const output = this.truncateOutput(event.output)
-        const prefix = event.is_error ? 'Error' : 'Result'
-        await this.queueActivity({
-          type: 'action',
-          content: `${event.tool} ${prefix}: ${output}`,
-          ephemeral: true,
-          toolName: event.tool,
-          toolOutput: output,
-        })
-      },
-
-      onResult: async (event: ClaudeResultEvent) => {
-        // Final result - persisted as response
-        const content = this.formatResultContent(event)
-        await this.queueActivity({
-          type: 'response',
-          content,
-          ephemeral: false,
-        })
-      },
-
-      onError: async (event: ClaudeErrorEvent) => {
-        // Errors are persisted
-        await this.queueActivity({
-          type: 'error',
-          content: event.error.message,
-          ephemeral: false,
-        })
-      },
-
-      // Note: Todo/plan updates are not supported via API emitter
-      // Plans would need a separate API endpoint
-      onTodo: async (_newTodos: ClaudeTodoItem[]) => {
-        // No-op - plan updates not supported via API yet
-      },
-    }
-  }
-
-  /**
    * Queue an activity for emission with rate limiting
    */
   private async queueActivity(activity: QueuedActivity): Promise<void> {
@@ -598,24 +521,6 @@ export class ApiActivityEmitter {
       output.substring(0, this.maxOutputLength) +
       `\n\n... (truncated ${output.length - this.maxOutputLength} chars)`
     )
-  }
-
-  /**
-   * Format the final result content
-   */
-  private formatResultContent(event: ClaudeResultEvent): string {
-    let content = event.result
-
-    if (event.cost) {
-      content += `\n\n---\n*Tokens: ${event.cost.input_tokens} in / ${event.cost.output_tokens} out*`
-    }
-
-    if (event.duration_ms) {
-      const seconds = (event.duration_ms / 1000).toFixed(1)
-      content += event.cost ? ` | *Duration: ${seconds}s*` : `\n\n---\n*Duration: ${seconds}s*`
-    }
-
-    return content
   }
 
   /**
