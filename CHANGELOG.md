@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.30
+
+### Features
+
+- **Enable agents to add new dependencies in worktrees** — Agents can now install packages they need (e.g., `stripe`) instead of getting stuck in a loop. The orchestrator writes `.agent/add-dep.sh` into each worktree during setup, which safely removes symlinked `node_modules` and runs `pnpm add` with the `ORCHESTRATOR_INSTALL=1` guard bypass. Updated dependency-instructions partial, supaku CLAUDE.md, and the preinstall guard error message to direct agents to the helper script.
+
 ## v0.7.29
 
 ### Fixes

@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from 'fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { config as loadDotenv } from 'dotenv'
 import {
@@ -1436,6 +1436,9 @@ export class AgentOrchestrator {
       console.warn(`Failed to initialize .agent/ directory: ${initError instanceof Error ? initError.message : String(initError)}`)
     }
 
+    // Write helper scripts into .agent/ for agent use
+    this.writeWorktreeHelpers(worktreePath)
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -1469,6 +1472,48 @@ export class AgentOrchestrator {
       } catch {
         // Ignore
       }
+    }
+  }
+
+  /**
+   * Write helper scripts into the worktree's .agent/ directory.
+   *
+   * Currently writes:
+   * - .agent/add-dep.sh: Safely adds a new dependency by removing symlinked
+   *   node_modules first, then running `pnpm add` with the guard bypass.
+   */
+  private writeWorktreeHelpers(worktreePath: string): void {
+    const agentDir = resolve(worktreePath, '.agent')
+    const scriptPath = resolve(agentDir, 'add-dep.sh')
+
+    const script = `#!/bin/bash
+# Safe dependency addition for agents in worktrees.
+# Removes symlinked node_modules, then runs pnpm add with guard bypass.
+# Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]
+set -e
+if [ $# -eq 0 ]; then
+  echo "Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]"
+  exit 1
+fi
+echo "Cleaning symlinked node_modules..."
+rm -rf node_modules
+for subdir in apps packages; do
+  [ -d "$subdir" ] && find "$subdir" -maxdepth 2 -name node_modules -type d -exec rm -rf {} + 2>/dev/null || true
+done
+echo "Installing: pnpm add $@"
+ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
+`
+
+    try {
+      if (!existsSync(agentDir)) {
+        mkdirSync(agentDir, { recursive: true })
+      }
+      writeFileSync(scriptPath, script, { mode: 0o755 })
+    } catch (error) {
+      // Log but don't fail — the helper is optional
+      console.warn(
+        `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
 
