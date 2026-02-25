@@ -1475,8 +1475,10 @@ export class AgentOrchestrator {
   /**
    * Link dependencies from the main repo into a worktree via symlinks.
    *
-   * For Node.js/pnpm monorepos, this symlinks node_modules from the main repo
-   * into the worktree — instant (~0s) vs pnpm install (~10+ min on cross-volume).
+   * Creates a REAL node_modules directory in the worktree and symlinks each
+   * entry (packages, .pnpm, .bin) individually. This prevents pnpm from
+   * resolving through a directory-level symlink and corrupting the main
+   * repo's node_modules when an agent accidentally runs `pnpm install`.
    *
    * For non-Node repos (no node_modules in main repo), this is a no-op.
    *
@@ -1498,13 +1500,12 @@ export class AgentOrchestrator {
 
     console.log(`[${identifier}] Linking dependencies from main repo...`)
     try {
-      // Symlink root node_modules
+      // Link root node_modules — create a real directory with symlinked contents
+      // so pnpm can't follow a top-level symlink to corrupt the main repo
       const destRoot = resolve(worktreePath, 'node_modules')
-      if (!existsSync(destRoot)) {
-        symlinkSync(mainNodeModules, destRoot)
-      }
+      this.linkNodeModulesContents(mainNodeModules, destRoot, identifier)
 
-      // Symlink per-workspace node_modules (apps/*, packages/*)
+      // Link per-workspace node_modules (apps/*, packages/*)
       let skipped = 0
       for (const subdir of ['apps', 'packages']) {
         const mainSubdir = resolve(repoRoot, subdir)
@@ -1523,9 +1524,7 @@ export class AgentOrchestrator {
             continue
           }
 
-          if (!existsSync(dest)) {
-            symlinkSync(src, dest)
-          }
+          this.linkNodeModulesContents(src, dest, identifier)
         }
       }
 
@@ -1546,34 +1545,77 @@ export class AgentOrchestrator {
   }
 
   /**
+   * Create a real node_modules directory and symlink each entry from the source.
+   *
+   * Instead of symlinking the entire node_modules directory (which lets pnpm
+   * resolve through the symlink and corrupt the original), we create a real
+   * directory and symlink each entry individually. If pnpm "recreates" this
+   * directory, it only destroys the worktree's symlinks — not the originals.
+   */
+  private linkNodeModulesContents(
+    srcNodeModules: string,
+    destNodeModules: string,
+    identifier: string
+  ): void {
+    if (existsSync(destNodeModules)) return
+
+    mkdirSync(destNodeModules, { recursive: true })
+
+    for (const entry of readdirSync(srcNodeModules)) {
+      const srcEntry = resolve(srcNodeModules, entry)
+      const destEntry = resolve(destNodeModules, entry)
+
+      // For scoped packages (@org/), create the scope dir and symlink contents
+      if (entry.startsWith('@')) {
+        const stat = lstatSync(srcEntry)
+        if (stat.isDirectory()) {
+          mkdirSync(destEntry, { recursive: true })
+          for (const scopedEntry of readdirSync(srcEntry)) {
+            const srcScoped = resolve(srcEntry, scopedEntry)
+            const destScoped = resolve(destEntry, scopedEntry)
+            if (!existsSync(destScoped)) {
+              symlinkSync(srcScoped, destScoped)
+            }
+          }
+          continue
+        }
+      }
+
+      if (!existsSync(destEntry)) {
+        symlinkSync(srcEntry, destEntry)
+      }
+    }
+  }
+
+  /**
    * Fallback: install dependencies via pnpm install.
    * Only called when symlinking fails.
    */
   private installDependencies(worktreePath: string, identifier: string): void {
     console.log(`[${identifier}] Installing dependencies via pnpm...`)
 
-    // Remove any root node_modules symlink from a partial linkDependencies attempt.
-    // Without this, pnpm install writes through the symlink into the main repo's
-    // node_modules, corrupting it and forcing the user to re-run pnpm install.
+    // Remove any node_modules from a partial linkDependencies attempt.
+    // Handles both old format (directory-level symlink) and new format
+    // (real directory with symlinked contents).
     const destRoot = resolve(worktreePath, 'node_modules')
     try {
-      if (existsSync(destRoot) && lstatSync(destRoot).isSymbolicLink()) {
-        rmSync(destRoot)
-        console.log(`[${identifier}] Removed partial node_modules symlink before install`)
+      if (existsSync(destRoot)) {
+        rmSync(destRoot, { recursive: true, force: true })
+        console.log(`[${identifier}] Removed partial node_modules before install`)
       }
     } catch {
       // Ignore cleanup errors — pnpm install may still work
     }
 
-    // Also remove any per-workspace symlinks that were partially created
+    // Also remove any per-workspace node_modules that were partially created
     for (const subdir of ['apps', 'packages']) {
       const subPath = resolve(worktreePath, subdir)
       if (!existsSync(subPath)) continue
       try {
         for (const entry of readdirSync(subPath)) {
           const nm = resolve(subPath, entry, 'node_modules')
-          if (existsSync(nm) && lstatSync(nm).isSymbolicLink()) {
-            rmSync(nm)
+          if (existsSync(nm)) {
+            rmSync(nm, { recursive: true, force: true })
           }
         }
       } catch {
@@ -1581,12 +1623,17 @@ export class AgentOrchestrator {
       }
     }
 
+    // Set ORCHESTRATOR_INSTALL=1 to bypass the preinstall guard script
+    // that blocks pnpm install in worktrees (to prevent symlink corruption).
+    const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
+
     try {
       execSync('pnpm install --frozen-lockfile 2>&1', {
         cwd: worktreePath,
         stdio: 'pipe',
         encoding: 'utf-8',
         timeout: 120_000,
+        env: installEnv,
       })
       console.log(`[${identifier}] Dependencies installed successfully`)
     } catch {
@@ -1596,6 +1643,7 @@ export class AgentOrchestrator {
           stdio: 'pipe',
           encoding: 'utf-8',
           timeout: 120_000,
+          env: installEnv,
         })
         console.log(`[${identifier}] Dependencies installed (without frozen lockfile)`)
       } catch (retryError) {

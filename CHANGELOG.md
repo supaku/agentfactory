@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.29
+
+### Fixes
+
+- **Prevent worktree node_modules from corrupting main repo** — Replaced directory-level symlinks with real directories containing per-entry symlinks. Previously, if an agent ran `pnpm install` in a worktree, pnpm would follow the top-level symlink and write into the main repo's `node_modules`. Now each entry is individually symlinked, so a rogue install only destroys the worktree's links. Also sets `ORCHESTRATOR_INSTALL=1` env var to bypass the preinstall guard when the orchestrator intentionally runs pnpm install as a fallback.
+
 ## v0.7.28
 
 ### Fixes
