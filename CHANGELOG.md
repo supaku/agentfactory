@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.33
+
+### Fixes
+
+- **Fix preserved worktrees blocking branch reuse** — When a worktree was preserved due to incomplete work, its heartbeat file remained on disk, causing the conflict handler to falsely detect a live agent for 30 seconds. This blocked subsequent agents from creating worktrees on the same branch, exhausting all 3 retries. Now the heartbeat file is deleted when a worktree is preserved (both completed and failed paths). Additionally, the conflict handler now saves a `.patch` file to `.worktrees/.patches/` before force-removing stale worktrees with incomplete work, preventing data loss.
+
 ## v0.7.32
 
 ### Fixes

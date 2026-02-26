@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { config as loadDotenv } from 'dotenv'
 import {
@@ -1226,7 +1226,54 @@ export class AgentOrchestrator {
       return false
     }
 
-    // Agent is not alive - safe to clean up
+    // Agent is not alive - check for incomplete work before cleaning up
+    const incompleteCheck = checkForIncompleteWork(conflictPath)
+    if (incompleteCheck.hasIncompleteWork) {
+      // Save a patch before removing so work can be recovered
+      try {
+        const patchDir = resolve(this.config.worktreePath, '.patches')
+        if (!existsSync(patchDir)) {
+          mkdirSync(patchDir, { recursive: true })
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const patchName = `${branchName}-${timestamp}.patch`
+        const patchPath = resolve(patchDir, patchName)
+
+        // Capture both staged and unstaged changes
+        const diff = execSync('git diff HEAD', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+        if (diff.trim().length > 0) {
+          writeFileSync(patchPath, diff)
+          console.log(`Saved incomplete work patch: ${patchPath}`)
+        }
+
+        // Also capture untracked files list
+        const untracked = execSync('git ls-files --others --exclude-standard', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        }).trim()
+        if (untracked.length > 0) {
+          // Create a full diff including untracked files
+          const fullDiff = execSync('git diff HEAD -- . && git diff --no-index /dev/null $(git ls-files --others --exclude-standard) 2>/dev/null || true', {
+            cwd: conflictPath,
+            encoding: 'utf-8',
+            timeout: 10000,
+            shell: '/bin/bash',
+          })
+          if (fullDiff.trim().length > 0) {
+            writeFileSync(patchPath, fullDiff)
+            console.log(`Saved incomplete work patch (including untracked files): ${patchPath}`)
+          }
+        }
+      } catch (patchError) {
+        console.warn('Failed to save work patch before cleanup:', patchError instanceof Error ? patchError.message : String(patchError))
+      }
+    }
+
     console.log(
       `Cleaning up stale worktree at ${conflictPath} (agent no longer running) ` +
       `to unblock branch ${branchName}`
@@ -2126,6 +2173,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
                 details: incompleteCheck.details,
                 worktreePath: agent.worktreePath,
               })
+
+              // Delete the heartbeat file so the preserved worktree isn't falsely
+              // detected as having a live agent (which would block branch reuse)
+              try {
+                const heartbeatPath = resolve(agent.worktreePath, '.agent', 'heartbeat.json')
+                if (existsSync(heartbeatPath)) {
+                  unlinkSync(heartbeatPath)
+                }
+              } catch {
+                // Best-effort - heartbeat will go stale naturally after timeout
+              }
             } else {
               // No PR but also no local changes - agent may not have made any changes
               log?.warn('No PR created but worktree is clean - proceeding with cleanup', {
@@ -2204,6 +2262,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
               details: incompleteCheck.details,
               worktreePath: agent.worktreePath,
             })
+
+            // Delete the heartbeat file so the preserved worktree isn't falsely
+            // detected as having a live agent (which would block branch reuse)
+            try {
+              const heartbeatPath = resolve(agent.worktreePath, '.agent', 'heartbeat.json')
+              if (existsSync(heartbeatPath)) {
+                unlinkSync(heartbeatPath)
+              }
+            } catch {
+              // Best-effort - heartbeat will go stale naturally after timeout
+            }
           }
         }
 
