@@ -805,6 +805,10 @@ export class AgentOrchestrator {
   private linearCli?: string
   // Package manager from .agentfactory/config.yaml (non-Node project support)
   private packageManager?: string
+  // Configurable build/test/validate commands from .agentfactory/config.yaml
+  private buildCommand?: string
+  private testCommand?: string
+  private validateCommand?: string
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -893,6 +897,16 @@ export class AgentOrchestrator {
           }
           if (repoConfig.packageManager) {
             this.packageManager = repoConfig.packageManager
+          }
+          // Store configurable build/test/validate commands
+          if (repoConfig.buildCommand) {
+            this.buildCommand = repoConfig.buildCommand
+          }
+          if (repoConfig.testCommand) {
+            this.testCommand = repoConfig.testCommand
+          }
+          if (repoConfig.validateCommand) {
+            this.validateCommand = repoConfig.validateCommand
           }
         }
       }
@@ -1800,6 +1814,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         sharedPaths: this.sharedPaths,
         linearCli: this.linearCli ?? 'pnpm af-linear',
         packageManager: this.packageManager ?? 'pnpm',
+        buildCommand: this.buildCommand,
+        testCommand: this.testCommand,
+        validateCommand: this.validateCommand,
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)

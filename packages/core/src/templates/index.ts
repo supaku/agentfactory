@@ -36,3 +36,6 @@ export {
 export { ClaudeToolPermissionAdapter, CodexToolPermissionAdapter, createToolPermissionAdapter } from './adapters.js'
 
 export { renderPromptWithFallback } from './renderer.js'
+
+export type { AgentDefinition, AgentDefinitionFrontmatter } from './agent-definition.js'
+export { parseAgentDefinition, parseAgentDefinitionFile, AgentDefinitionFrontmatterSchema } from './agent-definition.js'

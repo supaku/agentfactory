@@ -39,6 +39,22 @@ export const RepositoryConfigSchema = z.object({
    * Supported values: "pnpm" | "npm" | "yarn" | "bun" | "none"
    */
   packageManager: z.enum(['pnpm', 'npm', 'yarn', 'bun', 'none']).optional(),
+  /**
+   * Build command override (e.g. 'cargo build', 'cmake --build build', 'make').
+   * Injected into workflow templates as {{buildCommand}}.
+   */
+  buildCommand: z.string().optional(),
+  /**
+   * Test command override (e.g. 'cargo test', 'ctest --test-dir build', 'make test').
+   * Injected into workflow templates as {{testCommand}}.
+   */
+  testCommand: z.string().optional(),
+  /**
+   * Validation command override — replaces typecheck for compiled projects
+   * (e.g. 'cargo clippy', 'go vet ./...').
+   * Injected into workflow templates as {{validateCommand}}.
+   */
+  validateCommand: z.string().optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },
