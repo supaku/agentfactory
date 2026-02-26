@@ -2090,11 +2090,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Agents should NEVER clean up their own worktree - this is the orchestrator's job
       if (agent.status === 'completed' && agent.worktreePath) {
         const shouldPreserve = this.config.preserveWorkOnPrFailure ?? DEFAULT_CONFIG.preserveWorkOnPrFailure
-        const isDevelopmentWork = agent.workType === 'development' || agent.workType === 'inflight'
         let shouldCleanup = true
 
-        // For development work, validate that PR was created or work was fully pushed
-        if (shouldPreserve && isDevelopmentWork) {
+        // Validate that PR was created or work was fully pushed before cleanup
+        if (shouldPreserve) {
           if (!agent.pullRequestUrl) {
             // No PR detected - check for uncommitted/unpushed work
             const incompleteCheck = checkForIncompleteWork(agent.worktreePath)

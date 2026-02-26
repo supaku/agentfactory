@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.32
+
+### Fixes
+
+- **Fix worktree cleanup deleting unpushed work for QA/acceptance agents** — The `checkForIncompleteWork()` safety check was gated behind `isDevelopmentWork`, so QA and acceptance agents' worktrees were cleaned up without verifying commits were pushed. This caused completed work to vanish when the worktree was removed with `--force`. Removed the work-type gate so the safety check applies to all completed agents, matching the already-correct failed-agent cleanup path.
+
 ## v0.7.31
 
 ### Fixes
