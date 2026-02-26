@@ -11,5 +11,5 @@ content: |
   Without this marker, the issue status will NOT be updated automatically.
   - On pass: Include <!-- WORK_RESULT:passed --> in your final message
   - On fail: Include <!-- WORK_RESULT:failed --> in your final message
-  NEVER manually change the issue status via pnpm af-linear update-issue --state.
+  NEVER manually change the issue status via {{linearCli}} update-issue --state.
   The orchestrator manages ALL status transitions based on this marker. Manually changing status causes state loops.

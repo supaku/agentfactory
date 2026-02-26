@@ -172,7 +172,7 @@ describe('TemplateRegistry', () => {
 
     it('built-in templates include CLI instructions partial', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      const result = fullRegistry.renderPrompt('development', { identifier: 'SUP-1' })
+      const result = fullRegistry.renderPrompt('development', { identifier: 'SUP-1', linearCli: 'pnpm af-linear', packageManager: 'pnpm' })
       expect(result).toContain('pnpm af-linear')
       expect(result).toContain('LINEAR CLI (CRITICAL)')
     })

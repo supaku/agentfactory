@@ -29,7 +29,7 @@ prompt: |
   2. Identify the ROOT CAUSE — do not just fix symptoms
   3. Check if previous attempts made the same mistake repeatedly
   4. Make targeted fixes addressing the core issue
-  5. Run tests to verify: `pnpm test` and `pnpm typecheck`
+  5. Run tests to verify: `{{packageManager}} test` and `{{packageManager}} typecheck`
   6. Create a PR with clear description of what was wrong and how you fixed it
 
   {{> partials/path-scoping}}

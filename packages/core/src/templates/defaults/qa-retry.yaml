@@ -23,13 +23,13 @@ prompt: |
 
   ## Instructions
   1. Focus testing on previously failing areas first
-  2. Run the full test suite: `pnpm test` and `pnpm typecheck`
+  2. Run the full test suite: `{{packageManager}} test` and `{{packageManager}} typecheck`
   3. Verify the PR changes address the previously reported issues
   4. If issues persist, provide detailed failure reasons
   5. If all checks pass, report QA_PASSED
 
   HARD FAIL RULE — BUILD FAILURES:
-  If `pnpm typecheck` or `pnpm build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  If `{{packageManager}} typecheck` or `{{packageManager}} build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 

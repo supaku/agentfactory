@@ -122,6 +122,8 @@ describe('Strategy-Aware Template Selection', () => {
         cycleCount: 4,
         failureSummary: 'Multiple subsystems failing independently',
         team: 'Engineering',
+        linearCli: 'pnpm af-linear',
+        packageManager: 'pnpm',
       }
 
       const result = registry.renderPrompt('refinement', context, 'decompose')

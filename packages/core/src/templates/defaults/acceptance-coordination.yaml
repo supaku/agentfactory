@@ -17,7 +17,7 @@ prompt: |
   Coordinate acceptance across sub-issues for parent issue {{identifier}}.
 
   WORKFLOW:
-  1. Verify all sub-issues are in Delivered status: pnpm af-linear list-sub-issue-statuses {{identifier}}
+  1. Verify all sub-issues are in Delivered status: {{linearCli}} list-sub-issue-statuses {{identifier}}
   2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
   3. Validate the PR:
      - CI checks are passing
@@ -25,7 +25,7 @@ prompt: |
      - Preview deployment succeeded (if applicable)
   4. Merge the PR: gh pr merge <PR_NUMBER> --squash
   5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
-  6. Bulk-update all sub-issues to Accepted: for each sub-issue, run pnpm af-linear update-sub-issue <id> --state Accepted
+  6. Bulk-update all sub-issues to Accepted: for each sub-issue, run {{linearCli}} update-sub-issue <id> --state Accepted
   7. Mark parent as complete (transitions to Accepted)
 
   IMPORTANT CONSTRAINTS:

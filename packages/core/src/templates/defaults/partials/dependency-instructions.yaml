@@ -4,16 +4,18 @@ metadata:
   name: dependency-instructions
   description: Instructions for handling dependencies in agent worktrees
 content: |
+  {{#unless (eq packageManager "none")}}
 
   DEPENDENCY INSTALLATION:
-  Dependencies are symlinked from the main repo by the orchestrator. Do NOT run `pnpm install` directly.
+  Dependencies are symlinked from the main repo by the orchestrator. Do NOT run `{{packageManager}} install` directly.
   If you encounter a "Cannot find module" error for a package that should already be installed, this
-  is likely a symlink issue — run `ORCHESTRATOR_INSTALL=1 pnpm install --frozen-lockfile` synchronously
+  is likely a symlink issue — run `ORCHESTRATOR_INSTALL=1 {{packageManager}} install --frozen-lockfile` synchronously
   (never with run_in_background).
 
   ADDING A NEW DEPENDENCY:
   If your work requires a package that is NOT in the project's package.json yet:
     bash .agent/add-dep.sh <package-name> --filter <workspace-name>
   This safely removes symlinked node_modules and installs the new package.
-  Include the updated package.json and pnpm-lock.yaml in your commit.
+  Include the updated package.json and lockfile in your commit.
   Never use sleep or polling loops to wait for install commands.
+  {{/unless}}

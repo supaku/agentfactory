@@ -116,6 +116,12 @@ export class ClaudeProvider implements AgentProvider {
           'Bash(vitest:*)',
           'Bash(jest:*)',
           'Bash(claude:*)',
+          // Non-Node project support: common build tools and shell scripts
+          'Bash(make:*)',
+          'Bash(cmake:*)',
+          'Bash(bash:*)',
+          'Bash(sh:*)',
+          'Bash(./:*)',
         ]
       : []
 

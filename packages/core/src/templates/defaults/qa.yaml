@@ -19,7 +19,7 @@ prompt: |
   Run tests, check for regressions, verify the PR meets requirements.
 
   HARD FAIL RULE — BUILD FAILURES:
-  If `pnpm typecheck` or `pnpm build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  If `{{packageManager}} typecheck` or `{{packageManager}} build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 

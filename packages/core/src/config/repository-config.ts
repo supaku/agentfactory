@@ -25,6 +25,20 @@ export const RepositoryConfigSchema = z.object({
   projectPaths: z.record(z.string(), z.string()).optional(),
   /** Shared directories that any project's agent may modify (e.g., ['packages/ui']) */
   sharedPaths: z.array(z.string()).optional(),
+  /**
+   * Command to invoke the Linear CLI (default: "pnpm af-linear").
+   * For non-Node projects, set to a path or wrapper script, e.g.:
+   *   "npx -y @supaku/agentfactory-cli af-linear"
+   *   "./tools/af-linear.sh"
+   *   "/usr/local/bin/af-linear"
+   */
+  linearCli: z.string().optional(),
+  /**
+   * Package manager used by the project (default: "pnpm").
+   * Set to "none" for non-Node projects (disables dependency linking and helper scripts).
+   * Supported values: "pnpm" | "npm" | "yarn" | "bun" | "none"
+   */
+  packageManager: z.enum(['pnpm', 'npm', 'yarn', 'bun', 'none']).optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },

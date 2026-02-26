@@ -23,13 +23,13 @@ prompt: |
 
   SUB-ISSUE STATUS MANAGEMENT:
   You MUST update sub-issue statuses in Linear as work progresses:
-  - When starting work on a sub-issue: pnpm af-linear update-sub-issue <id> --state Started
-  - When a sub-agent completes a sub-issue: pnpm af-linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
-  - If a sub-agent fails on a sub-issue: pnpm af-linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
+  - When starting work on a sub-issue: {{linearCli}} update-sub-issue <id> --state Started
+  - When a sub-agent completes a sub-issue: {{linearCli}} update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
+  - If a sub-agent fails on a sub-issue: {{linearCli}} create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
 
   COMPLETION VERIFICATION:
   Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
-    pnpm af-linear list-sub-issue-statuses {{identifier}}
+    {{linearCli}} list-sub-issue-statuses {{identifier}}
   If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
   {{> partials/repo-validation}}
   {{> partials/path-scoping}}
