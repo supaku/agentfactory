@@ -20,6 +20,7 @@ Issue enters pipeline
 |-----------|-----------|---------|
 | [developer.md](./developer.md) | `development` | Implements features, fixes bugs, creates PRs |
 | [qa-reviewer.md](./qa-reviewer.md) | `qa` | Validates implementation, runs tests, checks regressions |
+| [qa-reviewer-native.md](./qa-reviewer-native.md) | `qa` (native) | QA for C++, Rust, Go — build verification, memory safety checks |
 | [coordinator.md](./coordinator.md) | `coordination` | Orchestrates parallel sub-issues via Task sub-agents |
 | [acceptance-handler.md](./acceptance-handler.md) | `acceptance` | Validates completion, merges PRs, cleans up |
 | [backlog-writer.md](./backlog-writer.md) | `planning` | Transforms plans into structured Linear issues |
@@ -76,6 +77,47 @@ These definitions are starting points. You should customize them for your stack:
 3. **Add deployment checks** — if using Vercel/Netlify/etc., add deployment verification to QA
 4. **Add database validation** — if using migrations, add schema drift checks
 5. **Tune the review checklist** — add checks specific to your codebase (e.g., i18n, accessibility)
+
+### QA for Native/Compiled Projects
+
+For C++, Rust, Go, and other compiled languages, the QA workflow differs from TypeScript projects:
+
+- **Build = type check** — the compiler IS the type checker, so build verification replaces `pnpm typecheck`
+- **No Vercel deployment** — skip deployment validation
+- **Different test runners** — `cargo test`, `ctest`, `go test`, `make test` instead of `pnpm test`
+- **Domain-specific audits** — memory safety, thread safety, resource cleanup instead of linting
+
+Use the `qa-native` strategy template or the `qa-reviewer-native.md` agent definition as your starting point.
+
+**Option 1: Use the built-in `qa-native` strategy template**
+
+Override `.agentfactory/templates/qa-native.yaml` in your project to customize commands:
+
+```yaml
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: qa-native
+  description: QA for my Rust project
+  workType: qa
+tools:
+  allow:
+    - shell: "cargo *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+prompt: |
+  QA {{identifier}} (Rust project).
+  Build: `cargo build --release`
+  Test: `cargo test`
+  Lint: `cargo clippy -- -D warnings`
+  ...
+```
+
+**Option 2: Use configurable build/test commands via template context**
+
+The base `qa.yaml` template supports `buildCommand`, `testCommand`, and `validateCommand` context variables. Set these in your orchestrator config or `.agentfactory/config.yaml` to customize QA for your project without creating a separate template.
 
 ### Creating Specialized Developer Agents
 

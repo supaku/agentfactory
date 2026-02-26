@@ -13,6 +13,7 @@ describe('Strategy-Aware Template Selection', () => {
       expect(workTypes).toContain('refinement-decompose')
       expect(workTypes).toContain('development-retry')
       expect(workTypes).toContain('qa-retry')
+      expect(workTypes).toContain('qa-native')
 
       // Should still include base work types
       expect(workTypes).toContain('development')
@@ -524,6 +525,205 @@ describe('Strategy-Aware Template Selection', () => {
       expect(result).toContain('Human Intervention Required')
       expect(result).not.toContain('blocker has been created')
       expect(result).toContain('No failure details recorded.')
+    })
+  })
+
+  describe('qa-native strategy template', () => {
+    let registry: TemplateRegistry
+
+    beforeEach(() => {
+      registry = TemplateRegistry.create({ useBuiltinDefaults: true })
+    })
+
+    it('loads qa-native as a strategy template', () => {
+      const template = registry.getTemplate('qa', 'native')
+      expect(template).toBeDefined()
+      expect(template!.metadata.name).toBe('qa-native')
+      expect(template!.metadata.workType).toBe('qa')
+    })
+
+    it('renders qa-native template with identifier', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-800',
+      }
+
+      const result = registry.renderPrompt('qa', context, 'native')
+      expect(result).toContain('SUP-800')
+      expect(result).toContain('native/compiled project')
+      expect(result).toContain('WORK_RESULT')
+      expect(result).toContain('Build verification')
+      expect(result).toContain('memory safety')
+    })
+
+    it('renders qa-native with custom build commands', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-801',
+        buildCommand: 'cargo build --release',
+        testCommand: 'cargo test',
+        validateCommand: 'cargo clippy -- -D warnings',
+      }
+
+      const result = registry.renderPrompt('qa', context, 'native')
+      expect(result).toContain('cargo build --release')
+      expect(result).toContain('cargo test')
+      expect(result).toContain('cargo clippy -- -D warnings')
+    })
+
+    it('renders qa-native with auto-detect fallback when no commands provided', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-802',
+      }
+
+      const result = registry.renderPrompt('qa', context, 'native')
+      expect(result).toContain('Detect the build system')
+      expect(result).toContain('Detect the test framework')
+    })
+
+    it('includes native-specific tool permissions', () => {
+      const perms = registry.getToolPermissions('qa', 'native')
+      expect(perms).toBeDefined()
+      expect(perms!.some(p => p.includes('cargo') || p.includes('make') || p.includes('cmake'))).toBe(true)
+    })
+
+    it('disallows user-input in native QA template', () => {
+      const disallowed = registry.getDisallowedTools('qa', 'native')
+      expect(disallowed).toBeDefined()
+      expect(disallowed).toContain('user-input')
+    })
+  })
+
+  describe('configurable build/test commands in base qa template', () => {
+    let registry: TemplateRegistry
+
+    beforeEach(() => {
+      registry = TemplateRegistry.create({ useBuiltinDefaults: true })
+    })
+
+    it('renders base qa template with custom buildCommand', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-900',
+        buildCommand: 'make -j8',
+      }
+
+      const result = registry.renderPrompt('qa', context)
+      expect(result).toContain('`make -j8`')
+      expect(result).toContain('WORK_RESULT')
+    })
+
+    it('renders base qa template with custom testCommand', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-901',
+        testCommand: 'go test ./...',
+      }
+
+      const result = registry.renderPrompt('qa', context)
+      expect(result).toContain('`go test ./...`')
+    })
+
+    it('renders base qa template with custom validateCommand', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-902',
+        validateCommand: 'cargo clippy',
+      }
+
+      const result = registry.renderPrompt('qa', context)
+      expect(result).toContain('`cargo clippy`')
+    })
+
+    it('uses pnpm defaults when no custom commands provided', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-903',
+      }
+
+      const result = registry.renderPrompt('qa', context)
+      expect(result).toContain('`pnpm typecheck` or `pnpm build`')
+      // Should NOT contain custom command sections
+      expect(result).not.toContain('Build: `')
+    })
+
+    it('uses custom buildCommand in HARD FAIL RULE when provided', () => {
+      const context: TemplateContext = {
+        identifier: 'SUP-904',
+        buildCommand: 'cmake --build build',
+      }
+
+      const result = registry.renderPrompt('qa', context)
+      expect(result).toContain('`cmake --build build`')
+      // Should NOT contain the pnpm default in the hard fail rule
+      expect(result).not.toContain('`pnpm typecheck` or `pnpm build`')
+    })
+  })
+
+  describe('build/test command context variables', () => {
+    it('buildCommand is available in templates', () => {
+      const registry = new TemplateRegistry()
+      const template: WorkflowTemplate = {
+        apiVersion: 'v1',
+        kind: 'WorkflowTemplate',
+        metadata: { name: 'test', workType: 'development' },
+        prompt: 'Build: {{buildCommand}}',
+      }
+      registry.initialize({ templates: { development: template }, useBuiltinDefaults: false })
+
+      const result = registry.renderPrompt('development', {
+        identifier: 'X',
+        buildCommand: 'cargo build',
+      })
+      expect(result).toBe('Build: cargo build')
+    })
+
+    it('testCommand is available in templates', () => {
+      const registry = new TemplateRegistry()
+      const template: WorkflowTemplate = {
+        apiVersion: 'v1',
+        kind: 'WorkflowTemplate',
+        metadata: { name: 'test', workType: 'development' },
+        prompt: 'Test: {{testCommand}}',
+      }
+      registry.initialize({ templates: { development: template }, useBuiltinDefaults: false })
+
+      const result = registry.renderPrompt('development', {
+        identifier: 'X',
+        testCommand: 'go test ./...',
+      })
+      expect(result).toBe('Test: go test ./...')
+    })
+
+    it('validateCommand is available in templates', () => {
+      const registry = new TemplateRegistry()
+      const template: WorkflowTemplate = {
+        apiVersion: 'v1',
+        kind: 'WorkflowTemplate',
+        metadata: { name: 'test', workType: 'development' },
+        prompt: 'Validate: {{validateCommand}}',
+      }
+      registry.initialize({ templates: { development: template }, useBuiltinDefaults: false })
+
+      const result = registry.renderPrompt('development', {
+        identifier: 'X',
+        validateCommand: 'cargo clippy',
+      })
+      expect(result).toBe('Validate: cargo clippy')
+    })
+  })
+
+  describe('native-build-validation partial', () => {
+    it('renders native-build-validation partial', () => {
+      const registry = TemplateRegistry.create({ useBuiltinDefaults: true })
+      const template: WorkflowTemplate = {
+        apiVersion: 'v1',
+        kind: 'WorkflowTemplate',
+        metadata: { name: 'test-native', workType: 'development' },
+        prompt: '{{> partials/native-build-validation}}',
+      }
+      registry.initialize({ useBuiltinDefaults: true, templates: { development: template } })
+
+      const result = registry.renderPrompt('development', { identifier: 'SUP-1' })
+      expect(result).toContain('NATIVE BUILD VALIDATION')
+      expect(result).toContain('Cargo.toml')
+      expect(result).toContain('CMakeLists.txt')
+      expect(result).toContain('go.mod')
+      expect(result).toContain('Memory safety')
     })
   })
 })

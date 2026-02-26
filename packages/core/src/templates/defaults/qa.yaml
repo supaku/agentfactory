@@ -18,8 +18,18 @@ prompt: |
   Validate the implementation against acceptance criteria.
   Run tests, check for regressions, verify the PR meets requirements.
 
+  {{#if buildCommand}}
+  Build: `{{buildCommand}}`
+  {{/if}}
+  {{#if testCommand}}
+  Test: `{{testCommand}}`
+  {{/if}}
+  {{#if validateCommand}}
+  Validate: `{{validateCommand}}`
+  {{/if}}
+
   HARD FAIL RULE — BUILD FAILURES:
-  If `pnpm typecheck` or `pnpm build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  If {{#if buildCommand}}`{{buildCommand}}`{{else}}`pnpm typecheck` or `pnpm build`{{/if}} exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 

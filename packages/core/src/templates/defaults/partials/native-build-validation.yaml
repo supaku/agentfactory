@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: native-build-validation
+  description: Build validation instructions for native/compiled projects
+content: |
+
+  NATIVE BUILD VALIDATION:
+  For compiled projects, the build IS the type check — a successful compilation verifies type correctness.
+
+  Build system detection order:
+  1. Use the provided buildCommand/testCommand/validateCommand if set in the template context
+  2. Check for Cargo.toml (Rust) → cargo build / cargo test / cargo clippy
+  3. Check for CMakeLists.txt (C/C++) → cmake --build build / ctest --test-dir build
+  4. Check for go.mod (Go) → go build ./... / go test ./... / go vet ./...
+  5. Check for Makefile (C/C++) → make / make test
+  6. Check for meson.build (C/C++) → meson compile -C build / meson test -C build
+
+  Safety checks for native code:
+  - Memory safety: buffer overflows, use-after-free, double-free
+  - Thread safety: data races, deadlocks, missing synchronization
+  - Resource cleanup: file handles, memory, locks
+  - Unsafe code blocks: must have justification comments

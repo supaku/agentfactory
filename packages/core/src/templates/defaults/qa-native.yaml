@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: qa-native
+  description: QA validation for native/compiled projects (C++, Rust, Go, etc.)
+  workType: qa
+
+tools:
+  allow:
+    - shell: "make *"
+    - shell: "cmake *"
+    - shell: "cargo *"
+    - shell: "go *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  QA {{identifier}} (native/compiled project).
+  Validate the implementation against acceptance criteria.
+  Run build, tests, and validation checks. Verify the PR meets requirements.
+
+  ## Build Commands
+
+  {{#if buildCommand}}
+  Build: `{{buildCommand}}`
+  {{else}}
+  Build: Detect the build system from the repository (CMake, Cargo, Make, Go, etc.) and run the appropriate build command.
+  {{/if}}
+
+  {{#if testCommand}}
+  Test: `{{testCommand}}`
+  {{else}}
+  Test: Detect the test framework and run tests (e.g., `ctest`, `cargo test`, `go test ./...`, `make test`).
+  {{/if}}
+
+  {{#if validateCommand}}
+  Validate: `{{validateCommand}}`
+  {{else}}
+  Validate: Run available static analysis (e.g., `cargo clippy`, `go vet`, compiler warnings-as-errors).
+  {{/if}}
+
+  ## Validation Steps
+
+  1. **Build verification** — compile the project. For compiled languages, a successful build IS the type check.
+  2. **Run tests** — execute the test suite and verify no regressions.
+  3. **Static analysis** — run linters or compiler warnings if available.
+  4. **Review changes** — examine the PR/branch against issue requirements.
+  5. **Security check** — review for memory safety issues, unsafe blocks, buffer overflows, etc.
+
+  HARD FAIL RULE — BUILD FAILURES:
+  If the build command exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  Do NOT rationalize, skip, or explain away build failures (e.g., "will resolve on merge").
+  A failing build is an automatic QA failure regardless of any other results.
+
+  ## Native-Specific Review Checklist
+
+  - [ ] Build succeeds (compiler errors = automatic fail)
+  - [ ] All tests pass
+  - [ ] No new compiler warnings (treat warnings as errors when possible)
+  - [ ] Changes match issue requirements
+  - [ ] No memory safety issues (buffer overflows, use-after-free, data races)
+  - [ ] No hardcoded credentials or API keys
+  - [ ] Resource cleanup (file handles, memory, network connections)
+  - [ ] Platform compatibility (if applicable)
+
+  {{> partials/work-result-marker}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
