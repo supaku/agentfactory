@@ -1,6 +1,6 @@
 {
   "name": "@supaku/create-agentfactory-app",
-  "version": "0.7.33",
+  "version": "0.7.34",
   "type": "module",
   "description": "Create an AgentFactory app — multi-agent fleet management for coding agents",
   "author": "Supaku (https://supaku.com)",

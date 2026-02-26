@@ -14,24 +14,34 @@ const STRUCTURED_MARKER_RE = /<!--\s*WORK_RESULT:(passed|failed)\s*-->/i
  * Patterns are checked case-insensitively against the result message.
  */
 const QA_PASS_PATTERNS = [
+  // Heading patterns
   /##\s*QA\s+Passed/i,
   /##\s*QA\s+Complete[^]*?\bPASS/i,
-  /QA\s+Result:\s*Pass/i,
-  /QA\s+Status:\s*Passed/i,
-  /QA\s+(?:Result|Status|Verdict):\s*✅/i,
+  // Explicit label patterns (with optional "QA" prefix, word-bounded to avoid WORK_RESULT)
+  /\b(?:QA\s+)?Result:\s*\*{0,2}Pass(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?Status:\s*\*{0,2}Pass(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?Verdict:\s*\*{0,2}Pass(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?(?:Result|Status|Verdict):\s*✅/i,
   /Overall\s+(?:QA\s+)?Result:\s*PASS/i,
   /Roll-?Up\s+Verdict:\s*PASS/i,
+  // Bold standalone PASS (agents commonly output **PASS** or **PASS.**)
+  /\*\*PASS\.?\*\*/,
 ]
 
 const QA_FAIL_PATTERNS = [
+  // Heading patterns
   /##\s*QA\s+Failed/i,
   /##\s*QA\s+Complete[^]*?\bFAIL/i,
-  /QA\s+Result:\s*Fail/i,
-  /QA\s+Status:\s*Failed/i,
-  /QA\s+(?:Result|Status|Verdict):\s*❌/i,
+  // Explicit label patterns (with optional "QA" prefix, word-bounded to avoid WORK_RESULT)
+  /\b(?:QA\s+)?Result:\s*\*{0,2}Fail(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?Status:\s*\*{0,2}Fail(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?Verdict:\s*\*{0,2}Fail(?:ed)?\*{0,2}/i,
+  /\b(?:QA\s+)?(?:Result|Status|Verdict):\s*❌/i,
   /Overall\s+(?:QA\s+)?Result:\s*FAIL/i,
   /Roll-?Up\s+Verdict:\s*FAIL/i,
   /Parent\s+QA\s+verdict:\s*FAIL/i,
+  // Bold standalone FAIL
+  /\*\*FAIL\.?\*\*/,
 ]
 
 const ACCEPTANCE_PASS_PATTERNS = [

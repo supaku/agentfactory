@@ -115,6 +115,47 @@ describe('parseWorkResult', () => {
     it('detects "Roll-Up Verdict: PASS"', () => {
       expect(parseWorkResult('### Roll-Up Verdict: PASS (6/6 sub-issues pass)', 'qa-coordination')).toBe('passed')
     })
+
+    // Real agent output patterns (SUP-867 regression)
+    it('detects bold **PASS**', () => {
+      expect(parseWorkResult('Branch unchanged — `4383c3e`. **PASS.** No new findings.', 'qa')).toBe('passed')
+    })
+
+    it('detects bold **PASS** without period', () => {
+      expect(parseWorkResult('All tests pass. **PASS**', 'qa')).toBe('passed')
+    })
+
+    it('detects "Verdict: PASS" without QA prefix', () => {
+      expect(parseWorkResult('**Verdict: PASS** — all criteria met', 'qa')).toBe('passed')
+    })
+
+    it('detects "Verdict: **PASS**" with bold', () => {
+      expect(parseWorkResult('Verdict: **PASS**', 'qa')).toBe('passed')
+    })
+
+    it('detects "Status: **PASS**" without QA prefix', () => {
+      expect(parseWorkResult('### Status: **PASS** — same as prior two passes', 'qa')).toBe('passed')
+    })
+
+    it('detects "Result: Pass" without QA prefix', () => {
+      expect(parseWorkResult('Result: Pass — no issues found', 'qa')).toBe('passed')
+    })
+
+    it('detects bold **FAIL**', () => {
+      expect(parseWorkResult('Build failed. **FAIL.**', 'qa')).toBe('failed')
+    })
+
+    it('detects "Verdict: FAIL" without QA prefix', () => {
+      expect(parseWorkResult('Verdict: FAIL — build errors detected', 'qa')).toBe('failed')
+    })
+
+    it('detects "Status: **FAIL**" without QA prefix', () => {
+      expect(parseWorkResult('Status: **FAIL**', 'qa')).toBe('failed')
+    })
+
+    it('does not false-positive on "tests pass" (no bold)', () => {
+      expect(parseWorkResult('All tests pass and everything looks good.', 'qa')).toBe('unknown')
+    })
   })
 
   // Acceptance heuristic pattern tests

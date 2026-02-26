@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.34
+
+### Fixes
+
+- **Fix QA infinite loop caused by rigid work result heuristics** — QA agents output verdicts like `**PASS**`, `Verdict: PASS`, `Status: **PASS**` but all heuristic patterns required a `QA` prefix (e.g., `QA Result: Pass`). Every QA run returned `unknown`, the orchestrator never transitioned the issue, and the work queue re-dispatched it endlessly. Made `QA` prefix optional, added bold markdown support (`**PASS**`/`**FAIL**`), and added standalone bold verdict patterns. Added 11 regression tests from real SUP-867 agent output.
+
 ## v0.7.33
 
 ### Fixes
