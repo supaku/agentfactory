@@ -17,7 +17,7 @@ prompt: |
   Coordinate QA across sub-issues for parent issue {{identifier}}.
 
   WORKFLOW:
-  1. Fetch sub-issues: pnpm af-linear list-sub-issues {{identifier}}
+  1. Fetch sub-issues: {{linearCli}} list-sub-issues {{identifier}}
   2. Create Claude Code Tasks for each sub-issue's QA verification
   3. Spawn qa-reviewer sub-agents in parallel — no dependency graph needed, all sub-issues are already Finished
   4. Each sub-agent: reads sub-issue requirements, runs scoped tests, validates implementation, emits pass/fail
@@ -30,12 +30,12 @@ prompt: |
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT create PRs or make git commits
   - The PR already exists from the development coordination phase
-  - Run pnpm test, pnpm typecheck, and pnpm build as part of validation
+  - Run {{packageManager}} test, {{packageManager}} typecheck, and {{packageManager}} build as part of validation
   - Verify each sub-issue's acceptance criteria against the actual code changes
   - NEVER manually change the parent issue status. The orchestrator manages all status transitions based on your WORK_RESULT marker.
 
   HARD FAIL RULE — BUILD FAILURES:
-  If `pnpm typecheck` or `pnpm build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
+  If `{{packageManager}} typecheck` or `{{packageManager}} build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 

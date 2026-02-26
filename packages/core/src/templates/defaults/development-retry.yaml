@@ -31,7 +31,7 @@ prompt: |
   1. Review the previous failure reasons carefully
   2. Do NOT repeat approaches that already failed
   3. Take a different strategy if the same approach failed twice
-  4. Run tests to verify: `pnpm test` and `pnpm typecheck`
+  4. Run tests to verify: `{{packageManager}} test` and `{{packageManager}} typecheck`
   5. Create a PR
 
   {{> partials/path-scoping}}

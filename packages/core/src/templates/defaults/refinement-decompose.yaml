@@ -28,7 +28,7 @@ prompt: |
   2. Break the original issue into 2-4 smaller sub-issues, each independently testable
   3. Create sub-issues using the Linear CLI:
      ```
-     pnpm af-linear create-issue --title "Sub-task title" --team "{{team}}" --parentId "PARENT_ID" --description "..."
+     {{linearCli}} create-issue --title "Sub-task title" --team "{{team}}" --parentId "PARENT_ID" --description "..."
      ```
   4. Each sub-issue should have clear acceptance criteria
   5. Add blocking relations if sub-issues have dependencies

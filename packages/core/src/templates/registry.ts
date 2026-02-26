@@ -40,6 +40,14 @@ export class TemplateRegistry {
 
   constructor() {
     this.handlebars = Handlebars.create()
+
+    // Register custom helpers
+    this.handlebars.registerHelper('eq', function (a: unknown, b: unknown) {
+      return a === b
+    })
+    this.handlebars.registerHelper('neq', function (a: unknown, b: unknown) {
+      return a !== b
+    })
   }
 
   /**

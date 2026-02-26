@@ -123,6 +123,8 @@ describe('Strategy-Aware Template Selection', () => {
         cycleCount: 4,
         failureSummary: 'Multiple subsystems failing independently',
         team: 'Engineering',
+        linearCli: 'pnpm af-linear',
+        packageManager: 'pnpm',
       }
 
       const result = registry.renderPrompt('refinement', context, 'decompose')
@@ -633,6 +635,7 @@ describe('Strategy-Aware Template Selection', () => {
     it('uses pnpm defaults when no custom commands provided', () => {
       const context: TemplateContext = {
         identifier: 'SUP-903',
+        packageManager: 'pnpm',
       }
 
       const result = registry.renderPrompt('qa', context)

@@ -801,6 +801,10 @@ export class AgentOrchestrator {
   private projectPaths?: Record<string, string>
   // Shared paths from .agentfactory/config.yaml (monorepo support)
   private sharedPaths?: string[]
+  // Linear CLI command from .agentfactory/config.yaml (non-Node project support)
+  private linearCli?: string
+  // Package manager from .agentfactory/config.yaml (non-Node project support)
+  private packageManager?: string
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -882,6 +886,13 @@ export class AgentOrchestrator {
             this.allowedProjects = Object.keys(repoConfig.projectPaths)
           } else if (repoConfig.allowedProjects) {
             this.allowedProjects = repoConfig.allowedProjects
+          }
+          // Store non-Node project config
+          if (repoConfig.linearCli) {
+            this.linearCli = repoConfig.linearCli
+          }
+          if (repoConfig.packageManager) {
+            this.packageManager = repoConfig.packageManager
           }
         }
       }
@@ -1483,6 +1494,11 @@ export class AgentOrchestrator {
    *   node_modules first, then running `pnpm add` with the guard bypass.
    */
   private writeWorktreeHelpers(worktreePath: string): void {
+    // Skip helper scripts for non-Node projects (no pnpm/npm available)
+    if (this.packageManager === 'none') {
+      return
+    }
+
     const agentDir = resolve(worktreePath, '.agent')
     const scriptPath = resolve(agentDir, 'add-dep.sh')
 
@@ -1735,6 +1751,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         repository: this.config.repository,
         projectPath: this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
+        linearCli: this.linearCli ?? 'pnpm af-linear',
+        packageManager: this.packageManager ?? 'pnpm',
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)

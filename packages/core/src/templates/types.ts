@@ -135,6 +135,12 @@ export interface TemplateContext {
   /** Shared directories that any project's agent may modify (e.g. ['packages/ui']) */
   sharedPaths?: string[]
 
+  // Non-Node project support
+  /** Command to invoke the Linear CLI (default: "pnpm af-linear") */
+  linearCli?: string
+  /** Package manager used by the project (default: "pnpm"). Set to "none" for non-Node projects. */
+  packageManager?: string
+
   // Configurable build/test commands (native/compiled project support)
   /** Build command override (e.g. 'cargo build', 'cmake --build build', 'make') */
   buildCommand?: string
@@ -256,6 +262,9 @@ export const TemplateContextSchema = z.object({
   // Project path scoping variables (monorepo support)
   projectPath: z.string().optional(),
   sharedPaths: z.array(z.string()).optional(),
+  // Non-Node project support
+  linearCli: z.string().optional(),
+  packageManager: z.string().optional(),
   // Configurable build/test commands (native/compiled project support)
   buildCommand: z.string().optional(),
   testCommand: z.string().optional(),
