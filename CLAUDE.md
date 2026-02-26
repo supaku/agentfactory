@@ -270,6 +270,9 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{repository}}` | Git repository URL pattern for pre-push validation |
 | `{{projectPath}}` | Root directory for this project in a monorepo (e.g., `apps/family`) |
 | `{{sharedPaths}}` | Shared directories any project may modify (array) |
+| `{{buildCommand}}` | Build command override for native projects (e.g., `cargo build`) |
+| `{{testCommand}}` | Test command override for native projects (e.g., `cargo test`) |
+| `{{validateCommand}}` | Validation command override — replaces typecheck (e.g., `cargo clippy`) |
 
 ### Available Partials
 
@@ -283,6 +286,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/pr-selection}}` | PR selection guidance |
 | `{{> partials/repo-validation}}` | Pre-push git remote URL validation |
 | `{{> partials/path-scoping}}` | Monorepo directory scoping instructions |
+| `{{> partials/native-build-validation}}` | Build system detection and safety checks for native projects |
 
 ### Tool Permissions
 

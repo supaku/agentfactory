@@ -134,6 +134,14 @@ export interface TemplateContext {
   projectPath?: string
   /** Shared directories that any project's agent may modify (e.g. ['packages/ui']) */
   sharedPaths?: string[]
+
+  // Configurable build/test commands (native/compiled project support)
+  /** Build command override (e.g. 'cargo build', 'cmake --build build', 'make') */
+  buildCommand?: string
+  /** Test command override (e.g. 'cargo test', 'ctest --test-dir build', 'make test') */
+  testCommand?: string
+  /** Validation command override — replaces typecheck for compiled projects (e.g. 'cargo clippy') */
+  validateCommand?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +256,10 @@ export const TemplateContextSchema = z.object({
   // Project path scoping variables (monorepo support)
   projectPath: z.string().optional(),
   sharedPaths: z.array(z.string()).optional(),
+  // Configurable build/test commands (native/compiled project support)
+  buildCommand: z.string().optional(),
+  testCommand: z.string().optional(),
+  validateCommand: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------
