@@ -220,6 +220,27 @@ describe('TemplateContextSchema', () => {
   it('rejects empty identifier', () => {
     expect(() => TemplateContextSchema.parse({ identifier: '' })).toThrow()
   })
+
+  it('validates context with build/test command variables', () => {
+    const result = TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+      buildCommand: 'cargo build --release',
+      testCommand: 'cargo test',
+      validateCommand: 'cargo clippy -- -D warnings',
+    })
+    expect(result.buildCommand).toBe('cargo build --release')
+    expect(result.testCommand).toBe('cargo test')
+    expect(result.validateCommand).toBe('cargo clippy -- -D warnings')
+  })
+
+  it('allows omitting build/test command variables', () => {
+    const result = TemplateContextSchema.parse({
+      identifier: 'SUP-123',
+    })
+    expect(result.buildCommand).toBeUndefined()
+    expect(result.testCommand).toBeUndefined()
+    expect(result.validateCommand).toBeUndefined()
+  })
 })
 
 describe('validateWorkflowTemplate', () => {
