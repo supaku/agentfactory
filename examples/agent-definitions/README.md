@@ -63,6 +63,48 @@ Instructions, checklists, commands, and patterns.
 | `description` | When the orchestrator should select this agent |
 | `tools` | Comma-separated list of allowed tools |
 | `model` | Which model to use (`opus`, `sonnet`, `haiku`) |
+| `build_commands` | Named build commands (map of name → command string) |
+| `test_commands` | Named test commands (map of name → command string) |
+| `af_linear` | Custom Linear CLI command override |
+
+### Configurable Build/Test Commands
+
+For projects with non-standard build systems (C++, Rust, Go, etc.), you can declare
+build and test commands in the frontmatter and reference them in the body:
+
+```markdown
+---
+name: developer
+description: C++ game engine developer
+tools: Read, Edit, Write, Grep, Glob, Bash
+model: opus
+build_commands:
+  verify: "cmake --build build-arm64/ --target engine-headless -j$(sysctl -n hw.ncpu)"
+  full: "cmake --build build-arm64/ --target engine-legacy -j$(sysctl -n hw.ncpu)"
+test_commands:
+  unit: "ctest --test-dir build-arm64/ --output-on-failure"
+af_linear: "bash tools/af-linear.sh"
+---
+
+# Developer Agent
+
+## Build Verification
+
+Run the verify build: `{{build_commands.verify}}`
+Run the full build: `{{build_commands.full}}`
+
+## Testing
+
+Run unit tests: `{{test_commands.unit}}`
+
+## Linear Updates
+
+Use `{{af_linear}}` instead of `pnpm af-linear` for all Linear operations.
+```
+
+The body uses Handlebars interpolation — `{{build_commands.verify}}` is replaced with the
+actual command string from frontmatter. This lets you share agent logic across projects
+by only changing the frontmatter.
 
 ### The Result Marker
 
@@ -115,9 +157,20 @@ prompt: |
   ...
 ```
 
-**Option 2: Use configurable build/test commands via template context**
+**Option 2: Use configurable build/test commands via `.agentfactory/config.yaml`**
 
-The base `qa.yaml` template supports `buildCommand`, `testCommand`, and `validateCommand` context variables. Set these in your orchestrator config or `.agentfactory/config.yaml` to customize QA for your project without creating a separate template.
+The base `qa.yaml` template supports `buildCommand`, `testCommand`, and `validateCommand` context variables. Set these in `.agentfactory/config.yaml` to customize QA for your project without creating a separate template:
+
+```yaml
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/myorg/myproject
+buildCommand: "cargo build --release"
+testCommand: "cargo test"
+validateCommand: "cargo clippy -- -D warnings"
+```
+
+These values are injected into workflow templates as `{{buildCommand}}`, `{{testCommand}}`, and `{{validateCommand}}`.
 
 ### Creating Specialized Developer Agents
 

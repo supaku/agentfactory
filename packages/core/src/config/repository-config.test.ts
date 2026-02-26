@@ -189,6 +189,79 @@ describe('RepositoryConfigSchema', () => {
       })
     ).toThrow(/mutually exclusive/)
   })
+
+  it('validates config with build/test/validate commands', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      repository: 'github.com/org/native-project',
+      buildCommand: 'cargo build --release',
+      testCommand: 'cargo test',
+      validateCommand: 'cargo clippy -- -D warnings',
+    })
+    expect(result.buildCommand).toBe('cargo build --release')
+    expect(result.testCommand).toBe('cargo test')
+    expect(result.validateCommand).toBe('cargo clippy -- -D warnings')
+  })
+
+  it('allows omitting build/test/validate commands', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(result.buildCommand).toBeUndefined()
+    expect(result.testCommand).toBeUndefined()
+    expect(result.validateCommand).toBeUndefined()
+  })
+
+  it('validates config with build commands and non-Node settings', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      packageManager: 'none',
+      linearCli: 'bash tools/af-linear.sh',
+      buildCommand: 'cmake --build build/',
+      testCommand: 'ctest --test-dir build/',
+    })
+    expect(result.packageManager).toBe('none')
+    expect(result.linearCli).toBe('bash tools/af-linear.sh')
+    expect(result.buildCommand).toBe('cmake --build build/')
+    expect(result.testCommand).toBe('ctest --test-dir build/')
+  })
+})
+
+describe('loadRepositoryConfig with build commands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('parses config with build/test/validate commands', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/org/native-project
+packageManager: none
+buildCommand: "cargo build --release"
+testCommand: "cargo test"
+validateCommand: "cargo clippy -- -D warnings"
+`
+    )
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result).toEqual({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      repository: 'github.com/org/native-project',
+      packageManager: 'none',
+      buildCommand: 'cargo build --release',
+      testCommand: 'cargo test',
+      validateCommand: 'cargo clippy -- -D warnings',
+    })
+  })
 })
 
 describe('getEffectiveAllowedProjects', () => {
