@@ -635,6 +635,7 @@ describe('Strategy-Aware Template Selection', () => {
     it('uses pnpm defaults when no custom commands provided', () => {
       const context: TemplateContext = {
         identifier: 'SUP-903',
+        packageManager: 'pnpm',
       }
 
       const result = registry.renderPrompt('qa', context)
