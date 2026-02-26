@@ -209,7 +209,7 @@ export interface ForwardPromptResult {
   resumed: boolean
   /** True if message was injected into running session (no restart needed) */
   injected?: boolean
-  reason?: 'not_found' | 'spawn_failed' | 'no_worktree'
+  reason?: 'not_found' | 'spawn_failed' | 'no_worktree' | 'terminal_status'
   agent?: AgentProcess
   error?: Error
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.35
+
+### Fixes
+
+- **Skip work for issues in terminal status (Accepted/Canceled/Duplicate)** — The governor queues work based on issue status at scan time, but by the time the worker picks up the item, the issue may have already moved to a terminal status. The orchestrator spawned agents anyway, causing issues like SUP-866 to get QA'd after already being Accepted. Added terminal status guards in `spawnAgentForIssue` (throws) and `forwardPrompt` (returns early with `reason: 'terminal_status'`).
+
+### Features
+
+- **Configurable build/test commands in agent frontmatter and repository config** (#15)
+
 ## v0.7.34
 
 ### Fixes

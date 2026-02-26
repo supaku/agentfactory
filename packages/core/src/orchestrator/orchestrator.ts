@@ -45,6 +45,7 @@ import {
   WORK_TYPE_START_STATUS,
   WORK_TYPE_COMPLETE_STATUS,
   WORK_TYPE_FAIL_STATUS,
+  TERMINAL_STATUSES,
 } from '@supaku/agentfactory-linear'
 import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
@@ -2832,6 +2833,16 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
 
+    // Guard: skip work if the issue has moved to a terminal status since being queued
+    const currentState = await issue.state
+    const currentStatus = currentState?.name
+    if (currentStatus && (TERMINAL_STATUSES as readonly string[]).includes(currentStatus)) {
+      throw new Error(
+        `Issue ${identifier} is in terminal status '${currentStatus}' — skipping ${workType ?? 'auto'} work. ` +
+        `The issue was likely accepted/canceled after being queued.`
+      )
+    }
+
     // Defense in depth: re-validate git remote before spawning (guards against long-running instances)
     if (this.config.repository) {
       validateGitRemote(this.config.repository)
@@ -3118,12 +3129,23 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         const issueTeam = await issue.team
         teamName = issueTeam?.key
 
+        // Guard: skip work if the issue has moved to a terminal status since being queued
+        const currentState = await issue.state
+        const currentStatus = currentState?.name
+        if (currentStatus && (TERMINAL_STATUSES as readonly string[]).includes(currentStatus)) {
+          console.log(`Issue ${identifier} is in terminal status '${currentStatus}' — skipping work`)
+          return {
+            forwarded: false,
+            resumed: false,
+            reason: 'terminal_status',
+          }
+        }
+
         // Auto-detect work type from issue status if not provided
         // This prevents defaulting to 'development' which would cause
         // incorrect status transitions (e.g., Delivered \u2192 Started for acceptance work)
         if (!workType) {
-          const state = await issue.state
-          const statusName = state?.name ?? 'Backlog'
+          const statusName = currentStatus ?? 'Backlog'
           workType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
         }
 
