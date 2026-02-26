@@ -45,7 +45,7 @@ const log = {
 
 export interface RealDependenciesConfig {
   linearClient: LinearAgentClient          // For read operations (listIssues, isParentIssue, etc.)
-  oauthClient?: LinearAgentClient          // For Agent API (createAgentSessionOnIssue) - resolved from Redis
+  resolveOAuthClient?: () => Promise<LinearAgentClient | undefined>  // Lazy OAuth client resolver (re-resolves token from Redis on each call)
   organizationId?: string                  // Workspace ID for session state storage
   generatePrompt?: (identifier: string, workType: string, mentionContext?: string) => string
 }
@@ -280,8 +280,9 @@ export function createRealDependencies(
         log.info('Dispatching work', { issueId, issueIdentifier, action, workType })
 
         // Create a Linear Agent Session on the issue so the UI shows activity
-        // Use OAuth client (Agent API) if available, fall back to personal API key
-        const sessionClient = config.oauthClient ?? config.linearClient
+        // Resolve OAuth client fresh each dispatch (handles token refresh/expiry)
+        const oauthClient = await config.resolveOAuthClient?.()
+        const sessionClient = oauthClient ?? config.linearClient
         let sessionId: string | undefined
         try {
           const sessionResult = await sessionClient.createAgentSessionOnIssue({

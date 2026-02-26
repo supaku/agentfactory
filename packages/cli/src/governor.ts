@@ -159,20 +159,22 @@ async function main(): Promise<void> {
   let oauthResolved = false
 
   if (linearApiKey) {
-    // Resolve OAuth token from Redis for Agent API operations
-    let oauthClient: LinearAgentClient | undefined
     let organizationId: string | undefined
 
     // Shared rate limiter and circuit breaker strategies (Redis-backed when available)
     let rateLimiterStrategy: RateLimiterStrategy | undefined
     let circuitBreakerStrategy: CircuitBreakerStrategy | undefined
 
+    // OAuth client cache — re-created when the underlying token changes
+    let cachedOAuthToken: string | undefined
+    let cachedOAuthClient: LinearAgentClient | undefined
+
     // Initialize touchpoint storage (for isHeld / getOverridePriority) when Redis is available
     if (redisUrl) {
       redisConnected = true
       initTouchpointStorage(new RedisOverrideStorage())
 
-      // Resolve OAuth token for Linear Agent API (createAgentSessionOnIssue)
+      // Resolve workspace and create shared strategies
       try {
         const workspaces = await listStoredWorkspaces()
         if (workspaces.length > 0) {
@@ -182,9 +184,11 @@ async function main(): Promise<void> {
           rateLimiterStrategy = createRedisTokenBucket(organizationId)
           circuitBreakerStrategy = createRedisCircuitBreaker(organizationId)
 
+          // Eagerly resolve token at startup to populate banner status
           const accessToken = await getAccessToken(organizationId)
           if (accessToken) {
-            oauthClient = createLinearAgentClient({
+            cachedOAuthToken = accessToken
+            cachedOAuthClient = createLinearAgentClient({
               apiKey: accessToken,
               rateLimiterStrategy,
               circuitBreakerStrategy,
@@ -199,6 +203,44 @@ async function main(): Promise<void> {
       }
     }
 
+    /**
+     * Lazy OAuth client resolver.
+     *
+     * Called on each dispatchWork() to ensure the OAuth token is fresh.
+     * Re-reads the token from Redis (which handles refresh internally),
+     * and only creates a new LinearAgentClient when the token has changed.
+     * Rate limiter and circuit breaker strategies are reused across clients.
+     */
+    const resolveOAuthClient = organizationId
+      ? async (): Promise<LinearAgentClient | undefined> => {
+          try {
+            const accessToken = await getAccessToken(organizationId!)
+            if (!accessToken) return cachedOAuthClient
+
+            // Token unchanged — reuse existing client
+            if (accessToken === cachedOAuthToken && cachedOAuthClient) {
+              return cachedOAuthClient
+            }
+
+            // Token was refreshed — create new client with same strategies
+            log.info('OAuth token refreshed, creating new client')
+            cachedOAuthToken = accessToken
+            cachedOAuthClient = createLinearAgentClient({
+              apiKey: accessToken,
+              rateLimiterStrategy,
+              circuitBreakerStrategy,
+            })
+            oauthResolved = true
+            return cachedOAuthClient
+          } catch (err) {
+            log.warn('Failed to resolve OAuth client', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+            return cachedOAuthClient
+          }
+        }
+      : undefined
+
     linearClient = createLinearAgentClient({
       apiKey: linearApiKey,
       rateLimiterStrategy,
@@ -210,7 +252,7 @@ async function main(): Promise<void> {
 
     dependencies = createRealDependencies({
       linearClient,
-      oauthClient,
+      resolveOAuthClient,
       organizationId,
       generatePrompt: defaultGeneratePrompt,
     })

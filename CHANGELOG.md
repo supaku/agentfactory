@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.31
+
+### Fixes
+
+- **Fix governor creating dead Linear sessions on every dispatch** — The governor resolved the OAuth token once at startup and held a static `LinearAgentClient` for the entire process lifetime. When the token expired or was missing, every `createAgentSessionOnIssue()` call failed and all sessions received a `governor-` prefixed fallback ID, causing all worker activity/progress forwarding to Linear to silently fail. Changed to a lazy resolver that re-reads the token from Redis on each dispatch, auto-refreshes when needed, and only creates a new client when the token actually changes.
+
 ## v0.7.30
 
 ### Features
