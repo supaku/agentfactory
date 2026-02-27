@@ -360,8 +360,15 @@ export async function deleteSessionState(linearSessionId: string): Promise<boole
  * Get session state by issue ID
  * Useful when we have the issue but not the session ID
  *
+ * When multiple sessions exist for the same issue (e.g., one running + several
+ * failed), this function returns the most relevant one — preferring active
+ * sessions (running/claimed/pending) over inactive ones. Without this
+ * prioritization, an arbitrary first-match could hide a running session behind
+ * a failed one, causing the governor to re-dispatch work for an issue that
+ * already has an agent in-flight.
+ *
  * @param issueId - The Linear issue ID
- * @returns The most recent session state for this issue or null
+ * @returns The most relevant session state for this issue or null
  */
 export async function getSessionStateByIssue(
   issueId: string
@@ -373,15 +380,24 @@ export async function getSessionStateByIssue(
   // Scan for sessions with this issue ID
   // Note: This is less efficient than direct lookup, use sparingly
   const keys = await redisKeys(`${SESSION_KEY_PREFIX}*`)
+  const activeStatuses = ['running', 'claimed', 'pending']
+  let fallback: AgentSessionState | null = null
 
   for (const key of keys) {
     const state = await redisGet<AgentSessionState>(key)
     if (state?.issueId === issueId) {
-      return state
+      // Prefer active sessions — return immediately if found
+      if (activeStatuses.includes(state.status)) {
+        return state
+      }
+      // Keep first non-active match as fallback
+      if (!fallback) {
+        fallback = state
+      }
     }
   }
 
-  return null
+  return fallback
 }
 
 // ============================================

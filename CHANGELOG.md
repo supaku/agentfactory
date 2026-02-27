@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.36
+
+### Fixes
+
+- **Fix governor re-dispatching work for issues with active agents** — `getSessionStateByIssue()` returned the first Redis key match for an issue, regardless of session status. When multiple sessions existed (one running + several failed from prior claim attempts), a failed session could be found first, causing `hasActiveSession()` to return false. The governor then re-dispatched every scan cycle, creating duplicate queue entries that workers claimed and failed on ("Agent already running"). Now `getSessionStateByIssue()` scans all matching sessions and prefers active ones (running/claimed/pending) over inactive ones.
+- **Use issue-lock dispatch in governor** — Governor's `dispatchWork()` called `queueWork()` directly, bypassing the issue-lock system. Multiple dispatches for the same issue all entered the global queue unserialized. Now uses `issueLockDispatchWork()` which acquires an atomic issue lock before queueing; if the issue is already locked, work is parked and auto-promoted when the lock is released.
+
 ## v0.7.35
 
 ### Fixes

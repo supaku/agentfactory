@@ -21,8 +21,8 @@ import {
   didJustFailQA,
   getWorkflowState,
   RedisProcessingStateStorage,
-  queueWork,
   storeSessionState,
+  dispatchWork as issueLockDispatchWork,
 } from '@supaku/agentfactory-server'
 import type { QueuedWork } from '@supaku/agentfactory-server'
 
@@ -331,11 +331,23 @@ export function createRealDependencies(
           prompt,
         }
 
-        const queued = await queueWork(queuedWork)
-        if (!queued) {
-          log.warn('Failed to queue work (Redis may not be configured)', {
+        // Use issue-lock dispatch instead of raw queueWork().
+        // If the issue is already locked (another session is in-flight),
+        // work is parked and promoted when the lock is released.
+        const result = await issueLockDispatchWork(queuedWork)
+        if (!result.dispatched && !result.parked) {
+          log.warn('Failed to dispatch or park work', {
             issueId,
             action,
+          })
+        } else if (result.parked) {
+          log.info('Work parked (issue already locked)', {
+            issueId,
+            issueIdentifier,
+            action,
+            workType,
+            replaced: result.replaced,
+            sessionId: finalSessionId,
           })
         } else {
           log.info('Work queued successfully', {
