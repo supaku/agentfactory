@@ -399,6 +399,21 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
 }
 
 /**
+ * Work types that produce code changes and require an isolated git worktree.
+ * Non-code work types (research, backlog-creation) run from the main repo root.
+ */
+export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set([
+  'development',
+  'inflight',
+  'qa',
+  'acceptance',
+  'refinement',
+  'coordination',
+  'qa-coordination',
+  'acceptance-coordination',
+])
+
+/**
  * Allowed statuses for each work type
  * Used to validate that an agent isn't assigned to an issue in the wrong status
  */

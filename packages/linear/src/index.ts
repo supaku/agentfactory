@@ -58,6 +58,7 @@ export {
   WORK_TYPE_ALLOWED_STATUSES,
   STATUS_VALID_WORK_TYPES,
   TERMINAL_STATUSES,
+  WORK_TYPES_REQUIRING_WORKTREE,
   validateWorkTypeForStatus,
   getValidWorkTypesForStatus,
 } from './types.js'

@@ -116,12 +116,13 @@ export interface OrchestratorIssue {
 export interface AgentProcess {
   issueId: string
   identifier: string
-  /** Worktree identifier includes work type suffix (e.g., "SUP-294-QA") */
-  worktreeIdentifier: string
+  /** Worktree identifier includes work type suffix (e.g., "SUP-294-QA"). Undefined for non-code work types. */
+  worktreeIdentifier?: string
   sessionId?: string
   /** Provider CLI session ID for resuming sessions with --resume */
   providerSessionId?: string
-  worktreePath: string
+  /** Worktree path for code work types. Undefined for non-code work types (research, backlog-creation). */
+  worktreePath?: string
   pid: number | undefined
   status: 'starting' | 'running' | 'completed' | 'failed' | 'stopped' | 'incomplete'
   startedAt: Date
@@ -167,10 +168,11 @@ export interface OrchestratorEvents {
 export interface SpawnAgentOptions {
   issueId: string
   identifier: string
-  /** Worktree identifier with work type suffix (e.g., "SUP-294-QA") */
-  worktreeIdentifier: string
+  /** Worktree identifier with work type suffix (e.g., "SUP-294-QA"). Undefined for non-code work types. */
+  worktreeIdentifier?: string
   sessionId?: string
-  worktreePath: string
+  /** Worktree path. Undefined for non-code work types (research, backlog-creation). */
+  worktreePath?: string
   /** Enable streaming activities to Linear (default: true when sessionId is provided) */
   streamActivities?: boolean
   /** Type of work: determines prompt and agent routing (defaults to 'development') */
@@ -224,10 +226,11 @@ export interface InjectMessageResult {
 export interface SpawnAgentWithResumeOptions {
   issueId: string
   identifier: string
-  /** Worktree identifier with work type suffix (e.g., "SUP-294-QA") */
-  worktreeIdentifier: string
+  /** Worktree identifier with work type suffix (e.g., "SUP-294-QA"). Undefined for non-code work types. */
+  worktreeIdentifier?: string
   sessionId: string
-  worktreePath: string
+  /** Worktree path. Undefined for non-code work types (research, backlog-creation). */
+  worktreePath?: string
   prompt: string
   providerSessionId?: string
   /** Type of work: determines transitions and agent behavior (defaults to 'development') */

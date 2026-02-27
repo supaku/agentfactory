@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.37
+
+### Features
+
+- **Skip worktree creation for non-code work types** — Research and backlog-creation agents no longer create git worktrees, branches, or `.agent/` state directories. These agents run from the main repo root with `cwd` set to `process.cwd()`, eliminating startup latency, branch pollution, and `fatal: no upstream` log noise. Added `WORK_TYPES_REQUIRING_WORKTREE` constant to `@supaku/agentfactory-linear` for the 8 code-producing work types. Made `worktreeIdentifier` and `worktreePath` optional on `AgentProcess`, `SpawnAgentOptions`, and `SpawnAgentWithResumeOptions`. All state persistence, recovery checks, and worktree cleanup are automatically skipped when these fields are undefined.
+
 ## v0.7.36
 
 ### Fixes

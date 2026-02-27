@@ -351,7 +351,7 @@ export function createWebhookOrchestrator(
         await storeSessionState(sessionId, {
           issueId,
           providerSessionId: agent.providerSessionId ?? null,
-          worktreePath: agent.worktreePath,
+          worktreePath: agent.worktreePath ?? '',
           status: 'running',
         })
 
@@ -439,7 +439,7 @@ export function createWebhookOrchestrator(
             await storeSessionState(sessionId, {
               issueId,
               providerSessionId: result.agent.providerSessionId ?? null,
-              worktreePath: result.agent.worktreePath,
+              worktreePath: result.agent.worktreePath ?? '',
               status: 'running',
               workType: sessionState?.workType,
             })

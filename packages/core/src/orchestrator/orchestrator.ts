@@ -46,6 +46,7 @@ import {
   WORK_TYPE_COMPLETE_STATUS,
   WORK_TYPE_FAIL_STATUS,
   TERMINAL_STATUSES,
+  WORK_TYPES_REQUIRING_WORKTREE,
 } from '@supaku/agentfactory-linear'
 import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
@@ -1850,59 +1851,61 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       this.sessionToIssue.set(sessionId, issueId)
     }
 
-    // Initialize state persistence and monitoring
-    try {
-      // Write initial state
-      const initialState = createInitialState({
-        issueId,
-        issueIdentifier: identifier,
-        linearSessionId: sessionId ?? null,
-        workType,
-        prompt,
-        workerId: this.config.apiActivityConfig?.workerId ?? null,
-        pid: null, // Will be updated when process spawns
-      })
-      writeState(worktreePath, initialState)
-
-      // Start heartbeat writer for crash detection
-      const heartbeatWriter = createHeartbeatWriter({
-        agentDir: resolve(worktreePath, '.agent'),
-        pid: process.pid, // Will be updated to child PID after spawn
-        intervalMs: getHeartbeatIntervalFromEnv(),
-        startTime: now.getTime(),
-      })
-      heartbeatWriter.start()
-      this.heartbeatWriters.set(issueId, heartbeatWriter)
-
-      // Start progress logger for debugging
-      const progressLogger = createProgressLogger({
-        agentDir: resolve(worktreePath, '.agent'),
-      })
-      progressLogger.logStart({ issueId, workType, prompt: prompt.substring(0, 200) })
-      this.progressLoggers.set(issueId, progressLogger)
-
-      // Start session logger for verbose analysis if enabled
-      if (isSessionLoggingEnabled()) {
-        const logConfig = getLogAnalysisConfig()
-        const sessionLogger = createSessionLogger({
-          sessionId: sessionId ?? issueId,
+    // Initialize state persistence and monitoring (only for worktree-based agents)
+    if (worktreePath) {
+      try {
+        // Write initial state
+        const initialState = createInitialState({
           issueId,
           issueIdentifier: identifier,
+          linearSessionId: sessionId ?? null,
           workType,
           prompt,
-          logsDir: logConfig.logsDir,
-          workerId: this.config.apiActivityConfig?.workerId,
+          workerId: this.config.apiActivityConfig?.workerId ?? null,
+          pid: null, // Will be updated when process spawns
         })
-        this.sessionLoggers.set(issueId, sessionLogger)
-        log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
-      }
+        writeState(worktreePath, initialState)
 
-      log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
-    } catch (stateError) {
-      // Log but don't fail - state persistence is optional
-      log.warn('Failed to initialize state persistence', {
-        error: stateError instanceof Error ? stateError.message : String(stateError),
-      })
+        // Start heartbeat writer for crash detection
+        const heartbeatWriter = createHeartbeatWriter({
+          agentDir: resolve(worktreePath, '.agent'),
+          pid: process.pid, // Will be updated to child PID after spawn
+          intervalMs: getHeartbeatIntervalFromEnv(),
+          startTime: now.getTime(),
+        })
+        heartbeatWriter.start()
+        this.heartbeatWriters.set(issueId, heartbeatWriter)
+
+        // Start progress logger for debugging
+        const progressLogger = createProgressLogger({
+          agentDir: resolve(worktreePath, '.agent'),
+        })
+        progressLogger.logStart({ issueId, workType, prompt: prompt.substring(0, 200) })
+        this.progressLoggers.set(issueId, progressLogger)
+
+        // Start session logger for verbose analysis if enabled
+        if (isSessionLoggingEnabled()) {
+          const logConfig = getLogAnalysisConfig()
+          const sessionLogger = createSessionLogger({
+            sessionId: sessionId ?? issueId,
+            issueId,
+            issueIdentifier: identifier,
+            workType,
+            prompt,
+            logsDir: logConfig.logsDir,
+            workerId: this.config.apiActivityConfig?.workerId,
+          })
+          this.sessionLoggers.set(issueId, sessionLogger)
+          log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
+        }
+
+        log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
+      } catch (stateError) {
+        // Log but don't fail - state persistence is optional
+        log.warn('Failed to initialize state persistence', {
+          error: stateError instanceof Error ? stateError.message : String(stateError),
+        })
+      }
     }
 
     this.events.onAgentStart?.(agent)
@@ -1963,11 +1966,12 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     this.abortControllers.set(issueId, abortController)
 
     // Load environment from settings.local.json
-    const settingsEnv = loadSettingsEnv(worktreePath, log)
+    const envBaseDir = worktreePath ?? process.cwd()
+    const settingsEnv = loadSettingsEnv(envBaseDir, log)
 
     // Load app-specific env files based on work type
     // Development work loads .env.local, QA/acceptance loads .env.test.local
-    const appEnv = loadAppEnvFiles(worktreePath, workType, log)
+    const appEnv = loadAppEnvFiles(envBaseDir, workType, log)
 
     // Build environment variables - inherit ALL from process.env (required for node to be found)
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
@@ -2011,19 +2015,19 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Set Claude Code Task List ID for intra-issue task coordination
     // This enables Tasks to persist across crashes and be shared between subagents
     // Format: {issueIdentifier}-{WORKTYPE} (e.g., "SUP-123-DEV")
-    env.CLAUDE_CODE_TASK_LIST_ID = worktreeIdentifier
+    env.CLAUDE_CODE_TASK_LIST_ID = worktreeIdentifier ?? `${identifier}-${WORK_TYPE_SUFFIX[workType]}`
 
     // Set team name so agents can use `pnpm af-linear create-issue` without --team
     if (teamName) {
       env.LINEAR_TEAM_NAME = teamName
     }
 
-    log.info('Starting agent via provider', { provider: this.provider.name, worktreePath, workType, promptPreview: prompt.substring(0, 50) })
+    log.info('Starting agent via provider', { provider: this.provider.name, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
-      cwd: worktreePath,
+      cwd: worktreePath ?? process.cwd(),
       env,
       abortController,
       autonomous: true,
@@ -2069,14 +2073,16 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       }
       agent.completedAt = new Date()
 
-      // Update state file to completed
-      try {
-        updateState(agent.worktreePath, {
-          status: agent.status === 'stopped' ? 'stopped' : 'completed',
-          pullRequestUrl: agent.pullRequestUrl ?? undefined,
-        })
-      } catch {
-        // Ignore state update errors
+      // Update state file to completed (only for worktree-based agents)
+      if (agent.worktreePath) {
+        try {
+          updateState(agent.worktreePath, {
+            status: agent.status === 'stopped' ? 'stopped' : 'completed',
+            pullRequestUrl: agent.pullRequestUrl ?? undefined,
+          })
+        } catch {
+          // Ignore state update errors
+        }
       }
 
       // Flush remaining activities
@@ -2211,7 +2217,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
         }
 
-        if (shouldCleanup) {
+        if (shouldCleanup && agent.worktreeIdentifier) {
           try {
             this.removeWorktree(agent.worktreeIdentifier)
             log?.info('Worktree cleaned up', { worktreePath: agent.worktreePath })
@@ -2294,7 +2300,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
         }
 
-        if (shouldCleanup) {
+        if (shouldCleanup && agent.worktreeIdentifier) {
           try {
             this.removeWorktree(agent.worktreeIdentifier)
             log?.info('Worktree cleaned up after failure', { worktreePath: agent.worktreePath })
@@ -2341,15 +2347,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         agent.providerSessionId = event.sessionId
         this.updateLastActivity(issueId, 'init')
 
-        // Update state with provider session ID
-        try {
-          updateState(agent.worktreePath, {
-            providerSessionId: event.sessionId,
-            status: 'running',
-            pid: agent.pid ?? null,
-          })
-        } catch {
-          // Ignore state update errors
+        // Update state with provider session ID (only for worktree-based agents)
+        if (agent.worktreePath) {
+          try {
+            updateState(agent.worktreePath, {
+              providerSessionId: event.sessionId,
+              status: 'running',
+              pid: agent.pid ?? null,
+            })
+          } catch {
+            // Ignore state update errors
+          }
         }
 
         // Notify via callback for external persistence
@@ -2417,7 +2425,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         if (event.toolName === 'TodoWrite') {
           try {
             const input = event.input as { todos?: TodoItem[] }
-            if (input.todos && Array.isArray(input.todos)) {
+            if (input.todos && Array.isArray(input.todos) && agent.worktreePath) {
               const todosState: TodosState = {
                 updatedAt: Date.now(),
                 items: input.todos,
@@ -2460,16 +2468,18 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             agent.resultMessage = event.message
           }
 
-          // Update state to completing/completed
-          try {
-            updateState(agent.worktreePath, {
-              status: 'completing',
-              currentPhase: 'Finalizing work',
-            })
-            progressLogger?.logComplete({ message: event.message?.substring(0, 200) })
-          } catch {
-            // Ignore state update errors
+          // Update state to completing/completed (only for worktree-based agents)
+          if (agent.worktreePath) {
+            try {
+              updateState(agent.worktreePath, {
+                status: 'completing',
+                currentPhase: 'Finalizing work',
+              })
+            } catch {
+              // Ignore state update errors
+            }
           }
+          progressLogger?.logComplete({ message: event.message?.substring(0, 200) })
 
           // Check cost limit
           const maxCostUsd = parseFloat(process.env.AGENT_MAX_COST_USD ?? '0')
@@ -2492,16 +2502,18 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           const errorMessage = event.errors && event.errors.length > 0
             ? event.errors[0]
             : `Agent error: ${event.errorSubtype}`
-          try {
-            updateState(agent.worktreePath, {
-              status: 'failed',
-              errorMessage,
-            })
-            progressLogger?.logError('Agent error result', new Error(errorMessage))
-            sessionLogger?.logError('Agent error result', new Error(errorMessage), { subtype: event.errorSubtype })
-          } catch {
-            // Ignore state update errors
+          if (agent.worktreePath) {
+            try {
+              updateState(agent.worktreePath, {
+                status: 'failed',
+                errorMessage,
+              })
+            } catch {
+              // Ignore state update errors
+            }
           }
+          progressLogger?.logError('Agent error result', new Error(errorMessage))
+          sessionLogger?.logError('Agent error result', new Error(errorMessage), { subtype: event.errorSubtype })
 
           // Report tool errors as Linear issues for tracking
           // Only report for 'error_during_execution' subtype (tool/execution errors)
@@ -2858,67 +2870,74 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.log(`Auto-detected work type: ${effectiveWorkType} (from status: ${statusName})`)
     }
 
-    // Create worktree with work type suffix (e.g., SUP-294-QA)
-    const { worktreePath, worktreeIdentifier } = this.createWorktree(identifier, effectiveWorkType)
+    // Create worktree only for code work types (skip for research, backlog-creation)
+    let worktreePath: string | undefined
+    let worktreeIdentifier: string | undefined
 
-    // Link dependencies from main repo into worktree
-    this.linkDependencies(worktreePath, identifier)
+    if (WORK_TYPES_REQUIRING_WORKTREE.has(effectiveWorkType)) {
+      const wt = this.createWorktree(identifier, effectiveWorkType)
+      worktreePath = wt.worktreePath
+      worktreeIdentifier = wt.worktreeIdentifier
 
-    // Check for existing state and potential recovery
-    const recoveryCheck = checkRecovery(worktreePath, {
-      heartbeatTimeoutMs: getHeartbeatTimeoutFromEnv(),
-      maxRecoveryAttempts: getMaxRecoveryAttemptsFromEnv(),
-    })
+      // Link dependencies from main repo into worktree
+      this.linkDependencies(worktreePath, identifier)
 
-    if (recoveryCheck.agentAlive) {
-      // Agent is still running - prevent duplicate
-      throw new Error(
-        `Agent already running for ${identifier}: ${recoveryCheck.message}. ` +
-        `Stop the existing agent before spawning a new one.`
-      )
-    }
-
-    if (recoveryCheck.canRecover && recoveryCheck.state) {
-      // Crashed agent detected - trigger recovery
-      console.log(`Recovery detected for ${identifier}: ${recoveryCheck.message}`)
-
-      // Increment recovery attempts in state
-      const updatedState = updateState(worktreePath, {
-        recoveryAttempts: (recoveryCheck.state.recoveryAttempts ?? 0) + 1,
+      // Check for existing state and potential recovery
+      const recoveryCheck = checkRecovery(worktreePath, {
+        heartbeatTimeoutMs: getHeartbeatTimeoutFromEnv(),
+        maxRecoveryAttempts: getMaxRecoveryAttemptsFromEnv(),
       })
 
-      // Build recovery prompt
-      const recoveryPrompt = prompt ?? buildRecoveryPrompt(recoveryCheck.state, recoveryCheck.todos)
-
-      // Use existing provider session ID for resume if available
-      const providerSessionId = recoveryCheck.state.providerSessionId ?? undefined
-
-      // Inherit work type from previous state if not provided
-      const recoveryWorkType = workType ?? recoveryCheck.state.workType ?? effectiveWorkType
-      const effectiveSessionId = sessionId ?? recoveryCheck.state.linearSessionId ?? randomUUID()
-
-      console.log(`Resuming work on ${identifier} (recovery attempt ${updatedState?.recoveryAttempts ?? 1})`)
-
-      // Update status based on work type if auto-transition is enabled
-      const startStatus = WORK_TYPE_START_STATUS[recoveryWorkType]
-      if (this.config.autoTransition && startStatus) {
-        await this.client.updateIssueStatus(issueId, startStatus)
-        console.log(`Updated ${identifier} status to ${startStatus}`)
+      if (recoveryCheck.agentAlive) {
+        // Agent is still running - prevent duplicate
+        throw new Error(
+          `Agent already running for ${identifier}: ${recoveryCheck.message}. ` +
+          `Stop the existing agent before spawning a new one.`
+        )
       }
 
-      // Spawn with resume capability
-      return this.spawnAgentWithResume({
-        issueId,
-        identifier,
-        worktreeIdentifier,
-        sessionId: effectiveSessionId,
-        worktreePath,
-        prompt: recoveryPrompt,
-        providerSessionId,
-        workType: recoveryWorkType,
-        teamName,
-        projectName,
-      })
+      if (recoveryCheck.canRecover && recoveryCheck.state) {
+        // Crashed agent detected - trigger recovery
+        console.log(`Recovery detected for ${identifier}: ${recoveryCheck.message}`)
+
+        // Increment recovery attempts in state
+        const updatedState = updateState(worktreePath, {
+          recoveryAttempts: (recoveryCheck.state.recoveryAttempts ?? 0) + 1,
+        })
+
+        // Build recovery prompt
+        const recoveryPrompt = prompt ?? buildRecoveryPrompt(recoveryCheck.state, recoveryCheck.todos)
+
+        // Use existing provider session ID for resume if available
+        const providerSessionId = recoveryCheck.state.providerSessionId ?? undefined
+
+        // Inherit work type from previous state if not provided
+        const recoveryWorkType = workType ?? recoveryCheck.state.workType ?? effectiveWorkType
+        const effectiveSessionId = sessionId ?? recoveryCheck.state.linearSessionId ?? randomUUID()
+
+        console.log(`Resuming work on ${identifier} (recovery attempt ${updatedState?.recoveryAttempts ?? 1})`)
+
+        // Update status based on work type if auto-transition is enabled
+        const startStatus = WORK_TYPE_START_STATUS[recoveryWorkType]
+        if (this.config.autoTransition && startStatus) {
+          await this.client.updateIssueStatus(issueId, startStatus)
+          console.log(`Updated ${identifier} status to ${startStatus}`)
+        }
+
+        // Spawn with resume capability
+        return this.spawnAgentWithResume({
+          issueId,
+          identifier,
+          worktreeIdentifier,
+          sessionId: effectiveSessionId,
+          worktreePath,
+          prompt: recoveryPrompt,
+          providerSessionId,
+          workType: recoveryWorkType,
+          teamName,
+          projectName,
+        })
+      }
     }
 
     // No recovery needed - proceed with fresh spawn
@@ -3008,8 +3027,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Abort the query
       abortController.abort()
 
-      // Clean up worktree if requested
-      if (cleanupWorktree) {
+      // Clean up worktree if requested (only if agent has a worktree)
+      if (cleanupWorktree && agent.worktreeIdentifier) {
         this.removeWorktree(agent.worktreeIdentifier)
       }
 
@@ -3108,8 +3127,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     // Get worktree path from existing agent or create new one
-    let worktreePath: string
-    let worktreeIdentifier: string
+    let worktreePath: string | undefined
+    let worktreeIdentifier: string | undefined
     let identifier: string
     let teamName: string | undefined
 
@@ -3149,12 +3168,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           workType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
         }
 
-        const result = this.createWorktree(identifier, workType)
-        worktreePath = result.worktreePath
-        worktreeIdentifier = result.worktreeIdentifier
+        // Only create worktree for code work types
+        if (WORK_TYPES_REQUIRING_WORKTREE.has(workType)) {
+          const result = this.createWorktree(identifier, workType)
+          worktreePath = result.worktreePath
+          worktreeIdentifier = result.worktreeIdentifier
 
-        // Link dependencies from main repo into worktree
-        this.linkDependencies(worktreePath, identifier)
+          // Link dependencies from main repo into worktree
+          this.linkDependencies(worktreePath, identifier)
+        }
       } catch (error) {
         return {
           forwarded: false,
@@ -3165,10 +3187,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       }
     }
 
-    // Check if worktree exists
-    if (!existsSync(worktreePath)) {
+    // Check if worktree exists (only relevant for code work types)
+    const effectiveWorkType = workType ?? 'development'
+    if (WORK_TYPES_REQUIRING_WORKTREE.has(effectiveWorkType) && worktreePath && !existsSync(worktreePath)) {
       try {
-        const result = this.createWorktree(identifier, workType ?? 'development')
+        const result = this.createWorktree(identifier, effectiveWorkType)
         worktreePath = result.worktreePath
         worktreeIdentifier = result.worktreeIdentifier
 
@@ -3329,63 +3352,65 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Track session to issue mapping for stop signal handling
     this.sessionToIssue.set(sessionId, issueId)
 
-    // Initialize state persistence and monitoring (for resumed sessions)
-    try {
-      // Write/update state with resume info
-      const initialState = createInitialState({
-        issueId,
-        issueIdentifier: identifier,
-        linearSessionId: sessionId,
-        workType: effectiveWorkType,
-        prompt,
-        workerId: this.config.apiActivityConfig?.workerId ?? null,
-        pid: null, // Will be updated when process spawns
-      })
-      // Preserve provider session ID if resuming
-      if (providerSessionId) {
-        initialState.providerSessionId = providerSessionId
-      }
-      writeState(worktreePath, initialState)
-
-      // Start heartbeat writer for crash detection
-      const heartbeatWriter = createHeartbeatWriter({
-        agentDir: resolve(worktreePath, '.agent'),
-        pid: process.pid, // Will be updated to child PID after spawn
-        intervalMs: getHeartbeatIntervalFromEnv(),
-        startTime: now.getTime(),
-      })
-      heartbeatWriter.start()
-      this.heartbeatWriters.set(issueId, heartbeatWriter)
-
-      // Start progress logger for debugging
-      const progressLogger = createProgressLogger({
-        agentDir: resolve(worktreePath, '.agent'),
-      })
-      progressLogger.logStart({ issueId, workType: effectiveWorkType, prompt: prompt.substring(0, 200) })
-      this.progressLoggers.set(issueId, progressLogger)
-
-      // Start session logger for verbose analysis if enabled
-      if (isSessionLoggingEnabled()) {
-        const logConfig = getLogAnalysisConfig()
-        const sessionLogger = createSessionLogger({
-          sessionId,
+    // Initialize state persistence and monitoring (only for worktree-based agents)
+    if (worktreePath) {
+      try {
+        // Write/update state with resume info
+        const initialState = createInitialState({
           issueId,
           issueIdentifier: identifier,
+          linearSessionId: sessionId,
           workType: effectiveWorkType,
           prompt,
-          logsDir: logConfig.logsDir,
-          workerId: this.config.apiActivityConfig?.workerId,
+          workerId: this.config.apiActivityConfig?.workerId ?? null,
+          pid: null, // Will be updated when process spawns
         })
-        this.sessionLoggers.set(issueId, sessionLogger)
-        log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
-      }
+        // Preserve provider session ID if resuming
+        if (providerSessionId) {
+          initialState.providerSessionId = providerSessionId
+        }
+        writeState(worktreePath, initialState)
 
-      log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
-    } catch (stateError) {
-      // Log but don't fail - state persistence is optional
-      log.warn('Failed to initialize state persistence', {
-        error: stateError instanceof Error ? stateError.message : String(stateError),
-      })
+        // Start heartbeat writer for crash detection
+        const heartbeatWriter = createHeartbeatWriter({
+          agentDir: resolve(worktreePath, '.agent'),
+          pid: process.pid, // Will be updated to child PID after spawn
+          intervalMs: getHeartbeatIntervalFromEnv(),
+          startTime: now.getTime(),
+        })
+        heartbeatWriter.start()
+        this.heartbeatWriters.set(issueId, heartbeatWriter)
+
+        // Start progress logger for debugging
+        const progressLogger = createProgressLogger({
+          agentDir: resolve(worktreePath, '.agent'),
+        })
+        progressLogger.logStart({ issueId, workType: effectiveWorkType, prompt: prompt.substring(0, 200) })
+        this.progressLoggers.set(issueId, progressLogger)
+
+        // Start session logger for verbose analysis if enabled
+        if (isSessionLoggingEnabled()) {
+          const logConfig = getLogAnalysisConfig()
+          const sessionLogger = createSessionLogger({
+            sessionId,
+            issueId,
+            issueIdentifier: identifier,
+            workType: effectiveWorkType,
+            prompt,
+            logsDir: logConfig.logsDir,
+            workerId: this.config.apiActivityConfig?.workerId,
+          })
+          this.sessionLoggers.set(issueId, sessionLogger)
+          log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
+        }
+
+        log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
+      } catch (stateError) {
+        // Log but don't fail - state persistence is optional
+        log.warn('Failed to initialize state persistence', {
+          error: stateError instanceof Error ? stateError.message : String(stateError),
+        })
+      }
     }
 
     this.events.onAgentStart?.(agent)
@@ -3440,12 +3465,13 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     this.abortControllers.set(issueId, abortController)
 
     // Load environment from settings.local.json
-    const settingsEnv = loadSettingsEnv(worktreePath, log)
+    const envBaseDir = worktreePath ?? process.cwd()
+    const settingsEnv = loadSettingsEnv(envBaseDir, log)
 
     // Load app-specific env files based on work type
     // Development work loads .env.local, QA/acceptance loads .env.test.local
     const effectiveWorkTypeForEnv = workType ?? 'development'
-    const appEnv = loadAppEnvFiles(worktreePath, effectiveWorkTypeForEnv, log)
+    const appEnv = loadAppEnvFiles(envBaseDir, effectiveWorkTypeForEnv, log)
 
     // Build environment variables - inherit ALL from process.env (required for node to be found)
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
@@ -3478,7 +3504,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     log.info('Starting agent via provider', {
       provider: this.provider.name,
-      worktreePath,
+      cwd: worktreePath ?? 'repo-root',
       resuming: !!providerSessionId,
       workType: workType ?? 'development',
     })
@@ -3486,7 +3512,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
       prompt,
-      cwd: worktreePath,
+      cwd: worktreePath ?? process.cwd(),
       env,
       abortController,
       autonomous: true,
