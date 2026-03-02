@@ -77,7 +77,12 @@ export async function handleIssueUpdated(
 
   const autoTrigger = config.autoTrigger
 
-  // --- Governor event bridge ---
+  // --- Governor event bridge (deferred until after auto-trigger processing) ---
+  // We capture the event here but don't publish until we know whether an auto-trigger
+  // dispatched work. If work was dispatched, the session is already stored in Redis
+  // and the governor will see it on its next poll — publishing would cause a duplicate.
+  let deferredGovernorEvent: Parameters<typeof publishGovernorEvent>[0] | null = null
+  let workDispatched = false
   if (currentStateName && updatedFrom?.stateId) {
     const governorIssue: GovernorIssue = {
       id: issueId,
@@ -91,7 +96,7 @@ export async function handleIssueUpdated(
       project: projectName,
     }
 
-    await publishGovernorEvent({
+    deferredGovernorEvent = {
       type: 'issue-status-changed',
       issueId,
       issue: governorIssue,
@@ -99,10 +104,13 @@ export async function handleIssueUpdated(
       newStatus: currentStateName,
       timestamp: eventTimestamp(),
       source: 'webhook',
-    })
+    }
   }
 
   if (config.governorMode === 'governor-only') {
+    if (deferredGovernorEvent) {
+      await publishGovernorEvent(deferredGovernorEvent)
+    }
     issueLog.info('Governor-only mode: skipping direct dispatch', { currentStateName })
     return NextResponse.json({ success: true, governorMode: 'governor-only' })
   }
@@ -293,8 +301,8 @@ export async function handleIssueUpdated(
       return NextResponse.json({ success: false, error: 'Error creating agent session for QA' })
     }
 
-    await recordQAAttempt(issueId, qaSessionId)
-
+    // Store session state IMMEDIATELY after creation so that the session-created
+    // webhook handler finds it and skips (prevents duplicate dispatch).
     await storeSessionState(qaSessionId, {
       issueId,
       issueIdentifier,
@@ -308,6 +316,8 @@ export async function handleIssueUpdated(
       workType: qaWorkType,
       projectName,
     })
+
+    await recordQAAttempt(issueId, qaSessionId)
 
     const qaWork: QueuedWork = {
       sessionId: qaSessionId,
@@ -323,6 +333,7 @@ export async function handleIssueUpdated(
     const qaResult = await dispatchWork(qaWork)
 
     if (qaResult.dispatched || qaResult.parked) {
+      workDispatched = true
       issueLog.info('QA work dispatched', {
         sessionId: qaSessionId,
         attemptNumber: attemptCount + 1,
@@ -554,29 +565,9 @@ export async function handleIssueUpdated(
 
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
-      let devSessionId: string
-      try {
-        const appUrl = getAppUrl(config)
-        const sessionResult = await linearClient.createAgentSessionOnIssue({
-          issueId,
-          externalUrls: [{ label: 'Agent Dashboard', url: `${appUrl}/sessions/pending` }],
-        })
-
-        if (!sessionResult.success || !sessionResult.sessionId) {
-          issueLog.error('Failed to create Linear AgentSession', { sessionResult })
-          return NextResponse.json({ success: false, error: 'Failed to create agent session' })
-        }
-
-        devSessionId = sessionResult.sessionId
-        issueLog.info('Linear AgentSession created', { sessionId: devSessionId })
-      } catch (err) {
-        issueLog.error('Error creating Linear AgentSession', { error: err })
-        return NextResponse.json({ success: false, error: 'Error creating agent session' })
-      }
-
       await markDevelopmentQueued(issueId)
 
-      // Auto-detect parent for coordination
+      // Auto-detect parent for coordination (before session creation so we can store immediately)
       let workType: AgentWorkType = 'development'
       try {
         const isParent = await linearClient.isParentIssue(issueId)
@@ -614,6 +605,28 @@ export async function handleIssueUpdated(
         }
       }
 
+      let devSessionId: string
+      try {
+        const appUrl = getAppUrl(config)
+        const sessionResult = await linearClient.createAgentSessionOnIssue({
+          issueId,
+          externalUrls: [{ label: 'Agent Dashboard', url: `${appUrl}/sessions/pending` }],
+        })
+
+        if (!sessionResult.success || !sessionResult.sessionId) {
+          issueLog.error('Failed to create Linear AgentSession', { sessionResult })
+          return NextResponse.json({ success: false, error: 'Failed to create agent session' })
+        }
+
+        devSessionId = sessionResult.sessionId
+        issueLog.info('Linear AgentSession created', { sessionId: devSessionId })
+      } catch (err) {
+        issueLog.error('Error creating Linear AgentSession', { error: err })
+        return NextResponse.json({ success: false, error: 'Error creating agent session' })
+      }
+
+      // Store session state IMMEDIATELY after creation so that the session-created
+      // webhook handler finds it and skips (prevents duplicate dispatch).
       await storeSessionState(devSessionId, {
         issueId,
         issueIdentifier,
@@ -642,6 +655,7 @@ export async function handleIssueUpdated(
       const devResult = await dispatchWork(devWork)
 
       if (devResult.dispatched || devResult.parked) {
+        workDispatched = true
         const retryLabel = isRetry ? ' (retry)' : ''
         issueLog.info(`Development work dispatched${retryLabel}`, { sessionId: devSessionId })
 
@@ -844,6 +858,7 @@ export async function handleIssueUpdated(
       const accResult = await dispatchWork(acceptanceWork)
 
       if (accResult.dispatched || accResult.parked) {
+        workDispatched = true
         issueLog.info('Acceptance work dispatched', { sessionId: acceptanceSessionId })
 
         try {
@@ -874,6 +889,13 @@ export async function handleIssueUpdated(
         issueLog.error('Failed to queue acceptance work')
       }
     }
+  }
+
+  // Publish deferred governor event only if no auto-trigger dispatched work.
+  // When work is dispatched, the session is already stored in Redis, so the
+  // governor will see it and skip — no need to also send an event.
+  if (deferredGovernorEvent && !workDispatched) {
+    await publishGovernorEvent(deferredGovernorEvent)
   }
 
   return null // Continue processing
