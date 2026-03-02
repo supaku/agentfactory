@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Prevent .env files from being committed.
-# Powered by dotenvx — https://dotenvx.com/docs/advanced/precommit-install
-
+# -----------------------------------------------------------
+# 1. Prevent .env files from being committed (dotenvx)
+# -----------------------------------------------------------
 if command -v dotenvx 2>&1 >/dev/null
 then
   dotenvx ext precommit
@@ -13,4 +13,15 @@ else
   echo "[dotenvx][precommit] 'dotenvx' command not found"
   echo "[dotenvx][precommit] install it with: pnpm add -Dw @dotenvx/dotenvx"
   exit 1
+fi
+
+# -----------------------------------------------------------
+# 2. Scan staged changes for secrets (gitleaks)
+# -----------------------------------------------------------
+if command -v gitleaks >/dev/null 2>&1
+then
+  gitleaks git --pre-commit --staged --verbose
+else
+  echo "[gitleaks][precommit] 'gitleaks' command not found — skipping secret scan"
+  echo "[gitleaks][precommit] install it with: brew install gitleaks"
 fi
