@@ -87,6 +87,10 @@ function printSummary(result: CleanupResult): void {
   console.log(`  Orphaned: ${result.orphaned}`)
   console.log(`  Cleaned:  ${result.cleaned}`)
 
+  if (result.skipped > 0) {
+    console.log(`  Skipped:  ${result.skipped} (IDE/process still open — use --force)`)
+  }
+
   if (result.errors.length > 0) {
     console.log(`  Errors:   ${result.errors.length}`)
     for (const err of result.errors) {

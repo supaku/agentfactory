@@ -1,6 +1,6 @@
 {
   "name": "@supaku/agentfactory-server",
-  "version": "0.7.37",
+  "version": "0.7.38",
   "type": "module",
   "description": "Webhook server and distributed worker pool for AgentFactory — Redis queues, issue locks, session management",
   "author": "Supaku (https://supaku.com)",

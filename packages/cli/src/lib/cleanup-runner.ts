@@ -9,6 +9,9 @@ import { execSync } from 'child_process'
 import { existsSync, readdirSync, statSync } from 'fs'
 import { resolve, basename } from 'path'
 
+/** Delay between worktree removals (ms) to let IDEs process filesystem events. */
+const IDE_SETTLE_DELAY_MS = 1500
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -28,6 +31,7 @@ export interface CleanupResult {
   scanned: number
   orphaned: number
   cleaned: number
+  skipped: number
   errors: Array<{ path: string; error: string }>
 }
 
@@ -106,6 +110,41 @@ function branchExists(branchName: string): boolean {
 }
 
 /**
+ * Check if any processes (IDEs, language servers, etc.) have files open in a
+ * directory.  Uses `lsof` on macOS/Linux.  Returns a deduplicated list of
+ * process command names so the caller can warn the user.
+ */
+function getProcessesUsingPath(dirPath: string): string[] {
+  try {
+    // lsof +D is recursive but can be slow on large trees.
+    // We use a short timeout and suppress errors — if it fails, we treat the
+    // path as free (better to over-delete than hang forever).
+    const output = execSync(`lsof +D "${dirPath}" 2>/dev/null || true`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000,
+    })
+    if (!output.trim()) return []
+
+    const commands = new Set<string>()
+    for (const line of output.split('\n').slice(1)) {
+      const cmd = line.split(/\s+/)[0]
+      if (cmd) commands.add(cmd)
+    }
+    return [...commands]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Sleep synchronously for the given number of milliseconds.
+ */
+function sleepSync(ms: number): void {
+  execSync(`sleep ${(ms / 1000).toFixed(1)}`, { stdio: 'pipe' })
+}
+
+/**
  * Scan the worktrees directory and identify orphaned worktrees
  */
 function scanWorktrees(options: CleanupOptions): WorktreeInfo[] {
@@ -162,8 +201,15 @@ function scanWorktrees(options: CleanupOptions): WorktreeInfo[] {
  *
  * SAFETY: Refuses to remove paths where .git is a directory (main working tree)
  * to prevent catastrophic data loss.
+ *
+ * IDE SAFETY: Detects processes (VS Code, Cursor, etc.) with open file handles
+ * in the worktree.  When detected and `force` is false, the removal is skipped
+ * to prevent IDE crashes caused by sudden workspace root deletion.
  */
-function removeWorktree(worktreePath: string): { success: boolean; error?: string } {
+function removeWorktree(
+  worktreePath: string,
+  force?: boolean,
+): { success: boolean; skipped?: boolean; error?: string } {
   // Safety check: never remove the main working tree
   try {
     const gitPath = resolve(worktreePath, '.git')
@@ -178,6 +224,19 @@ function removeWorktree(worktreePath: string): { success: boolean; error?: strin
     return { success: false, error: `SAFETY: Could not verify ${worktreePath} is not the main working tree.` }
   }
 
+  // IDE safety: check for processes with open file handles in this worktree
+  const processes = getProcessesUsingPath(worktreePath)
+  if (processes.length > 0 && !force) {
+    return {
+      success: false,
+      skipped: true,
+      error: `IDE/process still open: ${processes.join(', ')}. Use --force to remove anyway.`,
+    }
+  }
+  if (processes.length > 0) {
+    console.log(`\n    warning: ${processes.join(', ')} has files open — forcing removal`)
+  }
+
   try {
     execSync(`git worktree remove "${worktreePath}" --force`, {
       encoding: 'utf-8',
@@ -187,10 +246,6 @@ function removeWorktree(worktreePath: string): { success: boolean; error?: strin
   } catch {
     try {
       execSync(`rm -rf "${worktreePath}"`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-      execSync('git worktree prune', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
       })
@@ -212,19 +267,11 @@ function cleanup(options: CleanupOptions): CleanupResult {
     scanned: 0,
     orphaned: 0,
     cleaned: 0,
+    skipped: 0,
     errors: [],
   }
 
   console.log('Scanning worktrees...\n')
-
-  try {
-    execSync('git worktree prune', {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-  } catch {
-    console.log('Note: Could not prune git worktree metadata')
-  }
 
   const worktrees = scanWorktrees(options)
   result.scanned = worktrees.length
@@ -254,7 +301,9 @@ function cleanup(options: CleanupOptions): CleanupResult {
   if (options.dryRun) {
     console.log(`[DRY RUN] Would clean up ${orphaned.length} orphaned worktree(s):\n`)
     for (const wt of orphaned) {
-      console.log(`  Would remove: ${wt.path}`)
+      const procs = getProcessesUsingPath(wt.path)
+      const procNote = procs.length > 0 ? ` [open: ${procs.join(', ')}]` : ''
+      console.log(`  Would remove: ${wt.path}${procNote}`)
     }
     console.log('')
     return result
@@ -262,13 +311,24 @@ function cleanup(options: CleanupOptions): CleanupResult {
 
   console.log(`Cleaning up ${orphaned.length} orphaned worktree(s)...\n`)
 
+  let removedCount = 0
   for (const wt of orphaned) {
+    // Settle between removals so IDE file watchers can process previous
+    // deletion events without being overwhelmed.
+    if (removedCount > 0) {
+      sleepSync(IDE_SETTLE_DELAY_MS)
+    }
+
     process.stdout.write(`  Removing ${basename(wt.path)}... `)
-    const removal = removeWorktree(wt.path)
+    const removal = removeWorktree(wt.path, options.force)
 
     if (removal.success) {
       console.log('done')
       result.cleaned++
+      removedCount++
+    } else if (removal.skipped) {
+      console.log(`SKIPPED: ${removal.error}`)
+      result.skipped++
     } else {
       console.log(`FAILED: ${removal.error}`)
       result.errors.push({ path: wt.path, error: removal.error || 'Unknown error' })

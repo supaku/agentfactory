@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.38
+
+### Fixes
+
+- **IDE-safe worktree cleanup** — Worktree removal now detects processes (VS Code, Cursor, language servers) with open file handles via `lsof`. When detected without `--force`, the worktree is skipped instead of removed, preventing IDE crashes from sudden workspace deletion. Added `skipped` counter to `CleanupResult`, inter-removal settle delay (1.5s) for IDE file watchers, and removed redundant `git worktree prune` calls.
+
 ## v0.7.37
 
 ### Features
