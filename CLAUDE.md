@@ -32,6 +32,12 @@ pnpm af-linear update-issue <id> [--title "..."] [--description "..."] [--state 
 pnpm af-linear list-comments <issue-id>
 pnpm af-linear create-comment <issue-id> --body "Comment text"
 
+# File-based flags (for long content that exceeds CLI arg limits)
+# Write content to a temp file, then pass the path:
+pnpm af-linear update-issue <id> --description-file /tmp/description.md
+pnpm af-linear create-issue --title "Title" --team "Team" --description-file /tmp/description.md
+pnpm af-linear create-comment <issue-id> --body-file /tmp/comment.md
+
 # Relations
 pnpm af-linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>
 pnpm af-linear list-relations <issue-id>

@@ -5,6 +5,7 @@
  * This module does NOT call process.exit, read process.argv, or load dotenv.
  */
 
+import { readFileSync } from 'node:fs'
 import { createLinearAgentClient, getDefaultTeamName } from '@supaku/agentfactory-linear'
 import {
   checkPRDeploymentStatus,
@@ -698,6 +699,23 @@ async function createBlocker(
   }
 }
 
+// ── File-based arg helpers ──────────────────────────────────────────
+
+/**
+ * Resolve a text value that may come from a `--foo-file` flag.
+ * If `fooFile` is provided, reads the file content and returns it.
+ * Otherwise returns `foo` as-is.
+ */
+function resolveFileArg(
+  value: string | undefined,
+  filePath: string | undefined
+): string | undefined {
+  if (filePath && typeof filePath === 'string') {
+    return readFileSync(filePath, 'utf-8')
+  }
+  return value
+}
+
 // ── Commands that don't require LINEAR_API_KEY ─────────────────────
 
 const NO_API_KEY_COMMANDS = new Set(['check-deployment'])
@@ -755,10 +773,14 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
           'Tip: Set LINEAR_TEAM_NAME env var to provide a default team.'
         )
       }
+      const createDescription = resolveFileArg(
+        args.description as string | undefined,
+        args['description-file'] as string | undefined
+      )
       output = await createIssue(client(), {
         title: args.title as string,
         team: teamArg,
-        description: args.description as string | undefined,
+        description: createDescription,
         project: args.project as string | undefined,
         labels: args.labels as string[] | undefined,
         state: args.state as string | undefined,
@@ -770,9 +792,13 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
     case 'update-issue': {
       const issueId = requirePositional('issue-id')
       const opts = subArgs()
+      const updateDescription = resolveFileArg(
+        opts.description as string | undefined,
+        opts['description-file'] as string | undefined
+      )
       output = await updateIssue(client(), issueId, {
         title: opts.title as string | undefined,
-        description: opts.description as string | undefined,
+        description: updateDescription,
         state: opts.state as string | undefined,
         labels: opts.labels as string[] | undefined,
       })
@@ -787,10 +813,14 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
 
     case 'create-comment': {
       const issueId = requirePositional('issue-id')
-      if (!args.body) {
-        throw new Error('Usage: af-linear create-comment <issue-id> --body "Comment text"')
+      const commentBody = resolveFileArg(
+        args.body as string | undefined,
+        args['body-file'] as string | undefined
+      )
+      if (!commentBody) {
+        throw new Error('Usage: af-linear create-comment <issue-id> --body "Comment text" or --body-file /path/to/file')
       }
-      output = await createComment(client(), issueId, args.body as string)
+      output = await createComment(client(), issueId, commentBody)
       break
     }
 

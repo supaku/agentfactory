@@ -15,7 +15,14 @@ prompt: |
   Research and flesh out story {{identifier}}.
   Analyze requirements, identify technical approach, estimate complexity,
   and update the story description with detailed acceptance criteria.
-  Do NOT implement code. Focus on story refinement only.{{> partials/cli-instructions}}
+  Do NOT implement code. Focus on story refinement only.
+
+  IMPORTANT: To update the issue, you MUST use the Linear CLI (`pnpm af-linear`).
+  Do NOT use ToolSearch to find or load Linear MCP tools — they are blocked.
+  For long descriptions, write content to a temp file and use --description-file:
+    1. Write description to /tmp/description.md using the Write tool
+    2. Run: pnpm af-linear update-issue {{identifier}} --description-file /tmp/description.md
+  {{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

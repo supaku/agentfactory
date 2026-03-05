@@ -35,6 +35,7 @@
  *   LINEAR_API_KEY              Required API key for authentication
  */
 
+import { readFileSync } from 'node:fs'
 import 'dotenv/config'
 import { config } from 'dotenv'
 // Load .env.local (higher priority, loaded second so it overrides)
@@ -126,6 +127,16 @@ function parseArgs(args: string[]): Record<string, string | string[]> {
     }
   }
   return result
+}
+
+function resolveFileArg(
+  value: string | string[] | undefined,
+  filePath: string | string[] | undefined
+): string | undefined {
+  if (filePath && typeof filePath === 'string') {
+    return readFileSync(filePath, 'utf-8')
+  }
+  return typeof value === 'string' ? value : undefined
 }
 
 async function getIssue(issueId: string) {
@@ -698,10 +709,11 @@ async function main() {
         )
         process.exit(1)
       }
+      const createDesc = resolveFileArg(options.description, options['description-file'])
       await createIssue({
         title: options.title as string,
         team: options.team as string,
-        description: options.description as string | undefined,
+        description: createDesc,
         project: options.project as string | undefined,
         labels: options.labels as string[] | undefined,
         state: options.state as string | undefined,
@@ -719,9 +731,10 @@ async function main() {
         process.exit(1)
       }
       const updateOpts = parseArgs(args.slice(2))
+      const updateDesc = resolveFileArg(updateOpts.description, updateOpts['description-file'])
       await updateIssue(issueId, {
         title: updateOpts.title as string | undefined,
-        description: updateOpts.description as string | undefined,
+        description: updateDesc,
         state: updateOpts.state as string | undefined,
         labels: updateOpts.labels as string[] | undefined,
       })
@@ -740,13 +753,14 @@ async function main() {
 
     case 'create-comment': {
       const issueId = args[1]
-      if (!issueId || issueId.startsWith('--') || !options.body) {
+      const commentBody = resolveFileArg(options.body, options['body-file'])
+      if (!issueId || issueId.startsWith('--') || !commentBody) {
         console.error(
-          'Usage: pnpm af-linear create-comment <issue-id> --body "Comment text"'
+          'Usage: pnpm af-linear create-comment <issue-id> --body "Comment text" or --body-file /path/to/file'
         )
         process.exit(1)
       }
-      await createComment(issueId, options.body as string)
+      await createComment(issueId, commentBody)
       break
     }
 

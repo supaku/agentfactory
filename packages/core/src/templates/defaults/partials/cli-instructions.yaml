@@ -8,7 +8,11 @@ content: |
 
   LINEAR CLI (CRITICAL):
   Use the Linear CLI (`{{linearCli}}`) for ALL Linear operations. Do NOT use Linear MCP tools.
+  Do NOT use ToolSearch to find or load any mcp__claude_ai_Linear__ tools — they are blocked.
   See the project documentation (CLAUDE.md / AGENTS.md) for the full command reference.
+  For long text content, use file-based flags instead of inline strings:
+    --description-file /path/to/file  (for create-issue, update-issue)
+    --body-file /path/to/file         (for create-comment)
 
   HUMAN-NEEDED BLOCKERS:
   If you encounter work that requires human action and cannot be resolved autonomously
