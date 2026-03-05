@@ -26,6 +26,8 @@ import {
   cleanupExpiredLocksWithPendingWork,
   cleanupStaleLocksWithIdleWorkers,
   isSessionParkedForIssue,
+  getIssueLock,
+  releaseIssueLock,
 } from './issue-lock.js'
 
 const log = createLogger('orphan-cleanup')
@@ -208,6 +210,20 @@ export async function cleanupOrphanedSessions(
         // Release any existing claim
         await releaseClaim(session.linearSessionId)
 
+        // Release the issue lock if held by this orphaned session.
+        // Without this, dispatchWork() below would fail to acquire the lock
+        // (SET NX) and park the work instead — leaving it stuck until the
+        // lock's 2-hour TTL expires, since the session is reset to 'pending'
+        // which the stale-lock cleanup doesn't consider terminal.
+        const existingLock = await getIssueLock(session.issueId)
+        if (existingLock && existingLock.sessionId === session.linearSessionId) {
+          log.info('Releasing issue lock held by orphaned session', {
+            sessionId: session.linearSessionId,
+            issueId: session.issueId,
+          })
+          await releaseIssueLock(session.issueId)
+        }
+
         // Reset session for requeue (clears workerId so new worker can claim)
         await resetSessionForRequeue(session.linearSessionId)
 
@@ -290,6 +306,16 @@ export async function cleanupOrphanedSessions(
             sessionId: session.linearSessionId,
             issueIdentifier,
           })
+
+          // Release issue lock if held by this zombie session (same rationale as orphan cleanup)
+          const existingLock = await getIssueLock(session.issueId)
+          if (existingLock && existingLock.sessionId === session.linearSessionId) {
+            log.info('Releasing issue lock held by zombie session', {
+              sessionId: session.linearSessionId,
+              issueId: session.issueId,
+            })
+            await releaseIssueLock(session.issueId)
+          }
 
           const work: QueuedWork = {
             sessionId: session.linearSessionId,

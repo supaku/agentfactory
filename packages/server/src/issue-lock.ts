@@ -524,14 +524,20 @@ export async function cleanupExpiredLocksWithPendingWork(): Promise<number> {
   return promoted
 }
 
-const TERMINAL_STATUSES = new Set(['completed', 'failed', 'stopped'])
+// Statuses where a session should NOT be holding an issue lock.
+// Terminal: session finished (completed/failed/stopped) but lock release failed.
+// Pending: session was reset by orphan cleanup but lock wasn't released (see orphan-cleanup.ts).
+const STALE_LOCK_STATUSES = new Set(['completed', 'failed', 'stopped', 'pending'])
 
 /**
- * Release issue locks held by sessions that have already reached a terminal state.
+ * Release issue locks held by sessions that should no longer hold them.
  *
- * This handles the case where a session completes but the lock release failed
- * (e.g., network error during cleanup). The lock's 2-hour TTL would eventually
- * expire, but this proactively clears it when workers have idle capacity.
+ * This handles cases where:
+ * - A session completes but the lock release failed (network error during cleanup)
+ * - Orphan cleanup resets a session to 'pending' but the lock wasn't released
+ *
+ * The lock's 2-hour TTL would eventually expire, but this proactively clears it
+ * when workers have idle capacity.
  *
  * Only runs when workers are online -- if no workers are available, there's no
  * point promoting parked work since nothing can pick it up.
@@ -575,8 +581,8 @@ export async function cleanupStaleLocksWithIdleWorkers(
         continue
       }
 
-      if (TERMINAL_STATUSES.has(session.status)) {
-        log.info('Releasing stale lock (session already terminal)', {
+      if (STALE_LOCK_STATUSES.has(session.status)) {
+        log.info('Releasing stale lock (session no longer needs lock)', {
           issueId,
           sessionId: lock.sessionId,
           sessionStatus: session.status,
