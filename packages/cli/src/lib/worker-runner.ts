@@ -633,7 +633,7 @@ export async function runWorker(
             })
           },
           onAgentStart: (agent: AgentProcess) => {
-            agentLog.status('running', `PID: ${agent.pid}`)
+            agentLog.status('running', agent.pid ? `PID: ${agent.pid}` : 'spawning')
             agentLog.debug('Agent details', {
               worktree: agent.worktreePath,
             })

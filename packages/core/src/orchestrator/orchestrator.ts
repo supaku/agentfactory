@@ -8,7 +8,7 @@ import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
 import { resolve, dirname } from 'path'
-import { config as loadDotenv } from 'dotenv'
+import { parse as parseDotenv } from 'dotenv'
 import {
   type AgentProvider,
   type AgentHandle,
@@ -182,13 +182,15 @@ function loadSettingsEnv(workDir: string, log?: Logger): Record<string, string> 
           error: error instanceof Error ? error.message : String(error),
         })
       }
-      break
+      // File exists but has no env property — not an error
+      log?.debug('settings.local.json found but contains no env property', { path: settingsPath })
+      return {}
     }
     prevDir = currentDir
     currentDir = dirname(currentDir)
   }
 
-  log?.warn('settings.local.json not found', { startDir: workDir })
+  log?.debug('settings.local.json not found', { startDir: workDir })
   return {}
 }
 
@@ -264,15 +266,13 @@ function loadAppEnvFiles(
     for (const appName of appDirs) {
       const envPath = resolve(appsDir, appName, envFileName)
       if (existsSync(envPath)) {
-        // Use dotenv to parse the file
-        const result = loadDotenv({ path: envPath })
-        if (result.parsed) {
-          // Merge into our env object
-          // dotenv.parsed is Record<string, string>
-          Object.assign(env, result.parsed)
+        // Parse the file without injecting into process.env (avoids dotenv log spam)
+        const parsed = parseDotenv(readFileSync(envPath, 'utf-8'))
+        if (parsed && Object.keys(parsed).length > 0) {
+          Object.assign(env, parsed)
           loadedCount++
           log?.debug(`Loaded ${envFileName} from ${appName}`, {
-            vars: Object.keys(result.parsed).length,
+            vars: Object.keys(parsed).length,
           })
         }
       }
