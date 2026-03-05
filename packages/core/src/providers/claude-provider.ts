@@ -72,7 +72,15 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
     return { behavior: 'allow' }
   }
 
-  // MCP tools: allow all (agents need Linear, Vercel, etc.)
+  // MCP tools: block Linear (agents must use `pnpm af-linear` CLI instead)
+  if (toolName.startsWith('mcp__') && toolName.includes('Linear')) {
+    return {
+      behavior: 'deny',
+      message: 'Linear MCP tools are not available. Use `pnpm af-linear` CLI instead. See CLAUDE.md for the full command reference.',
+    }
+  }
+
+  // MCP tools: allow others (Vercel, Gmail, etc.)
   if (toolName.startsWith('mcp__')) {
     return { behavior: 'allow' }
   }
