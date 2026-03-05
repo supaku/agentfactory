@@ -21,10 +21,19 @@ const PACKAGE_NAME = '@supaku/agentfactory-cli'
  */
 export function getVersion(): string {
   try {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const pkgPath = path.resolve(__dirname, '..', '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    return pkg.version ?? 'unknown'
+    let dir = path.dirname(fileURLToPath(import.meta.url))
+    // Walk up from the current file until we find the CLI package.json
+    for (let i = 0; i < 5; i++) {
+      const candidate = path.join(dir, 'package.json')
+      if (existsSync(candidate)) {
+        const pkg = JSON.parse(readFileSync(candidate, 'utf-8'))
+        if (pkg.name === PACKAGE_NAME) {
+          return pkg.version ?? 'unknown'
+        }
+      }
+      dir = path.dirname(dir)
+    }
+    return 'unknown'
   } catch {
     return 'unknown'
   }
