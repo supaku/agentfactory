@@ -24,8 +24,6 @@
  */
 
 import path from 'path'
-import { fileURLToPath } from 'url'
-import { readFileSync } from 'fs'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local
@@ -42,6 +40,8 @@ import {
   printScanSummary,
   printCircuitBreakerWarning,
 } from './lib/governor-logger.js'
+import { getVersion, checkForUpdate, printUpdateNotification } from './lib/version.js'
+import { maybeAutoUpdate, isAutoUpdateEnabled } from './lib/auto-updater.js'
 import { createLinearAgentClient, type LinearAgentClient, type LinearApiQuota } from '@supaku/agentfactory-linear'
 import { createLogger, initTouchpointStorage } from '@supaku/agentfactory'
 import {
@@ -59,21 +59,6 @@ import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@supaku/agentf
 // ---------------------------------------------------------------------------
 
 const log = createLogger({ workerShortId: 'governor' })
-
-// ---------------------------------------------------------------------------
-// Version
-// ---------------------------------------------------------------------------
-
-function getVersion(): string {
-  try {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url))
-    const pkgPath = path.resolve(__dirname, '..', '..', 'package.json')
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
-    return pkg.version ?? 'unknown'
-  } catch {
-    return 'unknown'
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Stub dependencies
@@ -280,6 +265,17 @@ async function main(): Promise<void> {
     },
     redisConnected,
     oauthResolved,
+  })
+
+  // -----------------------------------------------------------------------
+  // Update check (non-blocking — runs in background)
+  // -----------------------------------------------------------------------
+  const updateCheck = await checkForUpdate()
+  printUpdateNotification(updateCheck)
+
+  // Auto-update if enabled and no active work
+  await maybeAutoUpdate(updateCheck, {
+    cliFlag: undefined, // Governor doesn't parse --auto-update yet; relies on env
   })
 
   // -----------------------------------------------------------------------

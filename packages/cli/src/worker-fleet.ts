@@ -40,7 +40,7 @@ const colors = {
   cyan: '\x1b[36m',
 }
 
-function parseArgs(): { workers: number; capacity: number; dryRun: boolean; projects?: string[] } {
+function parseArgs(): { workers: number; capacity: number; dryRun: boolean; projects?: string[]; autoUpdate?: boolean } {
   const args = process.argv.slice(2)
   let workers =
     parseInt(process.env.WORKER_FLEET_SIZE ?? '0', 10) ||
@@ -48,6 +48,7 @@ function parseArgs(): { workers: number; capacity: number; dryRun: boolean; proj
   let capacity = parseInt(process.env.WORKER_CAPACITY ?? '3', 10)
   let dryRun = false
   let projects: string[] | undefined
+  let autoUpdate: boolean | undefined
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--workers' || args[i] === '-w') {
@@ -58,13 +59,17 @@ function parseArgs(): { workers: number; capacity: number; dryRun: boolean; proj
       projects = args[++i].split(',').map(s => s.trim()).filter(Boolean)
     } else if (args[i] === '--dry-run') {
       dryRun = true
+    } else if (args[i] === '--auto-update') {
+      autoUpdate = true
+    } else if (args[i] === '--no-auto-update') {
+      autoUpdate = false
     } else if (args[i] === '--help' || args[i] === '-h') {
       printHelp()
       process.exit(0)
     }
   }
 
-  return { workers, capacity, dryRun, projects }
+  return { workers, capacity, dryRun, projects, autoUpdate }
 }
 
 function printHelp(): void {
@@ -80,6 +85,8 @@ ${colors.yellow}Options:${colors.reset}
   -c, --capacity <n>  Agents per worker (default: 3)
   -p, --projects <l>  Comma-separated project names to accept (default: all)
   --dry-run           Show configuration without starting workers
+  --auto-update       Enable automatic updates (waits for idle workers)
+  --no-auto-update    Disable automatic updates
   -h, --help          Show this help message
 
 ${colors.yellow}Examples:${colors.reset}
@@ -138,6 +145,7 @@ runWorkerFleet(
     apiUrl: process.env.WORKER_API_URL,
     apiKey: process.env.WORKER_API_KEY,
     projects,
+    autoUpdate: fleetArgs.autoUpdate,
   },
   controller.signal,
 )

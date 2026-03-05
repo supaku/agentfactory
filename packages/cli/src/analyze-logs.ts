@@ -30,6 +30,7 @@ import { config } from 'dotenv'
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
 import { runLogAnalyzer, printSummary } from './lib/analyze-logs-runner.js'
+import { getVersion, checkForUpdate, printUpdateNotification } from './lib/version.js'
 
 // ---------------------------------------------------------------------------
 // Arg parsing
@@ -146,6 +147,13 @@ async function main(): Promise<void> {
     printHelp()
     process.exit(0)
   }
+
+  const version = getVersion()
+  console.log(`AgentFactory Log Analyzer \x1b[2mv${version}\x1b[0m\n`)
+
+  // Update check (non-blocking)
+  const updateCheck = await checkForUpdate()
+  printUpdateNotification(updateCheck)
 
   // Create AbortController for SIGINT handling in follow mode
   const controller = new AbortController()

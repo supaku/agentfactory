@@ -10,6 +10,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getVersion, checkForUpdate, printUpdateNotification } from './version.js'
+import { maybeAutoUpdate, isAutoUpdateEnabled } from './auto-updater.js'
 
 // ---------------------------------------------------------------------------
 // Public config interface
@@ -30,6 +32,8 @@ export interface FleetRunnerConfig {
   workerScript?: string
   /** Linear project names for workers to accept (undefined = all) */
   projects?: string[]
+  /** Enable auto-update (CLI flag override) */
+  autoUpdate?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +123,9 @@ class WorkerFleet {
   }
   private shuttingDown = false
   private readonly workerScript: string
+  private readonly autoUpdateFlag?: boolean
   private resolveRunning: (() => void) | null = null
+  private updateInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(
     fleetConfig: {
@@ -131,23 +137,27 @@ class WorkerFleet {
       projects?: string[]
     },
     workerScript: string,
+    autoUpdateFlag?: boolean,
   ) {
     this.fleetConfig = fleetConfig
     this.workerScript = workerScript
+    this.autoUpdateFlag = autoUpdateFlag
   }
 
   async start(signal?: AbortSignal): Promise<void> {
     const { workers, capacity, dryRun } = this.fleetConfig
     const totalCapacity = workers * capacity
+    const version = getVersion()
 
     console.log(`
 ${colors.cyan}================================================================${colors.reset}
-${colors.cyan}  AgentFactory Worker Fleet Manager${colors.reset}
+${colors.cyan}  AgentFactory Worker Fleet Manager${colors.reset} ${colors.gray}v${version}${colors.reset}
 ${colors.cyan}================================================================${colors.reset}
   Workers:         ${colors.green}${workers}${colors.reset}
   Capacity/Worker: ${colors.green}${capacity}${colors.reset}
   Total Capacity:  ${colors.green}${totalCapacity}${colors.reset} concurrent agents
   Projects:        ${colors.green}${this.fleetConfig.projects?.length ? this.fleetConfig.projects.join(', ') : 'all'}${colors.reset}
+  Auto-update:     ${isAutoUpdateEnabled(this.autoUpdateFlag) ? `${colors.green}enabled${colors.reset}` : `${colors.gray}disabled${colors.reset}`}
 
   System:
     CPU Cores:    ${os.cpus().length}
@@ -155,6 +165,10 @@ ${colors.cyan}================================================================${
     Free RAM:     ${Math.round(os.freemem() / 1024 / 1024 / 1024)} GB
 ${colors.cyan}================================================================${colors.reset}
 `)
+
+    // Update check
+    const updateCheck = await checkForUpdate()
+    printUpdateNotification(updateCheck)
 
     if (dryRun) {
       console.log(`${colors.yellow}Dry run mode - not starting workers${colors.reset}`)
@@ -179,11 +193,24 @@ ${colors.cyan}================================================================${
 
       fleetLog(null, colors.green, 'INF', `All ${workers} workers started`)
 
+      // Periodic auto-update check (every 4 hours)
+      if (isAutoUpdateEnabled(this.autoUpdateFlag)) {
+        this.updateInterval = setInterval(async () => {
+          const check = await checkForUpdate()
+          await maybeAutoUpdate(check, {
+            cliFlag: this.autoUpdateFlag,
+            hasActiveWorkers: async () => this.workers.size > 0 && !this.shuttingDown,
+            onBeforeRestart: async () => this.shutdown('auto-update'),
+          })
+        }, 4 * 60 * 60 * 1000) // 4 hours
+      }
+
       // Keep the fleet manager running until shutdown
       await new Promise<void>((resolve) => {
         this.resolveRunning = resolve
       })
     } finally {
+      if (this.updateInterval) clearInterval(this.updateInterval)
       signal?.removeEventListener('abort', onAbort)
     }
   }
@@ -366,6 +393,7 @@ export async function runWorkerFleet(
       projects: config.projects?.length ? config.projects : undefined,
     },
     workerScript,
+    config.autoUpdate,
   )
 
   await fleet.start(signal)

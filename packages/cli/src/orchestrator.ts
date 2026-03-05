@@ -25,6 +25,7 @@ import { config } from 'dotenv'
 config({ path: path.resolve(process.cwd(), '.env.local') })
 
 import { runOrchestrator } from './lib/orchestrator-runner.js'
+import { getVersion, checkForUpdate, printUpdateNotification } from './lib/version.js'
 
 function parseArgs(): {
   project?: string
@@ -120,13 +121,19 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  console.log('AgentFactory Orchestrator')
+  const version = getVersion()
+
+  console.log(`AgentFactory Orchestrator \x1b[2mv${version}\x1b[0m`)
   console.log('========================')
   console.log(`Project: ${args.project ?? 'All'}`)
   console.log(`Max concurrent: ${args.max}`)
   console.log(`Repo: ${args.repo ?? 'Any'}`)
   console.log(`Dry run: ${args.dryRun}`)
   console.log('')
+
+  // Update check (non-blocking)
+  const updateCheck = await checkForUpdate()
+  printUpdateNotification(updateCheck)
 
   if (args.single) {
     console.log(`Processing single issue: ${args.single}`)
