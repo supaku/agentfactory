@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.40
+
+### Fixes
+
+- **Block Linear MCP tools for autonomous agents** — Agents were discovering Linear MCP tools via `ToolSearch` and calling them instead of using `pnpm af-linear` CLI, causing permission errors and data dumps into issue comments. The `autonomousCanUseTool` handler now denies `mcp__*Linear__*` tools with a redirect message to the CLI.
+- **Fix noisy/misleading agent startup logs** — Show "spawning" instead of "PID: undefined" in `onAgentStart` (PID arrives asynchronously after process spawn). Switched dotenv from `config()` to `parse()` to eliminate tip spam on stdout. Downgraded `settings.local.json` warnings to debug level (file may exist without `env` key, which is not an error).
+
 ## v0.7.39
 
 ### Fixes
