@@ -56,9 +56,11 @@ export function createWorkerPollHandler() {
         const allWork = await peekWork(fetchLimit)
 
         if (hasProjectFilter) {
-          // Accept: matching project OR untagged items (backward compat)
+          // Only accept work tagged with a project this worker serves.
+          // Untagged work is excluded — it should only be picked up by
+          // workers with no project filter, preventing cross-repo execution.
           work = allWork
-            .filter(w => !w.projectName || workerProjects.includes(w.projectName))
+            .filter(w => w.projectName && workerProjects.includes(w.projectName))
             .slice(0, desiredCount)
         } else {
           work = allWork.slice(0, desiredCount)

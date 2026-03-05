@@ -240,6 +240,7 @@ export async function cleanupOrphanedSessions(
           prompt: session.promptContext,
           // providerSessionId intentionally omitted - don't resume crashed sessions
           workType: session.workType,
+          projectName: session.projectName,
         }
 
         const dispatchResult = await dispatchWork(work)
@@ -325,6 +326,7 @@ export async function cleanupOrphanedSessions(
             queuedAt: Date.now(),
             prompt: session.promptContext,
             workType: session.workType,
+            projectName: session.projectName,
           }
 
           const dispatchResult = await dispatchWork(work)

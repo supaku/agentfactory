@@ -14,6 +14,7 @@ import {
   claimSession,
   getSessionState,
   addWorkerSession,
+  getWorker,
   createLogger,
 } from '@supaku/agentfactory-server'
 
@@ -49,6 +50,28 @@ export function createSessionClaimHandler() {
           claimed: false,
           reason: 'Work item not available or already claimed',
         })
+      }
+
+      // Validate project routing: reject if the worker's project list
+      // doesn't include this work item's project. Prevents cross-repo
+      // execution when work is claimed by the wrong worker.
+      if (work.projectName) {
+        const worker = await getWorker(workerId)
+        if (worker?.projects && worker.projects.length > 0) {
+          if (!worker.projects.includes(work.projectName)) {
+            log.error('Project mismatch on claim — requeuing', {
+              sessionId,
+              workerId,
+              workProject: work.projectName,
+              workerProjects: worker.projects,
+            })
+            await requeueWork(work)
+            return NextResponse.json({
+              claimed: false,
+              reason: `Worker not authorized for project ${work.projectName}`,
+            })
+          }
+        }
       }
 
       let claimSucceeded = false

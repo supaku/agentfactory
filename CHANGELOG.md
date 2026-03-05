@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.39
+
+### Fixes
+
+- **Fix orphan cleanup deadlock with issue locks** — When a worker is disrupted (e.g., tmux kill), orphan cleanup detected the stale session but failed to re-dispatch it because the issue lock (SET NX, 2h TTL) was still held by the same session. Work got parked instead of queued, and the stale-lock cleanup skipped it because the session was reset to `pending` (not terminal). Now orphan cleanup releases the issue lock before re-dispatching, and the stale-lock cleanup also treats `pending` as a stale lock status.
+- **Fix cross-project work routing after orphan recovery** — Orphan and zombie cleanup omitted `projectName` when reconstructing `QueuedWork` for re-dispatch. The poll filter treated untagged work as "any worker can take it", allowing workers from the wrong repository to claim issues from other projects. Now `projectName` is preserved from session state during re-queue.
+- **Add server-side project validation at claim time** — The claim endpoint (`POST /api/sessions/{id}/claim`) now validates that the claiming worker's project list includes the work item's `projectName`. If mismatched, the claim is rejected and work is requeued. Previously the poll filter was the only routing gate with no server-side enforcement.
+- **Tighten poll filter for project-scoped workers** — Project-filtered workers now only see work explicitly tagged with their projects. Previously, untagged work (`!w.projectName`) was accepted by any worker, bypassing project routing.
+- **Fix triple-dispatch duplication in event-bridge mode** — Prevented duplicate agent dispatches when events arrived via both webhook and polling simultaneously.
+
+### Features
+
+- **Add gitleaks pre-commit hook** for local secret scanning
+- **Add dotenvx pre-commit hook** to block `.env` commits
+
 ## v0.7.38
 
 ### Fixes

@@ -2062,13 +2062,23 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
   ): Promise<void> {
     const log = this.agentLoggers.get(issueId)
 
+    // Accumulate all assistant text for WORK_RESULT marker fallback scanning.
+    // The provider's result message only contains the final turn's text, but
+    // the agent may have emitted the marker in an earlier turn.
+    const assistantTextChunks: string[] = []
+
     try {
       for await (const event of handle.stream) {
+        if (event.type === 'assistant_text') {
+          assistantTextChunks.push(event.text)
+        }
         await this.handleAgentEvent(issueId, sessionId, event, emitter, agent, handle)
       }
 
-      // Query completed successfully
-      if (agent.status !== 'stopped') {
+      // Query completed successfully — preserve 'failed' status set by error results
+      // (e.g., error_max_turns, error_during_execution) so auto-transition doesn't
+      // fire with an empty resultMessage
+      if (agent.status !== 'stopped' && agent.status !== 'failed') {
         agent.status = 'completed'
       }
       agent.completedAt = new Date()
@@ -2077,7 +2087,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       if (agent.worktreePath) {
         try {
           updateState(agent.worktreePath, {
-            status: agent.status === 'stopped' ? 'stopped' : 'completed',
+            status: agent.status === 'stopped' ? 'stopped' : agent.status === 'failed' ? 'failed' : 'completed',
             pullRequestUrl: agent.pullRequestUrl ?? undefined,
           })
         } catch {
@@ -2098,8 +2108,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         let targetStatus: LinearWorkflowStatus | null = null
 
         if (isResultSensitive) {
-          // For QA/acceptance: parse result to decide promote vs reject
-          const workResult = parseWorkResult(agent.resultMessage, workType)
+          // For QA/acceptance: parse result to decide promote vs reject.
+          // Try the final result message first, then fall back to scanning
+          // all accumulated assistant text (the marker may be in an earlier turn).
+          let workResult = parseWorkResult(agent.resultMessage, workType)
+          if (workResult === 'unknown' && assistantTextChunks.length > 0) {
+            const fullText = assistantTextChunks.join('\n')
+            workResult = parseWorkResult(fullText, workType)
+            if (workResult !== 'unknown') {
+              log?.info('Work result found in accumulated text (not in final message)', { workResult })
+            }
+          }
           agent.workResult = workResult
 
           if (workResult === 'passed') {
@@ -2495,7 +2514,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             await emitter.emitThought(`Completed: ${event.message.substring(0, 200)}...`, true)
           }
         } else {
-          // Error result
+          // Error result — mark agent as failed so auto-transition doesn't fire
+          // with an empty resultMessage (which would always produce 'unknown')
+          agent.status = 'failed'
           log?.error('Agent error result', { subtype: event.errorSubtype })
 
           // Update state to failed
