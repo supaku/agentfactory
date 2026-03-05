@@ -104,8 +104,10 @@ export class ClaudeProvider implements AgentProvider {
     const abortController = config.abortController
 
     // Default allowed tools for autonomous agents — ensures bash commands
-    // like `pnpm af-linear`, `git`, `gh` are auto-approved without needing
-    // settings.local.json (which isn't available in worktrees).
+    // are auto-approved without needing settings.local.json (which isn't
+    // available in worktrees). The canUseTool callback handles deny-listing
+    // destructive commands; allowedTools just needs to be permissive enough
+    // that headless agents aren't blocked by missing permission prompts.
     // Format: Bash(prefix:glob) — colon separates prefix from wildcard.
     const defaultAllowedTools = config.autonomous
       ? [
@@ -124,9 +126,40 @@ export class ClaudeProvider implements AgentProvider {
           'Bash(vitest:*)',
           'Bash(jest:*)',
           'Bash(claude:*)',
+          // Shell builtins and navigation — cd, pwd, echo, etc.
+          'Bash(cd:*)',
+          'Bash(pwd:*)',
+          'Bash(echo:*)',
+          'Bash(cat:*)',
+          'Bash(ls:*)',
+          'Bash(find:*)',
+          'Bash(grep:*)',
+          'Bash(rg:*)',
+          'Bash(which:*)',
+          'Bash(head:*)',
+          'Bash(tail:*)',
+          'Bash(wc:*)',
+          'Bash(mkdir:*)',
+          'Bash(cp:*)',
+          'Bash(mv:*)',
+          'Bash(touch:*)',
+          'Bash(chmod:*)',
+          'Bash(sed:*)',
+          'Bash(awk:*)',
+          'Bash(sort:*)',
+          'Bash(uniq:*)',
+          'Bash(diff:*)',
+          'Bash(xargs:*)',
+          'Bash(env:*)',
+          'Bash(export:*)',
+          'Bash(source:*)',
+          'Bash(lsof:*)',
           // Non-Node project support: common build tools and shell scripts
           'Bash(make:*)',
           'Bash(cmake:*)',
+          'Bash(cargo:*)',
+          'Bash(rustc:*)',
+          'Bash(go:*)',
           'Bash(bash:*)',
           'Bash(sh:*)',
           'Bash(./:*)',
@@ -145,7 +178,44 @@ export class ClaudeProvider implements AgentProvider {
         // ensures headless agents are never blocked by permission prompts.
         canUseTool: config.autonomous ? autonomousCanUseTool : undefined,
         permissionMode: 'acceptEdits',
-        disallowedTools: config.autonomous ? ['AskUserQuestion'] : [],
+        disallowedTools: config.autonomous
+          ? [
+              'AskUserQuestion',
+              // Block Linear MCP tools — agents must use `pnpm af-linear` CLI.
+              // disallowedTools is a hard block at the SDK level, more reliable
+              // than canUseTool which may race with MCP tool execution.
+              'mcp__claude_ai_Linear__get_issue',
+              'mcp__claude_ai_Linear__list_issues',
+              'mcp__claude_ai_Linear__save_issue',
+              'mcp__claude_ai_Linear__create_comment',
+              'mcp__claude_ai_Linear__list_comments',
+              'mcp__claude_ai_Linear__get_issue_status',
+              'mcp__claude_ai_Linear__list_issue_statuses',
+              'mcp__claude_ai_Linear__create_issue_label',
+              'mcp__claude_ai_Linear__list_issue_labels',
+              'mcp__claude_ai_Linear__get_team',
+              'mcp__claude_ai_Linear__list_teams',
+              'mcp__claude_ai_Linear__get_user',
+              'mcp__claude_ai_Linear__list_users',
+              'mcp__claude_ai_Linear__get_project',
+              'mcp__claude_ai_Linear__list_projects',
+              'mcp__claude_ai_Linear__list_project_labels',
+              'mcp__claude_ai_Linear__search_documentation',
+              'mcp__claude_ai_Linear__get_document',
+              'mcp__claude_ai_Linear__list_documents',
+              'mcp__claude_ai_Linear__create_document',
+              'mcp__claude_ai_Linear__update_document',
+              'mcp__claude_ai_Linear__get_milestone',
+              'mcp__claude_ai_Linear__list_milestones',
+              'mcp__claude_ai_Linear__save_milestone',
+              'mcp__claude_ai_Linear__save_project',
+              'mcp__claude_ai_Linear__list_cycles',
+              'mcp__claude_ai_Linear__get_attachment',
+              'mcp__claude_ai_Linear__create_attachment',
+              'mcp__claude_ai_Linear__delete_attachment',
+              'mcp__claude_ai_Linear__extract_images',
+            ]
+          : [],
         settingSources: ['project'],
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         resume: resumeSessionId,

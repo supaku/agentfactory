@@ -2889,6 +2889,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       const statusName = state?.name ?? 'Backlog'
       effectiveWorkType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
       console.log(`Auto-detected work type: ${effectiveWorkType} (from status: ${statusName})`)
+
+      // Parent issues use coordination variants
+      const isParent = await this.client.isParentIssue(issueId)
+      if (isParent) {
+        if (effectiveWorkType === 'development') effectiveWorkType = 'coordination'
+        else if (effectiveWorkType === 'qa') effectiveWorkType = 'qa-coordination'
+        else if (effectiveWorkType === 'acceptance') effectiveWorkType = 'acceptance-coordination'
+        console.log(`Upgraded to coordination work type: ${effectiveWorkType} (parent issue)`)
+      }
     }
 
     // Create worktree only for code work types (skip for research, backlog-creation)
@@ -3183,10 +3192,18 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
         // Auto-detect work type from issue status if not provided
         // This prevents defaulting to 'development' which would cause
-        // incorrect status transitions (e.g., Delivered \u2192 Started for acceptance work)
+        // incorrect status transitions (e.g., Delivered → Started for acceptance work)
         if (!workType) {
           const statusName = currentStatus ?? 'Backlog'
           workType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
+
+          // Parent issues use coordination variants
+          const isParent = await this.client.isParentIssue(issue.id)
+          if (isParent) {
+            if (workType === 'development') workType = 'coordination'
+            else if (workType === 'qa') workType = 'qa-coordination'
+            else if (workType === 'acceptance') workType = 'acceptance-coordination'
+          }
         }
 
         // Only create worktree for code work types

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.41
+
+### Fixes
+
+- **Route parent issues to coordination work type** — The Governor's `dispatchWork` mapped `trigger-development` → `development` regardless of whether the issue had sub-issues, so parent issues were treated as single development tasks instead of using the coordinator. Now `dispatchWork` checks the `parentIssueIds` cache and upgrades to `coordination`/`qa-coordination`/`acceptance-coordination` for parent issues. Added the same check to `spawnAgentForIssue` and `forwardPrompt` auto-detect paths for defense in depth.
+- **Fix Bash permission failures for autonomous agents** — The `allowedTools` list only included command-specific prefixes (`pnpm`, `git`, `gh`, etc.) but missed common shell commands (`cd`, `pwd`, `ls`, `cat`, `find`, `mkdir`, etc.). Headless agents can't prompt for permission, so unlisted commands silently failed. Added ~25 common shell builtins and utilities.
+- **Hard-block Linear MCP tools for autonomous agents** — The `canUseTool` callback denied Linear MCP tools but agents still called them successfully, suggesting the callback raced with MCP execution. Added all Linear MCP tool names to `disallowedTools` for a hard SDK-level block that prevents the tools from being callable.
+
 ## v0.7.40
 
 ### Fixes
