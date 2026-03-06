@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.42
+
+### Fixes
+
+- **Fix infinite loop when qa-coordination fails on parent issues** — QA coordination failure sent parent issues to `Backlog`, which triggered development coordination. The coordinator saw all sub-issues already `Finished` and immediately promoted back to `Finished`, restarting the QA cycle indefinitely. Changed `qa-coordination` fail status to `Started` instead, which keeps the issue visible without re-triggering the coordination loop.
+- **Fix `getVersion()` returning "unknown" in compiled output** — Version resolution now works correctly in bundled builds.
+- **Disable filesystem hooks for autonomous SDK agents** — Prevents permission failures when agents run headless.
+
+### Features
+
+- **Add cost tooltip and all-time total to dashboard** — Fleet management dashboard now shows per-session cost breakdowns and cumulative totals.
+
 ## v0.7.41
 
 ### Fixes
