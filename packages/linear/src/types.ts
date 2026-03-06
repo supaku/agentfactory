@@ -394,7 +394,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'acceptance': 'Rejected',    // Acceptance failure -> Rejected (rejection handler diagnoses next steps)
   'refinement': null,
   'coordination': null,
-  'qa-coordination': 'Backlog',     // QA coordination failure -> Backlog (coordinator picks up with failure context)
+  'qa-coordination': 'Started',     // QA coordination failure -> Started (prevents loop: Backlog would re-trigger coordination which auto-completes since sub-issues are already Finished)
   'acceptance-coordination': 'Rejected', // Acceptance coordination failure -> Rejected
 }
 

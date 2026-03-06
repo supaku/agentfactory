@@ -652,7 +652,7 @@ WORKFLOW:
 
 RESULT HANDLING:
 - If ALL pass: Mark parent as complete (transitions to Delivered). Update each sub-issue to Delivered.
-- If ANY fail: Post rollup comment listing per-sub-issue results. Parent stays in Finished status.
+- If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed -->. The orchestrator will move the issue to Started for remediation.
 
 IMPORTANT CONSTRAINTS:
 - This is READ-ONLY validation \u2014 do NOT create PRs or make git commits

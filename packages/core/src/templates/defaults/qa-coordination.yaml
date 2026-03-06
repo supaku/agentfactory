@@ -25,7 +25,7 @@ prompt: |
 
   RESULT HANDLING:
   - If ALL pass: Emit <!-- WORK_RESULT:passed --> in your final message. The orchestrator will promote to Delivered.
-  - If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed --> in your final message. The orchestrator will move the issue to Backlog for remediation.
+  - If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed --> in your final message. The orchestrator will move the issue to Started for remediation (prevents re-triggering coordination while sub-issues are already Finished).
 
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT create PRs or make git commits
