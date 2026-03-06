@@ -20,6 +20,8 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 
 The Linear CLI wraps the `@supaku/agentfactory-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
 
+> **Tool plugins (Claude provider only):** When agents run via the orchestrator with the Claude provider, they receive typed `af_linear_*` tools (e.g., `af_linear_get_issue`, `af_linear_create_comment`) as in-process MCP tools instead of using the CLI via Bash. These tools call the same `runLinear()` function — same behavior, no subprocess overhead. Non-Claude providers and human users continue using `pnpm af-linear` as before. See `docs/providers.md` for details.
+
 ### Commands
 
 ```bash
@@ -276,6 +278,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{repository}}` | Git repository URL pattern for pre-push validation |
 | `{{projectPath}}` | Root directory for this project in a monorepo (e.g., `apps/family`) |
 | `{{sharedPaths}}` | Shared directories any project may modify (array) |
+| `{{useToolPlugins}}` | When true, agents use in-process `af_linear_*` tools instead of CLI |
 | `{{buildCommand}}` | Build command override for native projects (e.g., `cargo build`) |
 | `{{testCommand}}` | Test command override for native projects (e.g., `cargo test`) |
 | `{{validateCommand}}` | Validation command override — replaces typecheck (e.g., `cargo clippy`) |

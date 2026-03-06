@@ -145,6 +145,74 @@ orchestrator.events.onAgentComplete = (agent) => {
 }
 ```
 
+## Tool Plugins (Claude Provider)
+
+When using the Claude provider, agents receive **typed, in-process tools** instead of shelling out to CLI commands via Bash. This is powered by the `ToolPlugin` system and the Claude Agent SDK's `createSdkMcpServer()`.
+
+### Why MCP?
+
+Claude Code has a fixed set of built-in tools (Read, Write, Bash, etc.). The **only extension mechanism** for adding custom tools is MCP (Model Context Protocol) servers — when you pass `mcpServers` to `query()`, the SDK discovers each server's tools and adds them to the model's tool palette.
+
+However, standard MCP transports (stdio, SSE, HTTP) all run in separate processes, which would negate the performance benefit. `createSdkMcpServer()` is special: it creates an MCP server **in the same process**. Despite the MCP naming, there's no IPC, no child process, no network call. The SDK calls your handler function directly. It's essentially a way to say "here are additional tools with Zod schemas — add them to the agent's tool list."
+
+### How It Works
+
+```
+query({ mcpServers: { 'af-linear': createSdkMcpServer({ tools: [...] }) } })
+    │
+    ├─ SDK discovers tools via MCP protocol (in-process, no IPC)
+    ├─ Model sees: Read, Write, Bash, ..., af_linear_get_issue, af_linear_create_issue, ...
+    ├─ Model calls af_linear_get_issue({ issue_id: "SUP-123" })
+    ├─ SDK routes to handler (same process)
+    └─ Handler calls runLinear() directly → returns JSON result
+```
+
+### Benefits Over CLI
+
+| | CLI (`pnpm af-linear`) | Tool Plugin (`af_linear_*`) |
+|---|---|---|
+| **Overhead** | Subprocess per call | In-process function call |
+| **Input validation** | Runtime arg parsing | Zod schema at invocation |
+| **Prompt tokens** | Full CLI docs in prompt | Tool schemas self-document |
+| **Error handling** | Parse stderr | Structured `{ isError: true }` |
+| **Type safety** | String args | Typed params |
+
+### Provider Compatibility
+
+Tool plugins only activate for the Claude provider. Non-Claude providers (Codex, Amp) continue using the Bash-based CLI — their prompts receive the `{{linearCli}}` CLI instructions as before. This is controlled by the `useToolPlugins` template variable.
+
+### Available Plugins
+
+| Plugin | Server Name | Tools | Description |
+|--------|-------------|-------|-------------|
+| `linearPlugin` | `af-linear` | 16 | Linear issue management (get, create, update, comments, relations, etc.) |
+
+### Registering Plugins
+
+The orchestrator automatically registers built-in plugins. To add custom plugins programmatically:
+
+```typescript
+import { ToolRegistry, linearPlugin } from '@supaku/agentfactory'
+import type { ToolPlugin } from '@supaku/agentfactory'
+
+const myPlugin: ToolPlugin = {
+  name: 'my-tools',
+  description: 'Custom tools for my workflow',
+  createTools: (context) => [
+    tool('my_custom_action', 'Do something', { param: z.string() },
+      async (args) => ({ content: [{ type: 'text', text: 'result' }] })
+    ),
+  ],
+}
+
+const registry = new ToolRegistry()
+registry.register(linearPlugin)
+registry.register(myPlugin)
+
+// Pass servers to AgentSpawnConfig
+const servers = registry.createServers({ env: process.env, cwd: process.cwd() })
+```
+
 ## Writing a Custom Provider
 
 To add support for a new coding agent:

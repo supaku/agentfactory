@@ -108,6 +108,69 @@ To add support for a new coding agent:
 
 See `packages/core/src/providers/` for existing implementations.
 
+## Adding a Tool Plugin
+
+Tool plugins expose CLI functionality as typed, in-process tools for Claude agents. This avoids subprocess overhead and gives agents Zod-validated parameters instead of CLI arg strings.
+
+### Background: Why MCP?
+
+Claude Code has a fixed set of built-in tools (Read, Write, Bash, etc.) — you can't add new ones directly. The **only extension mechanism** is MCP (Model Context Protocol) servers. The Claude Agent SDK provides `createSdkMcpServer()` which creates an MCP server **in the same process** — no IPC, no child process, no network. The SDK discovers the tools and adds them to the model's tool palette alongside the built-ins.
+
+### Creating a Plugin
+
+1. Create `packages/core/src/tools/plugins/my-plugin.ts`
+2. Implement the `ToolPlugin` interface:
+
+```typescript
+import { z } from 'zod'
+import { tool, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk'
+import type { ToolPlugin, ToolPluginContext } from '../types.js'
+
+export const myPlugin: ToolPlugin = {
+  name: 'af-my-plugin',       // MCP server name — tools appear as mcp__af-my-plugin__*
+  description: 'My custom tools',
+  createTools(context: ToolPluginContext): SdkMcpToolDefinition<any>[] {
+    const apiKey = context.env.MY_API_KEY
+    if (!apiKey) return []     // Return empty if prerequisites missing
+
+    return [
+      tool(
+        'af_my_action',
+        'Does something useful',
+        { param: z.string().describe('The input parameter') },
+        async (args) => {
+          // Your logic here — runs in-process
+          const result = await doSomething(args.param, apiKey)
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          }
+        }
+      ),
+    ]
+  },
+}
+```
+
+3. Register in `packages/core/src/orchestrator/orchestrator.ts`:
+
+```typescript
+import { myPlugin } from '../tools/plugins/my-plugin.js'
+
+// In constructor:
+this.toolRegistry.register(myPlugin)
+```
+
+4. Export from `packages/core/src/tools/index.ts`
+5. Add tests in `packages/core/src/tools/__tests__/`
+
+### Conventions
+
+- Tool names: `af_{plugin}_{action}` with `snake_case` (e.g., `af_linear_get_issue`)
+- Plugin `name` field becomes the MCP server name — keep it short, use `af-` prefix
+- Return `[]` from `createTools()` when required env vars (API keys) are missing
+- Wrap errors as `{ isError: true, content: [{ type: 'text', text: 'Error: ...' }] }`
+- Non-Claude providers ignore plugins — they continue using Bash-based CLI
+
 ## Reporting Issues
 
 Use [GitHub Issues](https://github.com/supaku/agentfactory/issues) to report bugs or request features. Include:

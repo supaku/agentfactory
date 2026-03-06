@@ -121,6 +121,34 @@ interface AgentHandle {
 | `result` | Final result with cost data |
 | `error` | Error occurred |
 
+### Tool Plugins
+
+Claude Code's built-in tools (Read, Write, Bash, etc.) cannot be extended directly. The only way to add custom tools is through MCP servers. The `ToolPlugin` system uses the Claude Agent SDK's `createSdkMcpServer()` to register tools that run **in the same process** — no subprocess, no IPC, no network call.
+
+```
+Orchestrator
+  └── ToolRegistry
+        ├── linearPlugin (af-linear)  →  16 typed tools
+        └── future plugins...         →  more tools
+              │
+              ▼
+        createSdkMcpServer()  →  in-process MCP server
+              │
+              ▼
+        query({ mcpServers })  →  tools appear alongside Read, Write, Bash
+```
+
+When the Claude provider is active, agents call `af_linear_get_issue({ issue_id: "SUP-123" })` directly instead of `Bash("pnpm af-linear get-issue SUP-123")`. Both paths call the same `runLinear()` function — the plugin is a typed wrapper, not a reimplementation.
+
+Non-Claude providers continue using the CLI via Bash. See `docs/providers.md` for details.
+
+Key files:
+
+- `tools/types.ts` — `ToolPlugin` and `ToolPluginContext` interfaces
+- `tools/registry.ts` — `ToolRegistry` creates MCP servers from plugins
+- `tools/plugins/linear.ts` — Linear plugin (16 tools wrapping `runLinear()`)
+- `tools/linear-runner.ts` — shared `runLinear()` used by both CLI and plugin
+
 ### Provider Resolution
 
 Provider is selected dynamically per agent based on environment variables:
