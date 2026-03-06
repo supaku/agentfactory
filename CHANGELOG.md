@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.44
+
+### Fixes
+
+- **Fix ZodError in autonomous agent permission handling** — Claude Code 2.1.70 requires `updatedInput` in `PermissionResult` allow responses, but `autonomousCanUseTool` returned `{ behavior: 'allow' }` without it. Added `updatedInput: input` to all allow returns to satisfy the stricter Zod validation.
+
 ## v0.7.43
 
 ### Features

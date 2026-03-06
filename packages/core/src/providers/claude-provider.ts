@@ -33,25 +33,25 @@ import type {
 const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
   // Read-only tools: always allow
   if (['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'].includes(toolName)) {
-    return { behavior: 'allow' }
+    return { behavior: 'allow', updatedInput: input }
   }
 
   // File write tools: always allow (permissionMode: 'acceptEdits' should
   // handle these, but be explicit as a safety net)
   if (['Write', 'Edit', 'NotebookEdit'].includes(toolName)) {
-    return { behavior: 'allow' }
+    return { behavior: 'allow', updatedInput: input }
   }
 
   // Task management and planning
   if (['Task', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
        'EnterPlanMode', 'ExitPlanMode', 'Skill'].includes(toolName)) {
-    return { behavior: 'allow' }
+    return { behavior: 'allow', updatedInput: input }
   }
 
   // Bash: evaluate command safety
   if (toolName === 'Bash') {
     const cmd = (typeof input.command === 'string' ? input.command : '').trim()
-    if (!cmd) return { behavior: 'allow' }
+    if (!cmd) return { behavior: 'allow', updatedInput: input }
 
     // Deny destructive patterns
     if (/rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/.test(cmd)) {
@@ -69,7 +69,7 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
 
     // Allow everything else — autonomous agents run in isolated worktrees
     // managed by the orchestrator, with guardrails at the process level.
-    return { behavior: 'allow' }
+    return { behavior: 'allow', updatedInput: input }
   }
 
   // MCP tools: block Linear (agents must use `pnpm af-linear` CLI instead)
@@ -82,11 +82,11 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
 
   // MCP tools: allow others (Vercel, Gmail, etc.)
   if (toolName.startsWith('mcp__')) {
-    return { behavior: 'allow' }
+    return { behavior: 'allow', updatedInput: input }
   }
 
   // Default: allow — autonomous agents should not be blocked by prompts
-  return { behavior: 'allow' }
+  return { behavior: 'allow', updatedInput: input }
 }
 
 export class ClaudeProvider implements AgentProvider {
