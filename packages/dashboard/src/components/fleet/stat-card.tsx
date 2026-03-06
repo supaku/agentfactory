@@ -1,5 +1,6 @@
 import { cn } from '../../lib/utils'
 import { Skeleton } from '../../components/ui/skeleton'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip'
 
 interface StatCardProps {
   label: string
@@ -10,9 +11,10 @@ interface StatCardProps {
   accent?: boolean
   loading?: boolean
   className?: string
+  tooltip?: React.ReactNode
 }
 
-export function StatCard({ label, value, detail, icon, accent, loading, className }: StatCardProps) {
+export function StatCard({ label, value, detail, icon, accent, loading, className, tooltip }: StatCardProps) {
   if (loading) {
     return (
       <div className={cn(
@@ -29,7 +31,7 @@ export function StatCard({ label, value, detail, icon, accent, loading, classNam
     )
   }
 
-  return (
+  const card = (
     <div className={cn(
       'group rounded-xl border border-af-surface-border/50 bg-af-surface/40 p-4 transition-all duration-300 hover-glow',
       accent && 'border-af-accent/15 bg-af-accent/[0.03]',
@@ -59,4 +61,17 @@ export function StatCard({ label, value, detail, icon, accent, loading, classNam
       )}
     </div>
   )
+
+  if (tooltip) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return card
 }

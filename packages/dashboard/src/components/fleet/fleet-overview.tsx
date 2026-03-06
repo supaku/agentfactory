@@ -70,10 +70,23 @@ export function FleetOverview({ className, onSessionSelect }: FleetOverviewProps
             loading={statsLoading}
           />
           <StatCard
-            label="Cost"
+            label="Cost Today"
             value={formatCost(stats?.totalCostToday)}
             icon={<DollarSign className="h-3.5 w-3.5" />}
             loading={statsLoading}
+            tooltip={
+              <div className="space-y-1.5 py-1">
+                <p className="font-medium text-af-text-primary">Cost Today (UTC)</p>
+                <p className="text-af-text-secondary">
+                  Sum of {stats?.sessionCountToday ?? 0} session{(stats?.sessionCountToday ?? 0) !== 1 ? 's' : ''} active or completed today.
+                </p>
+                {stats?.totalCostAllTime != null && stats.totalCostAllTime !== stats.totalCostToday && (
+                  <p className="text-af-text-tertiary border-t border-af-surface-border/50 pt-1.5">
+                    All-time total: <span className="font-mono tabular-nums text-af-text-secondary">{formatCost(stats.totalCostAllTime)}</span>
+                  </p>
+                )}
+              </div>
+            }
           />
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { cn } from '../../lib/utils'
 import { useStats } from '../../hooks/use-stats'
 import { formatCost } from '../../lib/format'
+import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip'
 import { Zap } from 'lucide-react'
 
 interface BottomBarProps {
@@ -27,9 +28,19 @@ export function BottomBar({ className }: BottomBarProps) {
           <span className="text-af-text-secondary tabular-nums">{data?.availableCapacity ?? 0}</span> capacity
         </span>
         {data?.totalCostToday != null && (
-          <span>
-            <span className="text-af-accent font-mono tabular-nums">{formatCost(data.totalCostToday)}</span> today
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default">
+                <span className="text-af-accent font-mono tabular-nums">{formatCost(data.totalCostToday)}</span> today
+                {data.totalCostAllTime != null && data.totalCostAllTime !== data.totalCostToday && (
+                  <span className="text-af-text-tertiary"> · <span className="font-mono tabular-nums">{formatCost(data.totalCostAllTime)}</span> total</span>
+                )}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Cost from {data.sessionCountToday ?? 0} session{(data.sessionCountToday ?? 0) !== 1 ? 's' : ''} updated today (UTC)
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 

@@ -5,6 +5,8 @@ export interface PublicStatsResponse {
   completedToday: number
   availableCapacity: number
   totalCostToday?: number
+  totalCostAllTime?: number
+  sessionCountToday?: number
   timestamp: string
 }
 

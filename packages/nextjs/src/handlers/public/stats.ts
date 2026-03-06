@@ -16,6 +16,8 @@ export interface PublicStatsResponse {
   completedToday: number
   availableCapacity: number
   totalCostToday: number
+  totalCostAllTime: number
+  sessionCountToday: number
 }
 
 function getTodayStart(): number {
@@ -51,8 +53,12 @@ export function createPublicStatsHandler() {
           s.updatedAt >= todayStart
       ).length
 
-      const totalCostToday = allSessions
-        .filter((s) => s.updatedAt >= todayStart)
+      const todaySessions = allSessions.filter((s) => s.updatedAt >= todayStart)
+
+      const totalCostToday = todaySessions
+        .reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
+
+      const totalCostAllTime = allSessions
         .reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
 
       const workersOnline = workers.filter((w) => w.status === 'active').length
@@ -64,6 +70,8 @@ export function createPublicStatsHandler() {
         completedToday,
         availableCapacity: capacity.availableCapacity,
         totalCostToday: Math.round(totalCostToday * 10000) / 10000,
+        totalCostAllTime: Math.round(totalCostAllTime * 10000) / 10000,
+        sessionCountToday: todaySessions.length,
       }
 
       return NextResponse.json({
@@ -81,6 +89,8 @@ export function createPublicStatsHandler() {
           completedToday: 0,
           availableCapacity: 0,
           totalCostToday: 0,
+          totalCostAllTime: 0,
+          sessionCountToday: 0,
           error: 'Failed to fetch stats',
           timestamp: new Date().toISOString(),
         },
