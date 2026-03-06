@@ -135,6 +135,10 @@ export interface TemplateContext {
   /** Shared directories that any project's agent may modify (e.g. ['packages/ui']) */
   sharedPaths?: string[]
 
+  // Tool plugin mode
+  /** When true, agents use in-process af_linear_* tools instead of CLI */
+  useToolPlugins?: boolean
+
   // Non-Node project support
   /** Command to invoke the Linear CLI (default: "pnpm af-linear") */
   linearCli?: string
@@ -262,6 +266,8 @@ export const TemplateContextSchema = z.object({
   // Project path scoping variables (monorepo support)
   projectPath: z.string().optional(),
   sharedPaths: z.array(z.string()).optional(),
+  // Tool plugin mode
+  useToolPlugins: z.boolean().optional(),
   // Non-Node project support
   linearCli: z.string().optional(),
   packageManager: z.string().optional(),

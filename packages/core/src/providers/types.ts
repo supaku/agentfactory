@@ -60,6 +60,11 @@ export interface AgentSpawnConfig {
    * Providers call this once the underlying process is created.
    */
   onProcessSpawned?: (pid: number | undefined) => void
+  /**
+   * In-process MCP servers providing typed tools to the agent.
+   * Created by ToolRegistry.createServers() from registered plugins.
+   */
+  mcpServers?: Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
 }
 
 /**

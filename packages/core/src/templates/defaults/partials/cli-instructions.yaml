@@ -5,7 +5,25 @@ metadata:
   description: Linear CLI usage instructions and human blocker pattern
 content: |
 
+  {{#if useToolPlugins}}
+  LINEAR TOOLS (CRITICAL):
+  Use the af_linear_* tools for ALL Linear operations. Do NOT use mcp__claude_ai_Linear__* tools — they are blocked.
+  Available tools: af_linear_get_issue, af_linear_create_issue, af_linear_update_issue,
+  af_linear_list_comments, af_linear_create_comment, af_linear_add_relation, af_linear_list_relations,
+  af_linear_remove_relation, af_linear_list_sub_issues, af_linear_list_sub_issue_statuses,
+  af_linear_update_sub_issue, af_linear_check_blocked, af_linear_list_backlog_issues,
+  af_linear_list_unblocked_backlog, af_linear_check_deployment, af_linear_create_blocker.
+  Each tool has typed parameters — use them directly (no CLI arg formatting needed).
 
+  HUMAN-NEEDED BLOCKERS:
+  If you encounter work that requires human action and cannot be resolved autonomously
+  (e.g., missing API keys/credentials, infrastructure not provisioned, third-party onboarding,
+  manual setup steps, policy decisions, access permissions), use af_linear_create_blocker with
+  the source_issue_id and a title describing what the human needs to do.
+  This creates a tracked issue in Icebox with 'Needs Human' label, linked as blocking the source issue.
+  Do NOT silently skip human-needed work or bury it in comments.
+  Only create blockers for things that genuinely require a human — not for things you can retry or work around.
+  {{else}}
   LINEAR CLI (CRITICAL):
   Use the Linear CLI (`{{linearCli}}`) for ALL Linear operations. Do NOT use Linear MCP tools.
   Do NOT use ToolSearch to find or load any mcp__claude_ai_Linear__ tools — they are blocked.
@@ -22,3 +40,4 @@ content: |
   This creates a tracked issue in Icebox with 'Needs Human' label, linked as blocking the source issue.
   Do NOT silently skip human-needed work or bury it in comments.
   Only create blockers for things that genuinely require a human — not for things you can retry or work around.
+  {{/if}}

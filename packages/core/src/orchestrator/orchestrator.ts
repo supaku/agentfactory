@@ -54,6 +54,7 @@ import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activit
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
 import { loadRepositoryConfig } from '../config/index.js'
+import { ToolRegistry, linearPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
   OrchestratorConfig,
@@ -811,6 +812,8 @@ export class AgentOrchestrator {
   private buildCommand?: string
   private testCommand?: string
   private validateCommand?: string
+  // Tool plugin registry for in-process agent tools
+  private readonly toolRegistry: ToolRegistry
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -915,6 +918,10 @@ export class AgentOrchestrator {
     } catch (err) {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
     }
+
+    // Initialize tool plugin registry with Linear plugin
+    this.toolRegistry = new ToolRegistry()
+    this.toolRegistry.register(linearPlugin)
   }
 
   /**
@@ -1814,6 +1821,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         repository: this.config.repository,
         projectPath: this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
+        useToolPlugins: this.provider.name === 'claude',
         linearCli: this.linearCli ?? 'pnpm af-linear',
         packageManager: this.packageManager ?? 'pnpm',
         buildCommand: this.buildCommand,
@@ -2024,6 +2032,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     log.info('Starting agent via provider', { provider: this.provider.name, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
+    // Create in-process tool servers from registered plugins
+    const mcpServers = this.provider.name === 'claude'
+      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      : undefined
+
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -2032,6 +2045,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
+      mcpServers,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -3547,6 +3561,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       workType: workType ?? 'development',
     })
 
+    // Create in-process tool servers from registered plugins
+    const mcpServers = this.provider.name === 'claude'
+      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      : undefined
+
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -3555,6 +3574,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
+      mcpServers,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
