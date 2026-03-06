@@ -73,7 +73,7 @@ ${context.failureSummary ?? 'No details recorded.'}
 - Each sub-issue must have clear, unambiguous acceptance criteria
 - Each sub-issue must be testable in isolation
 - Address one specific concern that previous attempts failed on
-- After creating sub-issues, move the PARENT issue to Backlog status`
+- After creating sub-issues, keep the PARENT issue in Icebox for human review`
       }
 
       return `\n\n## Previous Failure Context
@@ -137,11 +137,11 @@ export function defaultGeneratePrompt(
     case 'backlog-creation':
       basePrompt = `Create backlog issues from the researched story ${identifier}.
 Read the issue description, identify distinct work items, classify each as bug/feature/chore,
-and create appropriately scoped issues in Backlog status.
+and create appropriately scoped issues in Icebox status (so a human can review before moving to Backlog).
 Choose the correct issue structure based on the work:
 - Sub-issues (--parentId): When work is a single concern with sequential/parallel phases sharing context and dependencies.
 - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context.
-- Single issue rewrite: When scope is atomic (single concern, few files, no phases). Rewrite source in-place and move to Backlog.
+- Single issue rewrite: When scope is atomic (single concern, few files, no phases). Rewrite source in-place, keep in Icebox.
 When creating multiple issues, always add "related" links between them AND blocking relations where one step depends on another.
 Do NOT wait for user approval - create issues automatically.`
       break

@@ -511,11 +511,11 @@ Do NOT implement code. Focus on story refinement only.${LINEAR_CLI_INSTRUCTION}`
     case 'backlog-creation':
       basePrompt = `Create backlog issues from the researched story ${identifier}.
 Read the issue description, identify distinct work items, classify each as bug/feature/chore,
-and create appropriately scoped Linear issues in Backlog status.
+and create appropriately scoped Linear issues in Icebox status (so a human can review before moving to Backlog).
 Choose the correct issue structure based on the work:
-- Sub-issues (--parentId): When work is a single concern with sequential/parallel phases sharing context and dependencies. Move source to Backlog as parent. Add blocking relations (--type blocks) between sub-issues to define execution order for the coordinator.
+- Sub-issues (--parentId): When work is a single concern with sequential/parallel phases sharing context and dependencies. Keep source in Icebox as parent. Add blocking relations (--type blocks) between sub-issues to define execution order for the coordinator.
 - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context. Source stays in Icebox.
-- Single issue rewrite: When scope is atomic (single concern, \u22643 files, no phases). Rewrite source in-place and move to Backlog.
+- Single issue rewrite: When scope is atomic (single concern, \u22643 files, no phases). Rewrite source in-place, keep in Icebox.
 IMPORTANT: When creating multiple issues (sub-issues or independent), always add "related" links between them AND blocking relations where one step depends on another. This informs sub-agents and the coordinator of execution order.
 Do NOT wait for user approval - create issues automatically.${LINEAR_CLI_INSTRUCTION}`
       break
