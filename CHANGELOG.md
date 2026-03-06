@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.43
+
+### Features
+
+- **Register CLI commands as in-process agent tools** — New `ToolPlugin` system exposes Linear CLI commands as typed, Zod-validated tools for Claude agents. Instead of shelling out to `pnpm af-linear`, agents call `af_linear_get_issue`, `af_linear_create_comment`, etc. directly — no subprocess overhead, no arg string construction, no stdout parsing. Uses the Claude Agent SDK's `createSdkMcpServer()` for in-process MCP tool registration (the only extension mechanism for adding custom tools to Claude Code). Non-Claude providers continue using the Bash-based CLI unchanged.
+- **Tool plugin architecture for future integrations** — `ToolPlugin` interface and `ToolRegistry` enable adding new tool sets (Asana, deployment, framework-specific) with minimal boilerplate. Each plugin provides a name and a `createTools()` function returning SDK tool definitions.
+
+### Chores
+
+- **Move `runLinear()` from CLI to core** — The canonical Linear runner now lives in `packages/core/src/tools/linear-runner.ts`. The CLI re-exports from core, ensuring both CLI and tool plugin use the same code path.
+- **Document tool plugin system** — Updated `docs/providers.md`, `docs/architecture.md`, `CONTRIBUTING.md`, and `CLAUDE.md` with MCP integration rationale, plugin authoring guide, and architecture diagrams.
+
 ## v0.7.42
 
 ### Fixes
