@@ -216,7 +216,7 @@ export class ClaudeProvider implements AgentProvider {
               'mcp__claude_ai_Linear__extract_images',
             ]
           : [],
-        settingSources: ['project'],
+        settingSources: config.autonomous ? [] : ['project'],
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         resume: resumeSessionId,
         sandbox: config.sandboxEnabled
