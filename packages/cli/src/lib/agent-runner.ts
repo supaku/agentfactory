@@ -21,15 +21,17 @@ import { createLinearAgentClient } from '@supaku/agentfactory-linear'
 // Public types
 // ---------------------------------------------------------------------------
 
-export type AgentCommand = 'stop' | 'chat' | 'status' | 'reconnect'
+export type AgentCommand = 'stop' | 'chat' | 'status' | 'reconnect' | 'list'
 
 export interface AgentRunnerConfig {
   /** Command to execute */
   command: AgentCommand
-  /** Issue identifier (e.g., SUP-674) or partial session ID */
-  issueId: string
+  /** Issue identifier (e.g., SUP-674) or partial session ID — not required for 'list' */
+  issueId?: string
   /** Message text for 'chat' command */
   message?: string
+  /** Show all sessions including completed/failed (for 'list' command) */
+  all?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -281,25 +283,67 @@ async function reconnectSession(issueId: string): Promise<void> {
   await disconnectRedis()
 }
 
+async function listSessions(showAll: boolean): Promise<void> {
+  ensureRedis()
+
+  const sessions = await getAllSessions()
+  const activeStatuses = new Set(['running', 'claimed', 'pending', 'finalizing'])
+
+  const filtered = showAll
+    ? sessions
+    : sessions.filter((s) => activeStatuses.has(s.status))
+
+  const label = showAll ? 'All Sessions' : 'Active Sessions'
+  console.log(`\n${C.cyan}${label}${C.reset} (${filtered.length}${showAll ? '' : ` of ${sessions.length}`})`)
+  console.log('='.repeat(60))
+
+  if (filtered.length === 0) {
+    console.log(showAll ? '(none)' : '(no active sessions)')
+    await disconnectRedis()
+    return
+  }
+
+  for (const session of filtered) {
+    const elapsed = Math.round(Date.now() / 1000 - session.createdAt)
+    const mins = Math.floor(elapsed / 60)
+    const duration = mins < 60
+      ? `${mins}m`
+      : `${Math.floor(mins / 60)}h${mins % 60}m`
+
+    const cost = session.totalCostUsd !== undefined
+      ? ` $${session.totalCostUsd.toFixed(2)}`
+      : ''
+
+    console.log(`  ${formatSession(session)} ${C.gray}${duration}${cost}${C.reset}`)
+  }
+
+  await disconnectRedis()
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
 export async function runAgent(config: AgentRunnerConfig): Promise<void> {
   switch (config.command) {
+    case 'list':
+      await listSessions(config.all ?? false)
+      break
     case 'stop':
+      if (!config.issueId) throw new Error('stop command requires an issue ID')
       await stopWork(config.issueId)
       break
     case 'chat':
-      if (!config.message) {
-        throw new Error('chat command requires a message')
-      }
+      if (!config.issueId) throw new Error('chat command requires an issue ID')
+      if (!config.message) throw new Error('chat command requires a message')
       await chatWithAgent(config.issueId, config.message)
       break
     case 'status':
+      if (!config.issueId) throw new Error('status command requires an issue ID')
       await showStatus(config.issueId)
       break
     case 'reconnect':
+      if (!config.issueId) throw new Error('reconnect command requires an issue ID')
       await reconnectSession(config.issueId)
       break
   }

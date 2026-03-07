@@ -2,10 +2,11 @@
 /**
  * AgentFactory Agent CLI
  *
- * Manage running agent sessions: stop work, send messages, check status,
+ * Manage running agent sessions: list, stop, send messages, check status,
  * or reconnect a disconnected Linear session.
  *
  * Usage:
+ *   af-agent list [--all]                     List active sessions
  *   af-agent stop <issue-id>                  Stop a running agent
  *   af-agent chat <issue-id> <message>        Send a message to a running agent
  *   af-agent status <issue-id>                Show session details
@@ -33,9 +34,11 @@ function printUsage(): void {
 ${C.cyan}AgentFactory Agent${C.reset} - Manage running agent sessions
 
 ${C.yellow}Usage:${C.reset}
-  af-agent <command> <issue-id> [args]
+  af-agent <command> [issue-id] [args]
 
 ${C.yellow}Commands:${C.reset}
+  list [--all]                     List active sessions (--all includes completed/failed)
+  ls [--all]                       Alias for list
   stop <issue-id>                  Stop a running agent (worker aborts within ~5s)
   chat <issue-id> <message>        Send a message to a running agent session
   status <issue-id>                Show detailed session information
@@ -45,6 +48,8 @@ ${C.yellow}Arguments:${C.reset}
   <issue-id>    Issue identifier (e.g., SUP-674) or partial session ID
 
 ${C.yellow}Examples:${C.reset}
+  af-agent ls
+  af-agent list --all
   af-agent stop SUP-674
   af-agent chat SUP-674 "use the existing test fixtures instead"
   af-agent status SUP-674
@@ -60,20 +65,23 @@ ${C.yellow}Environment:${C.reset}
 // Valid commands
 // ---------------------------------------------------------------------------
 
-const VALID_COMMANDS = new Set<AgentCommand>(['stop', 'chat', 'status', 'reconnect'])
+const VALID_COMMANDS = new Set<AgentCommand>(['stop', 'chat', 'status', 'reconnect', 'list'])
+const COMMAND_ALIASES: Record<string, AgentCommand> = { ls: 'list' }
 
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const command = process.argv[2] as string | undefined
-  const issueId = process.argv[3]
+  let command = process.argv[2] as string | undefined
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     printUsage()
     return
   }
+
+  // Resolve aliases
+  command = COMMAND_ALIASES[command] ?? command
 
   if (!VALID_COMMANDS.has(command as AgentCommand)) {
     console.error(`Unknown command: ${command}`)
@@ -81,6 +89,14 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  // list/ls doesn't require an issue ID
+  if (command === 'list') {
+    const showAll = process.argv.includes('--all') || process.argv.includes('-a')
+    await runAgent({ command: 'list', all: showAll })
+    return
+  }
+
+  const issueId = process.argv[3]
   if (!issueId) {
     console.error(`Usage: af-agent ${command} <issue-id>`)
     process.exit(1)
