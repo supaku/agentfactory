@@ -25,6 +25,11 @@
         "import": "./dist/src/index.js",
         "default": "./dist/src/index.js"
       },
+      "./agent": {
+        "types": "./dist/src/lib/agent-runner.d.ts",
+        "import": "./dist/src/lib/agent-runner.js",
+        "default": "./dist/src/lib/agent-runner.js"
+      },
       "./orchestrator": {
         "types": "./dist/src/lib/orchestrator-runner.d.ts",
         "import": "./dist/src/lib/orchestrator-runner.js",
@@ -77,6 +82,7 @@
   ],
   "bin": {
     "agentfactory": "./dist/src/index.js",
+    "af-agent": "./dist/src/agent.js",
     "af-orchestrator": "./dist/src/orchestrator.js",
     "af-worker": "./dist/src/worker.js",
     "af-worker-fleet": "./dist/src/worker-fleet.js",
@@ -95,6 +101,11 @@
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
+    },
+    "./agent": {
+      "types": "./dist/src/lib/agent-runner.d.ts",
+      "import": "./dist/src/lib/agent-runner.js",
+      "default": "./dist/src/lib/agent-runner.js"
     },
     "./orchestrator": {
       "types": "./dist/src/lib/orchestrator-runner.d.ts",

@@ -20,6 +20,7 @@ Commands:
   governor        Automated workflow scan loop with configurable triggers
   worker          Start a remote worker that polls for queued work
   worker-fleet    Spawn and manage multiple worker processes
+  agent           Manage running agent sessions (stop, chat, status, reconnect)
   cleanup         Clean up orphaned git worktrees
   queue-admin     Manage Redis work queue and sessions
   analyze-logs    Analyze agent session logs for errors
@@ -45,6 +46,9 @@ switch (command) {
     break
   case 'worker-fleet':
     import('./worker-fleet')
+    break
+  case 'agent':
+    import('./agent')
     break
   case 'cleanup':
     import('./cleanup')

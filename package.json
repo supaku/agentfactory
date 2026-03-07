@@ -30,6 +30,7 @@
     "queue-admin": "node --import tsx packages/cli/src/queue-admin.ts",
     "analyze-logs": "node --import tsx packages/cli/src/analyze-logs.ts",
     "af-linear": "node --import tsx packages/cli/src/linear.ts",
+    "af-agent": "node --import tsx packages/cli/src/agent.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
