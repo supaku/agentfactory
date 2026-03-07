@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.45
+
+### Features
+
+- **`af-agent` CLI for managing running agent sessions** — New command with five subcommands: `stop` (sets session to stopped in Redis, worker aborts within ~5s), `chat` (queues a pending prompt injected into the running Claude session), `status` (shows session details), `reconnect` (creates a fresh Linear agent session and re-associates Redis state), and `list`/`ls` (shows active sessions with duration and cost, `--all` for completed/failed).
+
+### Fixes
+
+- **Backlog-writer creates issues in Icebox instead of Backlog** — Built-in prompts in three locations (defaults/prompts.ts, orchestrator.ts, backlog-creation.yaml) told the backlog-writer agent to create issues in Backlog status, causing the governor to immediately dispatch dev agents before human review. All prompt sources now consistently use Icebox. The agent definition in downstream repos already specified Icebox, but the agentfactory built-in prompts overrode it.
+
 ## v0.7.44
 
 ### Fixes
