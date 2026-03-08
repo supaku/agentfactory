@@ -357,6 +357,7 @@ export class EventDrivenGovernor {
       workflowStrategy,
       researchCompleted,
       backlogCreationCompleted,
+      completedSessionCount,
     ] = await Promise.all([
       this.deps.hasActiveSession(issue.id),
       this.deps.isWithinCooldown(issue.id),
@@ -365,6 +366,7 @@ export class EventDrivenGovernor {
       this.deps.getWorkflowStrategy(issue.id),
       this.deps.isResearchCompleted(issue.id),
       this.deps.isBacklogCreationCompleted(issue.id),
+      this.deps.getCompletedSessionCount(issue.id),
     ])
 
     const ctx: DecisionContext = {
@@ -377,6 +379,7 @@ export class EventDrivenGovernor {
       workflowStrategy,
       researchCompleted,
       backlogCreationCompleted,
+      completedSessionCount,
     }
 
     const decision = decideAction(ctx)

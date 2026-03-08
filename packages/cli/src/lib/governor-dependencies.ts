@@ -20,6 +20,7 @@ import {
   getSessionStateByIssue,
   didJustFailQA,
   getWorkflowState,
+  getTotalSessionCount,
   RedisProcessingStateStorage,
   storeSessionState,
   dispatchWork as issueLockDispatchWork,
@@ -265,7 +266,22 @@ export function createRealDependencies(
     },
 
     // -----------------------------------------------------------------------
-    // 10. dispatchWork -- create Linear session and queue work
+    // 10. getCompletedSessionCount -- count completed sessions for circuit breaker
+    // -----------------------------------------------------------------------
+    getCompletedSessionCount: async (issueId: string): Promise<number> => {
+      try {
+        return await getTotalSessionCount(issueId)
+      } catch (err) {
+        log.error('getCompletedSessionCount failed', {
+          issueId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+        return 0
+      }
+    },
+
+    // -----------------------------------------------------------------------
+    // 11. dispatchWork -- create Linear session and queue work
     //     Accepts GovernorIssue directly (already resolved in the scan),
     //     eliminating 2 redundant API calls per dispatch.
     // -----------------------------------------------------------------------

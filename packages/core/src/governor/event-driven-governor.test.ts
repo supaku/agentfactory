@@ -46,6 +46,7 @@ function makeMockDeps(overrides: Partial<GovernorDependencies> = {}): GovernorDe
     getWorkflowStrategy: vi.fn().mockResolvedValue(undefined),
     isResearchCompleted: vi.fn().mockResolvedValue(false),
     isBacklogCreationCompleted: vi.fn().mockResolvedValue(false),
+    getCompletedSessionCount: vi.fn().mockResolvedValue(0),
     dispatchWork: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }

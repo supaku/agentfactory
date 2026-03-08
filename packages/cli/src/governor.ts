@@ -86,6 +86,7 @@ function createStubDependencies(): GovernorDependencies {
     getWorkflowStrategy: async (_issueId: string): Promise<string | undefined> => undefined,
     isResearchCompleted: async (_issueId: string): Promise<boolean> => false,
     isBacklogCreationCompleted: async (_issueId: string): Promise<boolean> => false,
+    getCompletedSessionCount: async (_issueId: string): Promise<number> => 0,
     dispatchWork: async (_issue: GovernorIssue, _action: GovernorAction): Promise<void> => {
       log.warn('dispatchWork stub called', { issueId: _issue.id, action: _action })
     },

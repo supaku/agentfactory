@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.46
+
+### Fixes
+
+- **Fix coordination agent circular re-triggering on parent issues** — Three compounding bugs caused parent issues with sub-issues to cycle through 8+ agent sessions without progressing. (1) Coordination work type was not result-sensitive — the orchestrator auto-promoted to Finished on session completion regardless of whether sub-issues were actually done. Coordination now requires a `<!-- WORK_RESULT:passed -->` marker like QA/acceptance. (2) WORK_RESULT markers embedded in tool call inputs (e.g., `create-comment --body`) were invisible to the orchestrator's parser, causing "unknown result → no transition → re-trigger" loops. The stream loop now captures markers from tool inputs. (3) Added `{{> partials/work-result-marker}}` to the coordination template so agents are instructed to emit the marker.
+- **Add circuit breaker for runaway agent sessions** — New `MAX_SESSION_ATTEMPTS` guard (default: 3) in the governor decision engine prevents issues from cycling through agents indefinitely. If an issue has had 3+ completed sessions without reaching a terminal status, the governor stops dispatching and the issue requires manual intervention.
+
 ## v0.7.45
 
 ### Features

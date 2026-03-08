@@ -52,6 +52,7 @@ function makeContext(overrides: Partial<DecisionContext> = {}): DecisionContext 
     workflowStrategy: undefined,
     researchCompleted: false,
     backlogCreationCompleted: false,
+    completedSessionCount: 0,
     ...overrides,
   }
 }
@@ -92,6 +93,18 @@ describe('decideAction — universal skip conditions', () => {
     const ctx = makeContext({ isWithinCooldown: true, isHeld: true })
     const result = decideAction(ctx)
     expect(result.reason).toContain('cooldown')
+  })
+  it('trips circuit breaker when session count exceeds max', () => {
+    const ctx = makeContext({ completedSessionCount: 3 })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('circuit breaker')
+  })
+
+  it('allows dispatch when session count is below max', () => {
+    const ctx = makeContext({ completedSessionCount: 2 })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('trigger-development')
   })
 })
 

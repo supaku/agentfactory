@@ -34,7 +34,12 @@ export interface DecisionContext {
   workflowStrategy?: string
   researchCompleted: boolean
   backlogCreationCompleted: boolean
+  /** Number of completed agent sessions for this issue (for circuit breaker) */
+  completedSessionCount: number
 }
+
+/** Max agent sessions before the circuit breaker trips and the issue is held */
+export const MAX_SESSION_ATTEMPTS = 3
 
 // ---------------------------------------------------------------------------
 // Decision Result
@@ -87,6 +92,17 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
 
   if (ctx.isHeld) {
     return { action: 'none', reason: `Issue ${issue.identifier} is held (HOLD override active)` }
+  }
+
+  // --- Circuit breaker ---
+  // Prevent issues from cycling through agents indefinitely.
+  // If an issue has had too many sessions without reaching a terminal status,
+  // stop dispatching and require manual intervention.
+  if (ctx.completedSessionCount >= MAX_SESSION_ATTEMPTS) {
+    return {
+      action: 'none',
+      reason: `Issue ${issue.identifier} has had ${ctx.completedSessionCount} agent sessions without progressing — circuit breaker tripped (max ${MAX_SESSION_ATTEMPTS})`,
+    }
   }
 
   // --- Terminal statuses ---

@@ -249,7 +249,7 @@ export class AgentSession {
         }
 
         if (!isTerminal) {
-          const isResultSensitive = this.workType === 'qa' || this.workType === 'acceptance'
+          const isResultSensitive = this.workType === 'qa' || this.workType === 'acceptance' || this.workType === 'coordination' || this.workType === 'qa-coordination' || this.workType === 'acceptance-coordination'
 
           if (isResultSensitive) {
             // For QA/acceptance: only transition if workResult is explicitly set

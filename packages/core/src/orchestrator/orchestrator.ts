@@ -2086,6 +2086,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         if (event.type === 'assistant_text') {
           assistantTextChunks.push(event.text)
         }
+        // Also capture tool call inputs that may contain WORK_RESULT markers.
+        // Agents sometimes embed the marker inside a create-comment body rather
+        // than in their direct text output.
+        if (event.type === 'tool_use' && event.input) {
+          const inputStr = typeof event.input === 'string' ? event.input : JSON.stringify(event.input)
+          if (inputStr.includes('WORK_RESULT')) {
+            assistantTextChunks.push(inputStr)
+          }
+        }
         await this.handleAgentEvent(issueId, sessionId, event, emitter, agent, handle)
       }
 
@@ -2117,7 +2126,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Update Linear status based on work type if auto-transition is enabled
       if (agent.status === 'completed' && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
-        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
+        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
 
         let targetStatus: LinearWorkflowStatus | null = null
 

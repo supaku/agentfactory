@@ -31,6 +31,9 @@ prompt: |
   Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
     {{linearCli}} list-sub-issue-statuses {{identifier}}
   If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
+  Sub-issues intentionally in Icebox (e.g., post-GA / future roadmap items) should be detached
+  from the parent before marking coordination as complete, or coordination should fail.
+  {{> partials/work-result-marker}}
   {{> partials/repo-validation}}
   {{> partials/path-scoping}}
   {{> partials/shared-worktree-safety}}

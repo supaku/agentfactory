@@ -81,6 +81,8 @@ export interface GovernorDependencies {
   isResearchCompleted: (issueId: string) => Promise<boolean>
   /** Check if the backlog-creation phase has been completed for an issue */
   isBacklogCreationCompleted: (issueId: string) => Promise<boolean>
+  /** Count completed agent sessions for an issue (for circuit breaker) */
+  getCompletedSessionCount: (issueId: string) => Promise<number>
   /** Dispatch work for an issue with a specific action */
   dispatchWork: (issue: GovernorIssue, action: GovernorAction) => Promise<void>
 }
@@ -341,6 +343,7 @@ export class WorkflowGovernor {
       workflowStrategy,
       researchCompleted,
       backlogCreationCompleted,
+      completedSessionCount,
     ] = await Promise.all([
       this.deps.hasActiveSession(issue.id),
       this.deps.isWithinCooldown(issue.id),
@@ -349,6 +352,7 @@ export class WorkflowGovernor {
       this.deps.getWorkflowStrategy(issue.id),
       this.deps.isResearchCompleted(issue.id),
       this.deps.isBacklogCreationCompleted(issue.id),
+      this.deps.getCompletedSessionCount(issue.id),
     ])
 
     const ctx: DecisionContext = {
@@ -361,6 +365,7 @@ export class WorkflowGovernor {
       workflowStrategy,
       researchCompleted,
       backlogCreationCompleted,
+      completedSessionCount,
     }
 
     return decideAction(ctx)
