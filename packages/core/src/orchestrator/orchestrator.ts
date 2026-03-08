@@ -2118,6 +2118,27 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         }
       }
 
+      // Emit a final response activity to close the Linear agent session.
+      // Linear auto-transitions sessions to "complete" when a response activity is emitted.
+      if (emitter && (agent.status === 'completed' || agent.status === 'failed')) {
+        try {
+          if (agent.status === 'completed') {
+            const summary = agent.resultMessage
+              ? agent.resultMessage.substring(0, 500)
+              : 'Work completed successfully.'
+            await emitter.emitResponse(summary)
+          } else {
+            await emitter.emitResponse(
+              agent.resultMessage || 'Agent encountered an error during execution.'
+            )
+          }
+        } catch (emitError) {
+          log?.warn('Failed to emit completion response activity', {
+            error: emitError instanceof Error ? emitError.message : String(emitError),
+          })
+        }
+      }
+
       // Flush remaining activities
       if (emitter) {
         await emitter.flush()

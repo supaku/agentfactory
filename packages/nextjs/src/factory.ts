@@ -167,7 +167,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       list: { GET: createSessionListHandler() },
       detail: { GET: createSessionGetHandler() },
       claim: { POST: createSessionClaimHandler() },
-      status: { GET: createSessionStatusGetHandler(), POST: createSessionStatusPostHandler() },
+      status: { GET: createSessionStatusGetHandler(), POST: createSessionStatusPostHandler(routeConfig) },
       lockRefresh: { POST: createSessionLockRefreshHandler() },
       prompts: { GET: createSessionPromptsGetHandler(), POST: createSessionPromptsPostHandler() },
       transferOwnership: { POST: createSessionTransferOwnershipHandler() },

@@ -21,6 +21,7 @@ import {
   RedisProcessingStateStorage,
   createLogger,
 } from '@supaku/agentfactory-server'
+import type { RouteConfig } from '../../types.js'
 
 const log = createLogger('api:sessions:status')
 
@@ -38,7 +39,7 @@ const VALID_STATUSES: AgentSessionStatus[] = [
 
 const TERMINAL_STATUSES: AgentSessionStatus[] = ['completed', 'failed', 'stopped']
 
-export function createSessionStatusPostHandler() {
+export function createSessionStatusPostHandler(config?: RouteConfig) {
   return async function POST(request: NextRequest, { params }: RouteParams) {
     const authError = requireWorkerAuth(request)
     if (authError) return authError
@@ -147,6 +148,35 @@ export function createSessionStatusPostHandler() {
                 error: err,
               })
             }
+          }
+        }
+
+        // Emit a response activity to close the Linear agent session.
+        // Linear auto-transitions sessions to "complete" based on response activities.
+        if (config && session.linearSessionId && session.organizationId) {
+          try {
+            const linearClient = await config.linearClient.getClient(session.organizationId)
+            const message = status === 'completed'
+              ? 'Work completed successfully.'
+              : status === 'failed'
+                ? 'Agent encountered an error during execution.'
+                : 'Agent was stopped.'
+            await linearClient.createAgentActivity({
+              agentSessionId: session.linearSessionId,
+              content: { type: 'response', body: message },
+              ephemeral: false,
+            })
+            log.info('Emitted completion response activity to close Linear session', {
+              sessionId,
+              linearSessionId: session.linearSessionId,
+              status,
+            })
+          } catch (err) {
+            log.warn('Failed to emit completion response activity', {
+              sessionId,
+              linearSessionId: session.linearSessionId,
+              error: err,
+            })
           }
         }
 
