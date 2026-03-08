@@ -61,6 +61,18 @@ describe('buildFailureContextBlock', () => {
     })
   })
 
+  describe('qa-coordination work type', () => {
+    it('returns empty string when no failure summary', () => {
+      expect(buildFailureContextBlock('qa-coordination', { ...baseContext, failureSummary: null })).toBe('')
+    })
+
+    it('includes previous QA results when failure summary exists', () => {
+      const result = buildFailureContextBlock('qa-coordination', baseContext)
+      expect(result).toContain('Previous QA Results')
+      expect(result).toContain('TypeError in UserService')
+    })
+  })
+
   describe('qa work type', () => {
     it('returns empty string when no failure summary', () => {
       expect(buildFailureContextBlock('qa', { ...baseContext, failureSummary: null })).toBe('')
@@ -145,5 +157,97 @@ describe('defaultGeneratePrompt with workflowContext', () => {
     })
     expect(result).toContain('Retry Context')
     expect(result).toContain('Please focus on the API layer')
+  })
+})
+
+describe('defaultGeneratePrompt coordination retry', () => {
+  it('uses fresh coordination prompt when no workflowContext', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination')
+    expect(result).toContain('Coordinate sub-issue execution for parent issue PROJ-100')
+    expect(result).toContain('Fetch sub-issues with dependency graph')
+    expect(result).not.toContain('REWORK MODE')
+  })
+
+  it('uses fresh coordination prompt when cycleCount is 0', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 0,
+      strategy: 'normal',
+      failureSummary: null,
+    })
+    expect(result).toContain('Coordinate sub-issue execution for parent issue PROJ-100')
+    expect(result).not.toContain('REWORK MODE')
+  })
+
+  it('switches to rework mode when cycleCount > 0', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 1,
+      strategy: 'context-enriched',
+      failureSummary: '2 migrations missing .json snapshots',
+    })
+    expect(result).toContain('REWORK MODE')
+    expect(result).toContain('Fix issues found during QA for parent issue PROJ-100')
+    expect(result).toContain('DO NOT re-coordinate sub-issues from scratch')
+    expect(result).toContain('pnpm af-linear list-comments PROJ-100')
+    expect(result).not.toContain('Fetch sub-issues with dependency graph')
+  })
+
+  it('includes common rework fixes in rework mode', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 2,
+      strategy: 'context-enriched',
+      failureSummary: 'Build failed',
+    })
+    expect(result).toContain('Missing migration .json snapshots')
+    expect(result).toContain('TypeScript errors')
+    expect(result).toContain('Missing API fields')
+    expect(result).toContain('Build failures')
+  })
+
+  it('appends failure context block in rework mode', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 2,
+      strategy: 'context-enriched',
+      failureSummary: 'Tests failed: missing snapshot for 20260308_migration.ts',
+    })
+    expect(result).toContain('REWORK MODE')
+    expect(result).toContain('Retry Context')
+    expect(result).toContain('retry #2')
+    expect(result).toContain('missing snapshot for 20260308_migration.ts')
+  })
+
+  it('includes mention context alongside rework mode', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', 'Focus on the migration snapshots', {
+      cycleCount: 1,
+      strategy: 'normal',
+      failureSummary: 'Missing .json snapshots',
+    })
+    expect(result).toContain('REWORK MODE')
+    expect(result).toContain('Focus on the migration snapshots')
+  })
+
+  it('instructs agent to use existing PR branch', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 1,
+      strategy: 'normal',
+      failureSummary: null,
+    })
+    expect(result).toContain('Do not create a new branch or PR')
+    expect(result).toContain('push to the existing PR branch')
+  })
+
+  it('includes sub-issue status management in fresh coordination', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination')
+    expect(result).toContain('SUB-ISSUE STATUS MANAGEMENT')
+    expect(result).toContain('COMPLETION VERIFICATION')
+  })
+
+  it('does not include sub-issue status management in rework mode', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 1,
+      strategy: 'normal',
+      failureSummary: 'QA failed',
+    })
+    expect(result).not.toContain('SUB-ISSUE STATUS MANAGEMENT')
+    expect(result).not.toContain('COMPLETION VERIFICATION')
   })
 })

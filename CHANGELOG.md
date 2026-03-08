@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.48
+
+### Fixes
+
+- **Coordination rework mode for QA retries** — When a coordinated parent issue fails QA and is retried, the coordinator now receives a specialized "REWORK MODE" prompt instead of the fresh coordination prompt. This prevents re-spawning sub-agents for already-complete work. The rework prompt instructs the agent to read QA failure comments, apply targeted fixes directly, push to the existing PR branch, and run full validation — addressing the SUP-994 scenario where coordinators saw all sub-issues as Finished and concluded "nothing to do."
+
 ## v0.7.47
 
 ### Fixes

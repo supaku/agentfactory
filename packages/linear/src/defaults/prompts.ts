@@ -180,8 +180,31 @@ Acceptance Steps:
     case 'refinement':
       basePrompt = `Refine ${identifier} based on rejection feedback. Read comments, update requirements, then return to Backlog.`
       break
-    case 'coordination':
-      basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.
+    case 'coordination': {
+      const isRetry = workflowContext && workflowContext.cycleCount > 0
+      if (isRetry) {
+        basePrompt = `Fix issues found during QA for parent issue ${identifier}.
+
+REWORK MODE — DO NOT re-coordinate sub-issues from scratch.
+All sub-issues are already Finished and a PR already exists. QA failed and specific fixes are needed.
+
+MANDATORY FIRST STEPS:
+1. Read the most recent QA failure comments: pnpm af-linear list-comments ${identifier}
+2. Identify the SPECIFIC fixes needed from the QA failure details below
+3. Apply fixes directly — do NOT re-spawn sub-agents for already-complete work
+4. Commit fixes, push to the existing PR branch
+5. Run full validation: pnpm typecheck && pnpm build && pnpm test
+6. Update parent issue status to Finished
+
+COMMON REWORK FIXES:
+- Missing migration .json snapshots: Find .ts migrations without .json, patch the latest snapshot
+- TypeScript errors: Read the error details, fix the type issues
+- Missing API fields: Update route handlers to include missing fields
+- Build failures: Run pnpm build, diagnose, fix
+
+If the existing PR branch is checked out, work directly on it. Do not create a new branch or PR.`
+      } else {
+        basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.
 
 SUB-ISSUE STATUS MANAGEMENT:
 Update sub-issue statuses in Linear as work progresses:
@@ -192,7 +215,9 @@ Update sub-issue statuses in Linear as work progresses:
 COMPLETION VERIFICATION:
 Before marking the parent issue as complete, verify ALL sub-issues are in Finished status.
 If any sub-issue is not Finished, report the failure and do not mark the parent as complete.`
+      }
       break
+    }
     case 'qa-coordination':
       basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, spawn QA sub-agents in parallel for each sub-issue, collect pass/fail results, and roll up to parent. ALL sub-issues must pass QA for the parent to pass.
 ${WORK_RESULT_MARKER_INSTRUCTION}`
