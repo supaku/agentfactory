@@ -26,6 +26,14 @@ You MUST include exactly one of these HTML comment markers in your final output:
 - On fail: <!-- WORK_RESULT:failed -->
 Without this marker, the orchestrator CANNOT detect your result and the issue status will NOT be updated. Even if you encounter errors, always emit <!-- WORK_RESULT:failed -->.`
 
+export const READ_ONLY_CONSTRAINT = `
+
+CRITICAL CONSTRAINT — READ-ONLY ROLE:
+You are a VALIDATION agent, NOT a development agent. You MUST NOT modify any source code, configuration files, migration files, or project files. Your role is strictly to READ, VALIDATE, and REPORT.
+FORBIDDEN actions: creating files, editing files, writing code, committing changes, patching snapshots, fixing bugs, resolving errors in code.
+ALLOWED actions: reading files, running tests, running builds, checking CI status, posting comments, merging PRs (acceptance only), updating Linear status.
+If you discover issues (missing files, broken builds, failing tests), REPORT them in your result comment and emit WORK_RESULT:failed. Do NOT attempt to fix them.`
+
 export const PR_SELECTION_GUIDANCE = `
 
 PR Selection (Multi-PR Handling):
@@ -153,6 +161,7 @@ Do NOT wait for user approval - create issues automatically.`
       break
     case 'qa':
       basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.
+${READ_ONLY_CONSTRAINT}
 ${WORK_RESULT_MARKER_INSTRUCTION}
 ${PR_SELECTION_GUIDANCE}
 
@@ -166,6 +175,7 @@ Validation Steps:
       break
     case 'acceptance':
       basePrompt = `Process acceptance for ${identifier}. Validate development and QA work is complete, verify PR is ready to merge (CI passing, no conflicts), merge the PR, and clean up local resources.
+${READ_ONLY_CONSTRAINT}
 ${WORK_RESULT_MARKER_INSTRUCTION}
 ${PR_SELECTION_GUIDANCE}
 
@@ -219,12 +229,43 @@ If any sub-issue is not Finished, report the failure and do not mark the parent 
       break
     }
     case 'qa-coordination':
-      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, spawn QA sub-agents in parallel for each sub-issue, collect pass/fail results, and roll up to parent. ALL sub-issues must pass QA for the parent to pass.
-${WORK_RESULT_MARKER_INSTRUCTION}`
+      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, validate each against acceptance criteria, collect pass/fail results, and roll up to parent.
+${READ_ONLY_CONSTRAINT}
+${WORK_RESULT_MARKER_INSTRUCTION}
+${PR_SELECTION_GUIDANCE}
+
+QA Coordination Steps:
+1. Find and validate the correct PR (see PR selection above)
+2. Fetch all sub-issues and verify each is in Finished or later status
+3. Run tests scoped to the affected packages
+4. Verify the build passes (pnpm typecheck && pnpm build)
+5. Review changes against each sub-issue's acceptance criteria
+6. Verify cross-cutting concerns: shared types, API contracts, data flow between sub-issues
+7. Check deployment status (CI checks on the PR)
+
+Pass/Fail:
+- PASS (emit <!-- WORK_RESULT:passed -->): ALL tests pass, build succeeds, all sub-issues implemented, deployment healthy
+- FAIL (emit <!-- WORK_RESULT:failed -->): ANY test failure, build error, missing implementation, deployment failure
+Post a result comment listing per-sub-issue findings, then emit the marker.`
       break
     case 'acceptance-coordination':
-      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR (CI passing, no conflicts), merge the PR, and bulk-update sub-issues to Accepted.
-${WORK_RESULT_MARKER_INSTRUCTION}`
+      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR, merge it, and bulk-update sub-issues to Accepted.
+${READ_ONLY_CONSTRAINT}
+${WORK_RESULT_MARKER_INSTRUCTION}
+${PR_SELECTION_GUIDANCE}
+
+Acceptance Coordination Steps:
+1. Find and validate the correct PR (see PR selection above)
+2. Verify ALL sub-issues are in Delivered or Accepted status
+3. Verify CI is passing and there are no merge conflicts
+4. Merge the PR
+5. Delete the remote branch after successful merge
+6. Post result comment with per-sub-issue status, then emit the marker
+
+Pass/Fail:
+- PASS (emit <!-- WORK_RESULT:passed -->): All sub-issues Delivered, CI passing, PR merged successfully
+- FAIL (emit <!-- WORK_RESULT:failed -->): Incomplete sub-issues, CI failure, merge conflicts, merge failed
+If ANY issue prevents merging, do NOT attempt to fix it — emit WORK_RESULT:failed with details.`
       break
   }
 

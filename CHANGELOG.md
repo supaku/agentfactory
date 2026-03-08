@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.49
+
+### Fixes
+
+- **Add READ-ONLY constraint to QA and acceptance prompts** — QA and acceptance agents (including coordination variants) now receive a `READ-ONLY ROLE` constraint that explicitly forbids modifying source code, config, or migration files. Agents must only read, validate, and report — if issues are found, they emit `WORK_RESULT:failed` instead of attempting fixes. Prevents QA agents from silently patching code and masking real bugs.
+- **Expand qa-coordination and acceptance-coordination prompts with structured steps** — Both prompts now include numbered validation steps, PR selection guidance, and explicit pass/fail criteria with `WORK_RESULT` marker instructions, matching the detail level of their non-coordination counterparts.
+- **Prevent acceptance re-trigger loop on failure** — When an acceptance agent fails or returns unknown result, `markAcceptanceCompleted` is now called to prevent the webhook orchestrator from immediately re-dispatching another acceptance agent for the same issue.
+
 ## v0.7.48
 
 ### Fixes

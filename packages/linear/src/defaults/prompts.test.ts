@@ -160,6 +160,52 @@ describe('defaultGeneratePrompt with workflowContext', () => {
   })
 })
 
+describe('defaultGeneratePrompt read-only constraint', () => {
+  const readOnlyWorkTypes = ['qa', 'acceptance', 'qa-coordination', 'acceptance-coordination'] as const
+
+  for (const workType of readOnlyWorkTypes) {
+    it(`includes READ-ONLY constraint for ${workType}`, () => {
+      const result = defaultGeneratePrompt('PROJ-123', workType)
+      expect(result).toContain('READ-ONLY ROLE')
+      expect(result).toContain('MUST NOT modify any source code')
+      expect(result).toContain('WORK_RESULT:failed')
+    })
+  }
+
+  const writableWorkTypes = ['development', 'coordination', 'refinement', 'research', 'backlog-creation', 'inflight'] as const
+
+  for (const workType of writableWorkTypes) {
+    it(`does NOT include READ-ONLY constraint for ${workType}`, () => {
+      const result = defaultGeneratePrompt('PROJ-123', workType)
+      expect(result).not.toContain('READ-ONLY ROLE')
+    })
+  }
+})
+
+describe('defaultGeneratePrompt coordination prompts have steps', () => {
+  it('qa-coordination includes numbered steps and pass/fail criteria', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'qa-coordination')
+    expect(result).toContain('QA Coordination Steps:')
+    expect(result).toContain('1. Find and validate the correct PR')
+    expect(result).toContain('Pass/Fail:')
+    expect(result).toContain('WORK_RESULT:passed')
+    expect(result).toContain('WORK_RESULT:failed')
+    expect(result).toContain('PR Selection')
+  })
+
+  it('acceptance-coordination includes numbered steps and pass/fail criteria', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'acceptance-coordination')
+    expect(result).toContain('Acceptance Coordination Steps:')
+    expect(result).toContain('1. Find and validate the correct PR')
+    expect(result).toContain('Merge the PR')
+    expect(result).toContain('Pass/Fail:')
+    expect(result).toContain('WORK_RESULT:passed')
+    expect(result).toContain('WORK_RESULT:failed')
+    expect(result).toContain('do NOT attempt to fix it')
+    expect(result).toContain('PR Selection')
+  })
+})
+
 describe('defaultGeneratePrompt coordination retry', () => {
   it('uses fresh coordination prompt when no workflowContext', () => {
     const result = defaultGeneratePrompt('PROJ-100', 'coordination')

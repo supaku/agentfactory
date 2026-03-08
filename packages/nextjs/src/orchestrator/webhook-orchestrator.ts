@@ -257,6 +257,16 @@ export function createWebhookOrchestrator(
                     issueId: agent.issueId,
                   })
                 }
+
+                // On acceptance failure/unknown: mark completed to prevent re-trigger loop.
+                // The issue stays in Delivered but won't auto-fire another acceptance agent.
+                if (phase === 'acceptance' && (agent.workResult === 'failed' || agent.workResult === 'unknown')) {
+                  await markAcceptanceCompleted(agent.issueId)
+                  log.info('Marked acceptance completed to prevent re-trigger loop', {
+                    issueId: agent.issueId,
+                    workResult: agent.workResult,
+                  })
+                }
               }
             } catch (err) {
               log.error('Failed to update workflow state', { error: err, issueId: agent.issueId })
