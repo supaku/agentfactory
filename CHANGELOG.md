@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.47
+
+### Fixes
+
+- **Wire WorkflowContext into governor prompt generation for retries** — When an issue failed QA and was retried, the governor dispatched agents with a vanilla prompt containing no failure context. The `WorkflowState` (cycle count, strategy, failure summary) was sitting in Redis but never passed to `generatePrompt`. Now `dispatchWork` fetches workflow state via `getWorkflowState()` and passes it as `WorkflowContext` to `generatePrompt`, so retry agents see previous QA failures, cycle count, and escalation strategy in their prompt.
+- **Emit response activity to close Linear agent sessions on completion** — Agent sessions now properly close in Linear's UI when work completes.
+
 ## v0.7.46
 
 ### Fixes

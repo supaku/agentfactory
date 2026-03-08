@@ -6,7 +6,7 @@
  * (from @supaku/agentfactory-server).
  */
 
-import type { LinearAgentClient } from '@supaku/agentfactory-linear'
+import type { LinearAgentClient, WorkflowContext } from '@supaku/agentfactory-linear'
 import type {
   GovernorDependencies,
   GovernorIssue,
@@ -48,7 +48,7 @@ export interface RealDependenciesConfig {
   linearClient: LinearAgentClient          // For read operations (listIssues, isParentIssue, etc.)
   resolveOAuthClient?: () => Promise<LinearAgentClient | undefined>  // Lazy OAuth client resolver (re-resolves token from Redis on each call)
   organizationId?: string                  // Workspace ID for session state storage
-  generatePrompt?: (identifier: string, workType: string, mentionContext?: string) => string
+  generatePrompt?: (identifier: string, workType: string, mentionContext?: string, workflowContext?: WorkflowContext) => string
 }
 
 // ---------------------------------------------------------------------------
@@ -322,8 +322,18 @@ export function createRealDependencies(
         const finalSessionId = sessionId ?? `governor-${issueId}-${Date.now()}`
         const now = Date.now()
 
-        // Generate prompt for the work type
-        const prompt = config.generatePrompt?.(issueIdentifier, workType)
+        // Fetch workflow state for retry context injection
+        const workflowState = await getWorkflowState(issueId)
+        const workflowContext: WorkflowContext | undefined = workflowState?.cycleCount
+          ? {
+              cycleCount: workflowState.cycleCount,
+              strategy: workflowState.strategy,
+              failureSummary: workflowState.failureSummary,
+            }
+          : undefined
+
+        // Generate prompt for the work type (with retry context if available)
+        const prompt = config.generatePrompt?.(issueIdentifier, workType, undefined, workflowContext)
 
         // Register a pending session FIRST so hasActiveSession() returns true
         // immediately, preventing re-dispatch on subsequent poll sweeps.
