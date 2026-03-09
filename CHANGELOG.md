@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.50
+
+### Fixes
+
+- **Pass workflow context to coordination rework prompts via webhook path** — When QA-coordination failed and the dev coordination agent was re-triggered via webhook, it received a fresh prompt instead of the rework prompt. The failure context filter excluded the `coordination` work type from Started status, and `workflowContext` was never passed as the 4th argument to `generatePrompt`. Now the webhook handler includes coordination in the filter and passes `wfContext` through, so the rework mode prompt activates correctly.
+
 ## v0.7.49
 
 ### Fixes
