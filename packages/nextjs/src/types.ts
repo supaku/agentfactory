@@ -6,7 +6,7 @@
  */
 
 import type { NextRequest, NextResponse } from 'next/server'
-import type { LinearAgentClient, AgentWorkType, SubIssueStatus } from '@supaku/agentfactory-linear'
+import type { LinearAgentClient, AgentWorkType, SubIssueStatus, WorkflowContext } from '@supaku/agentfactory-linear'
 
 /**
  * Resolves a Linear client for a given organization.
@@ -46,7 +46,7 @@ export interface AutoTriggerConfig {
  */
 export interface WebhookConfig extends RouteConfig {
   webhookSecret?: string // falls back to LINEAR_WEBHOOK_SECRET
-  generatePrompt?: (identifier: string, workType: AgentWorkType, mentionContext?: string) => string
+  generatePrompt?: (identifier: string, workType: AgentWorkType, mentionContext?: string, workflowContext?: WorkflowContext) => string
   detectWorkTypeFromPrompt?: (prompt: string, validWorkTypes: AgentWorkType[]) => AgentWorkType | undefined
   getPriority?: (workType: AgentWorkType) => number
   autoTrigger?: AutoTriggerConfig
@@ -74,7 +74,7 @@ export interface WebhookConfig extends RouteConfig {
  */
 export interface ResolvedWebhookConfig extends RouteConfig {
   webhookSecret?: string
-  generatePrompt: (identifier: string, workType: AgentWorkType, mentionContext?: string) => string
+  generatePrompt: (identifier: string, workType: AgentWorkType, mentionContext?: string, workflowContext?: WorkflowContext) => string
   detectWorkTypeFromPrompt?: (prompt: string, validWorkTypes: AgentWorkType[]) => AgentWorkType | undefined
   getPriority?: (workType: AgentWorkType) => number
   autoTrigger?: AutoTriggerConfig

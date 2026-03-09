@@ -340,13 +340,19 @@ export async function handleSessionCreated(
     projectName,
   })
 
-  // Enrich prompt with workflow failure context for retries (refinement, development)
+  // Enrich prompt with workflow failure context for retries
+  // Applies to: refinement, development (rework from Backlog), coordination (rework from Started)
   let workflowContextBlock = ''
-  if (workType === 'refinement' || (workType === 'development' && currentStatus === 'Backlog')) {
+  let wfContext: WorkflowContext | undefined
+  const needsFailureContext =
+    workType === 'refinement' ||
+    (workType === 'development' && currentStatus === 'Backlog') ||
+    (workType === 'coordination' && currentStatus === 'Started')
+  if (needsFailureContext) {
     try {
       const workflowState = await getWorkflowState(issueId)
       if (workflowState && workflowState.cycleCount > 0) {
-        const wfContext: WorkflowContext = {
+        wfContext = {
           cycleCount: workflowState.cycleCount,
           strategy: workflowState.strategy,
           failureSummary: workflowState.failureSummary,
@@ -373,7 +379,7 @@ export async function handleSessionCreated(
     priority,
     queuedAt: Date.now(),
     workType,
-    prompt: config.generatePrompt(issueIdentifier, workType, enhancedPromptContext) + workflowContextBlock,
+    prompt: config.generatePrompt(issueIdentifier, workType, enhancedPromptContext, wfContext) + workflowContextBlock,
     projectName,
   }
 
