@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.51
+
+### Fixes
+
+- **Add heuristic fallback patterns for coordination work types** — `parseWorkResult` now detects pass/fail from real agent output when the structured `<!-- WORK_RESULT -->` marker is missing. Adds patterns for `coordination` ("all X/X sub-issues completed", "Must Fix Before Merge"), `qa-coordination` ("Status: N Issues Found", "N Critical Issues (Block Merge)"), and `acceptance-coordination` ("Must Fix Before Merge"). Previously, missing markers caused `unknown` results that left issues stuck in Delivered, triggering infinite acceptance retry loops.
+- **Strengthen WORK_RESULT marker instruction and move to end of all templates** — The work-result-marker partial now uses a prominent visual box and explicit "VERY LAST line" instruction. Moved from mid-prompt to the final position in all 10 templates that use it, so it's the last thing agents read before generating output.
+- **Add READ-ONLY/GATE constraints and status manipulation guards to QA and acceptance templates** — QA templates now explicitly forbid code changes. Acceptance templates are marked as gates that must not fix issues. All result-sensitive templates prohibit `update-issue --state` to prevent agents from bypassing the orchestrator's state machine. Acceptance tool permissions tightened from `git push *` to `git push origin --delete *`.
+
 ## v0.7.50
 
 ### Fixes
