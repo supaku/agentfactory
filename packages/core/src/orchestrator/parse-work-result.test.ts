@@ -209,6 +209,98 @@ describe('parseWorkResult', () => {
     })
   })
 
+  // Coordination heuristic pattern tests
+  describe('coordination heuristic patterns', () => {
+    it('detects "all 8/8 sub-issues completed"', () => {
+      expect(
+        parseWorkResult('all 8/8 sub-issues completed and marked Finished in Linear.', 'coordination')
+      ).toBe('passed')
+    })
+
+    it('detects "all sub-issues completed" without count', () => {
+      expect(
+        parseWorkResult('All sub-issues completed successfully.', 'coordination')
+      ).toBe('passed')
+    })
+
+    it('detects "all sub-issues finished"', () => {
+      expect(
+        parseWorkResult('All 3/3 sub-issues finished.', 'coordination')
+      ).toBe('passed')
+    })
+
+    it('detects "Coordination Complete"', () => {
+      expect(
+        parseWorkResult('## Coordination Complete\nAll work done.', 'coordination')
+      ).toBe('passed')
+    })
+
+    it('detects "Must Fix Before Merge" as fail', () => {
+      expect(
+        parseWorkResult('### CRITICAL — Must Fix Before Merge\n1. provision-trial.ts uses removed fields', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "N Critical Issues (Block Merge)" as fail', () => {
+      expect(
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad migration', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "sub-issues need work" as fail', () => {
+      expect(
+        parseWorkResult('2 sub-issues need work before this can proceed.', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('does not match coordination patterns for non-coordination work types', () => {
+      expect(parseWorkResult('All sub-issues completed.', 'development')).toBe('unknown')
+      expect(parseWorkResult('All sub-issues completed.', 'qa')).toBe('unknown')
+    })
+
+    it('checks fail patterns before pass patterns', () => {
+      expect(
+        parseWorkResult('All 8/8 sub-issues completed.\n### Must Fix Before Merge\n1. Bad code', 'coordination')
+      ).toBe('failed')
+    })
+  })
+
+  // QA coordination with real agent output formats
+  describe('QA coordination real-world patterns', () => {
+    it('detects "Status: N Issues Found" as fail', () => {
+      expect(
+        parseWorkResult('### Status: 3 Issues Found (1 Critical, 2 Minor)', 'qa-coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "Must Fix Before Merge" in QA context as fail', () => {
+      expect(
+        parseWorkResult('## QA Report\n### CRITICAL — Must Fix Before Merge\n1. Bad migration', 'qa')
+      ).toBe('failed')
+    })
+
+    it('detects "N Critical Issues (Block Merge)" in QA context as fail', () => {
+      expect(
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad code', 'qa-coordination')
+      ).toBe('failed')
+    })
+  })
+
+  // Acceptance coordination with real agent output formats
+  describe('acceptance coordination real-world patterns', () => {
+    it('detects "Must Fix Before Merge" in acceptance context as fail', () => {
+      expect(
+        parseWorkResult('## Acceptance Coordination Report\n### CRITICAL — Must Fix Before Merge', 'acceptance-coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "N Critical Issues (Block Merge)" in acceptance context as fail', () => {
+      expect(
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. provision-trial.ts uses removed fields', 'acceptance-coordination')
+      ).toBe('failed')
+    })
+  })
+
   // Unknown result tests
   describe('unknown results', () => {
     it('returns unknown for undefined message', () => {

@@ -42,6 +42,12 @@ const QA_FAIL_PATTERNS = [
   /Parent\s+QA\s+verdict:\s*FAIL/i,
   // Bold standalone FAIL
   /\*\*FAIL\.?\*\*/,
+  // QA coordination report with issues found (agents output "Status: N Issues Found")
+  /\bStatus:\s*\d+\s+Issues?\s+Found\b/i,
+  // "Must Fix Before Merge" — agents use this heading for blocking findings
+  /\bMust\s+Fix\s+Before\s+Merge\b/i,
+  // "N Critical Issues (Block Merge)" — coordination QA summary format
+  /\d+\s+Critical\s+Issues?\s*\(Block\s+Merge\)/i,
 ]
 
 const ACCEPTANCE_PASS_PATTERNS = [
@@ -55,6 +61,35 @@ const ACCEPTANCE_FAIL_PATTERNS = [
   /Acceptance\s+(?:Processing\s+)?Blocked/i,
   /Acceptance\s+Result:\s*Fail/i,
   /Cannot\s+merge\s+PR/i,
+  // Coordination-style patterns (agents output reports with "Must Fix" / "Critical Issues")
+  /\bMust\s+Fix\s+Before\s+Merge\b/i,
+  /\d+\s+Critical\s+Issues?\s*\(Block\s+Merge\)/i,
+]
+
+/**
+ * Heuristic patterns for detecting coordination pass/fail.
+ * These apply to the 'coordination' work type (development coordination).
+ */
+const COORDINATION_PASS_PATTERNS = [
+  // "all 8/8 sub-issues completed" or "all sub-issues completed"
+  /\ball\s+(?:\d+\/\d+\s+)?sub-issues?\s+(?:completed|finished)/i,
+  // "8/8 sub-issues completed/finished" (without leading "all")
+  /\b(\d+)\/\1\b.*\bsub-issues?\s+(?:completed|finished)/i,
+  // Explicit result labels
+  /\bCoordination\s+(?:Result|Status|Verdict):\s*\*{0,2}Pass(?:ed)?\*{0,2}/i,
+  /\bCoordination\s+Complete/i,
+]
+
+const COORDINATION_FAIL_PATTERNS = [
+  // "Must Fix Before Merge" — agents use this heading for blocking issues
+  /\bMust\s+Fix\s+Before\s+Merge\b/i,
+  // "N Critical Issues (Block Merge)"
+  /\d+\s+Critical\s+Issues?\s*\(Block\s+Merge\)/i,
+  // "sub-issues need work/attention/fixes"
+  /\bsub-issues?\s+(?:need|require)[s]?\s+(?:work|attention|fixes?)\b/i,
+  // Explicit result labels
+  /\bCoordination\s+(?:Result|Status|Verdict):\s*\*{0,2}Fail(?:ed)?\*{0,2}/i,
+  /\bCoordination\s+Failed/i,
 ]
 
 /**
@@ -98,6 +133,15 @@ export function parseWorkResult(
       return 'failed'
     }
     if (ACCEPTANCE_PASS_PATTERNS.some((p) => p.test(resultMessage))) {
+      return 'passed'
+    }
+  }
+
+  if (workType === 'coordination') {
+    if (COORDINATION_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
+      return 'failed'
+    }
+    if (COORDINATION_PASS_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'passed'
     }
   }

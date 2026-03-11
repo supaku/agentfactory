@@ -8,7 +8,7 @@ metadata:
 tools:
   allow:
     - shell: "gh pr *"
-    - shell: "git push *"
+    - shell: "git push origin --delete *"
     - shell: "pnpm af-linear *"
   disallow:
     - user-input
@@ -20,10 +20,17 @@ prompt: |
   Merge the PR using: gh pr merge <PR_NUMBER> --squash
   After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
 
+  IMPORTANT CONSTRAINTS:
+  - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.
+  - If the PR has problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: get-issue, list-comments, create-comment, check-deployment
+
   {{> partials/repo-validation}}
-  {{> partials/work-result-marker}}{{> partials/cli-instructions}}
+  {{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:
   {{mentionContext}}
   {{/if}}
+  {{> partials/work-result-marker}}

@@ -8,7 +8,7 @@ metadata:
 tools:
   allow:
     - shell: "gh pr *"
-    - shell: "git push *"
+    - shell: "git push origin --delete *"
     - shell: "pnpm af-linear *"
   disallow:
     - user-input
@@ -29,11 +29,13 @@ prompt: |
   7. Mark parent as complete (transitions to Accepted)
 
   IMPORTANT CONSTRAINTS:
+  - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.
+  - If the PR has problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
   - ALL sub-issues must be in Delivered status before proceeding
   - The PR must pass CI and have no conflicts
   - If merge fails, report the error and do not mark as Accepted
-  - NEVER manually change the parent issue status. The orchestrator manages all status transitions based on your WORK_RESULT marker.
-  {{> partials/work-result-marker}}
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL parent issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: list-sub-issue-statuses, list-sub-issues, update-sub-issue, create-comment, check-deployment
   {{> partials/repo-validation}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
@@ -41,3 +43,4 @@ prompt: |
   Additional context from the user's mention:
   {{mentionContext}}
   {{/if}}
+  {{> partials/work-result-marker}}

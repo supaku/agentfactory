@@ -5,11 +5,21 @@ metadata:
   description: Structured result marker instruction for QA/acceptance work types
 content: |
 
-  STRUCTURED RESULT MARKER (REQUIRED):
-  You MUST include a structured result marker in your final output message.
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  STRUCTURED RESULT MARKER — MANDATORY, NON-NEGOTIABLE          ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  Your VERY LAST line of output MUST be one of these markers (exactly as shown):
+
+    <!-- WORK_RESULT:passed -->
+    <!-- WORK_RESULT:failed -->
+
   The orchestrator parses your output to determine whether to promote or reject the issue.
-  Without this marker, the issue status will NOT be updated automatically.
-  - On pass: Include <!-- WORK_RESULT:passed --> in your final message
-  - On fail: Include <!-- WORK_RESULT:failed --> in your final message
-  NEVER manually change the issue status via {{linearCli}} update-issue --state.
-  The orchestrator manages ALL status transitions based on this marker. Manually changing status causes state loops.
+  WITHOUT this marker, the issue status will NOT be updated — causing infinite retry loops.
+
+  Rules:
+  - On success/pass: End with <!-- WORK_RESULT:passed -->
+  - On failure/issues found: End with <!-- WORK_RESULT:failed -->
+  - Place the marker as the LAST line of your final message, after all other content
+  - NEVER manually change the issue status via {{linearCli}} update-issue --state
+  - The orchestrator manages ALL status transitions based on this marker

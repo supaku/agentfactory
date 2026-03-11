@@ -49,6 +49,11 @@ prompt: |
   4. **Review changes** — examine the PR/branch against issue requirements.
   5. **Security check** — review for memory safety issues, unsafe blocks, buffer overflows, etc.
 
+  IMPORTANT CONSTRAINTS:
+  - This is READ-ONLY validation — do NOT make code changes, git commits, or fix issues yourself.
+  - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+
   HARD FAIL RULE — BUILD FAILURES:
   If the build command exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build failures (e.g., "will resolve on merge").
@@ -65,10 +70,10 @@ prompt: |
   - [ ] Resource cleanup (file handles, memory, network connections)
   - [ ] Platform compatibility (if applicable)
 
-  {{> partials/work-result-marker}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:
   {{mentionContext}}
   {{/if}}
+  {{> partials/work-result-marker}}

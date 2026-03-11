@@ -35,4 +35,5 @@ prompt: |
   {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/cli-instructions}}
+
   {{> partials/work-result-marker}}

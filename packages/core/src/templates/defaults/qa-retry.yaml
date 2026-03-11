@@ -28,9 +28,15 @@ prompt: |
   4. If issues persist, provide detailed failure reasons
   5. If all checks pass, report QA_PASSED
 
+  IMPORTANT CONSTRAINTS:
+  - This is READ-ONLY validation — do NOT make code changes, git commits, or fix issues yourself.
+  - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+
   HARD FAIL RULE — BUILD FAILURES:
   If `{{packageManager}} typecheck` or `{{packageManager}} build` exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
+
 
   {{> partials/work-result-marker}}

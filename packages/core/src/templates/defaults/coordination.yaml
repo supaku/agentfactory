@@ -33,7 +33,6 @@ prompt: |
   If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
   Sub-issues intentionally in Icebox (e.g., post-GA / future roadmap items) should be detached
   from the parent before marking coordination as complete, or coordination should fail.
-  {{> partials/work-result-marker}}
   {{> partials/repo-validation}}
   {{> partials/path-scoping}}
   {{> partials/shared-worktree-safety}}
@@ -44,3 +43,4 @@ prompt: |
   Additional context from the user's mention:
   {{mentionContext}}
   {{/if}}
+  {{> partials/work-result-marker}}

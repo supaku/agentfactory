@@ -28,12 +28,17 @@ prompt: |
   Validate: `{{validateCommand}}`
   {{/if}}
 
+  IMPORTANT CONSTRAINTS:
+  - This is READ-ONLY validation — do NOT make code changes, git commits, or fix issues yourself.
+  - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: get-issue, list-comments, create-comment
+
   HARD FAIL RULE — BUILD FAILURES:
   If {{#if buildCommand}}`{{buildCommand}}`{{else}}`{{packageManager}} typecheck` or `{{packageManager}} build`{{/if}} exits with a non-zero exit code, you MUST report <!-- WORK_RESULT:failed --> immediately.
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 
-  {{> partials/work-result-marker}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
@@ -41,3 +46,4 @@ prompt: |
   Additional context from the user's mention:
   {{mentionContext}}
   {{/if}}
+  {{> partials/work-result-marker}}
