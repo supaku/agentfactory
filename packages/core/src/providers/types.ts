@@ -12,7 +12,7 @@
  */
 
 /** Supported agent provider names */
-export type AgentProviderName = 'claude' | 'codex' | 'amp'
+export type AgentProviderName = 'claude' | 'codex' | 'amp' | 'spring-ai'
 
 /**
  * Agent Provider

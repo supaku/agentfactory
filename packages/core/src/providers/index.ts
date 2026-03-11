@@ -26,16 +26,18 @@ export type {
 export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'
 export { CodexProvider, createCodexProvider } from './codex-provider.js'
 export { AmpProvider, createAmpProvider } from './amp-provider.js'
+export { SpringAiProvider, createSpringAiProvider } from './spring-ai-provider.js'
 
 import type { AgentProvider, AgentProviderName } from './types.js'
 import { ClaudeProvider } from './claude-provider.js'
 import { CodexProvider } from './codex-provider.js'
 import { AmpProvider } from './amp-provider.js'
+import { SpringAiProvider } from './spring-ai-provider.js'
 
 /**
  * Create a provider instance by name.
  *
- * @param name - Provider name ('claude', 'codex', 'amp')
+ * @param name - Provider name ('claude', 'codex', 'amp', 'spring-ai')
  * @returns AgentProvider instance
  * @throws Error if provider name is unknown
  */
@@ -47,8 +49,10 @@ export function createProvider(name: AgentProviderName): AgentProvider {
       return new CodexProvider()
     case 'amp':
       return new AmpProvider()
+    case 'spring-ai':
+      return new SpringAiProvider()
     default:
-      throw new Error(`Unknown agent provider: ${name}. Supported: claude, codex, amp`)
+      throw new Error(`Unknown agent provider: ${name}. Supported: claude, codex, amp, spring-ai`)
   }
 }
 
@@ -96,7 +100,7 @@ export function resolveProviderName(options?: {
   return 'claude'
 }
 
-const VALID_PROVIDER_NAMES: AgentProviderName[] = ['claude', 'codex', 'amp']
+const VALID_PROVIDER_NAMES: AgentProviderName[] = ['claude', 'codex', 'amp', 'spring-ai']
 
 function isValidProviderName(name: string): name is AgentProviderName {
   return VALID_PROVIDER_NAMES.includes(name as AgentProviderName)

@@ -76,6 +76,32 @@ export class CodexToolPermissionAdapter implements ToolPermissionAdapter {
 }
 
 /**
+ * Spring AI tool permission adapter.
+ *
+ * Spring AI uses @Tool annotations and ToolCallAdvisor for tool configuration.
+ * Shell permissions map to Spring AI's tool-call allowlist format:
+ *   { shell: "pnpm *" }  → "spring-tool:shell:pnpm *"
+ *   "user-input" → "user-input" (no-op — Spring AI agent is non-interactive)
+ */
+export class SpringAiToolPermissionAdapter implements ToolPermissionAdapter {
+  translatePermissions(permissions: ToolPermission[]): string[] {
+    return permissions.map(p => this.translateOne(p))
+  }
+
+  private translateOne(permission: ToolPermission): string {
+    if (typeof permission === 'string') {
+      return permission
+    }
+
+    if ('shell' in permission) {
+      return `spring-tool:shell:${permission.shell}`
+    }
+
+    return String(permission)
+  }
+}
+
+/**
  * Create a tool permission adapter for the given provider.
  */
 export function createToolPermissionAdapter(provider: AgentProviderName): ToolPermissionAdapter {
@@ -86,6 +112,8 @@ export function createToolPermissionAdapter(provider: AgentProviderName): ToolPe
       return new CodexToolPermissionAdapter()
     case 'amp':
       return new ClaudeToolPermissionAdapter()
+    case 'spring-ai':
+      return new SpringAiToolPermissionAdapter()
     default:
       return new ClaudeToolPermissionAdapter()
   }

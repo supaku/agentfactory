@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ClaudeToolPermissionAdapter,
   CodexToolPermissionAdapter,
+  SpringAiToolPermissionAdapter,
   createToolPermissionAdapter,
 } from './adapters.js'
 
@@ -99,6 +100,53 @@ describe('CodexToolPermissionAdapter', () => {
   })
 })
 
+describe('SpringAiToolPermissionAdapter', () => {
+  const adapter = new SpringAiToolPermissionAdapter()
+
+  it('translates shell command to spring-tool format', () => {
+    const result = adapter.translatePermissions([{ shell: 'pnpm *' }])
+    expect(result).toEqual(['spring-tool:shell:pnpm *'])
+  })
+
+  it('translates multi-word shell command', () => {
+    const result = adapter.translatePermissions([{ shell: 'git commit *' }])
+    expect(result).toEqual(['spring-tool:shell:git commit *'])
+  })
+
+  it('passes through user-input as-is (Spring AI agent is non-interactive)', () => {
+    const result = adapter.translatePermissions(['user-input'])
+    expect(result).toEqual(['user-input'])
+  })
+
+  it('passes through other string permissions as-is', () => {
+    const result = adapter.translatePermissions(['Read', 'Write'])
+    expect(result).toEqual(['Read', 'Write'])
+  })
+
+  it('translates single-word shell command', () => {
+    const result = adapter.translatePermissions([{ shell: 'ls' }])
+    expect(result).toEqual(['spring-tool:shell:ls'])
+  })
+
+  it('handles mixed permissions', () => {
+    const result = adapter.translatePermissions([
+      { shell: 'pnpm *' },
+      'user-input',
+      { shell: 'gh pr *' },
+    ])
+    expect(result).toEqual([
+      'spring-tool:shell:pnpm *',
+      'user-input',
+      'spring-tool:shell:gh pr *',
+    ])
+  })
+
+  it('handles empty permissions array', () => {
+    const result = adapter.translatePermissions([])
+    expect(result).toEqual([])
+  })
+})
+
 describe('createToolPermissionAdapter', () => {
   it('returns ClaudeToolPermissionAdapter for claude', () => {
     const adapter = createToolPermissionAdapter('claude')
@@ -113,6 +161,11 @@ describe('createToolPermissionAdapter', () => {
   it('returns ClaudeToolPermissionAdapter for amp (fallback)', () => {
     const adapter = createToolPermissionAdapter('amp')
     expect(adapter).toBeInstanceOf(ClaudeToolPermissionAdapter)
+  })
+
+  it('returns SpringAiToolPermissionAdapter for spring-ai', () => {
+    const adapter = createToolPermissionAdapter('spring-ai')
+    expect(adapter).toBeInstanceOf(SpringAiToolPermissionAdapter)
   })
 
   it('returns ClaudeToolPermissionAdapter for unknown provider', () => {
@@ -132,5 +185,24 @@ describe('createToolPermissionAdapter', () => {
     expect(claudeResult).toEqual(['Bash(pnpm:*)'])
     expect(codexResult).toEqual(['shell:pnpm *'])
     expect(claudeResult).not.toEqual(codexResult)
+  })
+
+  it('all three provider adapters produce different output for shell permissions', () => {
+    const claudeAdapter = createToolPermissionAdapter('claude')
+    const codexAdapter = createToolPermissionAdapter('codex')
+    const springAiAdapter = createToolPermissionAdapter('spring-ai')
+
+    const permissions = [{ shell: 'pnpm *' }] as const
+
+    const claudeResult = claudeAdapter.translatePermissions([...permissions])
+    const codexResult = codexAdapter.translatePermissions([...permissions])
+    const springAiResult = springAiAdapter.translatePermissions([...permissions])
+
+    expect(claudeResult).toEqual(['Bash(pnpm:*)'])
+    expect(codexResult).toEqual(['shell:pnpm *'])
+    expect(springAiResult).toEqual(['spring-tool:shell:pnpm *'])
+
+    // All three formats are distinct
+    expect(new Set([claudeResult[0], codexResult[0], springAiResult[0]]).size).toBe(3)
   })
 })
