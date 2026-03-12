@@ -66,3 +66,9 @@ export * from './redis-circuit-breaker.js'
 
 // Linear API quota tracker (reads rate limit headers)
 export * from './quota-tracker.js'
+
+// A2A Protocol types
+export * from './a2a-types.js'
+
+// A2A Server (AgentCard + JSON-RPC handlers)
+export * from './a2a-server.js'
