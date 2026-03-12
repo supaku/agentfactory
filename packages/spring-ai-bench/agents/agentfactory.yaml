@@ -1,0 +1,5 @@
+name: agentfactory
+type: exec
+command: ["pnpm", "orchestrator", "--single", "BENCH_TASK", "--project", "Agent", "--no-wait"]
+working-dir: "${workspace}"
+timeout: PT30M

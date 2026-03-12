@@ -1,0 +1,14 @@
+target/
+*.class
+*.jar
+*.war
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+bench-reports/
+runs/*/
+!runs/examples/
+!runs/coverage-uplift-single.yaml
+!runs/coverage-uplift-multi.yaml

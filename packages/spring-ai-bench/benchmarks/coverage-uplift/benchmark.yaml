@@ -1,0 +1,21 @@
+schema: bench.benchmark.v1
+name: coverage-uplift
+version: "1.0"
+description: >
+  Coverage uplift benchmark — measures an agent's ability to increase test coverage
+  from 0% to a target threshold on a Spring Boot REST service. Designed to demonstrate
+  AgentFactory's multi-agent pipeline (dev → QA → acceptance) vs single-agent runs.
+
+default-timeout: PT30M
+
+jury:
+  checks:
+    - type: file-exists
+      path: src/test/java
+    - type: shell-exit-zero
+      command: "./mvnw test -q"
+      timeout: PT5M
+    - type: shell-output-contains
+      command: "./mvnw jacoco:report -q && cat target/site/jacoco/index.html"
+      expected: "Total"
+      description: "JaCoCo coverage report generated"

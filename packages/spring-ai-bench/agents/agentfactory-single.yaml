@@ -1,0 +1,5 @@
+name: agentfactory-single
+type: exec
+command: ["pnpm", "af-agent", "--prompt", "${instruction}", "--cwd", "${workspace}", "--provider", "claude"]
+working-dir: "${workspace}"
+timeout: PT10M
