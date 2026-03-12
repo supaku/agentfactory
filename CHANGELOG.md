@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.54
+
+### Fixes
+
+- **Fix typecheck errors for `refinement-coordination` in server, nextjs, and linear packages** — Added missing `refinement-coordination` entries to duplicated `AgentWorkType` union in `packages/server/src/types.ts`, A2A skill map, priority switch statements, and work type messages. Added `default` branches to priority functions to prevent TS2366 (missing return).
+
 ## v0.7.53
 
 ### Fixes

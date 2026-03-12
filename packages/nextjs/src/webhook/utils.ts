@@ -165,6 +165,7 @@ export function defaultGetPriority(workType: AgentWorkType): number {
     case 'qa': return 2
     case 'acceptance': return 2
     case 'refinement': return 2
+    case 'refinement-coordination': return 2
     case 'inflight': return 2
     case 'backlog-creation': return 3
     case 'development': return 3
@@ -172,6 +173,7 @@ export function defaultGetPriority(workType: AgentWorkType): number {
     case 'coordination': return 2
     case 'qa-coordination': return 2
     case 'acceptance-coordination': return 2
+    default: return 3
   }
 }
 
@@ -207,4 +209,5 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   coordination: 'Coordination work queued. Agent will orchestrate sub-issue execution...',
   'qa-coordination': 'QA coordination queued. Agent will validate all sub-issues in parallel...',
   'acceptance-coordination': 'Acceptance coordination queued. Agent will verify sub-issues and merge PR...',
+  'refinement-coordination': 'Refinement coordination queued. Agent will triage QA/acceptance failures to sub-issues...',
 }

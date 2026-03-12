@@ -109,6 +109,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Coordinate acceptance reviews across multiple agents',
     tags: ['acceptance', 'coordination'],
   },
+  'refinement-coordination': {
+    id: 'refinement-coordination',
+    name: 'Refinement Coordination',
+    description: 'Coordinate refinement across sub-issues after QA/acceptance failure',
+    tags: ['refinement', 'coordination'],
+  },
 }
 
 /**

@@ -16,6 +16,7 @@ export type AgentWorkType =
   | 'qa'
   | 'acceptance'
   | 'refinement'
+  | 'refinement-coordination'
   | 'coordination'
   | 'qa-coordination'
   | 'acceptance-coordination'
