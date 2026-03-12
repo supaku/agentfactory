@@ -293,11 +293,12 @@ export function createRealDependencies(
       try {
         let workType = actionToWorkType(action)
 
-        // Parent issues use coordination variants for development, QA, and acceptance
+        // Parent issues use coordination variants for development, QA, acceptance, and refinement
         if (parentIssueIds.has(issueId)) {
           if (workType === 'development') workType = 'coordination'
           else if (workType === 'qa') workType = 'qa-coordination'
           else if (workType === 'acceptance') workType = 'acceptance-coordination'
+          else if (workType === 'refinement') workType = 'refinement-coordination'
         }
 
         log.info('Dispatching work', { issueId, issueIdentifier, action, workType })

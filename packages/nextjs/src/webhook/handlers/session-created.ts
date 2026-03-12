@@ -181,41 +181,49 @@ export async function handleSessionCreated(
   }
 
   // Phase 2.5: Auto-detect parent/child issues for coordination routing
-  if (workType === 'development' && workTypeSource === 'status') {
+  // Apply to all status-derived work types that have coordination variants
+  const coordinationUpgradeable = workTypeSource === 'status' && (
+    workType === 'development' || workType === 'refinement'
+  )
+  if (coordinationUpgradeable) {
     try {
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
       // Skip child/sub-issues for non-mention sessions — these are managed
       // by the parent issue's coordinator agent, not dispatched independently.
-      const isChild = await linearClient.isChildIssue(issueId)
-      if (isChild) {
-        sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
-          issueIdentifier,
-        })
+      if (workType === 'development') {
+        const isChild = await linearClient.isChildIssue(issueId)
+        if (isChild) {
+          sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
+            issueIdentifier,
+          })
 
-        try {
-          await emitActivity(
-            linearClient,
-            sessionId,
-            'response',
-            `This is a sub-issue. Work will be coordinated by the parent issue's agent.`
-          )
-        } catch (err) {
-          sessionLog.warn('Failed to emit sub-issue skip activity', { error: err })
+          try {
+            await emitActivity(
+              linearClient,
+              sessionId,
+              'response',
+              `This is a sub-issue. Work will be coordinated by the parent issue's agent.`
+            )
+          } catch (err) {
+            sessionLog.warn('Failed to emit sub-issue skip activity', { error: err })
+          }
+
+          return NextResponse.json({
+            success: true,
+            skipped: true,
+            reason: 'sub_issue_managed_by_parent',
+          })
         }
-
-        return NextResponse.json({
-          success: true,
-          skipped: true,
-          reason: 'sub_issue_managed_by_parent',
-        })
       }
 
       const isParent = await linearClient.isParentIssue(issueId)
       if (isParent) {
-        workType = 'coordination'
+        if (workType === 'development') workType = 'coordination'
+        else if (workType === 'refinement') workType = 'refinement-coordination'
         sessionLog.info('Parent issue detected, switching to coordination work type', {
           issueIdentifier,
+          workType,
         })
       }
     } catch (err) {
@@ -345,7 +353,7 @@ export async function handleSessionCreated(
   let workflowContextBlock = ''
   let wfContext: WorkflowContext | undefined
   const needsFailureContext =
-    workType === 'refinement' ||
+    workType === 'refinement' || workType === 'refinement-coordination' ||
     (workType === 'development' && currentStatus === 'Backlog') ||
     (workType === 'coordination' && currentStatus === 'Started')
   if (needsFailureContext) {

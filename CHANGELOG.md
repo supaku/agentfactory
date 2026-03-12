@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.55
+
+### Fixes
+
+- **Fix `refinement` not upgrading to `refinement-coordination` for parent issues** — The governor dispatch path (`governor-dependencies.ts`) and webhook session-created handler were missing the `refinement → refinement-coordination` parent-issue upgrade. Parent issues that failed QA-coordination and moved to Rejected would get a single-agent refinement instead of coordinated refinement, causing the agent to struggle with the sub-issue structure.
+
 ## v0.7.54
 
 ### Fixes
