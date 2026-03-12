@@ -1,0 +1,17 @@
+# Run spec: Multi-agent mode (dev → QA → acceptance) for comparison
+schema: bench.run.v1
+
+case: coverage-uplift
+runId: auto
+outDir: bench-reports
+
+agent:
+  type: exec
+  alias: agentfactory
+  args: []
+
+inputs:
+  target-coverage: 80
+
+environment:
+  workingDir: "."

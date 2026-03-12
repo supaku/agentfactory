@@ -1,0 +1,17 @@
+id: gs-rest-service
+description: >
+  Spring Boot gs-rest-service sample — a minimal REST controller with no tests.
+  The agent must add unit and integration tests to achieve meaningful coverage.
+
+instruction: >
+  This Spring Boot project has a REST controller with no test coverage.
+  Add comprehensive unit tests and integration tests to achieve at least 80% line coverage.
+  Use JUnit 5 and Spring Boot Test. Run `./mvnw test` to verify tests pass.
+  Run `./mvnw jacoco:report` to generate coverage reports.
+
+repo:
+  url: https://github.com/spring-guides/gs-rest-service.git
+  ref: main
+  subdir: complete
+
+timeout: PT15M
