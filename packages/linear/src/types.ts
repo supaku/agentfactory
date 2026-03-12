@@ -315,6 +315,7 @@ export type LinearWorkflowStatus =
  * | Delivered    | acceptance             | Acceptance testing                            |
  * | Delivered    | acceptance-coordination| Coordinate acceptance across sub-issues       |
  * | Rejected     | refinement             | Refine and return to Backlog                  |
+ * | Rejected     | refinement-coordination| Coordinate refinement across sub-issues       |
  */
 export type AgentWorkType =
   | 'research'              // Icebox: Flesh out story details, research
@@ -324,6 +325,7 @@ export type AgentWorkType =
   | 'qa'                    // Finished: Validate implementation
   | 'acceptance'            // Delivered: Final acceptance testing
   | 'refinement'            // Rejected: Address feedback, prep for retry
+  | 'refinement-coordination' // Rejected: Coordinate refinement across sub-issues for parent issues
   | 'coordination'          // Backlog: Coordinate sub-issue execution for parent issues
   | 'qa-coordination'       // Finished: Coordinate QA across sub-issues for parent issues
   | 'acceptance-coordination' // Delivered: Coordinate acceptance across sub-issues for parent issues
@@ -359,6 +361,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'qa': null,                // Already Finished
   'acceptance': null,        // Already Delivered
   'refinement': null,        // Already Rejected
+  'refinement-coordination': null, // Already Rejected
   'coordination': 'Started', // Backlog -> Started when coordinator begins
   'qa-coordination': null,   // Already Finished
   'acceptance-coordination': null, // Already Delivered
@@ -376,6 +379,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'qa': 'Delivered',         // Finished -> Delivered on QA pass
   'acceptance': 'Accepted',  // Delivered -> Accepted on acceptance pass
   'refinement': 'Backlog',   // Rejected -> Backlog after refinement
+  'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers coordination which re-runs failing sub-issues)
   'coordination': 'Finished', // Started -> Finished when all sub-issues done
   'qa-coordination': 'Delivered', // Finished -> Delivered when QA coordination passes
   'acceptance-coordination': 'Accepted', // Delivered -> Accepted when acceptance coordination passes
@@ -393,8 +397,9 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'qa': 'Backlog',              // QA failure -> Backlog (developer/coordinator picks up with failure context)
   'acceptance': 'Rejected',    // Acceptance failure -> Rejected (rejection handler diagnoses next steps)
   'refinement': null,
+  'refinement-coordination': null,
   'coordination': null,
-  'qa-coordination': 'Started',     // QA coordination failure -> Started (prevents loop: Backlog would re-trigger coordination which auto-completes since sub-issues are already Finished)
+  'qa-coordination': 'Rejected',    // QA coordination failure -> Rejected (refinement-coordination reads QA feedback and dispatches targeted fixes to failing sub-issues)
   'acceptance-coordination': 'Rejected', // Acceptance coordination failure -> Rejected
 }
 
@@ -408,6 +413,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'qa',
   'acceptance',
   'refinement',
+  'refinement-coordination',
   'coordination',
   'qa-coordination',
   'acceptance-coordination',
@@ -425,6 +431,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'qa': ['Finished'],
   'acceptance': ['Delivered'],
   'refinement': ['Rejected'],
+  'refinement-coordination': ['Rejected'],
   'coordination': ['Backlog', 'Started'],
   'qa-coordination': ['Finished'],
   'acceptance-coordination': ['Delivered'],
@@ -445,7 +452,7 @@ export const STATUS_VALID_WORK_TYPES: Record<string, AgentWorkType[]> = {
   'Started': ['inflight'],
   'Finished': ['qa', 'qa-coordination'],
   'Delivered': ['acceptance', 'acceptance-coordination'],
-  'Rejected': ['refinement'],
+  'Rejected': ['refinement', 'refinement-coordination'],
 }
 
 /**

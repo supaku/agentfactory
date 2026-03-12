@@ -49,6 +49,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'acceptance coordination', 'accept sub-issues', 'accept all sub-issues',
     'perform acceptance', 'complete acceptance',
   ],
+  'refinement-coordination': [
+    'refinement coordination', 'refine sub-issues', 'refine all sub-issues',
+    'triage failures', 'route feedback',
+  ],
 }
 
 /**

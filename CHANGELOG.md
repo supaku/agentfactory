@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.53
+
+### Fixes
+
+- **Fix qa-coordination fail status dead end** — QA coordination failures moved issues to `Started`, which the governor treated as "agent already working" — a dead end with no recovery path. Changed fail status from `Started` to `Rejected`, routing through the refinement workflow instead.
+
+### Features
+
+- **Add `refinement-coordination` work type** — Parent issues with sub-issues that fail QA or acceptance now get a coordination-aware refinement agent instead of a single-agent refinement that would struggle with the complexity. The refinement-coordination agent triages QA/acceptance failure feedback, moves only the failing sub-issues back to Backlog (leaving passing ones in Finished), and lets the orchestrator re-trigger coordination for targeted re-implementation.
+
 ## v0.7.52
 
 ### Fixes

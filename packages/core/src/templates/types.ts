@@ -205,6 +205,7 @@ const WORK_TYPES = [
   'qa',
   'acceptance',
   'refinement',
+  'refinement-coordination',
   'coordination',
   'qa-coordination',
   'acceptance-coordination',

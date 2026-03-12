@@ -598,6 +598,25 @@ update the issue description with refined requirements,
 then return to Backlog for re-implementation.${LINEAR_CLI_INSTRUCTION}`
       break
 
+    case 'refinement-coordination':
+      basePrompt = `Coordinate refinement across sub-issues for parent issue ${identifier}.
+
+WORKFLOW:
+1. Read the QA/acceptance failure comments on ${identifier} to identify which sub-issues failed and why
+2. Fetch sub-issues: pnpm af-linear list-sub-issues ${identifier}
+3. For each FAILING sub-issue:
+   a. Update its description with the specific failure feedback from the QA/acceptance report
+   b. Move it back to Backlog: pnpm af-linear update-sub-issue <id> --state Backlog --comment "Refinement: <failure summary>"
+4. Leave PASSING sub-issues in their current state (Finished) — do not re-run them
+5. Once all failing sub-issues are updated, the parent issue will be moved to Backlog by the orchestrator,
+   which will trigger a coordination agent that picks up only the Backlog sub-issues for re-implementation.
+
+IMPORTANT CONSTRAINTS:
+- This is a REFINEMENT task — do NOT implement fixes yourself, only triage and route feedback to sub-issues.
+- NEVER run pnpm af-linear update-issue --state on the parent issue. The orchestrator manages parent status transitions.
+- Only use pnpm af-linear for: list-sub-issues, list-sub-issue-statuses, get-issue, list-comments, create-comment, update-sub-issue${LINEAR_CLI_INSTRUCTION}`
+      break
+
     case 'coordination':
       basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}.
 Fetch sub-issues with dependency graph, create Claude Code Tasks mapping to each sub-issue,
@@ -653,7 +672,7 @@ WORKFLOW:
 
 RESULT HANDLING:
 - If ALL pass: Mark parent as complete (transitions to Delivered). Update each sub-issue to Delivered.
-- If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed -->. The orchestrator will move the issue to Started for remediation.
+- If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed -->. The orchestrator will move the issue to Rejected for coordinated refinement.
 
 IMPORTANT CONSTRAINTS:
 - This is READ-ONLY validation \u2014 do NOT create PRs or make git commits
@@ -749,6 +768,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   qa: 'QA',
   acceptance: 'AC',
   refinement: 'REF',
+  'refinement-coordination': 'REF-COORD',
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
 }
@@ -2016,7 +2036,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     env.LINEAR_WORK_TYPE = workType
 
     // Flag shared worktree for coordination mode so sub-agents know not to modify git state
-    if (workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination') {
+    if (workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination') {
       env.SHARED_WORKTREE = 'true'
     }
 
@@ -2040,7 +2060,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Coordinators need significantly more turns than standard agents
     // since they spawn sub-agents and poll their status repeatedly.
     // Inflight also gets the bump — it may be resuming coordination work.
-    const needsMoreTurns = workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'inflight'
+    const needsMoreTurns = workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
     // Spawn agent via provider interface
@@ -2947,6 +2967,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         if (effectiveWorkType === 'development') effectiveWorkType = 'coordination'
         else if (effectiveWorkType === 'qa') effectiveWorkType = 'qa-coordination'
         else if (effectiveWorkType === 'acceptance') effectiveWorkType = 'acceptance-coordination'
+        else if (effectiveWorkType === 'refinement') effectiveWorkType = 'refinement-coordination'
         console.log(`Upgraded to coordination work type: ${effectiveWorkType} (parent issue)`)
       }
     }
@@ -3254,6 +3275,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             if (workType === 'development') workType = 'coordination'
             else if (workType === 'qa') workType = 'qa-coordination'
             else if (workType === 'acceptance') workType = 'acceptance-coordination'
+            else if (workType === 'refinement') workType = 'refinement-coordination'
           }
         }
 
@@ -3605,7 +3627,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     // Coordinators need significantly more turns than standard agents
     const resolvedWorkType = workType ?? 'development'
-    const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'inflight'
+    const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
     // Spawn agent via provider interface (with resume if session ID available)

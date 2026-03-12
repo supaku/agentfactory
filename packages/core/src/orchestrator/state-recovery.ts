@@ -281,6 +281,7 @@ export function getTaskListId(
     qa: 'QA',
     acceptance: 'AC',
     refinement: 'REF',
+    'refinement-coordination': 'REF-COORD',
     'qa-coordination': 'QA-COORD',
     'acceptance-coordination': 'AC-COORD',
   }

@@ -267,6 +267,21 @@ Pass/Fail:
 - FAIL (emit <!-- WORK_RESULT:failed -->): Incomplete sub-issues, CI failure, merge conflicts, merge failed
 If ANY issue prevents merging, do NOT attempt to fix it — emit WORK_RESULT:failed with details.`
       break
+    case 'refinement-coordination':
+      basePrompt = `Coordinate refinement across sub-issues for parent issue ${identifier}.
+Read the QA/acceptance failure comments to identify which sub-issues failed and why.
+For each failing sub-issue, update its description with the specific failure feedback and move it back to Backlog.
+Leave passing sub-issues in their current state — do not re-run them.
+Once failing sub-issues are triaged, the orchestrator will move the parent to Backlog for re-coordination.
+
+Refinement Coordination Steps:
+1. Read comments on ${identifier} to find the QA/acceptance failure report
+2. Fetch sub-issues: pnpm af-linear list-sub-issues ${identifier}
+3. For each failing sub-issue: update description with failure details, move to Backlog
+4. Leave passing sub-issues unchanged
+
+IMPORTANT: Do NOT implement fixes yourself — only triage and route feedback to the correct sub-issues.`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION

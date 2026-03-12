@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: refinement-coordination
+  description: Coordinate refinement across sub-issues for parent issues after QA/acceptance failure
+  workType: refinement-coordination
+
+tools:
+  allow:
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Coordinate refinement across sub-issues for parent issue {{identifier}}.
+
+  WORKFLOW:
+  1. Read the QA/acceptance failure comments on {{identifier}} to identify which sub-issues failed and why
+  2. Fetch sub-issues: {{linearCli}} list-sub-issues {{identifier}}
+  3. For each FAILING sub-issue:
+     a. Update its description with the specific failure feedback from the QA/acceptance report
+     b. Move it back to Backlog: {{linearCli}} update-sub-issue <id> --state Backlog --comment "Refinement: <failure summary>"
+  4. Leave PASSING sub-issues in their current state (Finished) — do not re-run them
+  5. Once all failing sub-issues are updated, the parent issue will be moved to Backlog by the orchestrator,
+     which will trigger a coordination agent that picks up only the Backlog sub-issues for re-implementation.
+
+  IMPORTANT CONSTRAINTS:
+  - This is a REFINEMENT task — do NOT implement fixes yourself, only triage and route feedback to sub-issues.
+  - NEVER run {{linearCli}} update-issue --state on the parent issue. The orchestrator manages ALL parent issue status transitions. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: list-sub-issues, list-sub-issue-statuses, get-issue, list-comments, create-comment, update-sub-issue
+
+  {{> partials/shared-worktree-safety}}
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
