@@ -2037,6 +2037,12 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
+    // Coordinators need significantly more turns than standard agents
+    // since they spawn sub-agents and poll their status repeatedly.
+    // Inflight also gets the bump — it may be resuming coordination work.
+    const needsMoreTurns = workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'inflight'
+    const maxTurns = needsMoreTurns ? 200 : undefined
+
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -2046,6 +2052,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers,
+      maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -3596,6 +3603,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
+    // Coordinators need significantly more turns than standard agents
+    const resolvedWorkType = workType ?? 'development'
+    const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'inflight'
+    const maxTurns = needsMoreTurns ? 200 : undefined
+
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -3605,6 +3617,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers,
+      maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })

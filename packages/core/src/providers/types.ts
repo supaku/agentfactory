@@ -65,6 +65,12 @@ export interface AgentSpawnConfig {
    * Created by ToolRegistry.createServers() from registered plugins.
    */
   mcpServers?: Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
+  /**
+   * Maximum number of agentic turns (API round-trips) before stopping.
+   * Coordinators need more turns than standard agents since they poll sub-agent status.
+   * When omitted, the provider's default applies.
+   */
+  maxTurns?: number
 }
 
 /**

@@ -173,6 +173,7 @@ export class ClaudeProvider implements AgentProvider {
         env: config.env,
         abortController,
         mcpServers: config.mcpServers,
+        maxTurns: config.maxTurns,
         allowedTools: config.allowedTools ?? defaultAllowedTools,
         // Programmatic permission handler for autonomous agents.
         // Filesystem hooks may not resolve in worktrees — this callback
