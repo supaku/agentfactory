@@ -8,7 +8,7 @@
 
 **The open-source software factory — multi-agent fleet management for coding agents.**
 
-AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Amp) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
+AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Spring AI) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
 
 ## Packages
 
@@ -19,6 +19,7 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 | **[@supaku/agentfactory-server](./packages/server)** | `@supaku/agentfactory-server` | Redis work queue, session storage, worker pool |
 | **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
 | **[@supaku/agentfactory-nextjs](./packages/nextjs)** | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
+| **[@supaku/agentfactory-mcp](./packages/mcp)** | `@supaku/agentfactory-mcp` | MCP server exposing fleet capabilities to external clients |
 | **[@supaku/create-agentfactory-app](./packages/create-app)** | `@supaku/create-agentfactory-app` | Project scaffolding tool |
 
 ## Quick Start
@@ -152,7 +153,7 @@ AgentFactory supports multiple coding agent providers through a unified interfac
 
 ```typescript
 interface AgentProvider {
-  readonly name: 'claude' | 'codex' | 'amp'
+  readonly name: 'claude' | 'codex' | 'spring-ai'
   spawn(config: AgentSpawnConfig): AgentHandle
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle
 }
@@ -165,13 +166,53 @@ interface AgentHandle {
 }
 ```
 
+Spring AI support means enterprise Java teams can orchestrate Spring AI-based agents in the same fleet as Claude and Codex agents, with the same pipeline, governance, and cost tracking.
+
 Provider is selected via environment variables:
 
 ```bash
 AGENT_PROVIDER=claude            # Global default
 AGENT_PROVIDER_QA=codex          # Per-work-type override
-AGENT_PROVIDER_SOCIAL=amp        # Per-project override
+AGENT_PROVIDER_SOCIAL=spring-ai  # Per-project override
 ```
+
+### Agent-to-Agent Protocol (A2A)
+
+AgentFactory implements the [A2A protocol](https://a2a-protocol.org) (v0.3.0), operating as both client and server.
+
+- **Client mode:** Invoke remote A2A agents (Spring AI or any A2A-compliant agent) as part of an orchestrated fleet. Route specific work types to external agents via environment config.
+- **Server mode:** Expose fleet capabilities via `/.well-known/agent-card.json` discovery and JSON-RPC task submission. Any A2A-aware tool can submit work to the fleet.
+
+This enables mixed fleets across languages, frameworks, and infrastructure with no coupling.
+
+### MCP Server
+
+Fleet capabilities are exposed as an [MCP server](https://modelcontextprotocol.io). Any MCP-aware client (Claude Desktop, Spring AI apps, IDE agents) can interact with the fleet.
+
+**Tools:**
+
+| Tool | Description |
+|------|-------------|
+| `submit-task` | Submit a new task to the fleet |
+| `get-task-status` | Check status of a running task |
+| `list-fleet` | List active agents and their assignments |
+| `get-cost-report` | Retrieve cost tracking data |
+| `stop-agent` | Stop a running agent |
+| `forward-prompt` | Send a prompt to a specific agent |
+
+**Resources:**
+
+| URI | Description |
+|-----|-------------|
+| `fleet://agents` | Current fleet state |
+| `fleet://issues/{id}` | Issue progress details |
+| `fleet://logs/{id}` | Agent execution logs |
+
+Transport: Streamable HTTP for remote access, STDIO for local CLI.
+
+### Spring AI Bench
+
+AgentFactory agents can be evaluated through [Spring AI Bench](https://github.com/spring-ai-community/spring-ai-bench). The multi-agent pipeline (dev, QA, acceptance) improves benchmark reliability over single-agent runs.
 
 ### Work Types
 
@@ -233,7 +274,7 @@ This requires the `@supaku/agentfactory-server` package and a Redis instance.
 |----------|----------|-------------|
 | `LINEAR_ACCESS_TOKEN` | Yes | Linear API key (used by Next.js webhook server) |
 | `LINEAR_API_KEY` | Yes | Linear API key (used by CLI tools) |
-| `AGENT_PROVIDER` | No | Default provider: `claude`, `codex`, `amp` (default: `claude`) |
+| `AGENT_PROVIDER` | No | Default provider: `claude`, `codex`, `spring-ai` (default: `claude`) |
 | `LINEAR_TEAM_ID` | No | Linear team UUID |
 | `REDIS_URL` | For distributed | Redis connection URL |
 
