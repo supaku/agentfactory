@@ -7,8 +7,7 @@ import {
   getSessionStateByIssue,
   storeSessionState,
   updateSessionStatus,
-  listWorkers,
-  getTotalCapacity,
+  storePendingPrompt,
 } from '@supaku/agentfactory-server'
 import type { AgentSessionStatus } from '@supaku/agentfactory-server'
 
@@ -45,8 +44,8 @@ const SESSION_STATUSES = [
  * - get-task-status: Get current status of a task by session or issue ID
  * - list-fleet: List agents and their statuses with optional filtering
  * - get-cost-report: Get cost/token usage for a task or the entire fleet
- * - list-workers: List active workers and their capacity
- * - stop-task: Request to stop a running task
+ * - stop-agent: Request to stop a running agent
+ * - forward-prompt: Forward a follow-up prompt to a running agent session
  */
 export function registerFleetTools(server: McpServer): void {
   // ─── submit-task ───────────────────────────────────────────────────
@@ -274,24 +273,55 @@ export function registerFleetTools(server: McpServer): void {
     },
   )
 
-  // ─── list-workers ──────────────────────────────────────────────────
+  // ─── forward-prompt ────────────────────────────────────────────────
   server.tool(
-    'list-workers',
-    'List all registered workers and their capacity. Returns worker details and fleet-wide capacity summary.',
+    'forward-prompt',
+    'Forward a follow-up prompt to a running agent session. The prompt is queued and delivered to the agent via its message injection mechanism.',
     {
-      status: z
-        .enum(['active', 'draining', 'offline'])
-        .optional()
-        .describe('Filter workers by status'),
+      taskId: z.string().describe('Session ID or Linear issue ID of the running agent'),
+      message: z.string().describe('The follow-up prompt or message to send to the agent'),
     },
     async (args) => {
       try {
-        const workers = await listWorkers()
-        const capacity = await getTotalCapacity(workers)
+        // Resolve the session — try direct lookup, then issue-based
+        let session = await getSessionState(args.taskId)
+        if (!session) {
+          session = await getSessionStateByIssue(args.taskId)
+        }
 
-        const filtered = args.status
-          ? workers.filter((w) => w.status === args.status)
-          : workers
+        if (!session) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: No task found for ID "${args.taskId}"` }],
+            isError: true,
+          }
+        }
+
+        // Only allow forwarding to active sessions
+        const forwardableStatuses: AgentSessionStatus[] = ['running', 'claimed']
+        if (!forwardableStatuses.includes(session.status)) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `Error: Task "${session.linearSessionId}" is in status "${session.status}". Prompts can only be forwarded to running or claimed sessions.`,
+              },
+            ],
+            isError: true,
+          }
+        }
+
+        const pending = await storePendingPrompt(
+          session.linearSessionId,
+          session.issueId,
+          args.message,
+        )
+
+        if (!pending) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: Failed to store pending prompt. Redis may not be configured.` }],
+            isError: true,
+          }
+        }
 
         return {
           content: [
@@ -299,8 +329,11 @@ export function registerFleetTools(server: McpServer): void {
               type: 'text' as const,
               text: JSON.stringify(
                 {
-                  workers: filtered,
-                  capacity,
+                  forwarded: true,
+                  promptId: pending.id,
+                  taskId: session.linearSessionId,
+                  issueId: session.issueId,
+                  sessionStatus: session.status,
                 },
                 null,
                 2,
@@ -317,10 +350,10 @@ export function registerFleetTools(server: McpServer): void {
     },
   )
 
-  // ─── stop-task ─────────────────────────────────────────────────────
+  // ─── stop-agent ────────────────────────────────────────────────────
   server.tool(
-    'stop-task',
-    'Request to stop a running task. Updates the session status to stopped.',
+    'stop-agent',
+    'Request to stop a running agent. Updates the session status to stopped.',
     {
       taskId: z.string().describe('Session ID of the task to stop'),
     },
