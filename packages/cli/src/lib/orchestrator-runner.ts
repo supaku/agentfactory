@@ -39,6 +39,8 @@ export interface OrchestratorRunnerConfig {
   templateDir?: string
   /** Git repository URL for worktree cloning */
   repository?: string
+  /** Force a specific work type (used with --single) */
+  workType?: string
 }
 
 export interface OrchestratorCallbacks {
@@ -170,7 +172,7 @@ export async function runOrchestrator(
       return result
     }
 
-    await orchestrator.spawnAgentForIssue(config.single)
+    await orchestrator.spawnAgentForIssue(config.single, undefined, config.workType as import('@supaku/agentfactory-linear').AgentWorkType | undefined)
     result.agentsSpawned = 1
 
     if (wait) {

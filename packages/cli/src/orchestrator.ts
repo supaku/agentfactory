@@ -35,6 +35,7 @@ function parseArgs(): {
   dryRun: boolean
   templates?: string
   repo?: string
+  workType?: string
 } {
   const args = process.argv.slice(2)
   const result = {
@@ -45,6 +46,7 @@ function parseArgs(): {
     dryRun: false,
     templates: undefined as string | undefined,
     repo: undefined as string | undefined,
+    workType: undefined as string | undefined,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -71,6 +73,9 @@ function parseArgs(): {
       case '--repo':
         result.repo = args[++i]
         break
+      case '--work-type':
+        result.workType = args[++i]
+        break
       case '--help':
       case '-h':
         printHelp()
@@ -96,6 +101,7 @@ Options:
   --dry-run           Show what would be done without executing
   --templates <path>  Custom workflow template directory
   --repo <url>        Git repository URL for worktree cloning
+  --work-type <type>  Force work type (use with --single)
   --help, -h          Show this help message
 
 Environment:
@@ -154,6 +160,7 @@ async function main(): Promise<void> {
       dryRun: args.dryRun,
       templateDir: args.templates,
       repository: args.repo,
+      workType: args.workType,
     })
 
     if (!args.single && !args.dryRun) {
