@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.52
+
+### Fixes
+
+- **Set maxTurns=200 for coordination and inflight agents** — Coordinators were hitting the Claude SDK's default ~30 turn limit before finishing sub-agent polling, causing premature exit with unknown work result. Added `maxTurns` to `AgentSpawnConfig` and threaded it through to the SDK's `query()` options. Coordination, QA-coordination, acceptance-coordination, and inflight work types now get 200 turns.
+
+### Features
+
+- **Add `--work-type` flag to orchestrator CLI** — Allows forcing a specific work type when using `--single` mode, bypassing auto-detection from issue status. Useful for re-running coordination work that would otherwise be detected as inflight.
+- **Add Spring AI agent provider** — New provider for Spring AI-based agents (SUP-1038).
+
 ## v0.7.51
 
 ### Fixes
