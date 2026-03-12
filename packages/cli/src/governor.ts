@@ -274,11 +274,6 @@ async function main(): Promise<void> {
   const updateCheck = await checkForUpdate()
   printUpdateNotification(updateCheck)
 
-  // Auto-update if enabled and no active work
-  await maybeAutoUpdate(updateCheck, {
-    cliFlag: undefined, // Governor doesn't parse --auto-update yet; relies on env
-  })
-
   // -----------------------------------------------------------------------
   // Configure and run
   // -----------------------------------------------------------------------
@@ -295,7 +290,7 @@ async function main(): Promise<void> {
     mode: args.mode,
     dependencies,
     callbacks: {
-      onScanComplete: (results: ScanResult[]) => {
+      onScanComplete: async (results: ScanResult[]) => {
         const apiCalls = linearClient?.apiCallCount
         printScanSummary(results, 0, latestQuota, apiCalls)
 
@@ -311,6 +306,11 @@ async function main(): Promise<void> {
         // Reset for next scan
         linearClient?.resetApiCallCount()
         latestQuota = undefined
+
+        // Auto-update at end of scan when no active dispatches
+        await maybeAutoUpdate(updateCheck, {
+          cliFlag: args.autoUpdate,
+        })
       },
       onError: (error: Error) => {
         log.error('Governor error', { error: error.message })

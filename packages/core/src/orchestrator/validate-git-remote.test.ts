@@ -2,9 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { execSync } from 'child_process'
 import { validateGitRemote } from './orchestrator.js'
 
-vi.mock('child_process', () => ({
-  execSync: vi.fn(),
-}))
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>()
+  return {
+    ...actual,
+    execSync: vi.fn(),
+  }
+})
 
 const mockExecSync = vi.mocked(execSync)
 

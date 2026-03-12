@@ -97,7 +97,7 @@ export interface GovernorDependencies {
  * agent work for actionable issues.
  */
 export interface WorkflowGovernorCallbacks {
-  onScanComplete?: (results: ScanResult[]) => void
+  onScanComplete?: (results: ScanResult[]) => void | Promise<void>
 }
 
 export class WorkflowGovernor {
@@ -206,7 +206,7 @@ export class WorkflowGovernor {
       this.scanning = false
     }
 
-    this.callbacks.onScanComplete?.(results)
+    await this.callbacks.onScanComplete?.(results)
 
     return results
   }

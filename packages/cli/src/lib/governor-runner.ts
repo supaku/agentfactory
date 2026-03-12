@@ -59,7 +59,7 @@ export interface GovernorRunnerConfig {
 }
 
 export interface GovernorRunnerCallbacks {
-  onScanComplete?: (results: ScanResult[]) => void
+  onScanComplete?: (results: ScanResult[]) => void | Promise<void>
   onError?: (error: Error) => void
 }
 
@@ -162,6 +162,7 @@ export interface GovernorCLIArgs {
   enableAutoAcceptance: boolean
   once: boolean
   mode: 'poll-only' | 'event-driven'
+  autoUpdate?: boolean
 }
 
 /**
@@ -182,6 +183,8 @@ export interface GovernorCLIArgs {
  *   --no-auto-qa                Disable auto-QA from Finished
  *   --no-auto-acceptance        Disable auto-acceptance from Delivered
  *   --once                      Run a single scan pass and exit
+ *   --auto-update               Enable automatic updates
+ *   --no-auto-update            Disable automatic updates
  *   --help, -h                  Show help
  */
 export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): GovernorCLIArgs {
@@ -230,6 +233,12 @@ export function parseGovernorArgs(argv: string[] = process.argv.slice(2)): Gover
         break
       case '--no-auto-acceptance':
         result.enableAutoAcceptance = false
+        break
+      case '--auto-update':
+        result.autoUpdate = true
+        break
+      case '--no-auto-update':
+        result.autoUpdate = false
         break
       case '--once':
         result.once = true
