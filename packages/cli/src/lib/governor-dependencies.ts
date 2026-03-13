@@ -141,7 +141,7 @@ export function createRealDependencies(
       try {
         const session = await getSessionStateByIssue(issueId)
         if (!session) return false
-        const activeStatuses = ['running', 'claimed', 'pending']
+        const activeStatuses = ['running', 'claimed', 'pending', 'finalizing']
         return activeStatuses.includes(session.status)
       } catch (err) {
         log.error('hasActiveSession failed', {

@@ -412,8 +412,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'inflight',
   'qa',
   'acceptance',
-  'refinement',
-  'refinement-coordination',
+  // refinement and refinement-coordination are triage-only (no file edits) — run from main repo root
   'coordination',
   'qa-coordination',
   'acceptance-coordination',

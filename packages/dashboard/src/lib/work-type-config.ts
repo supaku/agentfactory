@@ -78,6 +78,12 @@ const workTypes: Record<string, WorkTypeConfig> = {
     bgColor: 'bg-lime-400/10',
     borderColor: 'border-lime-400/15',
   },
+  'refinement-coordination': {
+    label: 'Refine Coord',
+    color: 'text-lime-300',
+    bgColor: 'bg-lime-300/10',
+    borderColor: 'border-lime-300/15',
+  },
   refactor: {
     label: 'Refactor',
     color: 'text-amber-400',

@@ -253,6 +253,12 @@ describe('parseWorkResult', () => {
       ).toBe('failed')
     })
 
+    it('detects "Parent issue marked Finished"', () => {
+      expect(
+        parseWorkResult('Execution: Wave 1...Wave 2...Wave 3. Parent issue marked Finished in Linear.', 'coordination')
+      ).toBe('passed')
+    })
+
     it('does not match coordination patterns for non-coordination work types', () => {
       expect(parseWorkResult('All sub-issues completed.', 'development')).toBe('unknown')
       expect(parseWorkResult('All sub-issues completed.', 'qa')).toBe('unknown')

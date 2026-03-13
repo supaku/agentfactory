@@ -78,6 +78,8 @@ const COORDINATION_PASS_PATTERNS = [
   // Explicit result labels
   /\bCoordination\s+(?:Result|Status|Verdict):\s*\*{0,2}Pass(?:ed)?\*{0,2}/i,
   /\bCoordination\s+Complete/i,
+  // "Parent issue marked Finished" — coordinator confirms parent status update
+  /\bParent\s+issue\s+marked\s+Finished/i,
 ]
 
 const COORDINATION_FAIL_PATTERNS = [
