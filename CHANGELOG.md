@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.56
+
+### Fixes
+
+- **Fix governor race condition causing duplicate QA dispatch (SUP-955)** — `hasActiveSession` did not include `'finalizing'` in active statuses, creating a window where the governor could re-evaluate an issue while its agent was still wrapping up. Added `'finalizing'` to prevent stale `issue-status-changed` events from triggering redundant work.
+- **Fix coordination work result parsing when structured marker is absent (SUP-1059)** — Coordination agents that reported "Parent issue marked Finished in Linear" without a `<!-- WORK_RESULT:passed -->` marker were classified as `unknown`. Added heuristic pattern to detect this natural language confirmation.
+- **Rewrite refinement templates as triage-only agents** — Refinement agents were attempting to implement fixes instead of triaging rejection feedback. Rewrote both `refinement.yaml` and `refinement-coordination.yaml` to be read-only triage agents that produce actionable fix instructions. Disallowed git, test, build, and file-edit tools. Removed refinement work types from `WORK_TYPES_REQUIRING_WORKTREE`.
+- **Add missing `refinement-coordination` dashboard config** — The work type was missing from the dashboard display configuration.
+
 ## v0.7.55
 
 ### Fixes
