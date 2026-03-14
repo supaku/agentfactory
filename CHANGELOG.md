@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.58
+
+### Fixes
+
+- **Add sub-issue guard to Backlog transition webhook handler** — The webhook handler for `→ Backlog` transitions checked `isParentIssue` to upgrade to coordination but never checked `isChildIssue` to skip sub-issues. When a coordinator (e.g., refinement-coordination) updated sub-issue statuses in Linear, the resulting webhooks dispatched each sub-issue as individual development work, consuming all workers. Added the same `isChildIssue` guard pattern already present in the Finished and Delivered handlers.
+
 ## v0.7.57
 
 ### Fixes

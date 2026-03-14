@@ -517,6 +517,22 @@ export async function handleIssueUpdated(
         actorName: actor?.name,
       })
 
+      // Skip development for sub-issues — coordinator manages sub-issue lifecycle via parent
+      let isChildForDev = !!(data.parent)
+      if (!isChildForDev) {
+        try {
+          const checkClient = await config.linearClient.getClient(payload.organizationId)
+          isChildForDev = await checkClient.isChildIssue(issueId)
+        } catch (err) {
+          issueLog.warn('Failed to check if issue is a child', { error: err })
+        }
+      }
+
+      if (isChildForDev) {
+        issueLog.info('Sub-issue detected, skipping individual development trigger')
+        return NextResponse.json({ success: true, skipped: true, reason: 'sub_issue_skipped' })
+      }
+
       // Circuit breaker: check workflow state for escalate-human strategy
       if (isRetry) {
         try {
