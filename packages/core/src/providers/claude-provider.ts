@@ -66,6 +66,9 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
     if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
       return { behavior: 'deny', message: 'force push blocked' }
     }
+    if (/git\s+(checkout|switch)\b/.test(cmd)) {
+      return { behavior: 'deny', message: 'git checkout/switch blocked — agents must not change the checked-out branch' }
+    }
 
     // Allow everything else — autonomous agents run in isolated worktrees
     // managed by the orchestrator, with guardrails at the process level.

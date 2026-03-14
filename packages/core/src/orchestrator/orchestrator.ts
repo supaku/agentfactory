@@ -2972,7 +2972,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       }
     }
 
-    // Create worktree only for code work types (skip for research, backlog-creation)
+    // Create isolated worktree for the agent
     let worktreePath: string | undefined
     let worktreeIdentifier: string | undefined
 
@@ -3279,7 +3279,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
         }
 
-        // Only create worktree for code work types
+        // Create isolated worktree for the agent
         if (WORK_TYPES_REQUIRING_WORKTREE.has(workType)) {
           const result = this.createWorktree(identifier, workType)
           worktreePath = result.worktreePath

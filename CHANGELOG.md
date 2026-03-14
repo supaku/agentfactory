@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.57
+
+### Fixes
+
+- **Block `git checkout` and `git switch` in Claude provider** — Agents running in the main repo directory (research, backlog-creation) could run `git checkout <branch>`, changing the IDE's checked-out branch. This caused cascading failures where subsequent agents couldn't create worktrees for the same branch. Added deny rules to `autonomousCanUseTool` in `claude-provider.ts`.
+- **Isolate all work types in git worktrees** — Research, backlog-creation, refinement, and refinement-coordination agents previously ran from the main repo root (`process.cwd()`), giving them write access to the IDE's working tree. All work types now get isolated `.worktrees/` directories, eliminating the risk of agents mutating the main checkout.
+
 ## v0.7.56
 
 ### Fixes

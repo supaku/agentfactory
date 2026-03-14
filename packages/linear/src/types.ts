@@ -404,18 +404,22 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
 }
 
 /**
- * Work types that produce code changes and require an isolated git worktree.
- * Non-code work types (research, backlog-creation) run from the main repo root.
+ * Work types that require an isolated git worktree.
+ * ALL work types now get worktrees to prevent agents from mutating the main
+ * checkout (e.g., running `git checkout` in the IDE's working tree).
  */
 export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set([
   'development',
   'inflight',
   'qa',
   'acceptance',
-  // refinement and refinement-coordination are triage-only (no file edits) — run from main repo root
   'coordination',
   'qa-coordination',
   'acceptance-coordination',
+  'research',
+  'backlog-creation',
+  'refinement',
+  'refinement-coordination',
 ])
 
 /**
