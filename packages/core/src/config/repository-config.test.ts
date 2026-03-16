@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects } from './repository-config.js'
+import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath } from './repository-config.js'
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -105,6 +105,41 @@ sharedPaths:
     })
   })
 
+  it('parses valid YAML with mixed string and object projectPaths', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/org/monorepo
+projectPaths:
+  Social: apps/social
+  Family iOS:
+    path: apps/family-ios
+    packageManager: none
+    buildCommand: "make build"
+    testCommand: "make test"
+sharedPaths:
+  - packages/ui
+`
+    )
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result).toEqual({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      repository: 'github.com/org/monorepo',
+      projectPaths: {
+        Social: 'apps/social',
+        'Family iOS': {
+          path: 'apps/family-ios',
+          packageManager: 'none',
+          buildCommand: 'make build',
+          testCommand: 'make test',
+        },
+      },
+      sharedPaths: ['packages/ui'],
+    })
+  })
+
   it('throws on invalid schema — allowedProjects is not an array', () => {
     mockExistsSync.mockReturnValue(true)
     mockReadFileSync.mockReturnValue(
@@ -151,7 +186,7 @@ describe('RepositoryConfigSchema', () => {
     ).toThrow()
   })
 
-  it('validates config with projectPaths only', () => {
+  it('validates config with projectPaths only (string shorthand)', () => {
     const result = RepositoryConfigSchema.parse({
       apiVersion: 'v1',
       kind: 'RepositoryConfig',
@@ -163,6 +198,46 @@ describe('RepositoryConfigSchema', () => {
     })
     expect(result.projectPaths).toEqual({ Social: 'apps/social', Family: 'apps/family' })
     expect(result.allowedProjects).toBeUndefined()
+  })
+
+  it('validates config with projectPaths object form', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: {
+        Social: 'apps/social',
+        'Family iOS': {
+          path: 'apps/family-ios',
+          packageManager: 'none',
+          buildCommand: 'make build',
+          testCommand: 'make test',
+          validateCommand: 'make build',
+        },
+      },
+    })
+    expect(result.projectPaths).toEqual({
+      Social: 'apps/social',
+      'Family iOS': {
+        path: 'apps/family-ios',
+        packageManager: 'none',
+        buildCommand: 'make build',
+        testCommand: 'make test',
+        validateCommand: 'make build',
+      },
+    })
+  })
+
+  it('validates config with mixed string and object projectPaths', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: {
+        Social: 'apps/social',
+        Family: 'apps/family',
+        'Family iOS': { path: 'apps/family-ios', packageManager: 'none' },
+      },
+    })
+    expect(Object.keys(result.projectPaths!)).toEqual(['Social', 'Family', 'Family iOS'])
   })
 
   it('validates config with projectPaths and sharedPaths', () => {
@@ -289,5 +364,157 @@ describe('getEffectiveAllowedProjects', () => {
       kind: 'RepositoryConfig',
     })
     expect(getEffectiveAllowedProjects(config)).toBeUndefined()
+  })
+
+  it('returns keys from mixed string/object projectPaths', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: {
+        Social: 'apps/social',
+        'Family iOS': { path: 'apps/family-ios', packageManager: 'none' },
+      },
+    })
+    expect(getEffectiveAllowedProjects(config)).toEqual(['Social', 'Family iOS'])
+  })
+})
+
+describe('getProjectConfig', () => {
+  it('returns null when projectPaths is not set', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(getProjectConfig(config, 'Social')).toBeNull()
+  })
+
+  it('returns null for unknown project', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: { Social: 'apps/social' },
+    })
+    expect(getProjectConfig(config, 'Unknown')).toBeNull()
+  })
+
+  it('normalizes string shorthand to ProjectConfig', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: { Social: 'apps/social' },
+    })
+    const result = getProjectConfig(config, 'Social')
+    expect(result).toEqual({
+      path: 'apps/social',
+      packageManager: undefined,
+      buildCommand: undefined,
+      testCommand: undefined,
+      validateCommand: undefined,
+    })
+  })
+
+  it('returns per-project overrides from object form', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: {
+        'Family iOS': {
+          path: 'apps/family-ios',
+          packageManager: 'none',
+          buildCommand: 'make build',
+          testCommand: 'make test',
+          validateCommand: 'make build',
+        },
+      },
+    })
+    const result = getProjectConfig(config, 'Family iOS')
+    expect(result).toEqual({
+      path: 'apps/family-ios',
+      packageManager: 'none',
+      buildCommand: 'make build',
+      testCommand: 'make test',
+      validateCommand: 'make build',
+    })
+  })
+
+  it('falls back to repo-wide defaults when per-project overrides are not set', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      buildCommand: 'pnpm build',
+      testCommand: 'pnpm test',
+      projectPaths: { Social: 'apps/social' },
+    })
+    const result = getProjectConfig(config, 'Social')
+    expect(result).toEqual({
+      path: 'apps/social',
+      packageManager: undefined,
+      buildCommand: 'pnpm build',
+      testCommand: 'pnpm test',
+      validateCommand: undefined,
+    })
+  })
+
+  it('per-project overrides take precedence over repo-wide defaults', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      buildCommand: 'pnpm build',
+      testCommand: 'pnpm test',
+      packageManager: 'pnpm',
+      projectPaths: {
+        'Family iOS': {
+          path: 'apps/family-ios',
+          packageManager: 'none',
+          buildCommand: 'make build',
+          testCommand: 'make test',
+        },
+      },
+    })
+    const result = getProjectConfig(config, 'Family iOS')
+    expect(result).toEqual({
+      path: 'apps/family-ios',
+      packageManager: 'none',
+      buildCommand: 'make build',
+      testCommand: 'make test',
+      validateCommand: undefined,
+    })
+  })
+})
+
+describe('getProjectPath', () => {
+  it('returns path from string shorthand', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: { Social: 'apps/social' },
+    })
+    expect(getProjectPath(config, 'Social')).toBe('apps/social')
+  })
+
+  it('returns path from object form', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: { 'Family iOS': { path: 'apps/family-ios' } },
+    })
+    expect(getProjectPath(config, 'Family iOS')).toBe('apps/family-ios')
+  })
+
+  it('returns undefined for unknown project', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      projectPaths: { Social: 'apps/social' },
+    })
+    expect(getProjectPath(config, 'Unknown')).toBeUndefined()
+  })
+
+  it('returns undefined when projectPaths is not set', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(getProjectPath(config, 'Social')).toBeUndefined()
   })
 })

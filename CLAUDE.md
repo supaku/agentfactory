@@ -197,11 +197,26 @@ projectPaths:
 sharedPaths:
   - packages/ui
   - packages/lexical
+
+# Monorepo with per-project build overrides (mixed platforms)
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/renseiai/renseiai
+projectPaths:
+  Social: apps/social                    # string shorthand (Node.js default)
+  Family iOS:                            # object form with per-project overrides
+    path: apps/family-ios
+    packageManager: none
+    buildCommand: "make build"
+    testCommand: "make test"
+    validateCommand: "make build"
+sharedPaths:
+  - packages/ui
 ```
 
 - `repository`: Git remote URL pattern validated at startup against `git remote get-url origin`
 - `allowedProjects`: Only issues from these Linear projects are processed
-- `projectPaths`: Maps project names to their root directory (mutually exclusive with `allowedProjects`). When set, allowed projects are auto-derived from keys. Agents receive directory scoping instructions in their prompts.
+- `projectPaths`: Maps project names to their root directory or a full config object (mutually exclusive with `allowedProjects`). String shorthand: `ProjectName: path`. Object form: `ProjectName: { path, packageManager?, buildCommand?, testCommand?, validateCommand? }`. Per-project overrides take precedence over repo-wide defaults. When set, allowed projects are auto-derived from keys.
 - `sharedPaths`: Directories any project's agent may modify (only used with `projectPaths`)
 
 ### Validation layers

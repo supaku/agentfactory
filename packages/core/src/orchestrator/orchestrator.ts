@@ -53,7 +53,8 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
-import { loadRepositoryConfig } from '../config/index.js'
+import { loadRepositoryConfig, getProjectConfig, getProjectPath } from '../config/index.js'
+import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry, linearPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
@@ -820,6 +821,8 @@ export class AgentOrchestrator {
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
   private allowedProjects?: string[]
+  // Full repository config from .agentfactory/config.yaml
+  private repoConfig?: RepositoryConfig
   // Project-to-path mapping from .agentfactory/config.yaml (monorepo support)
   private projectPaths?: Record<string, string>
   // Shared paths from .agentfactory/config.yaml (monorepo support)
@@ -903,6 +906,7 @@ export class AgentOrchestrator {
       if (repoRoot) {
         const repoConfig = loadRepositoryConfig(repoRoot)
         if (repoConfig) {
+          this.repoConfig = repoConfig
           // Use repository from config as fallback if not set in OrchestratorConfig
           if (!this.config.repository && repoConfig.repository) {
             this.config.repository = repoConfig.repository
@@ -910,20 +914,26 @@ export class AgentOrchestrator {
           }
           // Store allowedProjects for backlog filtering
           if (repoConfig.projectPaths) {
-            this.projectPaths = repoConfig.projectPaths
+            // Resolve projectPaths to plain path strings (handles both string and object forms)
+            this.projectPaths = Object.fromEntries(
+              Object.entries(repoConfig.projectPaths).map(([name, value]) => [
+                name,
+                typeof value === 'string' ? value : value.path,
+              ])
+            )
             this.sharedPaths = repoConfig.sharedPaths
             this.allowedProjects = Object.keys(repoConfig.projectPaths)
           } else if (repoConfig.allowedProjects) {
             this.allowedProjects = repoConfig.allowedProjects
           }
-          // Store non-Node project config
+          // Store non-Node project config (repo-wide defaults)
           if (repoConfig.linearCli) {
             this.linearCli = repoConfig.linearCli
           }
           if (repoConfig.packageManager) {
             this.packageManager = repoConfig.packageManager
           }
-          // Store configurable build/test/validate commands
+          // Store configurable build/test/validate commands (repo-wide defaults)
           if (repoConfig.buildCommand) {
             this.buildCommand = repoConfig.buildCommand
           }
@@ -1836,17 +1846,22 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     if (customPrompt) {
       prompt = customPrompt
     } else if (this.templateRegistry?.hasTemplate(workType)) {
+      // Resolve per-project config overrides (falls back to repo-wide defaults)
+      const perProject = projectName && this.repoConfig
+        ? getProjectConfig(this.repoConfig, projectName)
+        : null
+
       const context: TemplateContext = {
         identifier,
         repository: this.config.repository,
-        projectPath: this.projectPaths?.[projectName ?? ''],
+        projectPath: perProject?.path ?? this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
         useToolPlugins: this.provider.name === 'claude',
         linearCli: this.linearCli ?? 'pnpm af-linear',
-        packageManager: this.packageManager ?? 'pnpm',
-        buildCommand: this.buildCommand,
-        testCommand: this.testCommand,
-        validateCommand: this.validateCommand,
+        packageManager: perProject?.packageManager ?? this.packageManager ?? 'pnpm',
+        buildCommand: perProject?.buildCommand ?? this.buildCommand,
+        testCommand: perProject?.testCommand ?? this.testCommand,
+        validateCommand: perProject?.validateCommand ?? this.validateCommand,
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)

@@ -16,13 +16,39 @@ import YAML from 'yaml'
 // Zod Schema
 // ---------------------------------------------------------------------------
 
+/** Per-project configuration (object form of projectPaths values) */
+export const ProjectConfigSchema = z.object({
+  /** Root directory for this project within the repo */
+  path: z.string(),
+  /** Package manager override for this project */
+  packageManager: z.enum(['pnpm', 'npm', 'yarn', 'bun', 'none']).optional(),
+  /** Build command override for this project */
+  buildCommand: z.string().optional(),
+  /** Test command override for this project */
+  testCommand: z.string().optional(),
+  /** Validation command override for this project */
+  validateCommand: z.string().optional(),
+})
+
+export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
+
+/**
+ * projectPaths values can be a string (path shorthand) or a full ProjectConfig object.
+ * String values are normalized to { path: value } by getProjectConfig().
+ */
+const ProjectPathValueSchema = z.union([z.string(), ProjectConfigSchema])
+
 export const RepositoryConfigSchema = z.object({
   apiVersion: z.string(),
   kind: z.literal('RepositoryConfig'),
   repository: z.string().optional(),
   allowedProjects: z.array(z.string()).optional(),
-  /** Maps Linear project names to their root directory within the repo (e.g., { Family: 'apps/family' }) */
-  projectPaths: z.record(z.string(), z.string()).optional(),
+  /**
+   * Maps Linear project names to their root directory or full config.
+   * String shorthand: { Family: 'apps/family' }
+   * Object form: { 'Family iOS': { path: 'apps/family-ios', packageManager: 'none', buildCommand: 'make build' } }
+   */
+  projectPaths: z.record(z.string(), ProjectPathValueSchema).optional(),
   /** Shared directories that any project's agent may modify (e.g., ['packages/ui']) */
   sharedPaths: z.array(z.string()).optional(),
   /**
@@ -80,6 +106,39 @@ export function getEffectiveAllowedProjects(config: RepositoryConfig): string[] 
     return Object.keys(config.projectPaths)
   }
   return config.allowedProjects
+}
+
+/**
+ * Returns the normalized ProjectConfig for a given project name.
+ * Handles both string shorthand and object form of projectPaths values.
+ * Per-project overrides take precedence over repo-wide defaults.
+ */
+export function getProjectConfig(config: RepositoryConfig, projectName: string): ProjectConfig | null {
+  if (!config.projectPaths) return null
+  const value = config.projectPaths[projectName]
+  if (value === undefined) return null
+
+  // Normalize string shorthand to object form
+  const projectConfig = typeof value === 'string' ? { path: value } : value
+
+  return {
+    path: projectConfig.path,
+    packageManager: projectConfig.packageManager ?? config.packageManager,
+    buildCommand: projectConfig.buildCommand ?? config.buildCommand,
+    testCommand: projectConfig.testCommand ?? config.testCommand,
+    validateCommand: projectConfig.validateCommand ?? config.validateCommand,
+  }
+}
+
+/**
+ * Returns just the path string for a given project name.
+ * Handles both string shorthand and object form.
+ */
+export function getProjectPath(config: RepositoryConfig, projectName: string): string | undefined {
+  if (!config.projectPaths) return undefined
+  const value = config.projectPaths[projectName]
+  if (value === undefined) return undefined
+  return typeof value === 'string' ? value : value.path
 }
 
 // ---------------------------------------------------------------------------
