@@ -163,6 +163,12 @@ export class ClaudeProvider implements AgentProvider {
           'Bash(cargo:*)',
           'Bash(rustc:*)',
           'Bash(go:*)',
+          // iOS/Apple development tools
+          'Bash(xcodebuild:*)',
+          'Bash(xcrun:*)',
+          'Bash(xcodegen:*)',
+          'Bash(swift:*)',
+          'Bash(swiftlint:*)',
           'Bash(bash:*)',
           'Bash(sh:*)',
           'Bash(./:*)',

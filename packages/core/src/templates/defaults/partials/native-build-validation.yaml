@@ -15,6 +15,13 @@ content: |
   4. Check for go.mod (Go) → go build ./... / go test ./... / go vet ./...
   5. Check for Makefile (C/C++) → make / make test
   6. Check for meson.build (C/C++) → meson compile -C build / meson test -C build
+  7. Check for project.yml (XcodeGen) / *.xcodeproj / Package.swift (iOS/macOS):
+     - If project.yml exists: run `xcodegen generate` (or `make generate`) before building
+     - Never edit .xcodeproj files directly when project.yml exists — regenerate instead
+     - Build: xcodebuild -scheme <Scheme> -destination 'platform=iOS Simulator,name=iPhone 16' build
+     - Test: xcodebuild -scheme <Scheme> -destination 'platform=iOS Simulator,name=iPhone 16' test
+     - Use simulator destinations for headless builds (avoids code signing requirements)
+     - If Package.swift exists without .xcodeproj: swift build / swift test
 
   Safety checks for native code:
   - Memory safety: buffer overflows, use-after-free, double-free
