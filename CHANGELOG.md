@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.8.1
+
+### Features
+
+- **Add MCP server to release pipeline** — `@renseiai/agentfactory-mcp-server` is now included in automated npm + GitHub Packages publishing with provenance attestation.
+- **Add MCP server README** — Documents tools, transports, Claude Desktop configuration, and environment variables.
+
+### Fixes
+
+- **Fix npm publish warnings** — Normalize `repository.url` to `git+https://` format, remove unsupported `exports`/`main`/`types` from `publishConfig`, and strip `./` prefix from `bin` entry paths.
+- **Re-add `--provenance` to release workflow** — OIDC Trusted Publishers are now configured for the `@renseiai` npm scope.
+
+## v0.8.0
+
+### Breaking
+
+- **Org migration: `@supaku/*` → `@renseiai/*`** — All npm packages renamed from `@supaku/` to `@renseiai/` scope. GitHub repo transferred to `github.com/renseiai/agentfactory`. Domains updated: `supaku.com` → `rensei.ai`, `supaku.dev` → `rensei.dev`. Java namespace updated: `com.supaku` → `com.renseiai`. Old `@supaku/*` packages are deprecated on npm with migration instructions.
+
 ## v0.7.58
 
 ### Fixes
