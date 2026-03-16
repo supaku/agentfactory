@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.2
+
+### Fixes
+
+- **Fix provenance verification failure** — `repository.url` in package.json used lowercase `renseiai` but GitHub org is `RenseiAI`. npm provenance verification requires exact case match.
+
 ## v0.8.1
 
 ### Features

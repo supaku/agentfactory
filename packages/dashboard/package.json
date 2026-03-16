@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-dashboard",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Premium dashboard UI components for AgentFactory",
   "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
@@ -9,12 +9,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/renseiai/agentfactory.git",
+    "url": "git+https://github.com/RenseiAI/agentfactory.git",
     "directory": "packages/dashboard"
   },
-  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/dashboard",
+  "homepage": "https://github.com/RenseiAI/agentfactory/tree/main/packages/dashboard",
   "bugs": {
-    "url": "https://github.com/renseiai/agentfactory/issues"
+    "url": "https://github.com/RenseiAI/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "type": "module",
   "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
   "author": "Rensei AI (https://rensei.ai)",
@@ -10,12 +10,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/renseiai/agentfactory.git",
+    "url": "git+https://github.com/RenseiAI/agentfactory.git",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/core",
+  "homepage": "https://github.com/RenseiAI/agentfactory/tree/main/packages/core",
   "bugs": {
-    "url": "https://github.com/renseiai/agentfactory/issues"
+    "url": "https://github.com/RenseiAI/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public"

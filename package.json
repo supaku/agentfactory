@@ -5,11 +5,11 @@
   "description": "The open-source software factory — multi-agent fleet management for coding agents",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/renseiai/agentfactory.git"
+    "url": "git+https://github.com/RenseiAI/agentfactory.git"
   },
-  "homepage": "https://github.com/renseiai/agentfactory#readme",
+  "homepage": "https://github.com/RenseiAI/agentfactory#readme",
   "bugs": {
-    "url": "https://github.com/renseiai/agentfactory/issues"
+    "url": "https://github.com/RenseiAI/agentfactory/issues"
   },
   "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
