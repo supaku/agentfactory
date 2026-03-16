@@ -1,4 +1,4 @@
-# @supaku/agentfactory-dashboard
+# @renseiai/agentfactory-dashboard
 
 A self-contained React component library for AgentFactory fleet management. Provides a complete dashboard UI with real-time data fetching, a dark design system with orange accent, and four page-level components.
 
@@ -6,19 +6,19 @@ A self-contained React component library for AgentFactory fleet management. Prov
 
 Want to run the dashboard without building from source? Use the one-click deploy template:
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/A7hIuF?referralCode=MwgIWL)
 
 > Railway includes Redis automatically. Vercel requires adding [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash Redis](https://upstash.com/) after deployment.
 
-See the [dashboard template](https://github.com/supaku/agentfactory/tree/main/templates/dashboard) for full setup instructions.
+See the [dashboard template](https://github.com/renseiai/agentfactory/tree/main/templates/dashboard) for full setup instructions.
 
 ## Installation
 
 ```bash
-npm install @supaku/agentfactory-dashboard
+npm install @renseiai/agentfactory-dashboard
 # or
-pnpm add @supaku/agentfactory-dashboard
+pnpm add @renseiai/agentfactory-dashboard
 ```
 
 ### Peer Dependencies
@@ -35,7 +35,7 @@ The package distributes TypeScript source — no build step. Add it to `transpil
 ```typescript
 // next.config.ts
 const nextConfig: NextConfig = {
-  transpilePackages: ['@supaku/agentfactory-dashboard'],
+  transpilePackages: ['@renseiai/agentfactory-dashboard'],
 }
 ```
 
@@ -45,18 +45,18 @@ Import the globals CSS and use the tailwind preset:
 
 ```css
 /* globals.css */
-@import '@supaku/agentfactory-dashboard/styles';
+@import '@renseiai/agentfactory-dashboard/styles';
 ```
 
 ```typescript
 // tailwind.config.ts
-import dashboardPreset from '@supaku/agentfactory-dashboard/tailwind-preset'
+import dashboardPreset from '@renseiai/agentfactory-dashboard/tailwind-preset'
 
 export default {
   presets: [dashboardPreset],
   content: [
     './src/**/*.{ts,tsx}',
-    './node_modules/@supaku/agentfactory-dashboard/src/**/*.{ts,tsx}',
+    './node_modules/@renseiai/agentfactory-dashboard/src/**/*.{ts,tsx}',
   ],
 }
 ```
@@ -66,7 +66,7 @@ export default {
 Skip the preset and globals import. Instead, register the design tokens directly in your `globals.css`:
 
 ```css
-@source "../../node_modules/@supaku/agentfactory-dashboard/src";
+@source "../../node_modules/@renseiai/agentfactory-dashboard/src";
 
 @theme {
   /* Dashboard colors */
@@ -125,7 +125,7 @@ import {
   PipelinePage,
   SessionPage,
   SettingsPage,
-} from '@supaku/agentfactory-dashboard'
+} from '@renseiai/agentfactory-dashboard'
 ```
 
 | Component | Route | Description |
@@ -144,7 +144,7 @@ Wrap each page in `DashboardShell` for the sidebar layout:
 // app/page.tsx
 'use client'
 
-import { DashboardShell, DashboardPage as FleetPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, DashboardPage as FleetPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function Home() {
@@ -161,7 +161,7 @@ export default function Home() {
 // app/sessions/[id]/page.tsx
 'use client'
 
-import { DashboardShell, SessionPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, SessionPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname, useParams } from 'next/navigation'
 
 export default function SessionDetail() {
@@ -178,7 +178,7 @@ export default function SessionDetail() {
 ## Layout Components
 
 ```tsx
-import { DashboardShell, Sidebar, TopBar, BottomBar } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, Sidebar, TopBar, BottomBar } from '@renseiai/agentfactory-dashboard'
 ```
 
 - **DashboardShell** — Full layout with sidebar, top bar, bottom bar, and mobile hamburger menu
@@ -189,19 +189,19 @@ import { DashboardShell, Sidebar, TopBar, BottomBar } from '@supaku/agentfactory
 ## Fleet Components
 
 ```tsx
-import { FleetOverview, AgentCard, StatCard, StatusDot, ProviderIcon } from '@supaku/agentfactory-dashboard'
+import { FleetOverview, AgentCard, StatCard, StatusDot, ProviderIcon } from '@renseiai/agentfactory-dashboard'
 ```
 
 ## Pipeline Components
 
 ```tsx
-import { PipelineView, PipelineColumn, PipelineCard } from '@supaku/agentfactory-dashboard'
+import { PipelineView, PipelineColumn, PipelineCard } from '@renseiai/agentfactory-dashboard'
 ```
 
 ## Session Components
 
 ```tsx
-import { SessionList, SessionDetail, SessionTimeline, TokenChart } from '@supaku/agentfactory-dashboard'
+import { SessionList, SessionDetail, SessionTimeline, TokenChart } from '@renseiai/agentfactory-dashboard'
 ```
 
 ## Data Hooks
@@ -209,7 +209,7 @@ import { SessionList, SessionDetail, SessionTimeline, TokenChart } from '@supaku
 SWR-based hooks that fetch from AgentFactory API routes with automatic 5-second refresh:
 
 ```tsx
-import { useStats, useSessions, useWorkers } from '@supaku/agentfactory-dashboard'
+import { useStats, useSessions, useWorkers } from '@renseiai/agentfactory-dashboard'
 ```
 
 | Hook | Endpoint | Returns |
@@ -221,8 +221,8 @@ import { useStats, useSessions, useWorkers } from '@supaku/agentfactory-dashboar
 ## Utilities
 
 ```tsx
-import { cn, formatDuration, formatCost, formatTokens, formatRelativeTime } from '@supaku/agentfactory-dashboard'
-import { getWorkTypeConfig, getStatusConfig } from '@supaku/agentfactory-dashboard'
+import { cn, formatDuration, formatCost, formatTokens, formatRelativeTime } from '@renseiai/agentfactory-dashboard'
+import { getWorkTypeConfig, getStatusConfig } from '@renseiai/agentfactory-dashboard'
 ```
 
 ## UI Primitives
@@ -233,7 +233,7 @@ Re-exports of Radix-based primitives styled for the dashboard:
 import {
   Button, Card, Badge, Skeleton, Separator,
   ScrollArea, Tabs, Tooltip, Sheet, DropdownMenu,
-} from '@supaku/agentfactory-dashboard'
+} from '@renseiai/agentfactory-dashboard'
 ```
 
 ## Design System

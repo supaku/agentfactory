@@ -1,4 +1,4 @@
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 import type { AgentWorkResult } from './types.js'
 
 /**

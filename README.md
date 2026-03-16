@@ -1,10 +1,10 @@
-# Supaku AgentFactory
+# Rensei AI AgentFactory
 
-[![npm version](https://img.shields.io/npm/v/@supaku/agentfactory)](https://www.npmjs.com/package/@supaku/agentfactory)
+[![npm version](https://img.shields.io/npm/v/@renseiai/agentfactory)](https://www.npmjs.com/package/@renseiai/agentfactory)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Linear](https://img.shields.io/badge/Linear-Integrated-5E6AD2?logo=linear)](https://linear.app)
-[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-dark.svg)](https://github.com/supaku/agentfactory)
+[![Built with AgentFactory](https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with-dark.svg)](https://github.com/renseiai/agentfactory)
 
 **The open-source software factory — multi-agent fleet management for coding agents.**
 
@@ -14,13 +14,13 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| **[@supaku/agentfactory](./packages/core)** | `@supaku/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
-| **[@supaku/agentfactory-linear](./packages/linear)** | `@supaku/agentfactory-linear` | Linear issue tracker integration |
-| **[@supaku/agentfactory-server](./packages/server)** | `@supaku/agentfactory-server` | Redis work queue, session storage, worker pool |
-| **[@supaku/agentfactory-cli](./packages/cli)** | `@supaku/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
-| **[@supaku/agentfactory-nextjs](./packages/nextjs)** | `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
-| **[@supaku/agentfactory-mcp](./packages/mcp)** | `@supaku/agentfactory-mcp` | MCP server exposing fleet capabilities to external clients |
-| **[@supaku/create-agentfactory-app](./packages/create-app)** | `@supaku/create-agentfactory-app` | Project scaffolding tool |
+| **[@renseiai/agentfactory](./packages/core)** | `@renseiai/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
+| **[@renseiai/agentfactory-linear](./packages/linear)** | `@renseiai/agentfactory-linear` | Linear issue tracker integration |
+| **[@renseiai/agentfactory-server](./packages/server)** | `@renseiai/agentfactory-server` | Redis work queue, session storage, worker pool |
+| **[@renseiai/agentfactory-cli](./packages/cli)** | `@renseiai/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
+| **[@renseiai/agentfactory-nextjs](./packages/nextjs)** | `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
+| **[@renseiai/agentfactory-mcp](./packages/mcp)** | `@renseiai/agentfactory-mcp` | MCP server exposing fleet capabilities to external clients |
+| **[@renseiai/create-agentfactory-app](./packages/create-app)** | `@renseiai/create-agentfactory-app` | Project scaffolding tool |
 
 ## Quick Start
 
@@ -30,15 +30,15 @@ Deploy the dashboard with a single click — no local setup required:
 
 | Platform | Deploy | Redis |
 |----------|--------|-------|
-| **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
+| **Vercel** | [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables) | Add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) or [Upstash](https://upstash.com/) after deploy |
 | **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/A7hIuF?referralCode=MwgIWL) | Bundled automatically |
 
-> See the [dashboard template](https://github.com/supaku/agentfactory/tree/main/templates/dashboard) for full setup instructions.
+> See the [dashboard template](https://github.com/renseiai/agentfactory/tree/main/templates/dashboard) for full setup instructions.
 
 ### Create a new project (recommended for customization)
 
 ```bash
-npx @supaku/create-agentfactory-app my-agent
+npx @renseiai/create-agentfactory-app my-agent
 
 cd my-agent
 cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN
@@ -52,7 +52,7 @@ For production use, AgentFactory provides a webhook server that receives Linear 
 
 ```typescript
 // src/lib/config.ts
-import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 export const routes = createAllRoutes({
   linearClient: createDefaultLinearClientResolver(),
@@ -69,7 +69,7 @@ export const GET = routes.webhook.GET
 ### Spawn an agent on a single issue
 
 ```typescript
-import { createOrchestrator } from '@supaku/agentfactory'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 3,
@@ -264,7 +264,7 @@ For teams that need horizontal scaling, AgentFactory supports a distributed work
                        └─────────┘     └────────────────┘
 ```
 
-This requires the `@supaku/agentfactory-server` package and a Redis instance.
+This requires the `@renseiai/agentfactory-server` package and a Redis instance.
 
 ## Configuration
 
@@ -299,7 +299,7 @@ interface OrchestratorConfig {
 
 ## Linear Integration
 
-The `@supaku/agentfactory-linear` package provides:
+The `@renseiai/agentfactory-linear` package provides:
 
 - **Agent sessions** — lifecycle management with status transitions
 - **Activity streaming** — thoughts, actions, and responses visible in Linear
@@ -308,7 +308,7 @@ The `@supaku/agentfactory-linear` package provides:
 - **Sub-issue coordination** — dependency-aware parallel execution
 
 ```typescript
-import { createLinearAgentClient, createAgentSession } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient, createAgentSession } from '@renseiai/agentfactory-linear'
 
 const client = createLinearAgentClient({ apiKey: process.env.LINEAR_API_KEY! })
 const session = createAgentSession({
@@ -391,30 +391,30 @@ AgentFactory powers real products in production:
 
 | Product | What it does |
 |---------|-------------|
-| [Supaku Social](https://supaku.com/products/social) | AI-powered social media management |
-| [Supaku Art](https://art.supaku.com) | Art collection curation platform |
-| [Supaku Account](https://account.supaku.com) | Unified auth across the Supaku ecosystem |
+| [Rensei Social](https://rensei.ai/products/social) | AI-powered social media management |
+| [Rensei Art](https://art.rensei.ai) | Art collection curation platform |
+| [Rensei Account](https://account.rensei.ai) | Unified auth across the Rensei AI ecosystem |
 
-Building with AgentFactory? Add the badge to your project and [share it in Discussions](https://github.com/supaku/agentfactory/discussions).
+Building with AgentFactory? Add the badge to your project and [share it in Discussions](https://github.com/renseiai/agentfactory/discussions).
 
 ## Badge
 
 If you're building with AgentFactory, add the badge to your README:
 
 <!-- Dark badge (default) -->
-[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with.svg)](https://github.com/supaku/agentfactory)
+[![Built with AgentFactory](https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with.svg)](https://github.com/renseiai/agentfactory)
 
 <!-- Light badge (for dark READMEs) -->
-[![Built with AgentFactory](https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-light.svg)](https://github.com/supaku/agentfactory)
+[![Built with AgentFactory](https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with-light.svg)](https://github.com/renseiai/agentfactory)
 
 Or use HTML for GitHub theme-switching (auto light/dark):
 
 ```html
-<a href="https://github.com/supaku/agentfactory">
+<a href="https://github.com/renseiai/agentfactory">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with-light.svg">
-    <img alt="Built with AgentFactory" src="https://raw.githubusercontent.com/supaku/agentfactory/main/docs/assets/badge-built-with.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with-light.svg">
+    <img alt="Built with AgentFactory" src="https://raw.githubusercontent.com/renseiai/agentfactory/main/docs/assets/badge-built-with.svg">
   </picture>
 </a>
 ```
@@ -425,4 +425,4 @@ MIT - see [LICENSE](./LICENSE)
 
 ---
 
-Built by [Supaku](https://supaku.com)
+Built by [Rensei AI](https://rensei.ai)

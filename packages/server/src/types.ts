@@ -1,7 +1,7 @@
 /**
  * Shared types for the server package
  *
- * AgentWorkType is re-exported from here until @supaku/agentfactory-linear
+ * AgentWorkType is re-exported from here until @renseiai/agentfactory-linear
  * provides it. Consumers should import from this module.
  */
 

@@ -1,4 +1,4 @@
-# Gitleaks configuration for Supaku AgentFactory
+# Gitleaks configuration for Rensei AgentFactory
 # https://github.com/gitleaks/gitleaks
 
 title = "AgentFactory gitleaks config"

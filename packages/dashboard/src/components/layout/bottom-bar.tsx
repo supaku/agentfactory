@@ -45,7 +45,7 @@ export function BottomBar({ className }: BottomBarProps) {
       </div>
 
       <a
-        href="https://github.com/supaku/agentfactory"
+        href="https://github.com/renseiai/agentfactory"
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1 text-2xs font-body text-af-text-tertiary hover:text-af-text-secondary transition-colors"

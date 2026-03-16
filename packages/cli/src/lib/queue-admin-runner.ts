@@ -16,7 +16,7 @@ import {
   redisZRem,
   redisHGetAll,
   disconnectRedis,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 // ---------------------------------------------------------------------------
 // Public types

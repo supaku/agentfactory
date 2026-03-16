@@ -3,12 +3,12 @@
  *
  * This barrel ONLY re-exports modules that are compatible with Next.js
  * Edge Runtime. It deliberately excludes worker-auth and cron-auth
- * which depend on @supaku/agentfactory-server (Node.js crypto/ioredis).
+ * which depend on @renseiai/agentfactory-server (Node.js crypto/ioredis).
  *
  * Use this subpath import in middleware.ts:
- *   import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs/middleware'
+ *   import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs/middleware'
  *
- * Do NOT import from the main barrel ('@supaku/agentfactory-nextjs')
+ * Do NOT import from the main barrel ('@renseiai/agentfactory-nextjs')
  * in Edge Runtime — it pulls in Node.js-only modules.
  */
 

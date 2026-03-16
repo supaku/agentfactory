@@ -1,7 +1,7 @@
 /**
  * Worker Authentication — Next.js Adapter
  *
- * Thin wrapper around @supaku/agentfactory-server's framework-agnostic
+ * Thin wrapper around @renseiai/agentfactory-server's framework-agnostic
  * auth functions, adapted for Next.js request/response types.
  */
 
@@ -11,7 +11,7 @@ import {
   verifyApiKey,
   isWorkerAuthConfigured,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 export { isWorkerAuthConfigured }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2026 Supaku, Inc.
+ * Copyright 2024-2026 Rensei AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.supaku.agentfactory.bench.runner;
+package com.renseiai.agentfactory.bench.runner;
 
-import com.supaku.agentfactory.bench.AgentFactoryModel;
+import com.renseiai.agentfactory.bench.AgentFactoryModel;
 import org.springaicommunity.bench.core.run.AgentRunner;
 import org.springaicommunity.judge.Judge;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -33,7 +33,7 @@ import org.springframework.context.annotation.Configuration;
  * spring.ai.bench.agent.provider=agentfactory
  * </pre>
  *
- * @author Supaku AgentFactory
+ * @author Rensei AI AgentFactory
  * @since 0.1.0
  */
 @Configuration

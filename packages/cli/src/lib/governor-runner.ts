@@ -15,13 +15,13 @@ import {
   type GovernorEventBus,
   type EventDeduplicator,
   type WorkflowGovernorCallbacks,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 import type {
   GovernorConfig,
   GovernorAction,
   GovernorIssue,
   ScanResult,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 
 // ---------------------------------------------------------------------------
 // Public types

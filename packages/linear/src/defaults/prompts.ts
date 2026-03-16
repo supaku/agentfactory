@@ -2,7 +2,7 @@
  * Default prompt templates for each work type.
  *
  * These provide sensible defaults that can be overridden by consumers.
- * The Supaku project overrides these with its own prompts.ts.
+ * The Rensei project overrides these with its own prompts.ts.
  */
 
 import type { AgentWorkType, SubIssueStatus } from '../types.js'

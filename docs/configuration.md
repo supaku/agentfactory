@@ -76,7 +76,7 @@ Complete reference for all AgentFactory configuration options.
 Central factory that creates all 21+ route handlers from a single config:
 
 ```typescript
-import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 const routes = createAllRoutes({
   // Required: how to resolve a Linear API client
@@ -168,7 +168,7 @@ routes.cleanup.GET           → /api/cleanup
 ### `createAgentFactoryMiddleware(config?)`
 
 ```typescript
-import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs'
 
 const { middleware } = createAgentFactoryMiddleware({
   // Optional: customize route classification
@@ -192,7 +192,7 @@ const { middleware } = createAgentFactoryMiddleware({
 Resolves a Linear API client from environment variables, with workspace OAuth token fallback:
 
 ```typescript
-import { createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 // Uses LINEAR_ACCESS_TOKEN env by default
 const resolver = createDefaultLinearClientResolver()
@@ -218,7 +218,7 @@ When an `organizationId` is provided, it checks Redis for a stored OAuth token (
 ### `createOrchestrator(config)`
 
 ```typescript
-import { createOrchestrator } from '@supaku/agentfactory'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   provider: myProvider,              // Agent provider instance
@@ -242,13 +242,13 @@ const orchestrator = createOrchestrator({
 All CLI tools are available as programmatic functions via subpath exports:
 
 ```typescript
-import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
-import { runWorker } from '@supaku/agentfactory-cli/worker'
-import { runWorkerFleet } from '@supaku/agentfactory-cli/worker-fleet'
-import { runCleanup } from '@supaku/agentfactory-cli/cleanup'
-import { runQueueAdmin } from '@supaku/agentfactory-cli/queue-admin'
-import { runLogAnalyzer } from '@supaku/agentfactory-cli/analyze-logs'
-import { runLinear, parseLinearArgs } from '@supaku/agentfactory-cli/linear'
+import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
+import { runWorker } from '@renseiai/agentfactory-cli/worker'
+import { runWorkerFleet } from '@renseiai/agentfactory-cli/worker-fleet'
+import { runCleanup } from '@renseiai/agentfactory-cli/cleanup'
+import { runQueueAdmin } from '@renseiai/agentfactory-cli/queue-admin'
+import { runLogAnalyzer } from '@renseiai/agentfactory-cli/analyze-logs'
+import { runLinear, parseLinearArgs } from '@renseiai/agentfactory-cli/linear'
 ```
 
 These functions accept config objects and return Promises — use them to build thin CLI wrappers with your own env loading strategy.
@@ -258,7 +258,7 @@ These functions accept config objects and return Promises — use them to build 
 Executes Linear CLI commands programmatically:
 
 ```typescript
-import { runLinear } from '@supaku/agentfactory-cli/linear'
+import { runLinear } from '@renseiai/agentfactory-cli/linear'
 
 const result = await runLinear({
   command: 'get-issue',

@@ -18,7 +18,7 @@ import {
   createOrchestrator,
   createProvider,
   resolveProviderName,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 
 const project = process.argv[2]
 if (!project) {

@@ -7,7 +7,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { createLinearAgentClient, getDefaultTeamName } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient, getDefaultTeamName } from '@renseiai/agentfactory-linear'
 import {
   checkPRDeploymentStatus,
   formatDeploymentStatus,

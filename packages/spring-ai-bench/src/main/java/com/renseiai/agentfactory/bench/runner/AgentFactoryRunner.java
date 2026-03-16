@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2026 Supaku, Inc.
+ * Copyright 2024-2026 Rensei AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.supaku.agentfactory.bench.runner;
+package com.renseiai.agentfactory.bench.runner;
 
 import java.nio.file.Path;
 import java.time.Duration;
 
-import com.supaku.agentfactory.bench.AgentFactoryModel;
+import com.renseiai.agentfactory.bench.AgentFactoryModel;
 import org.springaicommunity.bench.agents.runner.AgentModelAdapter;
 import org.springaicommunity.bench.core.run.AgentResult;
 import org.springaicommunity.bench.core.run.AgentRunner;
@@ -33,7 +33,7 @@ import org.springaicommunity.judge.Judge;
  * <p>Follows the same pattern as {@code ClaudeCodeAgentRunner} and
  * {@code GeminiAgentRunner} in the bench-agents module.</p>
  *
- * @author Supaku AgentFactory
+ * @author Rensei AI AgentFactory
  * @since 0.1.0
  */
 public class AgentFactoryRunner implements AgentRunner {

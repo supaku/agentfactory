@@ -12,7 +12,7 @@ import {
   popPendingPrompt,
   claimPendingPrompt,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:sessions:prompts')
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @deprecated Use `af-linear` from `@supaku/agentfactory-cli` instead.
+ * @deprecated Use `af-linear` from `@renseiai/agentfactory-cli` instead.
  * This file is kept for backwards compatibility. The canonical implementation
  * is in packages/cli/src/lib/linear-runner.ts.
  *
@@ -41,7 +41,7 @@ import { config } from 'dotenv'
 // Load .env.local (higher priority, loaded second so it overrides)
 config({ path: '.env.local', override: true })
 
-import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient } from '@renseiai/agentfactory-linear'
 import {
   checkPRDeploymentStatus,
   formatDeploymentStatus,

@@ -14,10 +14,10 @@
  */
 
 import { z } from 'zod'
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 
 // Re-export for convenience
-export type { AgentWorkType } from '@supaku/agentfactory-linear'
+export type { AgentWorkType } from '@renseiai/agentfactory-linear'
 
 // ---------------------------------------------------------------------------
 // Tool Permission Types

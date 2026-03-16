@@ -1,19 +1,19 @@
-# @supaku/agentfactory
+# @renseiai/agentfactory
 
 Core orchestrator for multi-agent fleet management. Turns your issue backlog into shipped code by coordinating coding agents (Claude, Codex, Amp) through an automated pipeline.
 
-Part of the [AgentFactory](https://github.com/supaku/agentfactory) monorepo.
+Part of the [AgentFactory](https://github.com/renseiai/agentfactory) monorepo.
 
 ## Installation
 
 ```bash
-npm install @supaku/agentfactory @supaku/agentfactory-linear
+npm install @renseiai/agentfactory @renseiai/agentfactory-linear
 ```
 
 ## Quick Start
 
 ```typescript
-import { createOrchestrator } from '@supaku/agentfactory'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 3,
@@ -87,7 +87,7 @@ import {
   InMemoryEventBus,
   InMemoryEventDeduplicator,
   type GovernorDependencies,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 
 // Poll-only mode (simple)
 const governor = new WorkflowGovernor(
@@ -109,16 +109,16 @@ const eventGovernor = new EventDrivenGovernor(
 await eventGovernor.start()
 ```
 
-The governor evaluates each issue against status, active sessions, cooldowns, human overrides (HOLD/RESUME/PRIORITY), and workflow strategy to decide what action to take. See [Architecture docs](https://github.com/supaku/agentfactory/blob/main/docs/architecture.md#workflow-governor) for details.
+The governor evaluates each issue against status, active sessions, cooldowns, human overrides (HOLD/RESUME/PRIORITY), and workflow strategy to decide what action to take. See [Architecture docs](https://github.com/renseiai/agentfactory/blob/main/docs/architecture.md#workflow-governor) for details.
 
 ## Related Packages
 
 | Package | Description |
 |---------|-------------|
-| [@supaku/agentfactory-linear](https://www.npmjs.com/package/@supaku/agentfactory-linear) | Linear issue tracker integration |
-| [@supaku/agentfactory-server](https://www.npmjs.com/package/@supaku/agentfactory-server) | Redis work queue, distributed workers |
-| [@supaku/agentfactory-cli](https://www.npmjs.com/package/@supaku/agentfactory-cli) | CLI tools |
-| [@supaku/agentfactory-nextjs](https://www.npmjs.com/package/@supaku/agentfactory-nextjs) | Next.js webhook server |
+| [@renseiai/agentfactory-linear](https://www.npmjs.com/package/@renseiai/agentfactory-linear) | Linear issue tracker integration |
+| [@renseiai/agentfactory-server](https://www.npmjs.com/package/@renseiai/agentfactory-server) | Redis work queue, distributed workers |
+| [@renseiai/agentfactory-cli](https://www.npmjs.com/package/@renseiai/agentfactory-cli) | CLI tools |
+| [@renseiai/agentfactory-nextjs](https://www.npmjs.com/package/@renseiai/agentfactory-nextjs) | Next.js webhook server |
 
 ## License
 

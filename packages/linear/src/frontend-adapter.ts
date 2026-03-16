@@ -1,12 +1,12 @@
 /**
  * LinearFrontendAdapter
  *
- * Implements the WorkSchedulingFrontend interface (defined in @supaku/agentfactory)
+ * Implements the WorkSchedulingFrontend interface (defined in @renseiai/agentfactory)
  * by wrapping the LinearAgentClient. This adapter translates between abstract,
  * frontend-agnostic types and Linear-specific concepts.
  *
  * Structural typing note: This class structurally satisfies the WorkSchedulingFrontend
- * interface from @supaku/agentfactory without an explicit `implements` clause, avoiding
+ * interface from @renseiai/agentfactory without an explicit `implements` clause, avoiding
  * a circular package dependency (core depends on linear at runtime, linear depends on
  * core only for types). Consumers who import both packages can assign this to
  * WorkSchedulingFrontend.
@@ -17,7 +17,7 @@ import type { LinearWorkflowStatus, ThoughtActivityContent } from './types.js'
 import type { LinearAgentClient } from './agent-client.js'
 
 // ---------------------------------------------------------------------------
-// Abstract types (structurally identical to @supaku/agentfactory frontend types)
+// Abstract types (structurally identical to @renseiai/agentfactory frontend types)
 // ---------------------------------------------------------------------------
 
 /**
@@ -181,7 +181,7 @@ async function toAbstractComment(comment: Comment): Promise<AbstractComment> {
 /**
  * Linear frontend adapter that wraps LinearAgentClient.
  *
- * Structurally satisfies WorkSchedulingFrontend from @supaku/agentfactory.
+ * Structurally satisfies WorkSchedulingFrontend from @renseiai/agentfactory.
  */
 export class LinearFrontendAdapter {
   readonly name = 'linear' as const

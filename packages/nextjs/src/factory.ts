@@ -1,12 +1,12 @@
 /**
- * Factory — @supaku/agentfactory-nextjs
+ * Factory — @renseiai/agentfactory-nextjs
  *
  * Wires all handlers together from a single configuration object.
  * Consumers call `createAllRoutes(config)` and get back a nested
  * route tree that maps 1:1 onto Next.js App Router exports.
  *
  * When optional config fields are omitted, sensible defaults from
- * @supaku/agentfactory-linear are used (defaultGeneratePrompt, etc.).
+ * @renseiai/agentfactory-linear are used (defaultGeneratePrompt, etc.).
  */
 
 import type { RouteHandler, RouteConfig, WebhookConfig, ResolvedWebhookConfig, CronConfig } from './types.js'
@@ -16,7 +16,7 @@ import {
   defaultGetPriority,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 
 // Worker handlers
 import { createWorkerRegisterHandler } from './handlers/workers/register.js'
@@ -109,7 +109,7 @@ export interface AllRoutesConfig extends WebhookConfig, CronConfig {
 /**
  * Create all route handlers from a single config object.
  *
- * Optional fields fall back to sensible defaults from @supaku/agentfactory-linear:
+ * Optional fields fall back to sensible defaults from @renseiai/agentfactory-linear:
  * - `generatePrompt` → `defaultGeneratePrompt`
  * - `detectWorkTypeFromPrompt` → `defaultDetectWorkTypeFromPrompt`
  * - `getPriority` → `defaultGetPriority`
@@ -118,7 +118,7 @@ export interface AllRoutesConfig extends WebhookConfig, CronConfig {
  *
  * @example
  * ```typescript
- * import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+ * import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
  *
  * // Minimal — everything uses defaults
  * const routes = createAllRoutes({

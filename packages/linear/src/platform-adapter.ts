@@ -2,7 +2,7 @@
  * LinearPlatformAdapter
  *
  * Extends LinearFrontendAdapter with Governor event integration methods.
- * Structurally satisfies the PlatformAdapter interface from @supaku/agentfactory
+ * Structurally satisfies the PlatformAdapter interface from @renseiai/agentfactory
  * without an explicit `implements` clause, avoiding a circular package dependency
  * (core depends on linear, so linear cannot import core).
  *
@@ -22,13 +22,13 @@ import type {
 } from './webhook-types.js'
 
 // ---------------------------------------------------------------------------
-// Governor types (structurally identical to @supaku/agentfactory governor types)
+// Governor types (structurally identical to @renseiai/agentfactory governor types)
 // Defined locally to avoid circular dependency: core -> linear -> core
 // ---------------------------------------------------------------------------
 
 /**
  * Minimal issue representation used by the Governor.
- * Structurally identical to GovernorIssue in @supaku/agentfactory.
+ * Structurally identical to GovernorIssue in @renseiai/agentfactory.
  */
 export interface GovernorIssue {
   id: string
@@ -47,7 +47,7 @@ type EventSource = 'webhook' | 'poll' | 'manual'
 
 /**
  * Fired when an issue's workflow status changes.
- * Structurally identical to IssueStatusChangedEvent in @supaku/agentfactory.
+ * Structurally identical to IssueStatusChangedEvent in @renseiai/agentfactory.
  */
 interface IssueStatusChangedEvent {
   type: 'issue-status-changed'
@@ -61,7 +61,7 @@ interface IssueStatusChangedEvent {
 
 /**
  * Fired when a comment is added to an issue.
- * Structurally identical to CommentAddedEvent in @supaku/agentfactory.
+ * Structurally identical to CommentAddedEvent in @renseiai/agentfactory.
  */
 interface CommentAddedEvent {
   type: 'comment-added'
@@ -132,7 +132,7 @@ const TERMINAL_STATUSES = ['Accepted', 'Canceled', 'Duplicate'] as const
 
 /**
  * Generate an ISO-8601 timestamp for the current moment.
- * Equivalent to `eventTimestamp()` from @supaku/agentfactory.
+ * Equivalent to `eventTimestamp()` from @renseiai/agentfactory.
  */
 function eventTimestamp(): string {
   return new Date().toISOString()
@@ -231,7 +231,7 @@ function isCommentPayload(payload: unknown): payload is LinearCommentWebhookPayl
  * Governor-specific methods for webhook normalization, project scanning,
  * and issue conversion.
  *
- * Structurally satisfies PlatformAdapter from @supaku/agentfactory.
+ * Structurally satisfies PlatformAdapter from @renseiai/agentfactory.
  */
 export class LinearPlatformAdapter extends LinearFrontendAdapter {
   /**

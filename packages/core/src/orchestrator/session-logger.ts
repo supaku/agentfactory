@@ -17,7 +17,7 @@ import {
   readFileSync,
 } from 'fs'
 import { resolve, dirname } from 'path'
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 
 /**
  * Session event types for categorization

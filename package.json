@@ -5,13 +5,13 @@
   "description": "The open-source software factory — multi-agent fleet management for coding agents",
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory"
+    "url": "https://github.com/renseiai/agentfactory"
   },
-  "homepage": "https://github.com/supaku/agentfactory#readme",
+  "homepage": "https://github.com/renseiai/agentfactory#readme",
   "bugs": {
-    "url": "https://github.com/supaku/agentfactory/issues"
+    "url": "https://github.com/renseiai/agentfactory/issues"
   },
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0",

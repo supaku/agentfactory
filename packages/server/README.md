@@ -1,11 +1,11 @@
-# @supaku/agentfactory-server
+# @renseiai/agentfactory-server
 
-Redis-backed infrastructure for [AgentFactory](https://github.com/supaku/agentfactory). Provides work queue, session storage, worker pool management, issue locking, and webhook idempotency.
+Redis-backed infrastructure for [AgentFactory](https://github.com/renseiai/agentfactory). Provides work queue, session storage, worker pool management, issue locking, and webhook idempotency.
 
 ## Installation
 
 ```bash
-npm install @supaku/agentfactory-server
+npm install @renseiai/agentfactory-server
 ```
 
 Requires a Redis instance (works with Redis, Upstash, Vercel KV, or any Redis-compatible store).
@@ -31,7 +31,7 @@ Requires a Redis instance (works with Redis, Upstash, Vercel KV, or any Redis-co
 ## Quick Start
 
 ```typescript
-import { createRedisClient, enqueueWork, claimWork } from '@supaku/agentfactory-server'
+import { createRedisClient, enqueueWork, claimWork } from '@renseiai/agentfactory-server'
 
 // Redis client (auto-reads REDIS_URL from env)
 const redis = createRedisClient()
@@ -62,9 +62,9 @@ if (work) {
 
 | Package | Description |
 |---------|-------------|
-| [@supaku/agentfactory](https://www.npmjs.com/package/@supaku/agentfactory) | Core orchestrator |
-| [@supaku/agentfactory-cli](https://www.npmjs.com/package/@supaku/agentfactory-cli) | CLI tools (worker, orchestrator) |
-| [@supaku/agentfactory-nextjs](https://www.npmjs.com/package/@supaku/agentfactory-nextjs) | Next.js webhook server |
+| [@renseiai/agentfactory](https://www.npmjs.com/package/@renseiai/agentfactory) | Core orchestrator |
+| [@renseiai/agentfactory-cli](https://www.npmjs.com/package/@renseiai/agentfactory-cli) | CLI tools (worker, orchestrator) |
+| [@renseiai/agentfactory-nextjs](https://www.npmjs.com/package/@renseiai/agentfactory-nextjs) | Next.js webhook server |
 
 ## License
 

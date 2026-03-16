@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../node_modules/@supaku/agentfactory-dashboard/src";
+@source "../../node_modules/@renseiai/agentfactory-dashboard/src";
 
 @theme {
   /* AgentFactory dashboard tokens */

@@ -1,20 +1,20 @@
 {
-  "name": "@supaku/agentfactory-dashboard",
+  "name": "@renseiai/agentfactory-dashboard",
   "version": "0.7.58",
   "description": "Premium dashboard UI components for AgentFactory",
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory",
+    "url": "https://github.com/renseiai/agentfactory",
     "directory": "packages/dashboard"
   },
-  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/dashboard",
+  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/dashboard",
   "bugs": {
-    "url": "https://github.com/supaku/agentfactory/issues"
+    "url": "https://github.com/renseiai/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public"

@@ -36,34 +36,34 @@ AgentFactory is split into six packages:
 
 | Package | Responsibility |
 |---------|---------------|
-| `@supaku/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
-| `@supaku/agentfactory-linear` | Linear API integration, sessions, status transitions |
-| `@supaku/agentfactory-server` | Redis work queue, session storage, distributed workers |
-| `@supaku/agentfactory-cli` | CLI tools for local and remote operation |
-| `@supaku/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
-| `@supaku/create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
+| `@renseiai/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
+| `@renseiai/agentfactory-linear` | Linear API integration, sessions, status transitions |
+| `@renseiai/agentfactory-server` | Redis work queue, session storage, distributed workers |
+| `@renseiai/agentfactory-cli` | CLI tools for local and remote operation |
+| `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
+| `@renseiai/create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
 
 ### Dependency Graph
 
 ```
-@supaku/create-agentfactory-app (scaffolding, no runtime deps)
+@renseiai/create-agentfactory-app (scaffolding, no runtime deps)
 
-@supaku/agentfactory-nextjs
-  ├── @supaku/agentfactory (core)
-  ├── @supaku/agentfactory-linear
-  └── @supaku/agentfactory-server
+@renseiai/agentfactory-nextjs
+  ├── @renseiai/agentfactory (core)
+  ├── @renseiai/agentfactory-linear
+  └── @renseiai/agentfactory-server
 
-@supaku/agentfactory-cli
-  ├── @supaku/agentfactory (core)
-  ├── @supaku/agentfactory-linear
-  └── @supaku/agentfactory-server
+@renseiai/agentfactory-cli
+  ├── @renseiai/agentfactory (core)
+  ├── @renseiai/agentfactory-linear
+  └── @renseiai/agentfactory-server
 
-@supaku/agentfactory-server
-  ├── @supaku/agentfactory (core)
-  └── @supaku/agentfactory-linear
+@renseiai/agentfactory-server
+  ├── @renseiai/agentfactory (core)
+  └── @renseiai/agentfactory-linear
 ```
 
-For a full webhook-driven setup, install `@supaku/agentfactory-nextjs` (it pulls in all dependencies). For CLI-only local orchestration, install `@supaku/agentfactory` and `@supaku/agentfactory-linear`.
+For a full webhook-driven setup, install `@renseiai/agentfactory-nextjs` (it pulls in all dependencies). For CLI-only local orchestration, install `@renseiai/agentfactory` and `@renseiai/agentfactory-linear`.
 
 ## Core Components
 

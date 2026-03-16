@@ -15,9 +15,9 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@supaku/agentfactory-dashboard": ["../src/index.ts"],
-      "@supaku/agentfactory-dashboard/styles": ["../src/styles/globals.css"],
-      "@supaku/agentfactory-dashboard/tailwind-preset": ["../tailwind.config.ts"]
+      "@renseiai/agentfactory-dashboard": ["../src/index.ts"],
+      "@renseiai/agentfactory-dashboard/styles": ["../src/styles/globals.css"],
+      "@renseiai/agentfactory-dashboard/tailwind-preset": ["../tailwind.config.ts"]
     },
     "plugins": [{ "name": "next" }]
   },

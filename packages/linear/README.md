@@ -1,11 +1,11 @@
-# @supaku/agentfactory-linear
+# @renseiai/agentfactory-linear
 
-Linear issue tracker integration for [AgentFactory](https://github.com/supaku/agentfactory). Provides the Linear API client, agent sessions, status transitions, activity streaming, and work type routing.
+Linear issue tracker integration for [AgentFactory](https://github.com/renseiai/agentfactory). Provides the Linear API client, agent sessions, status transitions, activity streaming, and work type routing.
 
 ## Installation
 
 ```bash
-npm install @supaku/agentfactory-linear
+npm install @renseiai/agentfactory-linear
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ npm install @supaku/agentfactory-linear
 ### Linear Client
 
 ```typescript
-import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+import { createLinearAgentClient } from '@renseiai/agentfactory-linear'
 
 const client = createLinearAgentClient({ apiKey: process.env.LINEAR_API_KEY! })
 
@@ -27,7 +27,7 @@ await client.createComment(issue.id, 'Work in progress...')
 Manage the lifecycle of an agent working on an issue:
 
 ```typescript
-import { createAgentSession } from '@supaku/agentfactory-linear'
+import { createAgentSession } from '@renseiai/agentfactory-linear'
 
 const session = createAgentSession({
   client: linearClient.linearClient,
@@ -67,7 +67,7 @@ import {
   defaultGeneratePrompt,
   defaultDetectWorkTypeFromPrompt,
   defaultGetPriority,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 ```
 
 ## Key Exports
@@ -83,8 +83,8 @@ import {
 
 | Package | Description |
 |---------|-------------|
-| [@supaku/agentfactory](https://www.npmjs.com/package/@supaku/agentfactory) | Core orchestrator |
-| [@supaku/agentfactory-nextjs](https://www.npmjs.com/package/@supaku/agentfactory-nextjs) | Next.js webhook server |
+| [@renseiai/agentfactory](https://www.npmjs.com/package/@renseiai/agentfactory) | Core orchestrator |
+| [@renseiai/agentfactory-nextjs](https://www.npmjs.com/package/@renseiai/agentfactory-nextjs) | Next.js webhook server |
 
 ## License
 

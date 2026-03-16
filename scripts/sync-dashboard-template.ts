@@ -8,7 +8,7 @@
  * This script:
  * 1. Calls getTemplates() with dashboard+cli+redis options
  * 2. Writes the output to templates/dashboard/
- * 3. Pins @supaku package versions to the provided version (or reads from packages/core/package.json)
+ * 3. Pins @renseiai package versions to the provided version (or reads from packages/core/package.json)
  * 4. Preserves the README.md, railway.toml, and .env.example customizations
  */
 
@@ -66,20 +66,20 @@ fs.writeFileSync(
   ),
 )
 
-// Pin @supaku package versions in package.json
+// Pin @renseiai package versions in package.json
 const pkgPath = path.join(TEMPLATE_DIR, 'package.json')
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
 
 // Add engines field
 pkg.engines = { node: '>=22.0.0' }
 
-// Sort dependencies and pin @supaku versions
+// Sort dependencies and pin @renseiai versions
 for (const depType of ['dependencies', 'devDependencies'] as const) {
   if (!pkg[depType]) continue
   const sorted: Record<string, string> = {}
   for (const key of Object.keys(pkg[depType]).sort()) {
     let ver = pkg[depType][key]
-    if (key.startsWith('@supaku/')) {
+    if (key.startsWith('@renseiai/')) {
       ver = version
     }
     sorted[key] = ver
@@ -88,6 +88,6 @@ for (const depType of ['dependencies', 'devDependencies'] as const) {
 }
 
 fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-console.log(`Pinned @supaku packages to ${version}`)
+console.log(`Pinned @renseiai packages to ${version}`)
 
 console.log('Done!')

@@ -15,7 +15,7 @@ import {
   createLogger,
   generateRequestId,
   type LinearTokenResponse,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { RouteHandler } from '../../types.js'
 
 /**
@@ -40,7 +40,7 @@ const baseLogger = createLogger('oauth-callback')
  * @example
  * ```typescript
  * // In app/callback/route.ts:
- * import { createOAuthCallbackHandler } from '@supaku/agentfactory-nextjs'
+ * import { createOAuthCallbackHandler } from '@renseiai/agentfactory-nextjs'
  * export const { GET } = createOAuthCallbackHandler()
  * ```
  */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2026 Supaku, Inc.
+ * Copyright 2024-2026 Rensei AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.supaku.agentfactory.bench;
+package com.renseiai.agentfactory.bench;
 
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
-import com.supaku.agentfactory.bench.runner.AgentFactoryRunner;
+import com.renseiai.agentfactory.bench.runner.AgentFactoryRunner;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springaicommunity.agents.model.AgentGeneration;

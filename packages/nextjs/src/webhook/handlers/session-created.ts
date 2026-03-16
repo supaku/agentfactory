@@ -3,7 +3,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload, AgentWorkType } from '@supaku/agentfactory-linear'
+import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
 import {
   TERMINAL_STATUSES,
   validateWorkTypeForStatus,
@@ -12,7 +12,7 @@ import {
   getValidWorkTypesForStatus,
   buildFailureContextBlock,
   type WorkflowContext,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 import {
   generateIdempotencyKey,
   isWebhookProcessed,
@@ -22,7 +22,7 @@ import {
   dispatchWork,
   type QueuedWork,
   getWorkflowState,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
   emitActivity,
@@ -32,7 +32,7 @@ import {
   getPriority,
   WORK_TYPE_MESSAGES,
 } from '../utils.js'
-import type { createLogger } from '@supaku/agentfactory-server'
+import type { createLogger } from '@renseiai/agentfactory-server'
 
 export async function handleSessionCreated(
   config: ResolvedWebhookConfig,

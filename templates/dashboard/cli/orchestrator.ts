@@ -4,7 +4,7 @@ import { config } from 'dotenv'
 
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
-import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
+import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
 
 function parseArgs() {
   const args = process.argv.slice(2)

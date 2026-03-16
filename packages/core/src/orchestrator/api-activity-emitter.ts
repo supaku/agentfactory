@@ -23,7 +23,7 @@ export interface ApiActivityEmitterConfig {
   sessionId: string
   /** Worker ID for authentication */
   workerId: string
-  /** API base URL (e.g., https://agent.supaku.dev) */
+  /** API base URL (e.g., https://agent.rensei.dev) */
   apiBaseUrl: string
   /** API authentication key */
   apiKey: string

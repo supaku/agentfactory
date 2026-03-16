@@ -117,11 +117,11 @@ function routeReexport(post: string | null, get?: string, del?: string): string 
 
 function packageJson(opts: TemplateOptions): string {
   const deps: Record<string, string> = {
-    '@supaku/agentfactory': '^0.7.6',
-    '@supaku/agentfactory-cli': '^0.7.6',
-    '@supaku/agentfactory-linear': '^0.7.6',
-    '@supaku/agentfactory-nextjs': '^0.7.6',
-    '@supaku/agentfactory-server': '^0.7.6',
+    '@renseiai/agentfactory': '^0.7.6',
+    '@renseiai/agentfactory-cli': '^0.7.6',
+    '@renseiai/agentfactory-linear': '^0.7.6',
+    '@renseiai/agentfactory-nextjs': '^0.7.6',
+    '@renseiai/agentfactory-server': '^0.7.6',
     'next': '^16.1.0',
     'react': '^19.0.0',
     'react-dom': '^19.0.0',
@@ -142,7 +142,7 @@ function packageJson(opts: TemplateOptions): string {
   }
 
   if (opts.includeDashboard) {
-    deps['@supaku/agentfactory-dashboard'] = '^0.7.6'
+    deps['@renseiai/agentfactory-dashboard'] = '^0.7.6'
     devDeps['@tailwindcss/postcss'] = '^4'
     devDeps['tailwindcss'] = '^4'
   }
@@ -198,7 +198,7 @@ function nextConfig(opts: TemplateOptions): string {
     return `import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@supaku/agentfactory-dashboard'],
+  transpilePackages: ['@renseiai/agentfactory-dashboard'],
 }
 
 export default nextConfig
@@ -282,7 +282,7 @@ function configTs(): string {
  * Customize generatePrompt and other hooks to match your workflow.
  */
 
-import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 export const routes = createAllRoutes({
   linearClient: createDefaultLinearClientResolver(),
@@ -310,11 +310,11 @@ function middlewareTs(): string {
  * Next.js Middleware — Edge Runtime Compatible
  *
  * Uses the /middleware subpath export which only loads Edge-compatible
- * modules. Do NOT import from the main barrel ('@supaku/agentfactory-nextjs')
+ * modules. Do NOT import from the main barrel ('@renseiai/agentfactory-nextjs')
  * — it pulls in Node.js-only dependencies via re-exports.
  */
 
-import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs/middleware'
+import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs/middleware'
 
 const { middleware } = createAgentFactoryMiddleware()
 
@@ -337,7 +337,7 @@ export const config = {
 function layoutTsx(opts: TemplateOptions): string {
   if (opts.includeDashboard) {
     return `import type { Metadata } from 'next'
-import '@supaku/agentfactory-dashboard/styles'
+import '@renseiai/agentfactory-dashboard/styles'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -374,14 +374,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 function globalsCss(): string {
   return `@import "tailwindcss";
-@source "../../node_modules/@supaku/agentfactory-dashboard/src";
+@source "../../node_modules/@renseiai/agentfactory-dashboard/src";
 `
 }
 
 function dashboardPageTsx(): string {
   return `'use client'
 
-import { DashboardShell, DashboardPage as FleetPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, DashboardPage as FleetPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function DashboardPage() {
@@ -398,7 +398,7 @@ export default function DashboardPage() {
 function pipelinePageTsx(): string {
   return `'use client'
 
-import { DashboardShell, PipelinePage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, PipelinePage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function Pipeline() {
@@ -415,7 +415,7 @@ export default function Pipeline() {
 function sessionsPageTsx(): string {
   return `'use client'
 
-import { DashboardShell, SessionPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, SessionPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function Sessions() {
@@ -432,7 +432,7 @@ export default function Sessions() {
 function sessionDetailPageTsx(): string {
   return `'use client'
 
-import { DashboardShell, SessionPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, SessionPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname, useParams } from 'next/navigation'
 
 export default function SessionDetailPage() {
@@ -450,7 +450,7 @@ export default function SessionDetailPage() {
 function settingsPageTsx(): string {
   return `'use client'
 
-import { DashboardShell, SettingsPage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, SettingsPage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function Settings() {
@@ -492,7 +492,7 @@ import { config } from 'dotenv'
 
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
-import { runWorker } from '@supaku/agentfactory-cli/worker'
+import { runWorker } from '@renseiai/agentfactory-cli/worker'
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -564,7 +564,7 @@ import { config } from 'dotenv'
 
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
-import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
+import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -611,7 +611,7 @@ import { config } from 'dotenv'
 
 config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
 
-import { runWorkerFleet } from '@supaku/agentfactory-cli/worker-fleet'
+import { runWorkerFleet } from '@renseiai/agentfactory-cli/worker-fleet'
 
 function parseArgs() {
   const args = process.argv.slice(2)
@@ -681,7 +681,7 @@ runWorkerFleet(
 
 function cliCleanup(): string {
   return `#!/usr/bin/env tsx
-import { runCleanup, type CleanupRunnerConfig } from '@supaku/agentfactory-cli/cleanup'
+import { runCleanup, type CleanupRunnerConfig } from '@renseiai/agentfactory-cli/cleanup'
 
 function parseArgs(): CleanupRunnerConfig {
   const args = process.argv.slice(2)

@@ -31,7 +31,7 @@ describe('loadRepositoryConfig', () => {
     mockReadFileSync.mockReturnValue(
       `apiVersion: v1
 kind: RepositoryConfig
-repository: github.com/supaku/agentfactory
+repository: github.com/renseiai/agentfactory
 allowedProjects:
   - Agent
   - Dashboard
@@ -41,7 +41,7 @@ allowedProjects:
     expect(result).toEqual({
       apiVersion: 'v1',
       kind: 'RepositoryConfig',
-      repository: 'github.com/supaku/agentfactory',
+      repository: 'github.com/renseiai/agentfactory',
       allowedProjects: ['Agent', 'Dashboard'],
     })
   })
@@ -65,7 +65,7 @@ kind: RepositoryConfig
     mockReadFileSync.mockReturnValue(
       `apiVersion: v1
 kind: WorkflowTemplate
-repository: github.com/supaku/agentfactory
+repository: github.com/renseiai/agentfactory
 `
     )
     expect(() => loadRepositoryConfig('/some/repo')).toThrow()
@@ -75,7 +75,7 @@ repository: github.com/supaku/agentfactory
     mockExistsSync.mockReturnValue(true)
     mockReadFileSync.mockReturnValue(
       `kind: RepositoryConfig
-repository: github.com/supaku/agentfactory
+repository: github.com/renseiai/agentfactory
 `
     )
     expect(() => loadRepositoryConfig('/some/repo')).toThrow()
@@ -86,7 +86,7 @@ repository: github.com/supaku/agentfactory
     mockReadFileSync.mockReturnValue(
       `apiVersion: v1
 kind: RepositoryConfig
-repository: github.com/supaku/supaku
+repository: github.com/renseiai/renseiai
 projectPaths:
   Social: apps/social
   Family: apps/family
@@ -99,7 +99,7 @@ sharedPaths:
     expect(result).toEqual({
       apiVersion: 'v1',
       kind: 'RepositoryConfig',
-      repository: 'github.com/supaku/supaku',
+      repository: 'github.com/renseiai/renseiai',
       projectPaths: { Social: 'apps/social', Family: 'apps/family' },
       sharedPaths: ['packages/ui', 'packages/lexical'],
     })

@@ -1,17 +1,17 @@
-# @supaku/agentfactory-nextjs
+# @renseiai/agentfactory-nextjs
 
-Next.js route handlers, webhook processor, middleware, and OAuth for [AgentFactory](https://github.com/supaku/agentfactory). Drop-in API routes that turn a Next.js app into a full agent fleet server.
+Next.js route handlers, webhook processor, middleware, and OAuth for [AgentFactory](https://github.com/renseiai/agentfactory). Drop-in API routes that turn a Next.js app into a full agent fleet server.
 
 ## Installation
 
 ```bash
-npm install @supaku/agentfactory-nextjs
+npm install @renseiai/agentfactory-nextjs
 ```
 
 Or scaffold a complete project:
 
 ```bash
-npx @supaku/create-agentfactory-app my-agent
+npx @renseiai/create-agentfactory-app my-agent
 ```
 
 ## Quick Start
@@ -20,7 +20,7 @@ npx @supaku/create-agentfactory-app my-agent
 
 ```typescript
 // src/lib/config.ts
-import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 export const routes = createAllRoutes({
   linearClient: createDefaultLinearClientResolver(),
@@ -40,7 +40,7 @@ export const GET = routes.webhook.GET
 
 ```typescript
 // src/middleware.ts
-import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs'
 
 const { middleware } = createAgentFactoryMiddleware()
 export { middleware }
@@ -110,8 +110,8 @@ const routes = createAllRoutes({
 When `governorMode` is `event-bridge` or `governor-only`, webhook handlers publish events to a `GovernorEventBus`. Wire the bus at server startup:
 
 ```typescript
-import { RedisEventBus } from '@supaku/agentfactory-server'
-import { setGovernorEventBus } from '@supaku/agentfactory-nextjs'
+import { RedisEventBus } from '@renseiai/agentfactory-server'
+import { setGovernorEventBus } from '@renseiai/agentfactory-nextjs'
 
 const eventBus = new RedisEventBus()
 setGovernorEventBus(eventBus)
@@ -149,10 +149,10 @@ const { middleware } = createAgentFactoryMiddleware({
 
 | Package | Description |
 |---------|-------------|
-| [@supaku/agentfactory](https://www.npmjs.com/package/@supaku/agentfactory) | Core orchestrator |
-| [@supaku/agentfactory-linear](https://www.npmjs.com/package/@supaku/agentfactory-linear) | Linear integration |
-| [@supaku/agentfactory-server](https://www.npmjs.com/package/@supaku/agentfactory-server) | Redis infrastructure |
-| [@supaku/agentfactory-cli](https://www.npmjs.com/package/@supaku/agentfactory-cli) | CLI tools |
+| [@renseiai/agentfactory](https://www.npmjs.com/package/@renseiai/agentfactory) | Core orchestrator |
+| [@renseiai/agentfactory-linear](https://www.npmjs.com/package/@renseiai/agentfactory-linear) | Linear integration |
+| [@renseiai/agentfactory-server](https://www.npmjs.com/package/@renseiai/agentfactory-server) | Redis infrastructure |
+| [@renseiai/agentfactory-cli](https://www.npmjs.com/package/@renseiai/agentfactory-cli) | CLI tools |
 
 ## License
 

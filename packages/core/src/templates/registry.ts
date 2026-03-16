@@ -7,7 +7,7 @@
  */
 
 import Handlebars from 'handlebars'
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 import type {
   WorkflowTemplate,
   TemplateContext,

@@ -16,8 +16,8 @@ import {
   type OrchestratorIssue,
   type AgentOrchestrator,
   type Logger,
-} from '@supaku/agentfactory'
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 
 // ---------------------------------------------------------------------------
 // Public config interface

@@ -13,7 +13,7 @@ import {
   type PendingPrompt,
   maybeCleanupOrphans,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:workers:poll')
 

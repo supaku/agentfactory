@@ -20,7 +20,7 @@ import {
   promoteNextPendingWork,
   RedisProcessingStateStorage,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
 
 const log = createLogger('api:sessions:status')

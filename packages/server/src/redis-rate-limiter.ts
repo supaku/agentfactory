@@ -5,13 +5,13 @@
  * All processes (dashboard, governor, CLI agents) share one bucket
  * keyed by `linear:rate-limit:{workspaceId}`.
  *
- * Implements RateLimiterStrategy from @supaku/agentfactory-linear
+ * Implements RateLimiterStrategy from @renseiai/agentfactory-linear
  * so it can be injected into LinearAgentClient.
  */
 
 import { getRedisClient } from './redis.js'
 import { createLogger } from './logger.js'
-import type { RateLimiterStrategy } from '@supaku/agentfactory-linear'
+import type { RateLimiterStrategy } from '@renseiai/agentfactory-linear'
 
 const log = createLogger('redis-rate-limiter')
 

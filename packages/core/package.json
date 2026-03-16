@@ -1,21 +1,21 @@
 {
-  "name": "@supaku/agentfactory",
+  "name": "@renseiai/agentfactory",
   "version": "0.7.58",
   "type": "module",
   "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory",
+    "url": "https://github.com/renseiai/agentfactory",
     "directory": "packages/core"
   },
-  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/core",
+  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/core",
   "bugs": {
-    "url": "https://github.com/supaku/agentfactory/issues"
+    "url": "https://github.com/renseiai/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public",
@@ -55,14 +55,14 @@
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.7",
-    "@supaku/agentfactory-linear": "workspace:*",
+    "@renseiai/agentfactory-linear": "workspace:*",
     "dotenv": "^17.2.3",
     "handlebars": "^4.7.8",
     "yaml": "^2.8.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@supaku/create-agentfactory-app": "workspace:*",
+    "@renseiai/create-agentfactory-app": "workspace:*",
     "@types/node": "^22.5.4",
     "typescript": "^5.7.3",
     "vitest": "^3.2.3"

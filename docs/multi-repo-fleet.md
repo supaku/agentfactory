@@ -26,7 +26,7 @@ Run a shared AgentFactory governor with per-repo workers across multiple reposit
                ┌─────────────┘   │   └──────────────┐
                │                 │                   │
     ┌──────────▼──────────┐  ┌──▼────────────┐  ┌───▼──────────────┐
-    │  Worker: supaku     │  │  Worker:      │  │  Worker:         │
+    │  Worker: renseiai   │  │  Worker:      │  │  Worker:         │
     │  (TypeScript)       │  │  agentfactory │  │  RecoilEngine    │
     │                     │  │  (TypeScript) │  │  (C++)           │
     │  WORKER_PROJECTS=   │  │              │  │                  │
@@ -135,13 +135,13 @@ Redeploy the governor for the change to take effect.
 **TypeScript projects:**
 
 ```bash
-npm install @supaku/agentfactory @supaku/agentfactory-linear @supaku/agentfactory-cli @supaku/agentfactory-server
+npm install @renseiai/agentfactory @renseiai/agentfactory-linear @renseiai/agentfactory-cli @renseiai/agentfactory-server
 ```
 
 Or scaffold a full project with the CLI:
 
 ```bash
-npx @supaku/create-agentfactory-app my-agent
+npx @renseiai/create-agentfactory-app my-agent
 ```
 
 **Non-TypeScript projects:** See [Non-TypeScript Projects](#non-typescript-projects) below.
@@ -246,13 +246,13 @@ The worker process requires Node.js. Install AgentFactory's CLI tools either glo
 
 ```bash
 # Option A: global install
-npm install -g @supaku/agentfactory-cli
+npm install -g @renseiai/agentfactory-cli
 
 # Option B: local tooling directory
 mkdir -p .agentfactory/tools
 cd .agentfactory/tools
 npm init -y
-npm install @supaku/agentfactory-cli
+npm install @renseiai/agentfactory-cli
 ```
 
 ### Create a CLAUDE.md (or equivalent)
@@ -338,7 +338,7 @@ if command -v af-linear &>/dev/null; then
   exec af-linear "$@"
 fi
 
-echo "Error: af-linear not found. Install with: npm install -g @supaku/agentfactory-cli" >&2
+echo "Error: af-linear not found. Install with: npm install -g @renseiai/agentfactory-cli" >&2
 exit 1
 ```
 
@@ -368,7 +368,7 @@ Each agent runs in its own git worktree (e.g., `.worktrees/PROJ-123-DEV`). This 
 | Agent pushes to wrong repo | Add/fix the `repository` field in `.agentfactory/config.yaml` |
 | Agent modifies wrong files | Use `projectPaths` + `sharedPaths` in config.yaml for monorepos |
 | Governor not dispatching | Verify project is in `GOVERNOR_PROJECTS` and governor has been redeployed |
-| `af-linear` not found | Install CLI tools: `npm install -g @supaku/agentfactory-cli` |
+| `af-linear` not found | Install CLI tools: `npm install -g @renseiai/agentfactory-cli` |
 
 ## Next Steps
 

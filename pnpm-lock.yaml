@@ -23,13 +23,13 @@ importers:
 
   packages/cli:
     dependencies:
-      '@supaku/agentfactory':
+      '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@supaku/agentfactory-linear':
+      '@renseiai/agentfactory-linear':
         specifier: workspace:*
         version: link:../linear
-      '@supaku/agentfactory-server':
+      '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
       dotenv:
@@ -51,7 +51,7 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.2.7
         version: 0.2.37(zod@4.3.6)
-      '@supaku/agentfactory-linear':
+      '@renseiai/agentfactory-linear':
         specifier: workspace:*
         version: link:../linear
       dotenv:
@@ -67,7 +67,7 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@supaku/create-agentfactory-app':
+      '@renseiai/create-agentfactory-app':
         specifier: workspace:*
         version: link:../create-app
       '@types/node':
@@ -177,7 +177,7 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.1
         version: 1.27.1(zod@4.3.6)
-      '@supaku/agentfactory-server':
+      '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
       zod:
@@ -196,13 +196,13 @@ importers:
 
   packages/nextjs:
     dependencies:
-      '@supaku/agentfactory':
+      '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@supaku/agentfactory-linear':
+      '@renseiai/agentfactory-linear':
         specifier: workspace:*
         version: link:../linear
-      '@supaku/agentfactory-server':
+      '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
     devDependencies:
@@ -221,10 +221,10 @@ importers:
 
   packages/server:
     dependencies:
-      '@supaku/agentfactory':
+      '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@supaku/agentfactory-linear':
+      '@renseiai/agentfactory-linear':
         specifier: workspace:*
         version: link:../linear
       ioredis:

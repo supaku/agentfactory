@@ -6,7 +6,7 @@
  * their normal direct-dispatch behavior.
  */
 
-import type { GovernorEventBus, GovernorEvent } from '@supaku/agentfactory'
+import type { GovernorEventBus, GovernorEvent } from '@renseiai/agentfactory'
 
 let _eventBus: GovernorEventBus | null = null
 

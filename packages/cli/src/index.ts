@@ -30,7 +30,7 @@ Commands:
 
 Run 'agentfactory <command> --help' for command-specific options.
 
-Learn more: https://github.com/supaku/agentfactory
+Learn more: https://github.com/renseiai/agentfactory
 `)
 }
 

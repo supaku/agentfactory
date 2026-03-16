@@ -3,7 +3,7 @@
  * priority assignment, and auto-trigger configuration.
  *
  * New users start with these defaults and customize as needed.
- * Supaku overrides these with its own prompts.ts.
+ * Rensei overrides these with its own prompts.ts.
  */
 
 export {

@@ -13,7 +13,7 @@ import {
   createOrchestrator,
   type AgentOrchestrator,
   type AgentProcess,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 import {
   withRetry,
   AgentSpawnError,
@@ -21,7 +21,7 @@ import {
   createAgentSession,
   createLinearAgentClient,
   type RetryConfig,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 import {
   createLogger,
   generateIdempotencyKey,
@@ -42,7 +42,7 @@ import {
   extractFailureReason,
   markAcceptanceCompleted,
   type WorkflowPhase,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import { formatErrorForComment } from './error-formatting.js'
 import type {
   WebhookOrchestratorConfig,

@@ -1,14 +1,14 @@
 {
-  "name": "@supaku/agentfactory-mcp-server",
+  "name": "@renseiai/agentfactory-mcp-server",
   "version": "0.7.52",
   "type": "module",
   "description": "MCP server exposing AgentFactory fleet capabilities to MCP-aware clients",
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": { "node": ">=22.0.0" },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory",
+    "url": "https://github.com/renseiai/agentfactory",
     "directory": "packages/mcp-server"
   },
   "publishConfig": {
@@ -39,7 +39,7 @@
   "files": ["dist", "README.md", "LICENSE"],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@supaku/agentfactory-server": "workspace:*",
+    "@renseiai/agentfactory-server": "workspace:*",
     "zod": "^4.3.6"
   },
   "devDependencies": {

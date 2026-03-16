@@ -5,8 +5,8 @@
  * Key pattern: `governor:dedup:{dedupKey}`
  */
 
-import type { EventDeduplicator, EventDeduplicatorConfig } from '@supaku/agentfactory'
-import { DEFAULT_DEDUP_CONFIG } from '@supaku/agentfactory'
+import type { EventDeduplicator, EventDeduplicatorConfig } from '@renseiai/agentfactory'
+import { DEFAULT_DEDUP_CONFIG } from '@renseiai/agentfactory'
 import { redisSetNX } from './redis.js'
 
 // ---------------------------------------------------------------------------

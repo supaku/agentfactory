@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getSessionState, type AgentSessionState, createLogger } from '@supaku/agentfactory-server'
+import { getSessionState, type AgentSessionState, createLogger } from '@renseiai/agentfactory-server'
 import type { AgentSessionResponse } from './list.js'
 
 const log = createLogger('api:sessions:[id]')

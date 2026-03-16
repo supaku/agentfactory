@@ -6,7 +6,7 @@ If you discover a security vulnerability in AgentFactory, please report it respo
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **security@supaku.com** with:
+Instead, please email **security@rensei.ai** with:
 
 - A description of the vulnerability
 - Steps to reproduce

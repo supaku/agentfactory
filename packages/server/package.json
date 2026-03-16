@@ -1,21 +1,21 @@
 {
-  "name": "@supaku/agentfactory-server",
+  "name": "@renseiai/agentfactory-server",
   "version": "0.7.58",
   "type": "module",
   "description": "Webhook server and distributed worker pool for AgentFactory — Redis queues, issue locks, session management",
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory",
+    "url": "https://github.com/renseiai/agentfactory",
     "directory": "packages/server"
   },
-  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/server",
+  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/server",
   "bugs": {
-    "url": "https://github.com/supaku/agentfactory/issues"
+    "url": "https://github.com/renseiai/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public",
@@ -52,8 +52,8 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@supaku/agentfactory": "workspace:*",
-    "@supaku/agentfactory-linear": "workspace:*",
+    "@renseiai/agentfactory": "workspace:*",
+    "@renseiai/agentfactory-linear": "workspace:*",
     "ioredis": "^5.4.2"
   },
   "devDependencies": {

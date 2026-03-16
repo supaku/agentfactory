@@ -1,5 +1,5 @@
 /**
- * Linear CLI Runner — re-exports from @supaku/agentfactory (core).
+ * Linear CLI Runner — re-exports from @renseiai/agentfactory (core).
  *
  * The canonical implementation lives in packages/core/src/tools/linear-runner.ts
  * so both the CLI and the in-process tool plugin share a single source of truth.
@@ -9,4 +9,4 @@ export {
   parseLinearArgs,
   type LinearRunnerConfig,
   type LinearRunnerResult,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'

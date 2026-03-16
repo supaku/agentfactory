@@ -9,14 +9,14 @@
  */
 
 import { NextResponse } from 'next/server'
-import { buildFailureContextBlock, type WorkflowContext } from '@supaku/agentfactory-linear'
-import type { LinearWebhookPayload, AgentWorkType } from '@supaku/agentfactory-linear'
+import { buildFailureContextBlock, type WorkflowContext } from '@renseiai/agentfactory-linear'
+import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
 import {
   checkIssueDeploymentStatus,
   formatFailedDeployments,
   eventTimestamp,
-} from '@supaku/agentfactory'
-import type { GovernorIssue } from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
+import type { GovernorIssue } from '@renseiai/agentfactory'
 import { publishGovernorEvent } from '../governor-bridge.js'
 import {
   generateIdempotencyKey,
@@ -38,7 +38,7 @@ import {
   getTotalSessionCount,
   MAX_TOTAL_SESSIONS,
   didAcceptanceJustComplete,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
   emitActivity,
@@ -47,7 +47,7 @@ import {
   hasExcludedLabel,
   getAppUrl,
 } from '../utils.js'
-import type { createLogger } from '@supaku/agentfactory-server'
+import type { createLogger } from '@renseiai/agentfactory-server'
 
 export async function handleIssueUpdated(
   config: ResolvedWebhookConfig,

@@ -1,12 +1,12 @@
 /**
- * Core types for @supaku/agentfactory-nextjs
+ * Core types for @renseiai/agentfactory-nextjs
  *
  * These types define the configuration interfaces that consumers
  * must implement to use the extracted route handlers.
  */
 
 import type { NextRequest, NextResponse } from 'next/server'
-import type { LinearAgentClient, AgentWorkType, SubIssueStatus, WorkflowContext } from '@supaku/agentfactory-linear'
+import type { LinearAgentClient, AgentWorkType, SubIssueStatus, WorkflowContext } from '@renseiai/agentfactory-linear'
 
 /**
  * Resolves a Linear client for a given organization.
@@ -42,7 +42,7 @@ export interface AutoTriggerConfig {
  * Configuration for the webhook processor.
  *
  * `generatePrompt` is optional — if not provided, falls back to
- * `defaultGeneratePrompt` from @supaku/agentfactory-linear.
+ * `defaultGeneratePrompt` from @renseiai/agentfactory-linear.
  */
 export interface WebhookConfig extends RouteConfig {
   webhookSecret?: string // falls back to LINEAR_WEBHOOK_SECRET

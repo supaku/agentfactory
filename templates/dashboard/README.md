@@ -1,12 +1,12 @@
 # AgentFactory Dashboard
 
-AI agent fleet management dashboard powered by [AgentFactory](https://github.com/supaku/agentfactory).
+AI agent fleet management dashboard powered by [AgentFactory](https://github.com/renseiai/agentfactory).
 
 ## One-Click Deploy
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Fsupaku%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard&project-name=agentfactory-dashboard&env=LINEAR_ACCESS_TOKEN,LINEAR_WEBHOOK_SECRET,REDIS_URL&envDescription=Environment%20variables%20needed%20for%20AgentFactory%20Dashboard&envLink=https%3A%2F%2Fgithub.com%2Frenseiai%2Fagentfactory%2Ftree%2Fmain%2Ftemplates%2Fdashboard%23environment-variables)
 
 > **Note:** Vercel does not include built-in Redis. After deploying, add [Vercel KV](https://vercel.com/docs/storage/vercel-kv) from the Storage tab or create an [Upstash Redis](https://upstash.com/) database, then set the `REDIS_URL` environment variable.
 
@@ -34,7 +34,7 @@ AI agent fleet management dashboard powered by [AgentFactory](https://github.com
 
 ```bash
 # Clone the template from the monorepo
-git clone --depth 1 --filter=blob:none --sparse https://github.com/supaku/agentfactory.git agentfactory-dashboard
+git clone --depth 1 --filter=blob:none --sparse https://github.com/renseiai/agentfactory.git agentfactory-dashboard
 cd agentfactory-dashboard
 git sparse-checkout set templates/dashboard
 cp -r templates/dashboard/* .
@@ -113,10 +113,10 @@ This is a [Next.js](https://nextjs.org) application that provides:
 
 | Package | Purpose |
 |---------|---------|
-| `@supaku/agentfactory-nextjs` | Route handlers and middleware |
-| `@supaku/agentfactory-dashboard` | UI components and pages |
-| `@supaku/agentfactory-server` | Redis-backed session/worker persistence |
-| `@supaku/agentfactory-linear` | Linear SDK client |
+| `@renseiai/agentfactory-nextjs` | Route handlers and middleware |
+| `@renseiai/agentfactory-dashboard` | UI components and pages |
+| `@renseiai/agentfactory-server` | Redis-backed session/worker persistence |
+| `@renseiai/agentfactory-linear` | Linear SDK client |
 
 ## Platform Comparison
 
@@ -133,14 +133,14 @@ This is a [Next.js](https://nextjs.org) application that provides:
 
 ## Staying Up to Date
 
-This template lives in the [AgentFactory monorepo](https://github.com/supaku/agentfactory/tree/main/templates/dashboard). When new versions of `@supaku/agentfactory-*` packages are released, this template is updated in-tree.
+This template lives in the [AgentFactory monorepo](https://github.com/renseiai/agentfactory/tree/main/templates/dashboard). When new versions of `@renseiai/agentfactory-*` packages are released, this template is updated in-tree.
 
 To manually update package versions:
 
 ```bash
-npm install @supaku/agentfactory@latest @supaku/agentfactory-linear@latest \
-  @supaku/agentfactory-nextjs@latest @supaku/agentfactory-server@latest \
-  @supaku/agentfactory-dashboard@latest @supaku/agentfactory-cli@latest
+npm install @renseiai/agentfactory@latest @renseiai/agentfactory-linear@latest \
+  @renseiai/agentfactory-nextjs@latest @renseiai/agentfactory-server@latest \
+  @renseiai/agentfactory-dashboard@latest @renseiai/agentfactory-cli@latest
 ```
 
 ## License

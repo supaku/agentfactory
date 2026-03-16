@@ -87,7 +87,7 @@ Work type beats project, both beat the global default.
 ### Programmatic Selection
 
 ```typescript
-import { createProvider, resolveProviderName } from '@supaku/agentfactory'
+import { createProvider, resolveProviderName } from '@renseiai/agentfactory'
 
 // Create a specific provider
 const claude = createProvider('claude')
@@ -192,8 +192,8 @@ Tool plugins only activate for the Claude provider. Non-Claude providers (Codex,
 The orchestrator automatically registers built-in plugins. To add custom plugins programmatically:
 
 ```typescript
-import { ToolRegistry, linearPlugin } from '@supaku/agentfactory'
-import type { ToolPlugin } from '@supaku/agentfactory'
+import { ToolRegistry, linearPlugin } from '@renseiai/agentfactory'
+import type { ToolPlugin } from '@renseiai/agentfactory'
 
 const myPlugin: ToolPlugin = {
   name: 'my-tools',
@@ -222,7 +222,7 @@ To add support for a new coding agent:
 3. Return an `AgentHandle` with the async iterable stream
 
 ```typescript
-import type { AgentProvider, AgentSpawnConfig, AgentHandle, AgentEvent } from '@supaku/agentfactory'
+import type { AgentProvider, AgentSpawnConfig, AgentHandle, AgentEvent } from '@renseiai/agentfactory'
 
 class MyProvider implements AgentProvider {
   readonly name = 'my-agent' as any // Extend AgentProviderName first

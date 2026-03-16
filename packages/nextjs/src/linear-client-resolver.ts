@@ -21,12 +21,12 @@ import {
   type LinearAgentClient,
   type CircuitBreakerStrategy,
   type RateLimiterStrategy,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 import {
   getAccessToken,
   isRedisConfigured,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { LinearClientResolver } from './types.js'
 
 const log = createLogger('linear-client-resolver')
@@ -72,7 +72,7 @@ export interface DefaultLinearClientResolverConfig {
  *
  * @example
  * ```typescript
- * import { createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+ * import { createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
  *
  * const resolver = createDefaultLinearClientResolver()
  * // Use in route config:

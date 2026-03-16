@@ -1,6 +1,6 @@
 'use client'
 
-import { DashboardShell, PipelinePage } from '@supaku/agentfactory-dashboard'
+import { DashboardShell, PipelinePage } from '@renseiai/agentfactory-dashboard'
 import { usePathname } from 'next/navigation'
 
 export default function Pipeline() {

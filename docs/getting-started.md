@@ -17,7 +17,7 @@ This guide walks through setting up AgentFactory to process Linear issues with c
 The fastest way to get started is with the scaffolding tool:
 
 ```bash
-npx @supaku/create-agentfactory-app my-agent
+npx @renseiai/create-agentfactory-app my-agent
 
 cd my-agent
 cp .env.example .env.local    # Fill in LINEAR_ACCESS_TOKEN
@@ -33,16 +33,16 @@ If you prefer to add AgentFactory to an existing project:
 
 ```bash
 # Webhook server (Next.js) — includes all route handlers
-npm install @supaku/agentfactory-nextjs
+npm install @renseiai/agentfactory-nextjs
 
 # Core + Linear integration (for CLI-only usage)
-npm install @supaku/agentfactory @supaku/agentfactory-linear
+npm install @renseiai/agentfactory @renseiai/agentfactory-linear
 
 # Optional: CLI tools (orchestrator, worker, fleet)
-npm install @supaku/agentfactory-cli
+npm install @renseiai/agentfactory-cli
 
 # Optional: Distributed workers (requires Redis)
-npm install @supaku/agentfactory-server
+npm install @renseiai/agentfactory-server
 ```
 
 ## Configuration
@@ -138,14 +138,14 @@ When an `organizationId` is present on a webhook event, AgentFactory checks Redi
 
 ## Webhook Server Setup
 
-If you used `@supaku/create-agentfactory-app`, this is already configured. For manual setup:
+If you used `@renseiai/create-agentfactory-app`, this is already configured. For manual setup:
 
 ### Route Configuration
 
 Create `src/lib/config.ts`:
 
 ```typescript
-import { createAllRoutes, createDefaultLinearClientResolver } from '@supaku/agentfactory-nextjs'
+import { createAllRoutes, createDefaultLinearClientResolver } from '@renseiai/agentfactory-nextjs'
 
 export const routes = createAllRoutes({
   linearClient: createDefaultLinearClientResolver(),
@@ -176,7 +176,7 @@ export const GET = routes.sessions.list.GET
 Create `src/middleware.ts`:
 
 ```typescript
-import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs'
 
 const { middleware } = createAgentFactoryMiddleware()
 
@@ -194,7 +194,7 @@ The middleware handles API key authentication, rate limiting, and webhook signat
 ### Process a Single Issue
 
 ```typescript
-import { createOrchestrator } from '@supaku/agentfactory'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 1,

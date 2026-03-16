@@ -6,19 +6,19 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| `@supaku/agentfactory` | `packages/core` | Orchestrator, providers, crash recovery, deployment checker |
-| `@supaku/agentfactory-linear` | `packages/linear` | Linear SDK client, agent sessions, webhook types |
-| `@supaku/agentfactory-server` | `packages/server` | Work queue server for webhook-driven execution |
-| `@supaku/agentfactory-nextjs` | `packages/nextjs` | Next.js webhook handlers and middleware |
-| `@supaku/agentfactory-dashboard` | `packages/dashboard` | Fleet management dashboard UI |
-| `@supaku/create-agentfactory` | `packages/create-app` | Project scaffolding CLI |
-| `@supaku/agentfactory-cli` | `packages/cli` | Orchestrator, worker, Linear CLI, and admin entry points |
+| `@renseiai/agentfactory` | `packages/core` | Orchestrator, providers, crash recovery, deployment checker |
+| `@renseiai/agentfactory-linear` | `packages/linear` | Linear SDK client, agent sessions, webhook types |
+| `@renseiai/agentfactory-server` | `packages/server` | Work queue server for webhook-driven execution |
+| `@renseiai/agentfactory-nextjs` | `packages/nextjs` | Next.js webhook handlers and middleware |
+| `@renseiai/agentfactory-dashboard` | `packages/dashboard` | Fleet management dashboard UI |
+| `@renseiai/create-agentfactory` | `packages/create-app` | Project scaffolding CLI |
+| `@renseiai/agentfactory-cli` | `packages/cli` | Orchestrator, worker, Linear CLI, and admin entry points |
 
 ## Linear CLI (CRITICAL)
 
 **Use `pnpm af-linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
 
-The Linear CLI wraps the `@supaku/agentfactory-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
+The Linear CLI wraps the `@renseiai/agentfactory-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
 
 > **Tool plugins (Claude provider only):** When agents run via the orchestrator with the Claude provider, they receive typed `af_linear_*` tools (e.g., `af_linear_get_issue`, `af_linear_create_comment`) as in-process MCP tools instead of using the CLI via Bash. These tools call the same `runLinear()` function — same behavior, no subprocess overhead. Non-Claude providers and human users continue using `pnpm af-linear` as before. See `docs/providers.md` for details.
 
@@ -73,7 +73,7 @@ pnpm af-linear create-blocker <source-issue-id> --title "Title" [--description "
 
 ## Route Sync CLI
 
-After upgrading `@supaku` packages, new routes may be missing from `src/app/`. Use `af-sync-routes` to generate missing route files from the manifest.
+After upgrading `@renseiai` packages, new routes may be missing from `src/app/`. Use `af-sync-routes` to generate missing route files from the manifest.
 
 ```bash
 # Preview what would be created
@@ -167,7 +167,7 @@ pnpm orchestrator --project ProjectName --dry-run
 pnpm orchestrator --project ProjectName --max 2
 
 # Restrict to a specific git repository
-pnpm orchestrator --project ProjectName --repo github.com/supaku/agentfactory
+pnpm orchestrator --project ProjectName --repo github.com/renseiai/agentfactory
 ```
 
 ## Repository-Scoped Orchestration
@@ -182,14 +182,14 @@ Checked into each repository to define allowed projects and repository identity:
 # Single-project repo
 apiVersion: v1
 kind: RepositoryConfig
-repository: github.com/supaku/agentfactory
+repository: github.com/renseiai/agentfactory
 allowedProjects:
   - Agent
 
 # Monorepo with path scoping
 apiVersion: v1
 kind: RepositoryConfig
-repository: github.com/supaku/supaku
+repository: github.com/renseiai/renseiai
 projectPaths:
   Social: apps/social
   Family: apps/family

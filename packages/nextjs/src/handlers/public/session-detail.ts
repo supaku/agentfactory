@@ -12,7 +12,7 @@ import {
   hashSessionId,
   isValidPublicId,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 const log = createLogger('api/public/sessions/[id]')
 

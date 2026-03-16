@@ -47,7 +47,7 @@ import {
   WORK_TYPE_FAIL_STATUS,
   TERMINAL_STATUSES,
   WORK_TYPES_REQUIRING_WORKTREE,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
@@ -79,7 +79,7 @@ const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 // leak into agent processes from app .env.local files, Claude Code switches
 // from Max subscription billing to API-key billing. Apps that need an
 // Anthropic API key should use a namespaced name instead (e.g.
-// SUPAKU_SOCIAL_ANTHROPIC_API_KEY) which won't be recognised by Claude Code.
+// RENSEI_SOCIAL_ANTHROPIC_API_KEY) which won't be recognised by Claude Code.
 const AGENT_ENV_BLOCKLIST = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
@@ -91,7 +91,7 @@ const AGENT_ENV_BLOCKLIST = [
  * Validate that the git remote origin URL contains the expected repository pattern.
  * Supports both HTTPS (github.com/org/repo) and SSH (git@github.com:org/repo) formats.
  *
- * @param expectedRepo - The expected repository pattern (e.g. 'github.com/supaku/agentfactory')
+ * @param expectedRepo - The expected repository pattern (e.g. 'github.com/renseiai/agentfactory')
  * @param cwd - Working directory to run git commands in
  * @throws Error if the git remote does not match the expected repository
  */

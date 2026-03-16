@@ -7,7 +7,7 @@
 
 /**
  * Auto-trigger configuration shape.
- * Matches the AutoTriggerConfig interface from @supaku/agentfactory-nextjs.
+ * Matches the AutoTriggerConfig interface from @renseiai/agentfactory-nextjs.
  */
 export interface DefaultAutoTriggerConfig {
   enableAutoQA: boolean

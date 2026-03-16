@@ -7,7 +7,7 @@ assignees: ''
 ---
 
 **Package**
-Which package is affected? (e.g., `@supaku/agentfactory`, `@supaku/agentfactory-nextjs`)
+Which package is affected? (e.g., `@renseiai/agentfactory`, `@renseiai/agentfactory-nextjs`)
 
 **Describe the bug**
 A clear description of what the bug is.

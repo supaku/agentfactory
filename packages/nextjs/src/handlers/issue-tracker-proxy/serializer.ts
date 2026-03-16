@@ -13,7 +13,7 @@ import type {
   SerializedComment,
   SerializedViewer,
   SerializedTeam,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 
 /**
  * Duck-typed Linear Issue interface (matches @linear/sdk Issue shape).

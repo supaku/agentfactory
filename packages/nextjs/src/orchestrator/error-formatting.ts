@@ -2,7 +2,7 @@
  * Generic error formatting for Linear comments.
  */
 
-import { AgentSpawnError } from '@supaku/agentfactory-linear'
+import { AgentSpawnError } from '@renseiai/agentfactory-linear'
 
 /**
  * Format an error for posting as a Linear comment with markdown.

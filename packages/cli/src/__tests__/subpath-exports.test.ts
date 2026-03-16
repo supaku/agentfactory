@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest'
  * - Missing or renamed function exports
  */
 
-describe('@supaku/agentfactory-cli subpath exports', () => {
+describe('@renseiai/agentfactory-cli subpath exports', () => {
   it('exports runOrchestrator from ./orchestrator', async () => {
     const mod = await import('../lib/orchestrator-runner.js')
     expect(mod.runOrchestrator).toBeDefined()

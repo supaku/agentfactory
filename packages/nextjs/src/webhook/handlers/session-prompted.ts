@@ -3,7 +3,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload, AgentWorkType } from '@supaku/agentfactory-linear'
+import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
 import {
   getSessionState,
   updateSessionStatus,
@@ -15,10 +15,10 @@ import {
   storePendingPrompt,
   generateIdempotencyKey,
   isWebhookProcessed,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import { handleStopSignal, emitActivity } from '../utils.js'
-import type { createLogger } from '@supaku/agentfactory-server'
+import type { createLogger } from '@renseiai/agentfactory-server'
 
 export async function handleSessionPrompted(
   config: ResolvedWebhookConfig,

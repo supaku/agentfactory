@@ -8,8 +8,8 @@ import {
   storeSessionState,
   updateSessionStatus,
   storePendingPrompt,
-} from '@supaku/agentfactory-server'
-import type { AgentSessionStatus } from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
+import type { AgentSessionStatus } from '@renseiai/agentfactory-server'
 
 // Work type values for zod enum validation
 const WORK_TYPES = [

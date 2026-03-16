@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { runCleanup, type CleanupRunnerConfig } from '@supaku/agentfactory-cli/cleanup'
+import { runCleanup, type CleanupRunnerConfig } from '@renseiai/agentfactory-cli/cleanup'
 
 function parseArgs(): CleanupRunnerConfig {
   const args = process.argv.slice(2)

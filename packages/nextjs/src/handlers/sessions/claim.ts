@@ -16,7 +16,7 @@ import {
   addWorkerSession,
   getWorker,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:sessions:claim')
 

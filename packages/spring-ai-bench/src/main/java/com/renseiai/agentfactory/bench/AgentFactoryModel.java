@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2026 Supaku, Inc.
+ * Copyright 2024-2026 Rensei AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.supaku.agentfactory.bench;
+package com.renseiai.agentfactory.bench;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -54,7 +54,7 @@ import org.springaicommunity.agents.model.AgentTaskRequest;
  * AgentResult result = adapter.run(workspace, spec, timeout);
  * }</pre>
  *
- * @author Supaku AgentFactory
+ * @author Rensei AI AgentFactory
  * @since 0.1.0
  */
 public class AgentFactoryModel implements AgentModel {

@@ -22,8 +22,8 @@ import {
   createWorkQueue,
   createSessionStorage,
   createWorkerStorage,
-} from '@supaku/agentfactory-server'
-import { createOrchestrator } from '@supaku/agentfactory'
+} from '@renseiai/agentfactory-server'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const role = process.argv[2] as 'coordinator' | 'worker'
 const issueId = process.argv[3]

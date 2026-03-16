@@ -4,8 +4,8 @@
  * Shared helpers used by webhook sub-handlers.
  */
 
-import type { LinearAgentClient, AgentWorkType } from '@supaku/agentfactory-linear'
-import { STATUS_WORK_TYPE_MAP } from '@supaku/agentfactory-linear'
+import type { LinearAgentClient, AgentWorkType } from '@renseiai/agentfactory-linear'
+import { STATUS_WORK_TYPE_MAP } from '@renseiai/agentfactory-linear'
 import {
   getSessionState,
   updateSessionStatus,
@@ -16,7 +16,7 @@ import {
   releaseIssueLock,
   promoteNextPendingWork,
   createLogger,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../types.js'
 
 const baseLogger = createLogger('webhook')
@@ -185,7 +185,7 @@ export function getAppUrl(config: ResolvedWebhookConfig): string {
     ?? process.env.NEXT_PUBLIC_APP_URL
     ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
     ?? (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`)
-    ?? 'https://agent.supaku.dev'
+    ?? 'https://agent.rensei.dev'
 }
 
 /**

@@ -6,7 +6,7 @@
  * that uses templates when available and falls back to hardcoded prompts.
  */
 
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 import type { TemplateContext } from './types.js'
 import type { TemplateRegistry } from './registry.js'
 

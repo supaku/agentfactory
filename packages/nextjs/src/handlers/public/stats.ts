@@ -5,7 +5,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getAllSessions, listWorkers, getTotalCapacity, getQueueLength, createLogger } from '@supaku/agentfactory-server'
+import { getAllSessions, listWorkers, getTotalCapacity, getQueueLength, createLogger } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api/public/stats')
 

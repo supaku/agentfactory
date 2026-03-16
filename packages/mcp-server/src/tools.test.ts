@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ── Mock @supaku/agentfactory-server ────────────────────────────────────────
-vi.mock('@supaku/agentfactory-server', () => ({
+// ── Mock @renseiai/agentfactory-server ────────────────────────────────────────
+vi.mock('@renseiai/agentfactory-server', () => ({
   getAllSessions: vi.fn(),
   getSessionsByStatus: vi.fn(),
   getSessionState: vi.fn(),
@@ -24,7 +24,7 @@ import {
   storeSessionState,
   updateSessionStatus,
   storePendingPrompt,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 import { registerFleetTools } from './tools.js'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

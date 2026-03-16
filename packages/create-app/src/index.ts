@@ -7,8 +7,8 @@
  * that processes Linear issues with coding agents.
  *
  * Usage:
- *   npx @supaku/create-agentfactory-app my-agent
- *   npx @supaku/create-agentfactory-app my-agent --team MY
+ *   npx @renseiai/create-agentfactory-app my-agent
+ *   npx @renseiai/create-agentfactory-app my-agent --team MY
  */
 
 import fs from 'node:fs'
@@ -141,7 +141,7 @@ async function main() {
     console.log('    pnpm worker           # Start a local worker (in another terminal)')
   }
   console.log()
-  console.log('  Documentation: https://github.com/supaku/agentfactory')
+  console.log('  Documentation: https://github.com/renseiai/agentfactory')
   console.log()
 
   rl.close()
@@ -149,7 +149,7 @@ async function main() {
 
 function printHelp() {
   console.log(`
-  Usage: npx @supaku/create-agentfactory-app [project-name] [options]
+  Usage: npx @renseiai/create-agentfactory-app [project-name] [options]
 
   Options:
     --team <KEY>     Linear team key (default: MY)
@@ -159,9 +159,9 @@ function printHelp() {
     -h, --help       Show this help message
 
   Examples:
-    npx @supaku/create-agentfactory-app my-agent
-    npx @supaku/create-agentfactory-app my-agent --team ENG
-    npx @supaku/create-agentfactory-app my-agent --no-dashboard --no-redis
+    npx @renseiai/create-agentfactory-app my-agent
+    npx @renseiai/create-agentfactory-app my-agent --team ENG
+    npx @renseiai/create-agentfactory-app my-agent --no-dashboard --no-redis
 `)
 }
 

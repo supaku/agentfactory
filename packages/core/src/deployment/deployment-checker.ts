@@ -14,7 +14,7 @@ const execAsync = promisify(exec)
  * Individual deployment status for a Vercel app
  */
 export interface DeploymentStatus {
-  /** The app name (e.g., "supaku-social") */
+  /** The app name (e.g., "renseiai-social") */
   app: string
   /** Deployment state */
   state: 'success' | 'pending' | 'error' | 'failure'
@@ -57,14 +57,14 @@ export interface DeploymentCheckOptions {
 }
 
 const DEFAULT_OPTIONS: Required<DeploymentCheckOptions> = {
-  owner: 'supaku',
+  owner: 'renseiai',
   repo: 'agentfactory',
   timeout: 30000,
 }
 
 /**
  * Parse Vercel app name from GitHub status context
- * Contexts look like: "Vercel – supaku-social" or "Vercel"
+ * Contexts look like: "Vercel – renseiai-social" or "Vercel"
  */
 function parseAppName(context: string): string {
   // Extract app name after "Vercel – " or "Vercel - "

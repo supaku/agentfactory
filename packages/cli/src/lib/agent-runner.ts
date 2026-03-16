@@ -14,8 +14,8 @@ import {
   storePendingPrompt,
   disconnectRedis,
   type AgentSessionState,
-} from '@supaku/agentfactory-server'
-import { createLinearAgentClient } from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-server'
+import { createLinearAgentClient } from '@renseiai/agentfactory-linear'
 
 // ---------------------------------------------------------------------------
 // Public types

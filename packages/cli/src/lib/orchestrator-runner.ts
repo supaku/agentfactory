@@ -12,7 +12,7 @@ import {
   createOrchestrator,
   type AgentProcess,
   type OrchestratorIssue,
-} from '@supaku/agentfactory'
+} from '@renseiai/agentfactory'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -172,7 +172,7 @@ export async function runOrchestrator(
       return result
     }
 
-    await orchestrator.spawnAgentForIssue(config.single, undefined, config.workType as import('@supaku/agentfactory-linear').AgentWorkType | undefined)
+    await orchestrator.spawnAgentForIssue(config.single, undefined, config.workType as import('@renseiai/agentfactory-linear').AgentWorkType | undefined)
     result.agentsSpawned = 1
 
     if (wait) {

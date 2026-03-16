@@ -79,7 +79,7 @@ jobs:
 
             ## Changes
             - Regenerated scaffold files from `create-agentfactory-app` templates
-            - Pinned `@supaku/*` package versions to `${{ steps.version.outputs.value }}`
+            - Pinned `@renseiai/*` package versions to `${{ steps.version.outputs.value }}`
 
             ## Verification
             - [ ] Template builds successfully

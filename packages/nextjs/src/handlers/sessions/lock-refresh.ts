@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkerAuth } from '../../middleware/worker-auth.js'
-import { getSessionState, refreshIssueLockTTL, createLogger } from '@supaku/agentfactory-server'
+import { getSessionState, refreshIssueLockTTL, createLogger } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:sessions:lock-refresh')
 

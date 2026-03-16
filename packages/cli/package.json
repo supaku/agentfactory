@@ -1,21 +1,21 @@
 {
-  "name": "@supaku/agentfactory-cli",
+  "name": "@renseiai/agentfactory-cli",
   "version": "0.7.58",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
-  "author": "Supaku (https://supaku.com)",
+  "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supaku/agentfactory",
+    "url": "https://github.com/renseiai/agentfactory",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/supaku/agentfactory/tree/main/packages/cli",
+  "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/cli",
   "bugs": {
-    "url": "https://github.com/supaku/agentfactory/issues"
+    "url": "https://github.com/renseiai/agentfactory/issues"
   },
   "publishConfig": {
     "access": "public",
@@ -154,9 +154,9 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@supaku/agentfactory": "workspace:*",
-    "@supaku/agentfactory-linear": "workspace:*",
-    "@supaku/agentfactory-server": "workspace:*",
+    "@renseiai/agentfactory": "workspace:*",
+    "@renseiai/agentfactory-linear": "workspace:*",
+    "@renseiai/agentfactory-server": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "devDependencies": {

@@ -6,7 +6,7 @@ import {
   getSessionStateByIssue,
   listWorkers,
   getTotalCapacity,
-} from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-server'
 
 /**
  * Registers MCP resources that expose AgentFactory fleet state to MCP-aware clients.

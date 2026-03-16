@@ -2,7 +2,7 @@
  * Agent Orchestrator Types
  */
 
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 import type { AgentProvider } from '../providers/types.js'
 
 /**
@@ -61,7 +61,7 @@ export interface OrchestratorConfig {
    * This is required for remote workers because Linear's Agent API requires OAuth tokens.
    */
   apiActivityConfig?: {
-    /** Base URL of the agent API (e.g., https://agent.supaku.dev) */
+    /** Base URL of the agent API (e.g., https://agent.rensei.dev) */
     baseUrl: string
     /** API authentication key for the worker */
     apiKey: string
@@ -92,7 +92,7 @@ export interface OrchestratorConfig {
    */
   templateDir?: string
   /**
-   * Git remote URL pattern to validate against (e.g. 'github.com/supaku/agentfactory').
+   * Git remote URL pattern to validate against (e.g. 'github.com/renseiai/agentfactory').
    * When set, the orchestrator validates that the git remote origin contains this pattern
    * at startup and before spawning agents. Supports both HTTPS and SSH URL formats.
    */

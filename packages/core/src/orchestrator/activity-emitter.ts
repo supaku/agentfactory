@@ -13,8 +13,8 @@
  * - error → error (persisted)
  */
 
-import type { AgentSession } from '@supaku/agentfactory-linear'
-import { ENVIRONMENT_ISSUE_TYPES } from '@supaku/agentfactory-linear'
+import type { AgentSession } from '@renseiai/agentfactory-linear'
+import { ENVIRONMENT_ISSUE_TYPES } from '@renseiai/agentfactory-linear'
 
 /** Configuration for the activity emitter */
 export interface ActivityEmitterConfig {

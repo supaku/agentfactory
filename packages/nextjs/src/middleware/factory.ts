@@ -5,7 +5,7 @@
  * rate limiting, and security for AgentFactory API routes.
  *
  * IMPORTANT: This module runs in the Edge Runtime. It MUST NOT import
- * from @supaku/agentfactory-server (which uses Node.js crypto/ioredis).
+ * from @renseiai/agentfactory-server (which uses Node.js crypto/ioredis).
  * All utilities are inlined for Edge compatibility.
  */
 
@@ -123,7 +123,7 @@ const DEFAULT_PASSTHROUGH_ROUTES = ['/api/cleanup']
  * @example
  * ```typescript
  * // In middleware.ts:
- * import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs'
+ * import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs'
  *
  * const { middleware, matcherConfig } = createAgentFactoryMiddleware()
  * export { middleware }

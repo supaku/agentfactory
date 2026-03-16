@@ -5,8 +5,8 @@
  * to avoid external dependencies like chalk.
  */
 
-import type { ScanResult } from '@supaku/agentfactory'
-import type { LinearApiQuota } from '@supaku/agentfactory-linear'
+import type { ScanResult } from '@renseiai/agentfactory'
+import type { LinearApiQuota } from '@renseiai/agentfactory-linear'
 
 // ---------------------------------------------------------------------------
 // ANSI colors (matching packages/core/src/logger.ts)

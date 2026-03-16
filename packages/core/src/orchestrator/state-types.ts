@@ -5,7 +5,7 @@
  * This enables crash recovery, heartbeat monitoring, and progress tracking.
  */
 
-import type { AgentWorkType } from '@supaku/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory-linear'
 
 /**
  * Status of the agent's work in the worktree

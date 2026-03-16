@@ -22,7 +22,7 @@ import {
   getDefaultTeamId,
   LINEAR_PROJECTS,
   LINEAR_LABELS,
-} from '@supaku/agentfactory-linear'
+} from '@renseiai/agentfactory-linear'
 import {
   readSessionMetadata,
   readSessionEvents,

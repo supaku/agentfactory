@@ -2,8 +2,8 @@
  * Types for the webhook orchestrator factory.
  */
 
-import type { AgentProcess, StopAgentResult, ForwardPromptResult } from '@supaku/agentfactory'
-import type { RetryConfig } from '@supaku/agentfactory-linear'
+import type { AgentProcess, StopAgentResult, ForwardPromptResult } from '@renseiai/agentfactory'
+import type { RetryConfig } from '@renseiai/agentfactory-linear'
 
 /**
  * Configuration for the webhook orchestrator.

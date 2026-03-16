@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest'
 
 /**
- * Subpath export resolution tests for @supaku/agentfactory-nextjs.
+ * Subpath export resolution tests for @renseiai/agentfactory-nextjs.
  *
  * Verifies that the /middleware subpath exports the expected factory
  * function and does NOT transitively import Node.js-only modules
  * (crypto, ioredis) that break Edge Runtime.
  */
 
-describe('@supaku/agentfactory-nextjs subpath exports', () => {
+describe('@renseiai/agentfactory-nextjs subpath exports', () => {
   it('exports createAgentFactoryMiddleware from ./middleware', async () => {
     const mod = await import('../middleware/index.js')
     expect(mod.createAgentFactoryMiddleware).toBeDefined()

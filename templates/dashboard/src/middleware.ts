@@ -2,11 +2,11 @@
  * Next.js Middleware — Edge Runtime Compatible
  *
  * Uses the /middleware subpath export which only loads Edge-compatible
- * modules. Do NOT import from the main barrel ('@supaku/agentfactory-nextjs')
+ * modules. Do NOT import from the main barrel ('@renseiai/agentfactory-nextjs')
  * — it pulls in Node.js-only dependencies via re-exports.
  */
 
-import { createAgentFactoryMiddleware } from '@supaku/agentfactory-nextjs/middleware'
+import { createAgentFactoryMiddleware } from '@renseiai/agentfactory-nextjs/middleware'
 
 const { middleware } = createAgentFactoryMiddleware()
 

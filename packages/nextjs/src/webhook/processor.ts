@@ -6,14 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import type { LinearWebhookPayload } from '@supaku/agentfactory-linear'
+import type { LinearWebhookPayload } from '@renseiai/agentfactory-linear'
 import {
   isAgentSessionCreated,
   isAgentSessionPrompted,
   isAgentSessionUpdated,
   isIssueUpdate,
-} from '@supaku/agentfactory-linear'
-import { createLogger, generateRequestId } from '@supaku/agentfactory-server'
+} from '@renseiai/agentfactory-linear'
+import { createLogger, generateRequestId } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../types.js'
 import { verifyWebhookSignature } from './signature.js'
 import { handleSessionCreated } from './handlers/session-created.js'

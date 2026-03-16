@@ -8,7 +8,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/supaku/agentfactory.git
+git clone https://github.com/renseiai/agentfactory.git
 cd agentfactory
 
 # Install dependencies
@@ -28,12 +28,12 @@ pnpm test
 
 ```
 packages/
-  core/        @supaku/agentfactory              — orchestrator, providers, crash recovery
-  linear/      @supaku/agentfactory-linear        — Linear issue tracker integration
-  server/      @supaku/agentfactory-server        — Redis queues, session storage, worker pool
-  cli/         @supaku/agentfactory-cli           — CLI tools (orchestrator, worker, fleet)
-  nextjs/      @supaku/agentfactory-nextjs        — Next.js route handlers, webhook, middleware
-  create-app/  @supaku/create-agentfactory-app    — Project scaffolding tool
+  core/        @renseiai/agentfactory              — orchestrator, providers, crash recovery
+  linear/      @renseiai/agentfactory-linear        — Linear issue tracker integration
+  server/      @renseiai/agentfactory-server        — Redis queues, session storage, worker pool
+  cli/         @renseiai/agentfactory-cli           — CLI tools (orchestrator, worker, fleet)
+  nextjs/      @renseiai/agentfactory-nextjs        — Next.js route handlers, webhook, middleware
+  create-app/  @renseiai/create-agentfactory-app    — Project scaffolding tool
 
 docs/          Documentation
 examples/      Working code samples
@@ -65,13 +65,13 @@ Turborepo handles building packages in the correct order.
 
 ```bash
 # Build just one package (and its dependencies)
-pnpm --filter @supaku/agentfactory-nextjs build
+pnpm --filter @renseiai/agentfactory-nextjs build
 
 # Typecheck one package
-pnpm --filter @supaku/agentfactory-server typecheck
+pnpm --filter @renseiai/agentfactory-server typecheck
 
 # Watch mode for tests
-pnpm --filter @supaku/agentfactory test:watch
+pnpm --filter @renseiai/agentfactory test:watch
 ```
 
 ### ESM Build Pattern
@@ -173,7 +173,7 @@ this.toolRegistry.register(myPlugin)
 
 ## Reporting Issues
 
-Use [GitHub Issues](https://github.com/supaku/agentfactory/issues) to report bugs or request features. Include:
+Use [GitHub Issues](https://github.com/renseiai/agentfactory/issues) to report bugs or request features. Include:
 
 - Steps to reproduce (for bugs)
 - Expected vs actual behavior

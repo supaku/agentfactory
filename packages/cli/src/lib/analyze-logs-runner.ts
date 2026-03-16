@@ -7,7 +7,7 @@
  */
 
 import { execSync } from 'child_process'
-import { createLogAnalyzer, type LogAnalyzer } from '@supaku/agentfactory'
+import { createLogAnalyzer, type LogAnalyzer } from '@renseiai/agentfactory'
 
 // ---------------------------------------------------------------------------
 // Public types

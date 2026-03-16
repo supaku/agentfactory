@@ -55,7 +55,7 @@ Usage:
 
 Options:
   --dry-run       Preview what would be created without writing files
-  --pages         Also sync dashboard page.tsx files (requires @supaku/agentfactory-dashboard)
+  --pages         Also sync dashboard page.tsx files (requires @renseiai/agentfactory-dashboard)
   --app-dir <p>   Custom app directory (default: src/app)
   --help, -h      Show this help message
 
@@ -69,7 +69,7 @@ Examples:
   # Also sync dashboard pages
   af-sync-routes --pages
 
-  # After upgrading @supaku packages
+  # After upgrading @renseiai packages
   pnpm bump:af && af-sync-routes --pages
 `)
 }

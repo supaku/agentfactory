@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkerAuth } from '../../middleware/worker-auth.js'
-import { getSessionState, createLogger } from '@supaku/agentfactory-server'
-import { createAgentSession, ENVIRONMENT_ISSUE_TYPES } from '@supaku/agentfactory-linear'
+import { getSessionState, createLogger } from '@renseiai/agentfactory-server'
+import { createAgentSession, ENVIRONMENT_ISSUE_TYPES } from '@renseiai/agentfactory-linear'
 import type { RouteConfig } from '../../types.js'
 
 const log = createLogger('api:sessions:tool-error')

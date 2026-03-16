@@ -11,7 +11,7 @@
  *   npx tsx examples/quickstart/index.ts PROJ-123
  */
 
-import { createOrchestrator } from '@supaku/agentfactory'
+import { createOrchestrator } from '@renseiai/agentfactory'
 
 const issueId = process.argv[2]
 if (!issueId) {

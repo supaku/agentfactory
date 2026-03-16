@@ -1,15 +1,15 @@
-# @supaku/agentfactory-cli
+# @renseiai/agentfactory-cli
 
-CLI tools for [AgentFactory](https://github.com/supaku/agentfactory). Run a local orchestrator, remote workers, worker fleets, and queue management.
+CLI tools for [AgentFactory](https://github.com/renseiai/agentfactory). Run a local orchestrator, remote workers, worker fleets, and queue management.
 
 ## Installation
 
 ```bash
 # Global (CLI commands)
-npm install -g @supaku/agentfactory-cli
+npm install -g @renseiai/agentfactory-cli
 
 # Local (programmatic runner functions)
-npm install @supaku/agentfactory-cli
+npm install @renseiai/agentfactory-cli
 ```
 
 ## CLI Commands
@@ -79,7 +79,7 @@ When `LINEAR_API_KEY` and `REDIS_URL` are set, the governor uses real dependenci
 All CLI tools are available as importable functions via subpath exports:
 
 ```typescript
-import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
+import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
 
 await runOrchestrator({
   project: 'MyProject',
@@ -91,12 +91,12 @@ await runOrchestrator({
 ### Available Runner Functions
 
 ```typescript
-import { runOrchestrator } from '@supaku/agentfactory-cli/orchestrator'
-import { runWorker } from '@supaku/agentfactory-cli/worker'
-import { runWorkerFleet } from '@supaku/agentfactory-cli/worker-fleet'
-import { runCleanup } from '@supaku/agentfactory-cli/cleanup'
-import { runQueueAdmin } from '@supaku/agentfactory-cli/queue-admin'
-import { runLogAnalyzer } from '@supaku/agentfactory-cli/analyze-logs'
+import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
+import { runWorker } from '@renseiai/agentfactory-cli/worker'
+import { runWorkerFleet } from '@renseiai/agentfactory-cli/worker-fleet'
+import { runCleanup } from '@renseiai/agentfactory-cli/cleanup'
+import { runQueueAdmin } from '@renseiai/agentfactory-cli/queue-admin'
+import { runLogAnalyzer } from '@renseiai/agentfactory-cli/analyze-logs'
 ```
 
 Each function accepts a config object and returns a Promise — use them to build thin wrappers with your own env loading and argument parsing.
@@ -114,9 +114,9 @@ Each function accepts a config object and returns a Promise — use them to buil
 
 | Package | Description |
 |---------|-------------|
-| [@supaku/agentfactory](https://www.npmjs.com/package/@supaku/agentfactory) | Core orchestrator |
-| [@supaku/agentfactory-server](https://www.npmjs.com/package/@supaku/agentfactory-server) | Redis work queue |
-| [@supaku/agentfactory-nextjs](https://www.npmjs.com/package/@supaku/agentfactory-nextjs) | Next.js webhook server |
+| [@renseiai/agentfactory](https://www.npmjs.com/package/@renseiai/agentfactory) | Core orchestrator |
+| [@renseiai/agentfactory-server](https://www.npmjs.com/package/@renseiai/agentfactory-server) | Redis work queue |
+| [@renseiai/agentfactory-nextjs](https://www.npmjs.com/package/@renseiai/agentfactory-nextjs) | Next.js webhook server |
 
 ## License
 

@@ -83,7 +83,7 @@ export function Sidebar({ currentPath = '/', navItems = defaultNavItems, classNa
       {/* Footer */}
       <div className="px-5 py-3">
         <a
-          href="https://github.com/supaku/agentfactory"
+          href="https://github.com/renseiai/agentfactory"
           target="_blank"
           rel="noopener noreferrer"
           className="group flex items-center gap-1.5 text-2xs font-body text-af-text-tertiary hover:text-af-text-secondary transition-colors"
