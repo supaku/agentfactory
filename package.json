@@ -5,7 +5,7 @@
   "description": "The open-source software factory — multi-agent fleet management for coding agents",
   "repository": {
     "type": "git",
-    "url": "https://github.com/renseiai/agentfactory"
+    "url": "git+https://github.com/renseiai/agentfactory.git"
   },
   "homepage": "https://github.com/renseiai/agentfactory#readme",
   "bugs": {

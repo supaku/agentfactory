@@ -64,7 +64,7 @@ jobs:
       - name: Set package versions
         if: steps.check.outputs.should_publish == 'true'
         run: |
-          for pkg in packages/linear packages/core packages/server packages/cli packages/nextjs packages/dashboard packages/create-app; do
+          for pkg in packages/linear packages/core packages/server packages/cli packages/nextjs packages/dashboard packages/mcp-server packages/create-app; do
             cd "$pkg"
             npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
             cd "$GITHUB_WORKSPACE"
@@ -79,31 +79,35 @@ jobs:
       # 6. create-app (no internal runtime deps)
       - name: Publish @renseiai/agentfactory-linear to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory-linear publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory-linear publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/agentfactory to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/agentfactory-server to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory-server publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory-server publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/agentfactory-cli to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory-cli publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory-cli publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/agentfactory-nextjs to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory-nextjs publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory-nextjs publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/agentfactory-dashboard to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/agentfactory-dashboard publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/agentfactory-dashboard publish --no-git-checks --provenance --access public
+
+      - name: Publish @renseiai/agentfactory-mcp-server to npm
+        if: steps.check.outputs.should_publish == 'true'
+        run: pnpm --filter @renseiai/agentfactory-mcp-server publish --no-git-checks --provenance --access public
 
       - name: Publish @renseiai/create-agentfactory-app to npm
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm --filter @renseiai/create-agentfactory-app publish --no-git-checks --access public
+        run: pnpm --filter @renseiai/create-agentfactory-app publish --no-git-checks --provenance --access public
 
       # Publish to GitHub Packages
       - name: Setup Node.js for GitHub Packages
@@ -151,6 +155,12 @@ jobs:
       - name: Publish @renseiai/agentfactory-dashboard to GitHub Packages
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm --filter @renseiai/agentfactory-dashboard publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish @renseiai/agentfactory-mcp-server to GitHub Packages
+        if: steps.check.outputs.should_publish == 'true'
+        run: pnpm --filter @renseiai/agentfactory-mcp-server publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

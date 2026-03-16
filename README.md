@@ -389,11 +389,10 @@ pnpm test
 
 AgentFactory powers real products in production:
 
-| Product | What it does |
-|---------|-------------|
-| [Rensei Social](https://rensei.ai/products/social) | AI-powered social media management |
-| [Rensei Art](https://art.rensei.ai) | Art collection curation platform |
-| [Rensei Account](https://account.rensei.ai) | Unified auth across the Rensei AI ecosystem |
+| Project                                                | What it does                              |
+|--------------------------------------------------------|-------------------------------------------|
+| [Supaku Family](https://family.supaku.com)             | Privacy focused Personal CRM              |
+| [Recoil Engine](https://github.com/supaku/RecoilEngine)| Adding Mac Metal support to BAR           |
 
 Building with AgentFactory? Add the badge to your project and [share it in Discussions](https://github.com/renseiai/agentfactory/discussions).
 

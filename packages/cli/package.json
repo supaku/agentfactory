@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-cli",
-  "version": "0.7.58",
+  "version": "0.8.0",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Rensei AI (https://rensei.ai)",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/renseiai/agentfactory",
+    "url": "git+https://github.com/renseiai/agentfactory.git",
     "directory": "packages/cli"
   },
   "homepage": "https://github.com/renseiai/agentfactory/tree/main/packages/cli",
@@ -18,61 +18,7 @@
     "url": "https://github.com/renseiai/agentfactory/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "exports": {
-      ".": {
-        "types": "./dist/src/index.d.ts",
-        "import": "./dist/src/index.js",
-        "default": "./dist/src/index.js"
-      },
-      "./agent": {
-        "types": "./dist/src/lib/agent-runner.d.ts",
-        "import": "./dist/src/lib/agent-runner.js",
-        "default": "./dist/src/lib/agent-runner.js"
-      },
-      "./orchestrator": {
-        "types": "./dist/src/lib/orchestrator-runner.d.ts",
-        "import": "./dist/src/lib/orchestrator-runner.js",
-        "default": "./dist/src/lib/orchestrator-runner.js"
-      },
-      "./cleanup": {
-        "types": "./dist/src/lib/cleanup-runner.d.ts",
-        "import": "./dist/src/lib/cleanup-runner.js",
-        "default": "./dist/src/lib/cleanup-runner.js"
-      },
-      "./worker": {
-        "types": "./dist/src/lib/worker-runner.d.ts",
-        "import": "./dist/src/lib/worker-runner.js",
-        "default": "./dist/src/lib/worker-runner.js"
-      },
-      "./worker-fleet": {
-        "types": "./dist/src/lib/worker-fleet-runner.d.ts",
-        "import": "./dist/src/lib/worker-fleet-runner.js",
-        "default": "./dist/src/lib/worker-fleet-runner.js"
-      },
-      "./queue-admin": {
-        "types": "./dist/src/lib/queue-admin-runner.d.ts",
-        "import": "./dist/src/lib/queue-admin-runner.js",
-        "default": "./dist/src/lib/queue-admin-runner.js"
-      },
-      "./analyze-logs": {
-        "types": "./dist/src/lib/analyze-logs-runner.d.ts",
-        "import": "./dist/src/lib/analyze-logs-runner.js",
-        "default": "./dist/src/lib/analyze-logs-runner.js"
-      },
-      "./linear": {
-        "types": "./dist/src/lib/linear-runner.d.ts",
-        "import": "./dist/src/lib/linear-runner.js",
-        "default": "./dist/src/lib/linear-runner.js"
-      },
-      "./sync-routes": {
-        "types": "./dist/src/lib/sync-routes-runner.d.ts",
-        "import": "./dist/src/lib/sync-routes-runner.js",
-        "default": "./dist/src/lib/sync-routes-runner.js"
-      }
-    },
-    "main": "./dist/src/index.js",
-    "types": "./dist/src/index.d.ts"
+    "access": "public"
   },
   "keywords": [
     "cli",
@@ -81,17 +27,17 @@
     "agent-management"
   ],
   "bin": {
-    "agentfactory": "./dist/src/index.js",
-    "af-agent": "./dist/src/agent.js",
-    "af-orchestrator": "./dist/src/orchestrator.js",
-    "af-worker": "./dist/src/worker.js",
-    "af-worker-fleet": "./dist/src/worker-fleet.js",
-    "af-cleanup": "./dist/src/cleanup.js",
-    "af-queue-admin": "./dist/src/queue-admin.js",
-    "af-analyze-logs": "./dist/src/analyze-logs.js",
-    "af-linear": "./dist/src/linear.js",
-    "af-governor": "./dist/src/governor.js",
-    "af-sync-routes": "./dist/src/sync-routes.js"
+    "agentfactory": "dist/src/index.js",
+    "af-agent": "dist/src/agent.js",
+    "af-orchestrator": "dist/src/orchestrator.js",
+    "af-worker": "dist/src/worker.js",
+    "af-worker-fleet": "dist/src/worker-fleet.js",
+    "af-cleanup": "dist/src/cleanup.js",
+    "af-queue-admin": "dist/src/queue-admin.js",
+    "af-analyze-logs": "dist/src/analyze-logs.js",
+    "af-linear": "dist/src/linear.js",
+    "af-governor": "dist/src/governor.js",
+    "af-sync-routes": "dist/src/sync-routes.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",

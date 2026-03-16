@@ -1,42 +1,39 @@
 {
   "name": "@renseiai/agentfactory-mcp-server",
-  "version": "0.7.52",
+  "version": "0.8.0",
   "type": "module",
   "description": "MCP server exposing AgentFactory fleet capabilities to MCP-aware clients",
   "author": "Rensei AI (https://rensei.ai)",
   "license": "MIT",
-  "engines": { "node": ">=22.0.0" },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/renseiai/agentfactory",
+    "url": "git+https://github.com/renseiai/agentfactory.git",
     "directory": "packages/mcp-server"
   },
   "publishConfig": {
-    "access": "public",
-    "exports": {
-      ".": {
-        "types": "./dist/src/index.d.ts",
-        "import": "./dist/src/index.js",
-        "default": "./dist/src/index.js"
-      }
-    },
-    "main": "./dist/src/index.js",
-    "types": "./dist/src/index.d.ts"
+    "access": "public"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     }
   },
   "bin": {
-    "af-mcp-server": "./dist/src/cli.js"
+    "af-mcp-server": "dist/src/cli.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@renseiai/agentfactory-server": "workspace:*",
