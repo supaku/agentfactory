@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.3
+
+### Fixes
+
+- **Clear stale parked work on status change** — Prevent QA-coordination loop by clearing parked work when issue status changes.
+- **Require version input for workflow_dispatch releases** — Release workflow now validates version input before proceeding.
+
+### Features
+
+- **Per-project build command overrides** — `RepositoryConfig` supports per-project `buildCommand`, `testCommand`, and `validateCommand` overrides in object form within `projectPaths`.
+- **iOS/Apple development support** — Native project agents can now handle iOS builds with platform-specific build system detection and safety checks.
+
 ## v0.8.2
 
 ### Fixes
