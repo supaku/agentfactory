@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath } from './repository-config.js'
+import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath, getProvidersConfig, ProvidersConfigSchema } from './repository-config.js'
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -516,5 +516,108 @@ describe('getProjectPath', () => {
       kind: 'RepositoryConfig',
     })
     expect(getProjectPath(config, 'Social')).toBeUndefined()
+  })
+})
+
+describe('ProvidersConfigSchema', () => {
+  it('validates a complete providers config', () => {
+    const result = ProvidersConfigSchema.parse({
+      default: 'codex',
+      byWorkType: { qa: 'amp', development: 'claude' },
+      byProject: { Social: 'codex' },
+    })
+    expect(result.default).toBe('codex')
+    expect(result.byWorkType).toEqual({ qa: 'amp', development: 'claude' })
+    expect(result.byProject).toEqual({ Social: 'codex' })
+  })
+
+  it('validates an empty object', () => {
+    const result = ProvidersConfigSchema.parse({})
+    expect(result.default).toBeUndefined()
+    expect(result.byWorkType).toBeUndefined()
+    expect(result.byProject).toBeUndefined()
+  })
+
+  it('rejects invalid provider names', () => {
+    expect(() => ProvidersConfigSchema.parse({ default: 'invalid' })).toThrow()
+  })
+
+  it('rejects invalid provider names in byWorkType', () => {
+    expect(() => ProvidersConfigSchema.parse({ byWorkType: { qa: 'invalid' } })).toThrow()
+  })
+})
+
+describe('RepositoryConfigSchema with providers', () => {
+  it('validates config with providers field', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      providers: {
+        default: 'codex',
+        byWorkType: { qa: 'amp' },
+      },
+    })
+    expect(result.providers).toEqual({
+      default: 'codex',
+      byWorkType: { qa: 'amp' },
+    })
+  })
+
+  it('validates config without providers field', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(result.providers).toBeUndefined()
+  })
+})
+
+describe('loadRepositoryConfig with providers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('parses config with providers section', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+providers:
+  default: codex
+  byWorkType:
+    qa: amp
+  byProject:
+    Social: claude
+`
+    )
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result?.providers).toEqual({
+      default: 'codex',
+      byWorkType: { qa: 'amp' },
+      byProject: { Social: 'claude' },
+    })
+  })
+})
+
+describe('getProvidersConfig', () => {
+  it('returns providers config when present', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      providers: { default: 'codex' },
+    })
+    expect(getProvidersConfig(config)).toEqual({ default: 'codex' })
+  })
+
+  it('returns undefined when providers not set', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(getProvidersConfig(config)).toBeUndefined()
   })
 })

@@ -3,7 +3,7 @@
  */
 
 import type { AgentWorkType } from '@renseiai/agentfactory-linear'
-import type { AgentProvider } from '../providers/types.js'
+import type { AgentProvider, AgentProviderName } from '../providers/types.js'
 
 /**
  * Result of parsing an agent's output to determine pass/fail
@@ -143,6 +143,8 @@ export interface AgentProcess {
   stopReason?: 'user_request' | 'timeout'
   /** Last activity timestamp for inactivity timeout tracking */
   lastActivityAt: Date
+  /** Provider name used to spawn this agent */
+  providerName?: AgentProviderName
   /** Total cost in USD (accumulated from provider result events) */
   totalCostUsd?: number
   /** Total input tokens used */
@@ -183,6 +185,10 @@ export interface SpawnAgentOptions {
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string
+  /** Issue labels (used for provider resolution via "provider:<name>" labels) */
+  labels?: string[]
+  /** Mention/prompt context text (used for provider resolution via "use <provider>" patterns) */
+  mentionContext?: string
 }
 
 export interface OrchestratorStreamConfig {
@@ -239,4 +245,8 @@ export interface SpawnAgentWithResumeOptions {
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string
+  /** Issue labels (used for provider resolution via "provider:<name>" labels) */
+  labels?: string[]
+  /** Mention/prompt context text (used for provider resolution via "use <provider>" patterns) */
+  mentionContext?: string
 }

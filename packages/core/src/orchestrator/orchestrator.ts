@@ -16,6 +16,9 @@ import {
   type AgentSpawnConfig,
   createProvider,
   resolveProviderName,
+  resolveProviderWithSource,
+  type AgentProviderName,
+  type ProvidersConfig,
 } from '../providers/index.js'
 import {
   initializeAgentDir,
@@ -53,7 +56,7 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
-import { loadRepositoryConfig, getProjectConfig, getProjectPath } from '../config/index.js'
+import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry, linearPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
@@ -803,6 +806,8 @@ export class AgentOrchestrator {
   private readonly activeAgents: Map<string, AgentProcess> = new Map()
   private readonly agentHandles: Map<string, AgentHandle> = new Map()
   private provider: AgentProvider
+  private readonly providerCache: Map<AgentProviderName, AgentProvider> = new Map()
+  private configProviders?: ProvidersConfig
   private readonly agentSessions: Map<string, AgentSession> = new Map()
   private readonly activityEmitters: Map<string, ActivityEmitter | ApiActivityEmitter> = new Map()
   // Track session ID to issue ID mapping for stop signal handling
@@ -874,9 +879,10 @@ export class AgentOrchestrator {
     this.client = createLinearAgentClient({ apiKey })
     this.events = events
 
-    // Initialize agent provider — defaults to Claude, configurable via env
+    // Initialize default agent provider — per-spawn resolution may override
     const providerName = resolveProviderName({ project: config.project })
     this.provider = config.provider ?? createProvider(providerName)
+    this.providerCache.set(this.provider.name, this.provider)
 
     // Initialize template registry for configurable workflow prompts
     try {
@@ -943,6 +949,8 @@ export class AgentOrchestrator {
           if (repoConfig.validateCommand) {
             this.validateCommand = repoConfig.validateCommand
           }
+          // Store providers config for per-spawn resolution
+          this.configProviders = getProvidersConfig(repoConfig)
         }
       }
     } catch (err) {
@@ -1824,6 +1832,34 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
   }
 
   /**
+   * Resolve the provider for a specific spawn, using the full priority cascade.
+   * Returns a cached provider instance (creating one if needed) and the resolved name.
+   */
+  private resolveProviderForSpawn(context: {
+    workType?: string
+    projectName?: string
+    labels?: string[]
+    mentionContext?: string
+  }): { provider: AgentProvider; providerName: AgentProviderName; source: string } {
+    const { name, source } = resolveProviderWithSource({
+      project: context.projectName,
+      workType: context.workType,
+      labels: context.labels,
+      mentionContext: context.mentionContext,
+      configProviders: this.configProviders,
+    })
+
+    // Return cached instance or create a new one
+    let provider = this.providerCache.get(name)
+    if (!provider) {
+      provider = createProvider(name)
+      this.providerCache.set(name, provider)
+    }
+
+    return { provider, providerName: name, source }
+  }
+
+  /**
    * Spawn a Claude agent for a specific issue using the Agent SDK
    */
   spawnAgent(options: SpawnAgentOptions): AgentProcess {
@@ -1838,7 +1874,13 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       prompt: customPrompt,
       teamName,
       projectName,
+      labels,
+      mentionContext,
     } = options
+
+    // Resolve provider for this specific spawn (may differ from default)
+    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
+      this.resolveProviderForSpawn({ workType, projectName, labels, mentionContext })
 
     // Generate prompt based on work type, or use custom prompt if provided
     // Try template registry first, fall back to hardcoded prompts
@@ -1856,7 +1898,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         repository: this.config.repository,
         projectPath: perProject?.path ?? this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
-        useToolPlugins: this.provider.name === 'claude',
+        useToolPlugins: spawnProviderName === 'claude',
         linearCli: this.linearCli ?? 'pnpm af-linear',
         packageManager: perProject?.packageManager ?? this.packageManager ?? 'pnpm',
         buildCommand: perProject?.buildCommand ?? this.buildCommand,
@@ -1885,6 +1927,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       startedAt: now,
       lastActivityAt: now, // Initialize for inactivity tracking
       workType,
+      providerName: spawnProviderName,
     }
 
     this.activeAgents.set(issueId, agent)
@@ -2065,10 +2108,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       env.LINEAR_TEAM_NAME = teamName
     }
 
-    log.info('Starting agent via provider', { provider: this.provider.name, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
+    log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
     // Create in-process tool servers from registered plugins
-    const mcpServers = this.provider.name === 'claude'
+    const mcpServers = spawnProviderName === 'claude'
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
@@ -2094,7 +2137,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       },
     }
 
-    const handle = this.provider.spawn(spawnConfig)
+    const handle = spawnProvider.spawn(spawnConfig)
 
     this.agentHandles.set(issueId, handle)
     agent.status = 'running'
@@ -2902,6 +2945,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           workType,
           teamName: issue.teamName,
           projectName: issue.projectName,
+          labels: issue.labels,
         })
 
         result.agents.push(agent)
@@ -2942,6 +2986,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     const issueId = issue.id // Use the actual UUID
     const team = await issue.team
     const teamName = team?.key
+
+    // Fetch labels for provider resolution
+    const issueLabels = await issue.labels()
+    const labelNames = issueLabels.nodes.map((l: { name: string }) => l.name)
 
     // Resolve project name for path scoping in monorepos
     let projectName: string | undefined
@@ -3053,6 +3101,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           workType: recoveryWorkType,
           teamName,
           projectName,
+          labels: labelNames,
         })
       }
     }
@@ -3080,6 +3129,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       prompt,
       teamName,
       projectName,
+      labels: labelNames,
     })
   }
 
@@ -3345,6 +3395,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         providerSessionId,
         workType,
         teamName,
+        mentionContext: prompt,
       })
 
       return {
@@ -3435,7 +3486,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * If autoTransition is enabled, also transitions the issue status to the appropriate working state
    */
   async spawnAgentWithResume(options: SpawnAgentWithResumeOptions): Promise<AgentProcess> {
-    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName } = options
+    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName, labels, mentionContext } = options
+
+    // Resolve provider for this specific spawn (may differ from default)
+    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
+      this.resolveProviderForSpawn({ workType, projectName: options.projectName, labels, mentionContext })
 
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
@@ -3471,6 +3526,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       startedAt: now,
       lastActivityAt: now, // Initialize for inactivity tracking
       workType,
+      providerName: spawnProviderName,
     }
 
     this.activeAgents.set(issueId, agent)
@@ -3629,14 +3685,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     log.info('Starting agent via provider', {
-      provider: this.provider.name,
+      provider: spawnProviderName,
+      source: providerSource,
       cwd: worktreePath ?? 'repo-root',
       resuming: !!providerSessionId,
       workType: workType ?? 'development',
     })
 
     // Create in-process tool servers from registered plugins
-    const mcpServers = this.provider.name === 'claude'
+    const mcpServers = spawnProviderName === 'claude'
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
@@ -3662,8 +3719,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     const handle = providerSessionId
-      ? this.provider.resume(providerSessionId, spawnConfig)
-      : this.provider.spawn(spawnConfig)
+      ? spawnProvider.resume(providerSessionId, spawnConfig)
+      : spawnProvider.spawn(spawnConfig)
 
     this.agentHandles.set(issueId, handle)
     agent.status = 'running'

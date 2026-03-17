@@ -11,6 +11,7 @@ import { z } from 'zod'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import YAML from 'yaml'
+import type { ProvidersConfig } from '../providers/index.js'
 
 // ---------------------------------------------------------------------------
 // Zod Schema
@@ -37,6 +38,19 @@ export type ProjectConfig = z.infer<typeof ProjectConfigSchema>
  * String values are normalized to { path: value } by getProjectConfig().
  */
 const ProjectPathValueSchema = z.union([z.string(), ProjectConfigSchema])
+
+/** Valid agent provider names */
+const AgentProviderNameSchema = z.enum(['claude', 'codex', 'amp', 'spring-ai', 'a2a'])
+
+/** Provider selection configuration */
+export const ProvidersConfigSchema = z.object({
+  /** Default provider for all agents */
+  default: AgentProviderNameSchema.optional(),
+  /** Provider overrides by work type (e.g., { qa: 'codex' }) */
+  byWorkType: z.record(z.string(), AgentProviderNameSchema).optional(),
+  /** Provider overrides by project name (e.g., { Social: 'codex' }) */
+  byProject: z.record(z.string(), AgentProviderNameSchema).optional(),
+})
 
 export const RepositoryConfigSchema = z.object({
   apiVersion: z.string(),
@@ -81,6 +95,11 @@ export const RepositoryConfigSchema = z.object({
    * Injected into workflow templates as {{validateCommand}}.
    */
   validateCommand: z.string().optional(),
+  /**
+   * Provider selection configuration.
+   * Allows routing agents to different providers by work type or project.
+   */
+  providers: ProvidersConfigSchema.optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },
@@ -139,6 +158,14 @@ export function getProjectPath(config: RepositoryConfig, projectName: string): s
   const value = config.projectPaths[projectName]
   if (value === undefined) return undefined
   return typeof value === 'string' ? value : value.path
+}
+
+/**
+ * Returns the providers config from a RepositoryConfig, if present.
+ * Convenience helper for passing to ProviderResolutionContext.configProviders.
+ */
+export function getProvidersConfig(config: RepositoryConfig): ProvidersConfig | undefined {
+  return config.providers as ProvidersConfig | undefined
 }
 
 // ---------------------------------------------------------------------------
