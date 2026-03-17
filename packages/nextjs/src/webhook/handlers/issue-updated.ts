@@ -24,6 +24,7 @@ import {
   storeSessionState,
   getSessionStateByIssue,
   dispatchWork,
+  clearAllParkedWork,
   type QueuedWork,
   wasAgentWorked,
   didJustFailQA,
@@ -104,6 +105,23 @@ export async function handleIssueUpdated(
       newStatus: currentStateName,
       timestamp: eventTimestamp(),
       source: 'webhook',
+    }
+  }
+
+  // Clear stale parked work on any status change.
+  // This prevents a race where both webhook and governor dispatch the same work type,
+  // one gets parked, and then gets promoted after the issue has moved to a new state.
+  if (currentStateName && updatedFrom?.stateId) {
+    try {
+      const cleared = await clearAllParkedWork(issueId)
+      if (cleared > 0) {
+        issueLog.info('Cleared stale parked work on status change', {
+          clearedCount: cleared,
+          newStatus: currentStateName,
+        })
+      }
+    } catch (err) {
+      issueLog.warn('Failed to clear parked work on status change', { error: err })
     }
   }
 

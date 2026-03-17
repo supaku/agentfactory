@@ -434,6 +434,41 @@ export async function removeParkedWorkBySessionId(
 }
 
 /**
+ * Clear all parked work for an issue.
+ *
+ * Deletes both the pending sorted set and the items hash.
+ * Used by the webhook handler on status changes to prevent stale parked work
+ * from being promoted after the issue has moved to a new state.
+ *
+ * @returns The number of parked items that were cleared
+ */
+export async function clearAllParkedWork(issueId: string): Promise<number> {
+  if (!isRedisConfigured()) return 0
+
+  try {
+    const pendingKey = `${PENDING_PREFIX}${issueId}`
+    const itemsKey = `${PENDING_ITEMS_PREFIX}${issueId}`
+
+    // Count items before clearing
+    const count = await redisZCard(pendingKey)
+
+    if (count === 0) {
+      return 0
+    }
+
+    // Delete both keys
+    await redisDel(pendingKey)
+    await redisDel(itemsKey)
+
+    log.info('Cleared all parked work for issue', { issueId, clearedCount: count })
+    return count
+  } catch (error) {
+    log.error('Failed to clear all parked work', { error, issueId })
+    return 0
+  }
+}
+
+/**
  * Check if a session is parked in any issue-pending queue.
  *
  * Scans the issue:pending:items:{issueId} hash entries for a matching sessionId.
