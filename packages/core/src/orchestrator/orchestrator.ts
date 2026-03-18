@@ -792,6 +792,29 @@ export function getWorktreeIdentifier(
   return `${issueIdentifier}-${suffix}`
 }
 
+/**
+ * Detect the appropriate work type for an issue based on its status,
+ * upgrading to coordination variants for parent issues with sub-issues.
+ *
+ * This prevents parent issues returning to Backlog after refinement from
+ * being dispatched as 'development' (which uses the wrong template and
+ * produces no sub-agent orchestration).
+ */
+export function detectWorkType(statusName: string, isParent: boolean): AgentWorkType {
+  let workType: AgentWorkType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
+  console.log(`Auto-detected work type: ${workType} (from status: ${statusName})`)
+
+  if (isParent) {
+    if (workType === 'development') workType = 'coordination'
+    else if (workType === 'qa') workType = 'qa-coordination'
+    else if (workType === 'acceptance') workType = 'acceptance-coordination'
+    else if (workType === 'refinement') workType = 'refinement-coordination'
+    console.log(`Upgraded to coordination work type: ${workType} (parent issue)`)
+  }
+
+  return workType
+}
+
 export class AgentOrchestrator {
   private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
     project?: string
@@ -996,6 +1019,19 @@ export class AgentOrchestrator {
     }
 
     return baseConfig
+  }
+
+  /**
+   * Detect the appropriate work type for an issue, upgrading to coordination
+   * variants for parent issues that have sub-issues.
+   *
+   * This prevents parent issues returning to Backlog after refinement from
+   * being dispatched as 'development' (which uses the wrong template and
+   * produces no sub-agent orchestration).
+   */
+  async detectWorkType(issueId: string, statusName: string): Promise<AgentWorkType> {
+    const isParent = await this.client.isParentIssue(issueId)
+    return detectWorkType(statusName, isParent)
   }
 
   /**
@@ -2918,8 +2954,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.log(`Processing: ${issue.identifier} - ${issue.title}`)
 
       try {
-        // Backlog issues are always development work
-        const workType: AgentWorkType = 'development'
+        // Detect work type — parent issues with sub-issues use coordination variants
+        const workType = await this.detectWorkType(issue.id, 'Backlog')
 
         // Create worktree with work type suffix
         const { worktreePath, worktreeIdentifier } = this.createWorktree(issue.identifier, workType)
@@ -3021,18 +3057,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     if (!effectiveWorkType) {
       const state = await issue.state
       const statusName = state?.name ?? 'Backlog'
-      effectiveWorkType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
-      console.log(`Auto-detected work type: ${effectiveWorkType} (from status: ${statusName})`)
-
-      // Parent issues use coordination variants
-      const isParent = await this.client.isParentIssue(issueId)
-      if (isParent) {
-        if (effectiveWorkType === 'development') effectiveWorkType = 'coordination'
-        else if (effectiveWorkType === 'qa') effectiveWorkType = 'qa-coordination'
-        else if (effectiveWorkType === 'acceptance') effectiveWorkType = 'acceptance-coordination'
-        else if (effectiveWorkType === 'refinement') effectiveWorkType = 'refinement-coordination'
-        console.log(`Upgraded to coordination work type: ${effectiveWorkType} (parent issue)`)
-      }
+      effectiveWorkType = await this.detectWorkType(issueId, statusName)
     }
 
     // Create isolated worktree for the agent
@@ -3332,16 +3357,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         // incorrect status transitions (e.g., Delivered → Started for acceptance work)
         if (!workType) {
           const statusName = currentStatus ?? 'Backlog'
-          workType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
-
-          // Parent issues use coordination variants
-          const isParent = await this.client.isParentIssue(issue.id)
-          if (isParent) {
-            if (workType === 'development') workType = 'coordination'
-            else if (workType === 'qa') workType = 'qa-coordination'
-            else if (workType === 'acceptance') workType = 'acceptance-coordination'
-            else if (workType === 'refinement') workType = 'refinement-coordination'
-          }
+          workType = await this.detectWorkType(issue.id, statusName)
         }
 
         // Create isolated worktree for the agent

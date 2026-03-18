@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.4
+
+### Fixes
+
+- **Fix parent issues dispatched as development instead of coordination after refinement** — The orchestrator's `run()` method hardcoded work type to `'development'` for all backlog issues, ignoring whether the issue is a parent with sub-issues. Parent issues returning to Backlog after a refinement cycle now correctly resolve to `'coordination'`, loading the right template with post-refinement sub-agent dispatch instructions.
+
+### Features
+
+- **Multi-provider selection with per-spawn resolution** — Providers can now be configured per work type or per project via `AGENT_PROVIDER_{WORKTYPE}` and `AGENT_PROVIDER_{PROJECT}` environment variables with priority cascade.
+- **Comprehensive test infrastructure** — Added 200+ new tests across all packages covering providers, templates, governor, orchestrator utilities, and more.
+
 ## v0.8.3
 
 ### Fixes
