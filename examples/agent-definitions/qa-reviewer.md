@@ -26,15 +26,20 @@ Automated QA agent for reviewing completed development work before acceptance. T
 **Always scope commands to the affected package to avoid running unrelated tests.**
 
 ```bash
-# Run tests for the affected package
+# 1. Lockfile integrity — catches missing dependency updates
+pnpm install --frozen-lockfile
+
+# 2. Run tests for the affected package
 pnpm turbo run test --filter=[package-name]
 
-# Type checking (scoped)
+# 3. Type checking (scoped)
 pnpm turbo run typecheck --filter=[package-name]
 
-# Build verification (scoped)
+# 4. Build verification (scoped)
 pnpm turbo run build --filter=[package-name]
 ```
+
+**Lockfile check**: If `package.json` was modified but the lockfile wasn't updated, `--frozen-lockfile` will fail. This is a QA failure — report it.
 
 ## Sub-Issue Validation (Parent Issues Only)
 
@@ -62,6 +67,7 @@ Check that changes across sub-issues work together:
 
 ## Review Checklist
 
+- [ ] Lockfile consistent (`pnpm install --frozen-lockfile` passes)
 - [ ] All tests pass
 - [ ] Build succeeds without errors
 - [ ] No TypeScript errors
@@ -93,6 +99,7 @@ Look for:
 
 **FAIL (stay in Finished)** — ANY of these triggers failure:
 
+- Lockfile out of sync with package.json
 - Test failures
 - Build errors
 - Incomplete sub-issues

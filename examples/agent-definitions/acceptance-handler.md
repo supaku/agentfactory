@@ -46,8 +46,19 @@ pnpm af-linear list-sub-issue-statuses [issue-id]
 
 **Important:** Sub-issues in Finished status have NOT been QA-verified. Do not accept until they reach Delivered.
 
+### Lockfile Integrity
+
+Verify the lockfile is consistent with package.json:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+If this fails, the developer forgot to update the lockfile after changing dependencies. **This is an acceptance failure** — report it.
+
 ### Merge Readiness
 
+- [ ] Lockfile consistent (`pnpm install --frozen-lockfile` passes)
 - [ ] CI checks passing on PR
 - [ ] No merge conflicts
 - [ ] PR approved (if required by repo settings)

@@ -61,20 +61,36 @@ glob "src/**/*.ts" | grep "related-feature"
 - Follow the project's naming conventions
 - Keep changes focused on the issue requirements
 
-### Testing
+### Pre-PR Validation
 
-Run tests scoped to the affected area:
+Run validation in this order (fail fast on cheapest checks first):
 
 ```bash
-# Run tests for affected package
+# 1. Lockfile integrity — if you modified any package.json
+#    CI uses --frozen-lockfile and will reject mismatches
+pnpm install --frozen-lockfile
+
+# 2. Tests — scoped to affected package
 pnpm turbo run test --filter=[package-name]
 
-# Type checking
+# 3. Type checking — scoped to affected package
 pnpm turbo run typecheck --filter=[package-name]
 
-# Build verification
+# 4. Build verification — scoped to affected package
 pnpm turbo run build --filter=[package-name]
 ```
+
+**If you modified any `package.json`**, you MUST run `pnpm install` first and commit the updated `pnpm-lock.yaml` (or equivalent lockfile). CI pipelines use `--frozen-lockfile` and will fail if the lockfile is out of sync.
+
+**If you modified a shared package** (e.g., a library consumed by multiple apps), also run typecheck and tests for all consuming packages to catch breaking changes:
+
+```bash
+# Example: test all consumers of a shared package
+pnpm turbo run typecheck --filter=...@scope/shared-package...
+pnpm turbo run test --filter=...@scope/shared-package...
+```
+
+**Do NOT create a PR with known validation failures.** Fix issues before proceeding.
 
 ## PR Creation
 
