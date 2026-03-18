@@ -1,0 +1,220 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Mock redis before importing module under test
+vi.mock('./redis.js', () => ({
+  isRedisConfigured: vi.fn(() => true),
+  redisSet: vi.fn(),
+  redisGet: vi.fn(() => null),
+  redisDel: vi.fn(() => 1),
+  redisKeys: vi.fn(() => []),
+}))
+
+import {
+  storeSessionState,
+  getSessionState,
+  updateSessionStatus,
+  updateProviderSessionId,
+  deleteSessionState,
+} from './session-storage.js'
+import { isRedisConfigured, redisSet, redisGet, redisDel } from './redis.js'
+
+const mockIsRedisConfigured = vi.mocked(isRedisConfigured)
+const mockRedisSet = vi.mocked(redisSet)
+const mockRedisGet = vi.mocked(redisGet)
+const mockRedisDel = vi.mocked(redisDel)
+
+function makeSessionInput() {
+  return {
+    issueId: 'issue-1',
+    issueIdentifier: 'SUP-123',
+    providerSessionId: null,
+    worktreePath: '/tmp/worktree',
+    status: 'pending' as const,
+  }
+}
+
+describe('session-storage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsRedisConfigured.mockReturnValue(true)
+    mockRedisGet.mockResolvedValue(null)
+  })
+
+  describe('storeSessionState', () => {
+    it('returns state with timestamps when Redis is not configured', async () => {
+      mockIsRedisConfigured.mockReturnValue(false)
+
+      const result = await storeSessionState('session-1', makeSessionInput())
+
+      expect(result.linearSessionId).toBe('session-1')
+      expect(result.issueId).toBe('issue-1')
+      expect(result.createdAt).toBeGreaterThan(0)
+      expect(result.updatedAt).toBeGreaterThan(0)
+      expect(mockRedisSet).not.toHaveBeenCalled()
+    })
+
+    it('stores serialized state in Redis with TTL', async () => {
+      const result = await storeSessionState('session-2', makeSessionInput())
+
+      expect(result.linearSessionId).toBe('session-2')
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'agent:session:session-2',
+        expect.objectContaining({
+          linearSessionId: 'session-2',
+          issueId: 'issue-1',
+          status: 'pending',
+        }),
+        86400 // 24 * 60 * 60
+      )
+    })
+
+    it('preserves createdAt from existing session', async () => {
+      const existingCreatedAt = 1000000
+      mockRedisGet.mockResolvedValue({
+        linearSessionId: 'session-3',
+        issueId: 'issue-1',
+        providerSessionId: null,
+        worktreePath: '/tmp/worktree',
+        status: 'running',
+        createdAt: existingCreatedAt,
+        updatedAt: 1000001,
+      })
+
+      const result = await storeSessionState('session-3', makeSessionInput())
+
+      expect(result.createdAt).toBe(existingCreatedAt)
+      expect(result.updatedAt).not.toBe(existingCreatedAt)
+    })
+  })
+
+  describe('getSessionState', () => {
+    it('returns null when Redis is not configured', async () => {
+      mockIsRedisConfigured.mockReturnValue(false)
+      const result = await getSessionState('session-1')
+      expect(result).toBeNull()
+    })
+
+    it('returns null when session is not found', async () => {
+      mockRedisGet.mockResolvedValue(null)
+      const result = await getSessionState('nonexistent')
+      expect(result).toBeNull()
+    })
+
+    it('returns parsed session state from Redis', async () => {
+      const stored = {
+        linearSessionId: 'session-1',
+        issueId: 'issue-1',
+        issueIdentifier: 'SUP-123',
+        providerSessionId: null,
+        worktreePath: '/tmp/worktree',
+        status: 'running',
+        createdAt: 1000000,
+        updatedAt: 1000001,
+      }
+      mockRedisGet.mockResolvedValue(stored)
+
+      const result = await getSessionState('session-1')
+
+      expect(result).toEqual(stored)
+      expect(mockRedisGet).toHaveBeenCalledWith('agent:session:session-1')
+    })
+  })
+
+  describe('updateSessionStatus', () => {
+    it('returns false when Redis is not configured', async () => {
+      mockIsRedisConfigured.mockReturnValue(false)
+      const result = await updateSessionStatus('session-1', 'running')
+      expect(result).toBe(false)
+    })
+
+    it('returns false when session is not found', async () => {
+      mockRedisGet.mockResolvedValue(null)
+      const result = await updateSessionStatus('nonexistent', 'running')
+      expect(result).toBe(false)
+    })
+
+    it('updates status and updatedAt timestamp', async () => {
+      const existing = {
+        linearSessionId: 'session-1',
+        issueId: 'issue-1',
+        providerSessionId: null,
+        worktreePath: '/tmp/worktree',
+        status: 'pending',
+        createdAt: 1000000,
+        updatedAt: 1000001,
+      }
+      mockRedisGet.mockResolvedValue(existing)
+
+      const result = await updateSessionStatus('session-1', 'running')
+
+      expect(result).toBe(true)
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'agent:session:session-1',
+        expect.objectContaining({
+          status: 'running',
+          updatedAt: expect.any(Number),
+        }),
+        86400
+      )
+      // Verify updatedAt changed
+      const storedArg = mockRedisSet.mock.calls[0]![1] as Record<string, unknown>
+      expect(storedArg.updatedAt).not.toBe(existing.updatedAt)
+    })
+  })
+
+  describe('updateProviderSessionId', () => {
+    it('returns false when session is not found', async () => {
+      mockRedisGet.mockResolvedValue(null)
+      const result = await updateProviderSessionId('nonexistent', 'provider-1')
+      expect(result).toBe(false)
+    })
+
+    it('updates provider session ID', async () => {
+      const existing = {
+        linearSessionId: 'session-1',
+        issueId: 'issue-1',
+        providerSessionId: null,
+        worktreePath: '/tmp/worktree',
+        status: 'running',
+        createdAt: 1000000,
+        updatedAt: 1000001,
+      }
+      mockRedisGet.mockResolvedValue(existing)
+
+      const result = await updateProviderSessionId('session-1', 'provider-abc')
+
+      expect(result).toBe(true)
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'agent:session:session-1',
+        expect.objectContaining({
+          providerSessionId: 'provider-abc',
+        }),
+        86400
+      )
+    })
+  })
+
+  describe('deleteSessionState', () => {
+    it('calls redisDel with correct key', async () => {
+      mockRedisDel.mockResolvedValue(1)
+
+      const result = await deleteSessionState('session-1')
+
+      expect(result).toBe(true)
+      expect(mockRedisDel).toHaveBeenCalledWith('agent:session:session-1')
+    })
+
+    it('returns false when Redis is not configured', async () => {
+      mockIsRedisConfigured.mockReturnValue(false)
+      const result = await deleteSessionState('session-1')
+      expect(result).toBe(false)
+      expect(mockRedisDel).not.toHaveBeenCalled()
+    })
+
+    it('returns false when key did not exist', async () => {
+      mockRedisDel.mockResolvedValue(0)
+      const result = await deleteSessionState('nonexistent')
+      expect(result).toBe(false)
+    })
+  })
+})

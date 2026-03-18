@@ -26,5 +26,7 @@ export function verifyWebhookSignature(
   hmac.update(body)
   const digest = hmac.digest('hex')
 
+  if (digest.length !== signature.length) return false
+
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature))
 }
