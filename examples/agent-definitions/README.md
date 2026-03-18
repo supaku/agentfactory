@@ -119,6 +119,7 @@ These definitions are starting points. You should customize them for your stack:
 3. **Add deployment checks** — if using Vercel/Netlify/etc., add deployment verification to QA
 4. **Add database validation** — if using migrations, add schema drift checks
 5. **Tune the review checklist** — add checks specific to your codebase (e.g., i18n, accessibility)
+6. **Add shared package impact checks** — if your monorepo has shared packages, require testing consumers when shared code changes
 
 ### QA for Native/Compiled Projects
 
