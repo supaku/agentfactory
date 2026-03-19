@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeStrategy, extractFailureReason, type EscalationStrategy } from './agent-tracking.js'
+import { computeStrategy, computeSessionBackoffS, extractFailureReason, type EscalationStrategy } from './agent-tracking.js'
 
 describe('computeStrategy', () => {
   it('returns normal for cycle 0', () => {
@@ -91,6 +91,39 @@ The main issue is that the database migration was not applied correctly and the 
     const msg = 'Failed'
     const result = extractFailureReason(msg)
     expect(result).toBe('Failed')
+  })
+})
+
+describe('computeSessionBackoffS', () => {
+  it('returns 0 for 0 failures', () => {
+    expect(computeSessionBackoffS(0)).toBe(0)
+  })
+
+  it('returns 0 for negative failures', () => {
+    expect(computeSessionBackoffS(-1)).toBe(0)
+  })
+
+  it('returns base delay (120s) for 1 failure', () => {
+    expect(computeSessionBackoffS(1)).toBe(120)
+  })
+
+  it('doubles each subsequent failure', () => {
+    expect(computeSessionBackoffS(2)).toBe(240) // 2 * 120
+    expect(computeSessionBackoffS(3)).toBe(480) // 4 * 120
+    expect(computeSessionBackoffS(4)).toBe(960) // 8 * 120
+  })
+
+  it('caps at 1800s (30 minutes)', () => {
+    expect(computeSessionBackoffS(5)).toBe(1800)
+    expect(computeSessionBackoffS(10)).toBe(1800)
+    expect(computeSessionBackoffS(100)).toBe(1800)
+  })
+
+  it('follows exact exponential schedule: 2min, 4min, 8min, 16min, 30min cap', () => {
+    const expected = [120, 240, 480, 960, 1800]
+    for (let i = 0; i < expected.length; i++) {
+      expect(computeSessionBackoffS(i + 1)).toBe(expected[i])
+    }
   })
 })
 

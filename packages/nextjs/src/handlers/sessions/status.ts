@@ -20,6 +20,8 @@ import {
   promoteNextPendingWork,
   RedisProcessingStateStorage,
   createLogger,
+  recordSessionFailure,
+  clearSessionFailures,
 } from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
 
@@ -110,6 +112,26 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
           await updateSessionCostData(sessionId, { totalCostUsd, inputTokens, outputTokens }).catch(
             (err) => log.error('Failed to persist cost data', { sessionId, error: err })
           )
+        }
+
+        // Track session failures for circuit breaker (exponential backoff)
+        if (session.issueId) {
+          if (status === 'failed') {
+            const errorMsg = typeof errorInfo === 'object' && errorInfo !== null && 'message' in errorInfo
+              ? String((errorInfo as { message: unknown }).message)
+              : undefined
+            try {
+              await recordSessionFailure(session.issueId, errorMsg)
+            } catch (err) {
+              log.error('Failed to record session failure', { sessionId, issueId: session.issueId, error: err })
+            }
+          } else if (status === 'completed') {
+            try {
+              await clearSessionFailures(session.issueId)
+            } catch (err) {
+              log.error('Failed to clear session failures', { sessionId, issueId: session.issueId, error: err })
+            }
+          }
         }
 
         if (status === 'completed' && session.issueId) {
