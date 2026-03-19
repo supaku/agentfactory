@@ -40,6 +40,12 @@ import {
   markAcceptanceCompleted,
   didAcceptanceJustComplete,
   clearAcceptanceCompleted,
+  recordSessionFailure,
+  checkSessionFailureBackoff,
+  clearSessionFailures,
+  getSessionFailureState,
+  computeSessionBackoffS,
+  cleanupAcceptedIssue,
   type EscalationStrategy,
 } from './agent-tracking.js'
 
@@ -429,5 +435,264 @@ describe('acceptance completion lock', () => {
 
     await clearAcceptanceCompleted(issueId)
     expect(await didAcceptanceJustComplete(issueId)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Session failure circuit breaker
+// ---------------------------------------------------------------------------
+
+describe('session failure circuit breaker', () => {
+  const issueId = 'circuit-breaker-test-001'
+
+  describe('recordSessionFailure', () => {
+    it('increments failure count on each call', async () => {
+      const s1 = await recordSessionFailure(issueId, 'error 1')
+      expect(s1.failureCount).toBe(1)
+      expect(s1.lastError).toBe('error 1')
+
+      const s2 = await recordSessionFailure(issueId, 'error 2')
+      expect(s2.failureCount).toBe(2)
+      expect(s2.lastError).toBe('error 2')
+
+      const s3 = await recordSessionFailure(issueId)
+      expect(s3.failureCount).toBe(3)
+      expect(s3.lastError).toBeUndefined()
+    })
+
+    it('records timestamp', async () => {
+      const before = Date.now()
+      const state = await recordSessionFailure(issueId, 'test')
+      const after = Date.now()
+
+      expect(state.lastFailedAt).toBeGreaterThanOrEqual(before)
+      expect(state.lastFailedAt).toBeLessThanOrEqual(after)
+    })
+  })
+
+  describe('getSessionFailureState', () => {
+    it('returns null for unknown issue', async () => {
+      const state = await getSessionFailureState('nonexistent')
+      expect(state).toBeNull()
+    })
+
+    it('returns current state after recording', async () => {
+      await recordSessionFailure(issueId, 'boom')
+      const state = await getSessionFailureState(issueId)
+      expect(state).not.toBeNull()
+      expect(state!.failureCount).toBe(1)
+      expect(state!.lastError).toBe('boom')
+    })
+  })
+
+  describe('clearSessionFailures', () => {
+    it('resets failure state', async () => {
+      await recordSessionFailure(issueId, 'error')
+      await recordSessionFailure(issueId, 'error')
+
+      await clearSessionFailures(issueId)
+
+      const state = await getSessionFailureState(issueId)
+      expect(state).toBeNull()
+    })
+
+    it('is safe to call on nonexistent issue', async () => {
+      await expect(clearSessionFailures('nonexistent')).resolves.not.toThrow()
+    })
+  })
+
+  describe('checkSessionFailureBackoff', () => {
+    it('allows dispatch when no failures recorded', async () => {
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(true)
+      expect(check.failureCount).toBe(0)
+      expect(check.backoffRemainingS).toBe(0)
+    })
+
+    it('blocks dispatch during backoff period after first failure', async () => {
+      await recordSessionFailure(issueId, 'crash')
+
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('backoff')
+      expect(check.failureCount).toBe(1)
+      expect(check.backoffRemainingS).toBeGreaterThan(0)
+      // Should be close to 120s (2 min base delay)
+      expect(check.backoffRemainingS).toBeLessThanOrEqual(120)
+      expect(check.message).toContain('1 time')
+      expect(check.message).toContain('exponential backoff')
+      expect(check.message).toContain('mention the agent')
+    })
+
+    it('includes last error in backoff message', async () => {
+      await recordSessionFailure(issueId, 'API key expired')
+
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(false)
+      expect(check.message).toContain('API key expired')
+    })
+
+    it('allows dispatch after backoff period elapses', async () => {
+      // Record a failure with a timestamp far in the past
+      const key = `session:failures:${issueId}`
+      store.set(key, JSON.stringify({
+        issueId,
+        failureCount: 1,
+        lastFailedAt: Date.now() - 200_000, // 200s ago, backoff is 120s
+      }))
+
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(true)
+      expect(check.failureCount).toBe(1)
+      expect(check.backoffRemainingS).toBe(0)
+    })
+
+    it('increases backoff exponentially with each failure', async () => {
+      // Simulate failures with timestamps far enough apart that we're checking
+      // the backoff calculation, not the elapsed time
+      for (let i = 1; i <= 4; i++) {
+        store.set(`session:failures:${issueId}`, JSON.stringify({
+          issueId,
+          failureCount: i,
+          lastFailedAt: Date.now(), // just now
+        }))
+
+        const check = await checkSessionFailureBackoff(issueId)
+        expect(check.allowed).toBe(false)
+        expect(check.reason).toBe('backoff')
+
+        // Backoff should match the exponential schedule
+        const expectedBackoff = computeSessionBackoffS(i)
+        expect(check.backoffRemainingS).toBeLessThanOrEqual(expectedBackoff)
+        expect(check.backoffRemainingS).toBeGreaterThan(0)
+      }
+    })
+
+    it('hard-stops at 5 consecutive failures', async () => {
+      for (let i = 0; i < 5; i++) {
+        await recordSessionFailure(issueId, `crash #${i + 1}`)
+      }
+
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('hard_stop')
+      expect(check.failureCount).toBe(5)
+      expect(check.backoffRemainingS).toBe(0) // no backoff — permanently stopped
+      expect(check.message).toContain('5 consecutive times')
+      expect(check.message).toContain('human intervention')
+      expect(check.message).toContain('crash #5')
+    })
+
+    it('hard-stops at 6+ failures (stays stopped)', async () => {
+      for (let i = 0; i < 7; i++) {
+        await recordSessionFailure(issueId, 'crash')
+      }
+
+      const check = await checkSessionFailureBackoff(issueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('hard_stop')
+      expect(check.failureCount).toBe(7)
+    })
+
+    it('allows dispatch after clearing failures', async () => {
+      for (let i = 0; i < 5; i++) {
+        await recordSessionFailure(issueId, 'crash')
+      }
+
+      const hardStopped = await checkSessionFailureBackoff(issueId)
+      expect(hardStopped.allowed).toBe(false)
+      expect(hardStopped.reason).toBe('hard_stop')
+
+      await clearSessionFailures(issueId)
+
+      const afterClear = await checkSessionFailureBackoff(issueId)
+      expect(afterClear.allowed).toBe(true)
+      expect(afterClear.failureCount).toBe(0)
+    })
+  })
+
+  describe('cleanupAcceptedIssue clears session failures', () => {
+    it('removes session failure state along with other tracking data', async () => {
+      // Set up various tracking state
+      await recordSessionFailure(issueId, 'some error')
+      await updateWorkflowState(issueId, { issueIdentifier: 'TEST-1' })
+
+      // Verify state exists
+      expect(await getSessionFailureState(issueId)).not.toBeNull()
+      expect(await getWorkflowState(issueId)).not.toBeNull()
+
+      // Cleanup
+      await cleanupAcceptedIssue(issueId)
+
+      // Both should be cleared
+      expect(await getSessionFailureState(issueId)).toBeNull()
+      expect(await getWorkflowState(issueId)).toBeNull()
+    })
+  })
+
+  describe('SUP-953 scenario simulation', () => {
+    it('would have stopped the runaway retry loop', async () => {
+      const supIssueId = 'sup-953-simulation'
+
+      // Simulate what happened: 9 rapid consecutive failures
+      // Each failure happens ~2 minutes apart (Linear creating new sessions)
+
+      // Failure 1 — would be allowed (no prior failures)
+      let check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(true)
+
+      // Record failure 1
+      await recordSessionFailure(supIssueId, 'Agent did not complete successfully')
+
+      // Failure 2 attempt (~2 min later) — BLOCKED by 2-min backoff
+      // (in reality the backoff just started, so it blocks)
+      check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('backoff')
+
+      // Simulate time passing (2 min) — backoff elapses, retry allowed
+      store.set(`session:failures:${supIssueId}`, JSON.stringify({
+        issueId: supIssueId,
+        failureCount: 1,
+        lastFailedAt: Date.now() - 121_000, // 121s ago
+      }))
+      check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(true)
+
+      // Record failure 2
+      await recordSessionFailure(supIssueId, 'Agent did not complete successfully')
+
+      // Failure 3 attempt — blocked by 4-min backoff
+      check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(false)
+
+      // Record failures 3, 4, 5 (simulating elapsed backoff each time)
+      for (let i = 3; i <= 5; i++) {
+        store.set(`session:failures:${supIssueId}`, JSON.stringify({
+          issueId: supIssueId,
+          failureCount: i - 1,
+          lastFailedAt: Date.now() - (computeSessionBackoffS(i - 1) + 1) * 1000,
+        }))
+        check = await checkSessionFailureBackoff(supIssueId)
+        expect(check.allowed).toBe(true)
+        await recordSessionFailure(supIssueId, 'Agent did not complete successfully')
+      }
+
+      // After 5 failures — hard stop, no more retries
+      check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('hard_stop')
+      expect(check.message).toContain('human intervention')
+
+      // Even after waiting a long time, still blocked
+      store.set(`session:failures:${supIssueId}`, JSON.stringify({
+        issueId: supIssueId,
+        failureCount: 5,
+        lastFailedAt: Date.now() - 86400_000, // 24 hours ago
+      }))
+      check = await checkSessionFailureBackoff(supIssueId)
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toBe('hard_stop')
+    })
   })
 })
