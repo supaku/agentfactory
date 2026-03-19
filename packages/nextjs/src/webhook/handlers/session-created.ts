@@ -22,6 +22,8 @@ import {
   dispatchWork,
   type QueuedWork,
   getWorkflowState,
+  checkSessionFailureBackoff,
+  clearSessionFailures,
 } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -283,6 +285,50 @@ export async function handleSessionCreated(
         message: validation.error,
       })
     }
+  }
+
+  // Session failure circuit breaker — prevent runaway retry loops.
+  // Mentions bypass the backoff timer (user explicitly asked for a retry)
+  // but NOT the hard stop (too many consecutive failures need human investigation).
+  const failureCheck = await checkSessionFailureBackoff(issueId)
+  if (!failureCheck.allowed) {
+    const isHardStop = failureCheck.reason === 'hard_stop'
+    const canBypass = isMention && !isHardStop
+
+    if (!canBypass) {
+      sessionLog.warn('Session dispatch blocked by failure circuit breaker', {
+        reason: failureCheck.reason,
+        failureCount: failureCheck.failureCount,
+        backoffRemainingS: failureCheck.backoffRemainingS,
+        isMention,
+      })
+
+      try {
+        const linearClient = await config.linearClient.getClient(payload.organizationId)
+        await emitActivity(
+          linearClient,
+          sessionId,
+          'response',
+          failureCheck.message ?? 'Agent dispatch paused due to repeated failures.'
+        )
+      } catch (err) {
+        sessionLog.warn('Failed to emit circuit breaker activity', { error: err })
+      }
+
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        reason: `session_failure_${failureCheck.reason}`,
+        failureCount: failureCheck.failureCount,
+        backoffRemainingS: failureCheck.backoffRemainingS,
+      })
+    }
+
+    // Mention bypassing backoff — clear failures so the retry starts fresh
+    sessionLog.info('Mention bypassing session failure backoff', {
+      failureCount: failureCheck.failureCount,
+    })
+    await clearSessionFailures(issueId)
   }
 
   // Extract PR info for QA/acceptance agents so they know which PRs to validate
