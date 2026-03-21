@@ -39,6 +39,7 @@ import {
   getTotalSessionCount,
   MAX_TOTAL_SESSIONS,
   didAcceptanceJustComplete,
+  incrementDispatchCount,
 } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -352,6 +353,7 @@ export async function handleIssueUpdated(
 
     if (qaResult.dispatched || qaResult.parked) {
       workDispatched = true
+      try { await incrementDispatchCount(issueId) } catch {}
       issueLog.info('QA work dispatched', {
         sessionId: qaSessionId,
         attemptNumber: attemptCount + 1,
@@ -690,6 +692,7 @@ export async function handleIssueUpdated(
 
       if (devResult.dispatched || devResult.parked) {
         workDispatched = true
+        try { await incrementDispatchCount(issueId) } catch {}
         const retryLabel = isRetry ? ' (retry)' : ''
         issueLog.info(`Development work dispatched${retryLabel}`, { sessionId: devSessionId })
 
@@ -893,6 +896,7 @@ export async function handleIssueUpdated(
 
       if (accResult.dispatched || accResult.parked) {
         workDispatched = true
+        try { await incrementDispatchCount(issueId) } catch {}
         issueLog.info('Acceptance work dispatched', { sessionId: acceptanceSessionId })
 
         try {

@@ -107,6 +107,24 @@ describe('@renseiai/agentfactory-server subpath exports', () => {
     expect(typeof mod.MAX_TOTAL_SESSIONS).toBe('number')
   })
 
+  it('exports incrementDispatchCount from main', async () => {
+    const mod = await import('../index.js')
+    expect(mod.incrementDispatchCount).toBeDefined()
+    expect(typeof mod.incrementDispatchCount).toBe('function')
+  })
+
+  it('exports getDispatchCount from main', async () => {
+    const mod = await import('../index.js')
+    expect(mod.getDispatchCount).toBeDefined()
+    expect(typeof mod.getDispatchCount).toBe('function')
+  })
+
+  it('exports clearDispatchCount from main', async () => {
+    const mod = await import('../index.js')
+    expect(mod.clearDispatchCount).toBeDefined()
+    expect(typeof mod.clearDispatchCount).toBe('function')
+  })
+
   // Governor storage
   it('exports RedisOverrideStorage from main', async () => {
     const mod = await import('../index.js')
