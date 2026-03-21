@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.6
+
+### Fixes
+
+- **Add "QA Coordination Complete" heuristic to work result parser** — Agents that output "QA Coordination Complete" or "QA Complete" as inline text (without a structured `WORK_RESULT` marker) now correctly resolve as "passed", preventing issues from stalling in Finished status.
+
 ## v0.8.5
 
 ### Fixes

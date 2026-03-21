@@ -185,6 +185,27 @@ describe('parseWorkResult', () => {
         'qa'
       )).toBe('passed')
     })
+
+    it('detects "QA Coordination Complete" inline text as pass', () => {
+      expect(parseWorkResult(
+        'QA Coordination Complete for SUP-1145\n\nFound and fixed 2 blocking rework issues.',
+        'qa-coordination'
+      )).toBe('passed')
+    })
+
+    it('detects "QA Complete" inline text as pass', () => {
+      expect(parseWorkResult(
+        'QA Complete — all sub-issues verified.',
+        'qa'
+      )).toBe('passed')
+    })
+
+    it('fail patterns take precedence over "QA Complete" when fail indicators present', () => {
+      expect(parseWorkResult(
+        '## QA Complete\n\nStatus: 3 Issues Found\n\nQA Coordination Complete',
+        'qa-coordination'
+      )).toBe('failed')
+    })
   })
 
   // Acceptance heuristic pattern tests

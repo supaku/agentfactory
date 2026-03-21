@@ -32,6 +32,8 @@ const QA_PASS_PATTERNS = [
   /\bAPPROVED\s+FOR\s+MERGE\b/i,
   // "all checks passed" — agent confirmed all checks passed
   /\ball\s+checks\s+passed\b/i,
+  // "QA Coordination Complete" / "QA Complete" — inline text (not heading)
+  /\bQA\s+(?:Coordination\s+)?Complete\b/i,
 ]
 
 const QA_FAIL_PATTERNS = [
