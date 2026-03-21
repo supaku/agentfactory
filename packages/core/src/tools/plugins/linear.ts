@@ -184,6 +184,36 @@ function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>
     ),
 
     tool(
+      'af_linear_list_issues',
+      'List Linear issues with filters (project, status, label, priority, assignee)',
+      {
+        project: z.string().optional().describe('Filter by project name'),
+        status: z.string().optional().describe('Filter by status (Icebox, Backlog, Started, Finished, etc.)'),
+        label: z.string().optional().describe('Filter by label name'),
+        priority: z.number().optional().describe('Filter by priority (1=Urgent, 2=High, 3=Medium, 4=Low)'),
+        assignee: z.string().optional().describe('Filter by assignee (name, email, or "me")'),
+        team: z.string().optional().describe('Filter by team name'),
+        limit: z.number().optional().describe('Max results (default 50)'),
+        order_by: z.enum(['createdAt', 'updatedAt']).optional().describe('Sort order'),
+        query: z.string().optional().describe('Search title/description text'),
+      },
+      async (args) => {
+        const cliArgs: Record<string, string | string[] | boolean> = {}
+        if (args.project) cliArgs.project = args.project
+        if (args.status) cliArgs.status = args.status
+        if (args.label) cliArgs.label = args.label
+        if (args.priority != null) cliArgs.priority = String(args.priority)
+        if (args.assignee) cliArgs.assignee = args.assignee
+        if (args.team) cliArgs.team = args.team
+        else if (teamName) cliArgs.team = teamName
+        if (args.limit != null) cliArgs.limit = String(args.limit)
+        if (args.order_by) cliArgs['order-by'] = args.order_by
+        if (args.query) cliArgs.query = args.query
+        return run('list-issues', cliArgs)
+      }
+    ),
+
+    tool(
       'af_linear_create_blocker',
       'Create a human-needed blocker issue linked to a source issue',
       {

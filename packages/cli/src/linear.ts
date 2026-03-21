@@ -13,6 +13,7 @@
  *   update-issue <id>           Update an existing issue
  *   list-comments <issueId>     List comments on an issue
  *   create-comment <issueId>    Create a comment on an issue
+ *   list-issues                  List issues with flexible filters
  *   list-backlog-issues         List backlog issues for a project
  *   list-unblocked-backlog      List unblocked backlog issues
  *   check-blocked <id>          Check if an issue is blocked
@@ -55,6 +56,7 @@ Commands:
   update-issue <id>             Update an existing issue
   list-comments <issueId>       List comments on an issue
   create-comment <issueId>      Create a comment on an issue
+  list-issues                   List issues with flexible filters
   list-backlog-issues           List backlog issues for a project
   list-unblocked-backlog        List unblocked backlog issues
   check-blocked <id>            Check if an issue is blocked

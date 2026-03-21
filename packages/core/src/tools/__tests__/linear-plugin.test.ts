@@ -32,9 +32,9 @@ describe('linearPlugin', () => {
     expect(tools).toHaveLength(0)
   })
 
-  it('returns 16 tools when LINEAR_API_KEY is set', () => {
+  it('returns 17 tools when LINEAR_API_KEY is set', () => {
     const tools = linearPlugin.createTools(contextWithKey)
-    expect(tools).toHaveLength(16)
+    expect(tools).toHaveLength(17)
   })
 
   it('creates tools with correct names', () => {
@@ -56,6 +56,7 @@ describe('linearPlugin', () => {
     expect(names).toContain('af_linear_list_backlog_issues')
     expect(names).toContain('af_linear_list_unblocked_backlog')
     expect(names).toContain('af_linear_check_deployment')
+    expect(names).toContain('af_linear_list_issues')
     expect(names).toContain('af_linear_create_blocker')
   })
 

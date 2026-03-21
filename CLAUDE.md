@@ -50,6 +50,9 @@ pnpm af-linear list-sub-issues <parent-issue-id>
 pnpm af-linear list-sub-issue-statuses <parent-issue-id>
 pnpm af-linear update-sub-issue <id> [--state "Finished"] [--comment "Done"]
 
+# Issue listing (flexible filters)
+pnpm af-linear list-issues [--project "..."] [--status "..."] [--label "..."] [--priority 2] [--assignee "me"] [--team "..."] [--limit 50] [--order-by "createdAt"] [--query "search text"]
+
 # Blocking checks
 pnpm af-linear check-blocked <issue-id>
 pnpm af-linear list-backlog-issues --project "ProjectName"
@@ -109,6 +112,7 @@ const isAutonomous = !!process.env.LINEAR_SESSION_ID
 3. **Complete the full workflow** — implement, test (`pnpm test`, `pnpm typecheck`), create PR, report status.
 4. **Handle errors gracefully** — try alternatives; if blocked, post a Linear comment and mark as failed.
 5. **Never delete your own worktree** — see Worktree Lifecycle Rules below.
+6. Spawn `Task` agents with `subagent_type=Explore` for research tasks
 
 ## File Operations Best Practices
 

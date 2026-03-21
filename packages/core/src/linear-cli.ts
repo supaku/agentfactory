@@ -15,6 +15,7 @@
  *   update-issue <id>           Update an existing issue
  *   list-comments <issueId>     List comments on an issue
  *   create-comment <issueId>    Create a comment on an issue
+ *   list-issues                  List issues with flexible filters
  *   list-backlog-issues         List backlog issues for a project
  *   list-unblocked-backlog      List unblocked backlog issues
  *   check-blocked <id>          Check if an issue is blocked
@@ -670,6 +671,7 @@ async function main() {
     console.error('  update-issue <id>           Update an existing issue')
     console.error('  list-comments <issueId>     List comments on an issue')
     console.error('  create-comment <issueId>    Create a comment on an issue')
+    console.error('  list-issues                 List issues with flexible filters')
     console.error('  list-backlog-issues         List backlog issues for a project')
     console.error('  list-unblocked-backlog      List unblocked backlog issues')
     console.error('  check-blocked <id>          Check if an issue is blocked')

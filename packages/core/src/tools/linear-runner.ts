@@ -121,6 +121,18 @@ interface CreateBlockerOptions {
   assignee?: string
 }
 
+interface ListIssuesOptions {
+  project?: string
+  status?: string
+  label?: string
+  priority?: number
+  assignee?: string
+  team?: string
+  limit?: number
+  orderBy?: 'createdAt' | 'updatedAt'
+  query?: string
+}
+
 // ── Command implementations ────────────────────────────────────────
 
 async function getIssue(client: LinearClient, issueId: string): Promise<unknown> {
@@ -555,6 +567,112 @@ async function checkDeployment(
   return result
 }
 
+async function listIssues(
+  client: LinearClient,
+  options: ListIssuesOptions
+): Promise<unknown> {
+  const filter: Record<string, unknown> = {}
+
+  // Project filter
+  if (options.project) {
+    const projects = await client.linearClient.projects({
+      filter: { name: { eqIgnoreCase: options.project } },
+    })
+    if (projects.nodes.length === 0) {
+      throw new Error(`Project not found: ${options.project}`)
+    }
+    filter.project = { id: { eq: projects.nodes[0].id } }
+  }
+
+  // Status filter
+  if (options.status) {
+    filter.state = { name: { eqIgnoreCase: options.status } }
+  }
+
+  // Label filter
+  if (options.label) {
+    filter.labels = { name: { eqIgnoreCase: options.label } }
+  }
+
+  // Priority filter
+  if (options.priority != null) {
+    filter.priority = { eq: options.priority }
+  }
+
+  // Assignee filter
+  if (options.assignee) {
+    if (options.assignee === 'me') {
+      const viewer = await client.getViewer()
+      filter.assignee = { id: { eq: viewer.id } }
+    } else {
+      const users = await client.linearClient.users({
+        filter: {
+          or: [
+            { name: { eqIgnoreCase: options.assignee } },
+            { email: { eq: options.assignee } },
+          ],
+        },
+      })
+      if (users.nodes.length > 0) {
+        filter.assignee = { id: { eq: users.nodes[0].id } }
+      } else {
+        throw new Error(`Assignee not found: ${options.assignee}`)
+      }
+    }
+  }
+
+  // Team filter
+  if (options.team) {
+    const team = await client.getTeam(options.team)
+    filter.team = { id: { eq: team.id } }
+  }
+
+  // Text search
+  if (options.query) {
+    filter.or = [
+      { title: { containsIgnoreCase: options.query } },
+      { description: { containsIgnoreCase: options.query } },
+    ]
+  }
+
+  const limit = options.limit ?? 50
+
+  const issues = await client.linearClient.issues({
+    filter,
+    first: limit,
+    orderBy: options.orderBy === 'updatedAt'
+      ? ('updatedAt' as any)
+      : ('createdAt' as any),
+  })
+
+  const results = []
+  for (const issue of issues.nodes) {
+    const state = await issue.state
+    const labels = await issue.labels()
+    const project = await issue.project
+    const assignee = await issue.assignee
+    results.push({
+      id: issue.identifier,
+      title: issue.title,
+      status: state?.name,
+      priority: issue.priority,
+      labels: labels.nodes.map((l) => l.name),
+      project: project?.name ?? null,
+      assignee: assignee?.name ?? null,
+      createdAt: issue.createdAt,
+    })
+  }
+
+  // Sort by priority (higher priority = lower number, 0 = no priority goes last)
+  results.sort((a, b) => {
+    const aPriority = a.priority || 5
+    const bPriority = b.priority || 5
+    return aPriority - bPriority
+  })
+
+  return results
+}
+
 async function createBlocker(
   client: LinearClient,
   options: CreateBlockerOptions
@@ -914,6 +1032,21 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
       }
       const format = (args.format as 'json' | 'markdown') || 'json'
       output = await checkDeployment(prNumber, format)
+      break
+    }
+
+    case 'list-issues': {
+      output = await listIssues(client(), {
+        project: args.project as string | undefined,
+        status: (args.status ?? args.state) as string | undefined,
+        label: args.label as string | undefined,
+        priority: args.priority ? Number(args.priority) : undefined,
+        assignee: args.assignee as string | undefined,
+        team: args.team as string | undefined,
+        limit: args.limit ? Number(args.limit) : undefined,
+        orderBy: (args['order-by'] as 'createdAt' | 'updatedAt' | undefined),
+        query: args.query as string | undefined,
+      })
       break
     }
 
