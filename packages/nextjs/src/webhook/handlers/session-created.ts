@@ -25,6 +25,10 @@ import {
   getWorkflowState,
   checkSessionFailureBackoff,
   clearSessionFailures,
+  getTotalSessionCount,
+  MAX_TOTAL_SESSIONS,
+  incrementDispatchCount,
+  getDispatchCount,
 } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -332,6 +336,56 @@ export async function handleSessionCreated(
     await clearSessionFailures(issueId)
   }
 
+  // Total session hard cap — prevent infinite dispatch loops.
+  // Uses two counters: workflow-state-based (tracks phase-recorded sessions)
+  // and dispatch counter (tracks ALL dispatches including no-op sessions).
+  // When an issue accumulates too many sessions (e.g., agent keeps completing
+  // without producing a WORK_RESULT marker, leaving the issue in a non-terminal
+  // state that triggers new auto-sessions), this cap stops the cycle.
+  // Mentions bypass only if under 2× the cap (absolute safety valve).
+  try {
+    const [totalSessions, dispatchCount] = await Promise.all([
+      getTotalSessionCount(issueId),
+      getDispatchCount(issueId),
+    ])
+    const effectiveCount = Math.max(totalSessions, dispatchCount)
+
+    if (effectiveCount >= MAX_TOTAL_SESSIONS) {
+      const canBypassCap = isMention && effectiveCount < MAX_TOTAL_SESSIONS * 2
+      if (!canBypassCap) {
+        sessionLog.warn('Session hard cap reached, blocking dispatch', {
+          totalSessions,
+          dispatchCount,
+          effectiveCount,
+          maxTotalSessions: MAX_TOTAL_SESSIONS,
+          isMention,
+        })
+
+        try {
+          const linearClient = await config.linearClient.getClient(payload.organizationId)
+          await emitActivity(
+            linearClient,
+            sessionId,
+            'response',
+            `⚠️ **Session hard cap reached** (${effectiveCount}/${MAX_TOTAL_SESSIONS}). ` +
+            `No more automated sessions will be created for this issue. Manual intervention required.`
+          )
+        } catch (err) {
+          sessionLog.warn('Failed to emit session cap activity', { error: err })
+        }
+
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          reason: 'session_hard_cap',
+          totalSessions: effectiveCount,
+        })
+      }
+    }
+  } catch (err) {
+    sessionLog.warn('Failed to check total session count', { error: err })
+  }
+
   // Extract PR info for QA/acceptance agents so they know which PRs to validate
   let prContext = ''
   const needsPrContext =
@@ -441,6 +495,13 @@ export async function handleSessionCreated(
   const result = await dispatchWork(work)
 
   if (result.dispatched || result.parked) {
+    // Increment per-issue dispatch counter for hard cap enforcement
+    try {
+      await incrementDispatchCount(issueId)
+    } catch (err) {
+      sessionLog.warn('Failed to increment dispatch count', { error: err })
+    }
+
     sessionLog.info('Work dispatched', {
       sessionId,
       issueIdentifier,

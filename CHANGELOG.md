@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.5
+
+### Fixes
+
+- **Fix infinite session dispatch loop on completed coordination issues** — When a qa-coordination agent completed without a structured `WORK_RESULT` marker (e.g., "already done"), the issue stayed in Finished and Linear auto-created new agent sessions indefinitely. The `session-created` webhook handler now enforces a total session hard cap (`MAX_TOTAL_SESSIONS`) and a per-issue dispatch counter, matching the guards already present in `issue-updated`.
+- **Improve work result detection for "already done" agents** — Added heuristic patterns for `already done/complete`, `APPROVED FOR MERGE`, and `all checks passed` so no-op QA sessions correctly resolve as "passed" and trigger the Finished → Delivered transition.
+
+### Features
+
+- **Per-issue dispatch counter** — New `incrementDispatchCount`/`getDispatchCount`/`clearDispatchCount` functions track all session dispatches in a 4-hour sliding window, independent of workflow phase records. Both `session-created` and `issue-updated` handlers increment this counter on every dispatch.
+
 ## v0.8.4
 
 ### Fixes

@@ -23,6 +23,7 @@ const ACCEPTANCE_QUEUED_PREFIX = 'agent:acceptance-queued:'
 const ACCEPTANCE_COMPLETED_PREFIX = 'agent:acceptance-completed:'
 const WORKFLOW_STATE_PREFIX = 'workflow:state:'
 const SESSION_FAILURES_PREFIX = 'session:failures:'
+const DISPATCH_COUNT_PREFIX = 'session:dispatch-count:'
 
 // TTLs in seconds
 const AGENT_WORKED_TTL = 7 * 24 * 60 * 60 // 7 days
@@ -33,6 +34,7 @@ const ACCEPTANCE_QUEUED_TTL = 300 // 5 minutes
 const ACCEPTANCE_COMPLETED_TTL = 30 * 60 // 30 minutes
 const WORKFLOW_STATE_TTL = 30 * 24 * 60 * 60 // 30 days
 const SESSION_FAILURES_TTL = 60 * 60 // 1 hour — auto-clears if no failures for an hour
+const DISPATCH_COUNT_TTL = 4 * 60 * 60 // 4 hours — sliding window for dispatch counting
 
 // Session failure circuit breaker constants
 const SESSION_FAILURE_BASE_DELAY_S = 120 // 2 minutes initial backoff
@@ -491,6 +493,58 @@ export async function clearAcceptanceCompleted(issueId: string): Promise<void> {
   const key = `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`
   await redisDel(key)
   log.debug('Cleared acceptance completed marker', { issueId })
+}
+
+// ---------------------------------------------------------------------------
+// Per-issue dispatch counter
+//
+// Simple sliding-window counter that tracks how many sessions have been
+// dispatched for an issue, regardless of work type or outcome. Unlike the
+// workflow-state-based getTotalSessionCount (which only counts sessions
+// recorded in specific phases), this counter increments on EVERY dispatch
+// and catches runaway loops where sessions complete without recording a
+// phase (e.g., "already done" no-op sessions).
+// ---------------------------------------------------------------------------
+
+interface DispatchCountState {
+  count: number
+  firstDispatchAt: number
+  lastDispatchAt: number
+}
+
+/**
+ * Increment the dispatch counter for an issue.
+ * Call this every time a session is dispatched (from any trigger path).
+ */
+export async function incrementDispatchCount(issueId: string): Promise<number> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  const existing = await redisGet<DispatchCountState>(key)
+
+  const state: DispatchCountState = {
+    count: (existing?.count ?? 0) + 1,
+    firstDispatchAt: existing?.firstDispatchAt ?? Date.now(),
+    lastDispatchAt: Date.now(),
+  }
+
+  await redisSet(key, state, DISPATCH_COUNT_TTL)
+  return state.count
+}
+
+/**
+ * Get the current dispatch count for an issue within the sliding window.
+ */
+export async function getDispatchCount(issueId: string): Promise<number> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  const state = await redisGet<DispatchCountState>(key)
+  return state?.count ?? 0
+}
+
+/**
+ * Clear the dispatch counter for an issue (e.g., when issue reaches terminal status).
+ */
+export async function clearDispatchCount(issueId: string): Promise<void> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  await redisDel(key)
 }
 
 // ---------------------------------------------------------------------------
