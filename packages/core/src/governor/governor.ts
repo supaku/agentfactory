@@ -18,6 +18,7 @@ import type {
 import { DEFAULT_GOVERNOR_CONFIG } from './governor-types.js'
 import { decideAction, type DecisionContext } from './decision-engine.js'
 import type { OverridePriority } from './override-parser.js'
+import { WorkflowRegistry, type WorkflowRegistryConfig } from '../workflow/workflow-registry.js'
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -104,14 +105,21 @@ export class WorkflowGovernor {
   private readonly config: GovernorConfig
   private readonly deps: GovernorDependencies
   private readonly callbacks: WorkflowGovernorCallbacks
+  private readonly workflowRegistry: WorkflowRegistry
   private intervalHandle: ReturnType<typeof setInterval> | null = null
   private running = false
   private scanning = false
 
-  constructor(config: Partial<GovernorConfig>, deps: GovernorDependencies, callbacks?: WorkflowGovernorCallbacks) {
-    this.config = { ...DEFAULT_GOVERNOR_CONFIG, ...config }
+  constructor(
+    config: Partial<GovernorConfig> & { workflow?: WorkflowRegistryConfig },
+    deps: GovernorDependencies,
+    callbacks?: WorkflowGovernorCallbacks,
+  ) {
+    const { workflow: workflowConfig, ...governorConfig } = config
+    this.config = { ...DEFAULT_GOVERNOR_CONFIG, ...governorConfig }
     this.deps = deps
     this.callbacks = callbacks ?? {}
+    this.workflowRegistry = WorkflowRegistry.create(workflowConfig)
   }
 
   // -------------------------------------------------------------------------
@@ -365,6 +373,7 @@ export class WorkflowGovernor {
       workflowStrategy,
       researchCompleted,
       backlogCreationCompleted,
+      workflowRegistry: this.workflowRegistry,
       completedSessionCount,
     }
 

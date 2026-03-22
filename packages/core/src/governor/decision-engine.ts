@@ -14,6 +14,8 @@ import {
   DEFAULT_TOP_OF_FUNNEL_CONFIG,
   type TopOfFunnelConfig,
 } from './top-of-funnel.js'
+import type { WorkflowRegistry } from '../workflow/workflow-registry.js'
+import { evaluateTransitions } from '../workflow/transition-engine.js'
 
 // ---------------------------------------------------------------------------
 // Decision Context
@@ -36,6 +38,12 @@ export interface DecisionContext {
   backlogCreationCompleted: boolean
   /** Number of completed agent sessions for this issue (for circuit breaker) */
   completedSessionCount: number
+  /**
+   * Optional workflow registry for declarative transition routing.
+   * When present, the transition engine is used instead of the hard-coded
+   * switch statement. Falls back to the switch statement when absent.
+   */
+  workflowRegistry?: WorkflowRegistry
 }
 
 /** Max agent sessions before the circuit breaker trips and the issue is held */
@@ -123,7 +131,39 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
     }
   }
 
-  // --- Status-specific decisions ---
+  // --- Declarative transition routing (v1.1) ---
+  // When a WorkflowRegistry is present, delegate to the transition engine
+  // for status→phase routing. This reads from the WorkflowDefinition YAML
+  // instead of the hard-coded switch statement below.
+  //
+  // Icebox is excluded: top-of-funnel heuristics (description quality, delay
+  // thresholds, label checks) are too nuanced for simple status→phase mapping
+  // and remain in the dedicated decideIcebox() path until Phase 3 conditions
+  // can express them declaratively.
+
+  if (ctx.workflowRegistry && issue.status !== 'Icebox') {
+    // "Started" is a no-op in the current workflow — agent is already working.
+    if (issue.status === 'Started') {
+      return { action: 'none', reason: `Issue ${issue.identifier} is in Started status (agent already working)` }
+    }
+
+    // Check governor enable flags before delegating to the transition engine.
+    // These are configuration guards, not workflow graph concerns.
+    const enableCheck = checkEnableFlag(issue.status, config, issue.identifier)
+    if (enableCheck) return enableCheck
+
+    const result = evaluateTransitions({
+      issue,
+      registry: ctx.workflowRegistry,
+      workflowStrategy: ctx.workflowStrategy,
+      isParentIssue: ctx.isParentIssue,
+    })
+
+    return result
+  }
+
+  // --- Fallback: hard-coded status-specific decisions ---
+  // Used when no WorkflowRegistry is available (backward compatibility).
 
   switch (issue.status) {
     case 'Icebox':
@@ -147,6 +187,41 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
     default:
       return { action: 'none', reason: `Issue ${issue.identifier} has unrecognized status: ${issue.status}` }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Enable-flag guard (shared between declarative and legacy paths)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether the governor enable flag for a given status allows dispatch.
+ * Returns a DecisionResult to skip if disabled, or null to proceed.
+ */
+function checkEnableFlag(
+  status: string,
+  config: GovernorConfig,
+  issueIdentifier: string,
+): DecisionResult | null {
+  switch (status) {
+    case 'Backlog':
+      if (!config.enableAutoDevelopment) {
+        return { action: 'none', reason: `Auto-development is disabled for ${issueIdentifier}` }
+      }
+      break
+    case 'Finished':
+      if (!config.enableAutoQA) {
+        return { action: 'none', reason: `Auto-QA is disabled for ${issueIdentifier}` }
+      }
+      break
+    case 'Delivered':
+      if (!config.enableAutoAcceptance) {
+        return { action: 'none', reason: `Auto-acceptance is disabled for ${issueIdentifier}` }
+      }
+      break
+    // Rejected has no enable flag — refinement always triggers.
+    // Icebox is handled separately via top-of-funnel.
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
