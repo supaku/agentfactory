@@ -5,7 +5,7 @@
  * This enables crash recovery, heartbeat monitoring, and progress tracking.
  */
 
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from './work-types.js'
 
 /**
  * Status of the agent's work in the worktree

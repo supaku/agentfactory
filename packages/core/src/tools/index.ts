@@ -1,5 +1,2 @@
 export { ToolRegistry } from './registry.js'
 export type { ToolPlugin, ToolPluginContext } from './types.js'
-export { linearPlugin } from './plugins/linear.js'
-export { runLinear, parseLinearArgs } from './linear-runner.js'
-export type { LinearRunnerConfig, LinearRunnerResult } from './linear-runner.js'

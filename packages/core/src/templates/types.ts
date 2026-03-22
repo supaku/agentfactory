@@ -14,10 +14,10 @@
  */
 
 import { z } from 'zod'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '../orchestrator/work-types.js'
 
 // Re-export for convenience
-export type { AgentWorkType } from '@renseiai/agentfactory-linear'
+export type { AgentWorkType } from '../orchestrator/work-types.js'
 
 // ---------------------------------------------------------------------------
 // Tool Permission Types

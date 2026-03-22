@@ -2,8 +2,10 @@
  * Agent Orchestrator Types
  */
 
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
 import type { AgentProvider, AgentProviderName } from '../providers/types.js'
+import type { IssueTrackerClient } from './issue-tracker-client.js'
+import type { ToolPlugin } from '../tools/types.js'
 
 /**
  * Result of parsing an agent's output to determine pass/fail
@@ -30,8 +32,26 @@ export interface OrchestratorConfig {
   project?: string
   /** Base path for git worktrees (default: .worktrees) */
   worktreePath?: string
-  /** Linear API key (defaults to LINEAR_API_KEY env var) */
+  /**
+   * Linear API key (defaults to LINEAR_API_KEY env var).
+   * @deprecated Use issueTrackerClient instead. Kept for backwards compatibility.
+   */
   linearApiKey?: string
+  /**
+   * Platform-agnostic issue tracker client.
+   * When provided, the orchestrator uses this instead of creating a Linear client from linearApiKey.
+   */
+  issueTrackerClient?: IssueTrackerClient
+  /**
+   * Status mapping configuration for the issue tracker.
+   * Required when using issueTrackerClient. Defines how statuses map to work types.
+   */
+  statusMappings?: WorkTypeStatusMappings
+  /**
+   * Tool plugins to register with the orchestrator.
+   * These are registered in addition to any built-in plugins.
+   */
+  toolPlugins?: ToolPlugin[]
   /** Whether to auto-transition issue status (default: true) */
   autoTransition?: boolean
   /**

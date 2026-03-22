@@ -36,21 +36,8 @@ import { createProgressLogger, type ProgressLogger } from './progress-logger.js'
 import { createSessionLogger, type SessionLogger } from './session-logger.js'
 import { isSessionLoggingEnabled, isAutoAnalyzeEnabled, getLogAnalysisConfig } from './log-config.js'
 import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
-import {
-  createLinearAgentClient,
-  createAgentSession,
-  buildCompletionComments,
-  type LinearAgentClient,
-  type AgentSession,
-  type AgentWorkType,
-  type LinearWorkflowStatus,
-  STATUS_WORK_TYPE_MAP,
-  WORK_TYPE_START_STATUS,
-  WORK_TYPE_COMPLETE_STATUS,
-  WORK_TYPE_FAIL_STATUS,
-  TERMINAL_STATUSES,
-  WORK_TYPES_REQUIRING_WORKTREE,
-} from '@renseiai/agentfactory-linear'
+import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
+import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-client.js'
 import { parseWorkResult } from './parse-work-result.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
@@ -58,7 +45,8 @@ import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
 import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
-import { ToolRegistry, linearPlugin } from '../tools/index.js'
+import { ToolRegistry } from '../tools/index.js'
+import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import type {
   OrchestratorConfig,
@@ -130,7 +118,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -800,8 +788,9 @@ export function getWorktreeIdentifier(
  * being dispatched as 'development' (which uses the wrong template and
  * produces no sub-agent orchestration).
  */
-export function detectWorkType(statusName: string, isParent: boolean): AgentWorkType {
-  let workType: AgentWorkType = STATUS_WORK_TYPE_MAP[statusName] ?? 'development'
+export function detectWorkType(statusName: string, isParent: boolean, statusToWorkType?: Record<string, AgentWorkType>): AgentWorkType {
+  const mapping = statusToWorkType ?? {}
+  let workType: AgentWorkType = mapping[statusName] ?? 'development'
   console.log(`Auto-detected work type: ${workType} (from status: ${statusName})`)
 
   if (isParent) {
@@ -816,7 +805,7 @@ export function detectWorkType(statusName: string, isParent: boolean): AgentWork
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -824,14 +813,15 @@ export class AgentOrchestrator {
     workTypeTimeouts?: OrchestratorConfig['workTypeTimeouts']
     maxSessionTimeoutMs?: number
   }
-  private readonly client: LinearAgentClient
+  private readonly client: IssueTrackerClient
+  private readonly statusMappings: WorkTypeStatusMappings
   private readonly events: OrchestratorEvents
   private readonly activeAgents: Map<string, AgentProcess> = new Map()
   private readonly agentHandles: Map<string, AgentHandle> = new Map()
   private provider: AgentProvider
   private readonly providerCache: Map<AgentProviderName, AgentProvider> = new Map()
   private configProviders?: ProvidersConfig
-  private readonly agentSessions: Map<string, AgentSession> = new Map()
+  private readonly agentSessions: Map<string, IssueTrackerSession> = new Map()
   private readonly activityEmitters: Map<string, ActivityEmitter | ApiActivityEmitter> = new Map()
   // Track session ID to issue ID mapping for stop signal handling
   private readonly sessionToIssue: Map<string, string> = new Map()
@@ -869,9 +859,12 @@ export class AgentOrchestrator {
   private readonly gitRoot: string
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
-    const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
-    if (!apiKey) {
-      throw new Error('LINEAR_API_KEY is required')
+    // Validate that an issue tracker client is available
+    if (!config.issueTrackerClient) {
+      const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
+      if (!apiKey) {
+        throw new Error('Either issueTrackerClient or LINEAR_API_KEY is required')
+      }
     }
 
     // Parse timeout config from environment variables (can be overridden by config)
@@ -885,7 +878,7 @@ export class AgentOrchestrator {
     this.config = {
       ...DEFAULT_CONFIG,
       ...config,
-      linearApiKey: apiKey,
+      linearApiKey: config.linearApiKey ?? process.env.LINEAR_API_KEY ?? '',
       streamConfig: {
         ...DEFAULT_CONFIG.streamConfig,
         ...config.streamConfig,
@@ -904,7 +897,9 @@ export class AgentOrchestrator {
       validateGitRemote(this.config.repository, this.gitRoot)
     }
 
-    this.client = createLinearAgentClient({ apiKey })
+    // Use injected client or fail (caller must provide one)
+    this.client = config.issueTrackerClient!
+    this.statusMappings = config.statusMappings!
     this.events = events
 
     // Initialize default agent provider — per-spawn resolution may override
@@ -985,9 +980,13 @@ export class AgentOrchestrator {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
     }
 
-    // Initialize tool plugin registry with Linear plugin
+    // Initialize tool plugin registry with injected plugins
     this.toolRegistry = new ToolRegistry()
-    this.toolRegistry.register(linearPlugin)
+    if (config.toolPlugins) {
+      for (const plugin of config.toolPlugins) {
+        this.toolRegistry.register(plugin)
+      }
+    }
   }
 
   /**
@@ -1036,7 +1035,7 @@ export class AgentOrchestrator {
    */
   async detectWorkType(issueId: string, statusName: string): Promise<AgentWorkType> {
     const isParent = await this.client.isParentIssue(issueId)
-    return detectWorkType(statusName, isParent)
+    return detectWorkType(statusName, isParent, this.statusMappings.statusToWorkType)
   }
 
   /**
@@ -1045,91 +1044,62 @@ export class AgentOrchestrator {
   async getBacklogIssues(limit?: number): Promise<OrchestratorIssue[]> {
     const maxIssues = limit ?? this.config.maxConcurrent
 
-    // Build filter based on project
-    const filter: {
-      state?: { name: { eqIgnoreCase: string } }
-      project?: { id: { eq: string } }
-    } = {
-      state: { name: { eqIgnoreCase: 'Backlog' } },
-    }
-
-    if (this.config.project) {
-      const projects = await this.client.linearClient.projects({
-        filter: { name: { eqIgnoreCase: this.config.project } },
-      })
-      if (projects.nodes.length > 0) {
-        filter.project = { id: { eq: projects.nodes[0].id } }
-
-        // Cross-reference project repo metadata with config (SUP-725)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- runtime check for method added in SUP-725
-        const clientAny = this.client as any
-        if (this.config.repository && typeof clientAny.getProjectRepositoryUrl === 'function') {
-          try {
-            const projectRepoUrl: string | null = await clientAny.getProjectRepositoryUrl(projects.nodes[0].id)
-            if (projectRepoUrl) {
-              const normalizedProjectRepo = projectRepoUrl
-                .replace(/^https?:\/\//, '')
-                .replace(/\.git$/, '')
-              const normalizedConfigRepo = this.config.repository
-                .replace(/^https?:\/\//, '')
-                .replace(/\.git$/, '')
-              if (!normalizedProjectRepo.includes(normalizedConfigRepo) && !normalizedConfigRepo.includes(normalizedProjectRepo)) {
-                console.warn(
-                  `Warning: Project '${this.config.project}' repository metadata '${projectRepoUrl}' ` +
-                  `does not match configured repository '${this.config.repository}'. Skipping issues.`
-                )
-                return []
-              }
-            }
-          } catch (error) {
-            // Non-fatal: log warning but continue if metadata check fails
-            console.warn('Warning: Could not check project repository metadata:', error instanceof Error ? error.message : String(error))
+    // Cross-reference project repo metadata with config
+    if (this.config.project && this.config.repository) {
+      try {
+        const projectRepoUrl = await this.client.getProjectRepositoryUrl(this.config.project)
+        if (projectRepoUrl) {
+          const normalizedProjectRepo = projectRepoUrl
+            .replace(/^https?:\/\//, '')
+            .replace(/\.git$/, '')
+          const normalizedConfigRepo = this.config.repository
+            .replace(/^https?:\/\//, '')
+            .replace(/\.git$/, '')
+          if (!normalizedProjectRepo.includes(normalizedConfigRepo) && !normalizedConfigRepo.includes(normalizedProjectRepo)) {
+            console.warn(
+              `Warning: Project '${this.config.project}' repository metadata '${projectRepoUrl}' ` +
+              `does not match configured repository '${this.config.repository}'. Skipping issues.`
+            )
+            return []
           }
         }
+      } catch (error) {
+        // Non-fatal: log warning but continue if metadata check fails
+        console.warn('Warning: Could not check project repository metadata:', error instanceof Error ? error.message : String(error))
       }
     }
 
-    const issues = await this.client.linearClient.issues({
-      filter,
-      first: maxIssues * 2, // Fetch extra to account for filtering
+    // Query issues using the abstract client
+    const allIssues = await this.client.queryIssues({
+      project: this.config.project,
+      status: 'Backlog',
+      maxResults: maxIssues * 2, // Fetch extra to account for filtering
     })
 
     const results: OrchestratorIssue[] = []
-    for (const issue of issues.nodes) {
+    for (const issue of allIssues) {
       if (results.length >= maxIssues) break
 
       // Filter by allowedProjects from .agentfactory/config.yaml
-      let resolvedProjectName: string | undefined
       if (this.allowedProjects && this.allowedProjects.length > 0) {
-        const project = await issue.project
-        const projectName = project?.name
-        if (!projectName || !this.allowedProjects.includes(projectName)) {
+        if (!issue.projectName || !this.allowedProjects.includes(issue.projectName)) {
           console.warn(
-            `[orchestrator] Skipping issue ${issue.identifier} — project "${projectName ?? '(none)'}" is not in allowedProjects: [${this.allowedProjects.join(', ')}]`
+            `[orchestrator] Skipping issue ${issue.identifier} — project "${issue.projectName ?? '(none)'}" is not in allowedProjects: [${this.allowedProjects.join(', ')}]`
           )
           continue
         }
-        resolvedProjectName = projectName
       }
 
-      // Resolve project name for path scoping even when not filtering by allowedProjects
-      if (!resolvedProjectName && this.projectPaths) {
-        const project = await issue.project
-        resolvedProjectName = project?.name
-      }
-
-      const labels = await issue.labels()
-      const team = await issue.team
       results.push({
         id: issue.id,
         identifier: issue.identifier,
         title: issue.title,
-        description: issue.description ?? undefined,
+        description: issue.description,
         url: issue.url,
         priority: issue.priority,
-        labels: labels.nodes.map((l: { name: string }) => l.name),
-        teamName: team?.key,
-        projectName: resolvedProjectName,
+        labels: issue.labels,
+        teamName: issue.teamName,
+        projectName: issue.projectName,
       })
     }
 
@@ -2071,8 +2041,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       } else {
         // Direct Linear API - only works with OAuth tokens (not API keys)
         // This will fail for createAgentActivity calls but works for comments
-        const session = createAgentSession({
-          client: this.client.linearClient,
+        const session = this.client.createSession({
           issueId,
           sessionId,
           autoTransition: false, // Orchestrator handles transitions
@@ -2280,7 +2249,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         const workType = agent.workType ?? 'development'
         const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
 
-        let targetStatus: LinearWorkflowStatus | null = null
+        let targetStatus: string | null = null
 
         if (isResultSensitive) {
           // For QA/acceptance: parse result to decide promote vs reject.
@@ -2297,10 +2266,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           agent.workResult = workResult
 
           if (workResult === 'passed') {
-            targetStatus = WORK_TYPE_COMPLETE_STATUS[workType]
+            targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
             log?.info('Work result: passed, promoting', { workType, targetStatus })
           } else if (workResult === 'failed') {
-            targetStatus = WORK_TYPE_FAIL_STATUS[workType]
+            targetStatus = this.statusMappings.workTypeFailStatus[workType]
             log?.info('Work result: failed, transitioning to fail status', { workType, targetStatus })
           } else {
             // unknown — safe default: don't transition
@@ -2330,7 +2299,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
         } else {
           // Non-QA/acceptance: unchanged behavior — always promote on completion
-          targetStatus = WORK_TYPE_COMPLETE_STATUS[workType]
+          targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
         }
 
         if (targetStatus) {
@@ -2812,7 +2781,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         })
       }
     } else {
-      // Direct Linear API - use AgentSession if available
+      // Direct issue tracker API - use session if available
       const session = this.agentSessions.get(agent.issueId)
       if (session) {
         try {
@@ -2838,7 +2807,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     log?: Logger
   ): Promise<void> {
     // Build completion comments with multi-part splitting
-    const comments = buildCompletionComments(
+    const comments = this.client.buildCompletionComments(
       resultMessage,
       [], // No plan items to include (already shown via activities)
       sessionId ?? null
@@ -2973,7 +2942,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         // Link dependencies from main repo into worktree
         this.linkDependencies(worktreePath, issue.identifier)
 
-        const startStatus = WORK_TYPE_START_STATUS[workType]
+        const startStatus = this.statusMappings.workTypeStartStatus[workType]
 
         // Update issue status based on work type if auto-transition is enabled
         if (this.config.autoTransition && startStatus) {
@@ -3030,26 +2999,22 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     const issue = await this.client.getIssue(issueIdOrIdentifier)
     const identifier = issue.identifier
     const issueId = issue.id // Use the actual UUID
-    const team = await issue.team
-    const teamName = team?.key
+    const teamName = issue.teamName
 
-    // Fetch labels for provider resolution
-    const issueLabels = await issue.labels()
-    const labelNames = issueLabels.nodes.map((l: { name: string }) => l.name)
+    // Labels for provider resolution (pre-resolved by IssueTrackerClient)
+    const labelNames = issue.labels
 
     // Resolve project name for path scoping in monorepos
     let projectName: string | undefined
     if (this.projectPaths) {
-      const project = await issue.project
-      projectName = project?.name
+      projectName = issue.projectName
     }
 
     console.log(`Processing single issue: ${identifier} (${issueId}) - ${issue.title}`)
 
     // Guard: skip work if the issue has moved to a terminal status since being queued
-    const currentState = await issue.state
-    const currentStatus = currentState?.name
-    if (currentStatus && (TERMINAL_STATUSES as readonly string[]).includes(currentStatus)) {
+    const currentStatus = issue.status
+    if (currentStatus && (this.statusMappings.terminalStatuses as readonly string[]).includes(currentStatus)) {
       throw new Error(
         `Issue ${identifier} is in terminal status '${currentStatus}' — skipping ${workType ?? 'auto'} work. ` +
         `The issue was likely accepted/canceled after being queued.`
@@ -3065,8 +3030,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // This must happen BEFORE creating worktree since path includes work type suffix
     let effectiveWorkType = workType
     if (!effectiveWorkType) {
-      const state = await issue.state
-      const statusName = state?.name ?? 'Backlog'
+      const statusName = issue.status ?? 'Backlog'
       effectiveWorkType = await this.detectWorkType(issueId, statusName)
     }
 
@@ -3074,7 +3038,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     let worktreePath: string | undefined
     let worktreeIdentifier: string | undefined
 
-    if (WORK_TYPES_REQUIRING_WORKTREE.has(effectiveWorkType)) {
+    if (this.statusMappings.workTypesRequiringWorktree.has(effectiveWorkType)) {
       const wt = this.createWorktree(identifier, effectiveWorkType)
       worktreePath = wt.worktreePath
       worktreeIdentifier = wt.worktreeIdentifier
@@ -3118,7 +3082,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         console.log(`Resuming work on ${identifier} (recovery attempt ${updatedState?.recoveryAttempts ?? 1})`)
 
         // Update status based on work type if auto-transition is enabled
-        const startStatus = WORK_TYPE_START_STATUS[recoveryWorkType]
+        const startStatus = this.statusMappings.workTypeStartStatus[recoveryWorkType]
         if (this.config.autoTransition && startStatus) {
           await this.client.updateIssueStatus(issueId, startStatus)
           console.log(`Updated ${identifier} status to ${startStatus}`)
@@ -3143,7 +3107,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     // No recovery needed - proceed with fresh spawn
     // Update status based on work type if auto-transition is enabled
-    const startStatus = WORK_TYPE_START_STATUS[effectiveWorkType]
+    const startStatus = this.statusMappings.workTypeStartStatus[effectiveWorkType]
     if (this.config.autoTransition && startStatus) {
       await this.client.updateIssueStatus(issueId, startStatus)
       console.log(`Updated ${identifier} status to ${startStatus}`)
@@ -3347,13 +3311,11 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       try {
         const issue = await this.client.getIssue(issueId)
         identifier = issue.identifier
-        const issueTeam = await issue.team
-        teamName = issueTeam?.key
+        teamName = issue.teamName
 
         // Guard: skip work if the issue has moved to a terminal status since being queued
-        const currentState = await issue.state
-        const currentStatus = currentState?.name
-        if (currentStatus && (TERMINAL_STATUSES as readonly string[]).includes(currentStatus)) {
+        const currentStatus = issue.status
+        if (currentStatus && (this.statusMappings.terminalStatuses as readonly string[]).includes(currentStatus)) {
           console.log(`Issue ${identifier} is in terminal status '${currentStatus}' — skipping work`)
           return {
             forwarded: false,
@@ -3371,7 +3333,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         }
 
         // Create isolated worktree for the agent
-        if (WORK_TYPES_REQUIRING_WORKTREE.has(workType)) {
+        if (this.statusMappings.workTypesRequiringWorktree.has(workType)) {
           const result = this.createWorktree(identifier, workType)
           worktreePath = result.worktreePath
           worktreeIdentifier = result.worktreeIdentifier
@@ -3391,7 +3353,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     // Check if worktree exists (only relevant for code work types)
     const effectiveWorkType = workType ?? 'development'
-    if (WORK_TYPES_REQUIRING_WORKTREE.has(effectiveWorkType) && worktreePath && !existsSync(worktreePath)) {
+    if (this.statusMappings.workTypesRequiringWorktree.has(effectiveWorkType) && worktreePath && !existsSync(worktreePath)) {
       try {
         const result = this.createWorktree(identifier, effectiveWorkType)
         worktreePath = result.worktreePath
@@ -3525,7 +3487,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Use the work type to determine if we need to transition on start
     // Only certain work types trigger a start transition
     const effectiveWorkType = workType ?? 'development'
-    const startStatus = WORK_TYPE_START_STATUS[effectiveWorkType]
+    const startStatus = this.statusMappings.workTypeStartStatus[effectiveWorkType]
 
     if (this.config.autoTransition && startStatus) {
       try {
@@ -3647,9 +3609,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         },
       })
     } else {
-      // Direct Linear API
-      const session = createAgentSession({
-        client: this.client.linearClient,
+      // Direct issue tracker API
+      const session = this.client.createSession({
         issueId,
         sessionId,
         autoTransition: false,

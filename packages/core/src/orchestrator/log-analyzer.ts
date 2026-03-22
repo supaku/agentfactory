@@ -16,13 +16,7 @@ import {
 } from 'fs'
 import { resolve, join } from 'path'
 import { createHash } from 'crypto'
-import {
-  createLinearAgentClient,
-  type LinearAgentClient,
-  getDefaultTeamId,
-  LINEAR_PROJECTS,
-  LINEAR_LABELS,
-} from '@renseiai/agentfactory-linear'
+import type { IssueTrackerClient } from './issue-tracker-client.js'
 import {
   readSessionMetadata,
   readSessionEvents,
@@ -271,17 +265,16 @@ function generateSignature(issueType: PatternType, title: string): string {
 }
 
 /**
- * Get the project ID for agent bugs from AGENT_BUG_BACKLOG env var.
- * Maps project names (e.g., "Agent", "Social") to their Linear project IDs.
- * Defaults to the Agent project if not set or not found.
+ * Callback for creating issues in the issue tracker.
+ * Injected by the caller to decouple from any specific issue tracker.
  */
-function getBugBacklogProjectId(): string {
-  const projectName = process.env.AGENT_BUG_BACKLOG?.toUpperCase()
-  if (projectName && projectName in LINEAR_PROJECTS) {
-    return LINEAR_PROJECTS[projectName as keyof typeof LINEAR_PROJECTS]
-  }
-  // Default to Agent project
-  return LINEAR_PROJECTS.AGENT
+export interface IssueCreator {
+  createIssue(options: {
+    title: string
+    description: string
+    labels: string[]
+  }): Promise<{ id: string; identifier: string } | null>
+  createComment(issueId: string, body: string): Promise<void>
 }
 
 /**
@@ -293,7 +286,7 @@ export class LogAnalyzer {
   private readonly processedDir: string
   private readonly analysisDir: string
   private readonly deduplicationPath: string
-  private linearClient?: LinearAgentClient
+  private issueCreator?: IssueCreator
 
   constructor(config?: Partial<LogAnalysisConfig>) {
     this.config = { ...getLogAnalysisConfig(), ...config }
@@ -304,9 +297,9 @@ export class LogAnalyzer {
   }
 
   /**
-   * Initialize directories and Linear client
+   * Initialize directories and optional issue creator
    */
-  initialize(linearApiKey?: string): void {
+  initialize(issueCreator?: IssueCreator): void {
     // Create directories if needed
     for (const dir of [this.sessionsDir, this.processedDir, this.analysisDir]) {
       if (!existsSync(dir)) {
@@ -314,11 +307,7 @@ export class LogAnalyzer {
       }
     }
 
-    // Initialize Linear client if API key provided
-    const apiKey = linearApiKey ?? process.env.LINEAR_API_KEY
-    if (apiKey) {
-      this.linearClient = createLinearAgentClient({ apiKey })
-    }
+    this.issueCreator = issueCreator
   }
 
   /**
@@ -610,8 +599,8 @@ export class LogAnalyzer {
     sessionId: string,
     dryRun = false
   ): Promise<Array<{ signature: string; identifier: string; created: boolean }>> {
-    if (!this.linearClient) {
-      throw new Error('Linear client not initialized. Provide LINEAR_API_KEY.')
+    if (!this.issueCreator) {
+      throw new Error('Issue creator not initialized. Provide an IssueCreator when calling initialize().')
     }
 
     const store = this.loadDeduplicationStore()
@@ -624,7 +613,7 @@ export class LogAnalyzer {
         // Update existing issue - add comment
         try {
           if (!dryRun) {
-            await this.linearClient.createComment(
+            await this.issueCreator.createComment(
               existing.linearIssueId,
               `+1 - Detected again in session. Total occurrences: ${existing.sessionCount + 1}`
             )
@@ -649,34 +638,28 @@ export class LogAnalyzer {
         // Create new issue
         try {
           if (!dryRun) {
-            // Create issue in the configured backlog project with Bug label
-            const payload = await this.linearClient.linearClient.createIssue({
-              teamId: getDefaultTeamId(),
-              projectId: getBugBacklogProjectId(),
-              labelIds: [LINEAR_LABELS.BUG],
+            const issue = await this.issueCreator.createIssue({
               title: suggestion.title,
               description: suggestion.description,
+              labels: suggestion.labels,
             })
 
-            if (payload.success) {
-              const issue = await payload.issue
-              if (issue) {
-                // Track in store
-                store.issues[suggestion.signature] = {
-                  linearIssueId: issue.id,
-                  linearIdentifier: issue.identifier,
-                  createdAt: Date.now(),
-                  lastSeenAt: Date.now(),
-                  sessionCount: 1,
-                  sessionIds: [sessionId],
-                }
-
-                results.push({
-                  signature: suggestion.signature,
-                  identifier: issue.identifier,
-                  created: true,
-                })
+            if (issue) {
+              // Track in store
+              store.issues[suggestion.signature] = {
+                linearIssueId: issue.id,
+                linearIdentifier: issue.identifier,
+                createdAt: Date.now(),
+                lastSeenAt: Date.now(),
+                sessionCount: 1,
+                sessionIds: [sessionId],
               }
+
+              results.push({
+                signature: suggestion.signature,
+                identifier: issue.identifier,
+                created: true,
+              })
             }
           } else {
             // Dry run - just report what would be created
@@ -756,9 +739,9 @@ export class LogAnalyzer {
  */
 export function createLogAnalyzer(
   config?: Partial<LogAnalysisConfig>,
-  linearApiKey?: string
+  issueCreator?: IssueCreator
 ): LogAnalyzer {
   const analyzer = new LogAnalyzer(config)
-  analyzer.initialize(linearApiKey)
+  analyzer.initialize(issueCreator)
   return analyzer
 }

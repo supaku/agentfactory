@@ -14,7 +14,7 @@ import type {
   RecoveryCheckResult,
   WorktreeStatus,
 } from './state-types.js'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from './work-types.js'
 
 // Default heartbeat timeout: 30 seconds
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30000

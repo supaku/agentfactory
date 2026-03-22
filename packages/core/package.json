@@ -46,7 +46,6 @@
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.7",
-    "@renseiai/agentfactory-linear": "workspace:*",
     "dotenv": "^17.2.3",
     "handlebars": "^4.7.8",
     "yaml": "^2.8.2",

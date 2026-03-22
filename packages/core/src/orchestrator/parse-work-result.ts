@@ -1,4 +1,4 @@
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from './work-types.js'
 import type { AgentWorkResult } from './types.js'
 
 /**

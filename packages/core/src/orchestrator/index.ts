@@ -1,3 +1,19 @@
+// Work Types (platform-agnostic)
+export type { AgentWorkType, WorkflowStatus, WorkTypeStatusMappings, EnvironmentIssueType } from './work-types.js'
+export { ENVIRONMENT_ISSUE_TYPES } from './work-types.js'
+
+// Issue Tracker Client Interface (platform-agnostic)
+export type {
+  IssueTrackerClient,
+  IssueTrackerIssue,
+  IssueTrackerSession,
+  SessionConfig,
+  CommentChunk,
+} from './issue-tracker-client.js'
+
+// Log Analyzer Issue Creator Interface
+export type { IssueCreator } from './log-analyzer.js'
+
 // Types
 export type {
   OrchestratorConfig,

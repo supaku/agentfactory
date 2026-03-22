@@ -4,14 +4,18 @@
  * All 16 command implementations. This module does NOT call process.exit,
  * read process.argv, or load dotenv. Shared by both the CLI entry point
  * and the in-process tool plugin.
+ *
+ * Moved from packages/core/src/tools/linear-runner.ts to keep Linear-specific
+ * code in the Linear package.
  */
 
 import { readFileSync } from 'node:fs'
-import { createLinearAgentClient, getDefaultTeamName } from '@renseiai/agentfactory-linear'
+import { createLinearAgentClient } from '../agent-client.js'
+import { getDefaultTeamName } from '../constants.js'
 import {
   checkPRDeploymentStatus,
   formatDeploymentStatus,
-} from '../deployment/index.js'
+} from './deployment-bridge.js'
 
 // ── Types ──────────────────────────────────────────────────────────
 

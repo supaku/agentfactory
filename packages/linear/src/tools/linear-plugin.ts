@@ -3,12 +3,15 @@
  *
  * Exposes all Linear CLI commands as typed, in-process agent tools.
  * Agents call these directly instead of shelling out to `pnpm af-linear`.
+ *
+ * Moved from packages/core/src/tools/plugins/linear.ts to keep
+ * Linear-specific tool code in the Linear package.
  */
 
 import { z } from 'zod'
 import { tool, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk'
-import type { ToolPlugin, ToolPluginContext } from '../types.js'
-import { runLinear } from '../linear-runner.js'
+import type { ToolPlugin, ToolPluginContext } from '@renseiai/agentfactory'
+import { runLinear } from './linear-runner.js'
 
 function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>[] {
   async function run(command: string, args: Record<string, string | string[] | boolean> = {}, positionalArgs: string[] = []) {
