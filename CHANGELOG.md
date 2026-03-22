@@ -224,7 +224,7 @@
 
 ### Features
 
-- **Skip worktree creation for non-code work types** — Research and backlog-creation agents no longer create git worktrees, branches, or `.agent/` state directories. These agents run from the main repo root with `cwd` set to `process.cwd()`, eliminating startup latency, branch pollution, and `fatal: no upstream` log noise. Added `WORK_TYPES_REQUIRING_WORKTREE` constant to `@renseiai/agentfactory-linear` for the 8 code-producing work types. Made `worktreeIdentifier` and `worktreePath` optional on `AgentProcess`, `SpawnAgentOptions`, and `SpawnAgentWithResumeOptions`. All state persistence, recovery checks, and worktree cleanup are automatically skipped when these fields are undefined.
+- **Skip worktree creation for non-code work types** — Research and backlog-creation agents no longer create git worktrees, branches, or `.agent/` state directories. These agents run from the main repo root with `cwd` set to `process.cwd()`, eliminating startup latency, branch pollution, and `fatal: no upstream` log noise. Added `WORK_TYPES_REQUIRING_WORKTREE` constant to `@renseiai/plugin-linear` for the 8 code-producing work types. Made `worktreeIdentifier` and `worktreePath` optional on `AgentProcess`, `SpawnAgentOptions`, and `SpawnAgentWithResumeOptions`. All state persistence, recovery checks, and worktree cleanup are automatically skipped when these fields are undefined.
 
 ## v0.7.36
 
@@ -372,14 +372,14 @@
 
 ### Features
 
-- **Circuit breaker for Linear API** — New `CircuitBreaker` class in `@renseiai/agentfactory-linear` with closed→open→half-open state machine and exponential backoff. Detects auth errors (400/401/403), GraphQL `RATELIMITED` responses, and error message patterns. Integrated into `LinearAgentClient.withRetry()` — checks circuit before acquiring a rate limit token, so no quota is consumed when the circuit is open.
+- **Circuit breaker for Linear API** — New `CircuitBreaker` class in `@renseiai/plugin-linear` with closed→open→half-open state machine and exponential backoff. Detects auth errors (400/401/403), GraphQL `RATELIMITED` responses, and error message patterns. Integrated into `LinearAgentClient.withRetry()` — checks circuit before acquiring a rate limit token, so no quota is consumed when the circuit is open.
 - **Pluggable rate limiter & circuit breaker strategies** — New `RateLimiterStrategy` and `CircuitBreakerStrategy` interfaces allow swapping in-memory defaults for Redis-backed implementations. `LinearAgentClient` accepts optional strategy overrides via config.
 - **Redis-backed shared rate limiter** — New `RedisTokenBucket` in `@renseiai/agentfactory-server` uses atomic Lua scripts to share a single token bucket across all processes (dashboard, governor, agents). Key: `linear:rate-limit:{workspaceId}`.
 - **Redis-backed shared circuit breaker** — New `RedisCircuitBreaker` in `@renseiai/agentfactory-server` shares circuit state across processes via Redis. Supports exponential backoff on reset timeout.
 - **Linear quota tracker** — New `QuotaTracker` in `@renseiai/agentfactory-server` reads and stores Linear's `X-RateLimit-Requests-Remaining` and `X-RateLimit-Complexity-Remaining` headers in Redis for proactive throttling. Warns when quota drops below threshold.
 - **Centralized issue tracker proxy** — New `POST /api/issue-tracker-proxy` endpoint in `@renseiai/agentfactory-nextjs` acts as a single gateway for all Linear API calls. Agents, governors, and CLI tools call this endpoint instead of Linear directly, centralizing rate limiting, circuit breaking, and OAuth token management. Includes a health endpoint at `GET /api/issue-tracker-proxy`.
-- **Platform-agnostic proxy types** — New `IssueTrackerMethod`, `SerializedIssue`, `SerializedComment`, `ProxyRequest`, and `ProxyResponse` types in `@renseiai/agentfactory-linear` are Linear-agnostic, enabling future issue tracker backends without changing consumer code.
-- **Proxy client** — New `ProxyIssueTrackerClient` in `@renseiai/agentfactory-linear` is a drop-in replacement that routes all calls through the dashboard proxy. Activated when `AGENTFACTORY_API_URL` env var is set.
+- **Platform-agnostic proxy types** — New `IssueTrackerMethod`, `SerializedIssue`, `SerializedComment`, `ProxyRequest`, and `ProxyResponse` types in `@renseiai/plugin-linear` are Linear-agnostic, enabling future issue tracker backends without changing consumer code.
+- **Proxy client** — New `ProxyIssueTrackerClient` in `@renseiai/plugin-linear` is a drop-in replacement that routes all calls through the dashboard proxy. Activated when `AGENTFACTORY_API_URL` env var is set.
 
 ### Fixes
 
@@ -455,7 +455,7 @@
 
 ### Features
 
-- **Linear API rate limiter** — New `TokenBucket` rate limiter in `@renseiai/agentfactory-linear` proactively throttles requests below Linear's ~100 req/min limit. Uses a token bucket algorithm (80 burst capacity, 1.5 tokens/sec refill). All `LinearAgentClient` API calls now pass through the rate limiter with automatic backpressure. Includes `Retry-After` header parsing for 429 responses.
+- **Linear API rate limiter** — New `TokenBucket` rate limiter in `@renseiai/plugin-linear` proactively throttles requests below Linear's ~100 req/min limit. Uses a token bucket algorithm (80 burst capacity, 1.5 tokens/sec refill). All `LinearAgentClient` API calls now pass through the rate limiter with automatic backpressure. Includes `Retry-After` header parsing for 429 responses.
 - **Auto-detect app URL on Vercel** — `getAppUrl()` and OAuth callback in `@renseiai/agentfactory-nextjs` now fall back to `VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL` when `NEXT_PUBLIC_APP_URL` is not set. Removes the need to manually configure app URL on Vercel deployments.
 - **One-click deploy buttons** — Vercel and Railway deploy buttons are now fully functional across all READMEs. Vercel deploys from the monorepo subdirectory (`agentfactory/tree/main/templates/dashboard`), eliminating the need for a separate template repository. Railway deploy uses a published template with bundled Redis.
 
@@ -537,7 +537,7 @@
 
 ### Features
 
-- **`LINEAR_TEAM_NAME` env var for CLI** — `pnpm af-linear create-issue` now falls back to the `LINEAR_TEAM_NAME` environment variable when `--team` is omitted. The orchestrator auto-sets this from the issue's team context, so agents no longer waste turns discovering the team name. Explicit `--team` always wins. Added `getDefaultTeamName()` to `@renseiai/agentfactory-linear` constants.
+- **`LINEAR_TEAM_NAME` env var for CLI** — `pnpm af-linear create-issue` now falls back to the `LINEAR_TEAM_NAME` environment variable when `--team` is omitted. The orchestrator auto-sets this from the issue's team context, so agents no longer waste turns discovering the team name. Explicit `--team` always wins. Added `getDefaultTeamName()` to `@renseiai/plugin-linear` constants.
 - **Server-level project filtering** — `@renseiai/agentfactory-server` supports project filtering at the server level for multi-project deployments.
 - **Improved WORK_RESULT marker handling** — QA and acceptance agent prompts now have better `<!-- WORK_RESULT:passed/failed -->` marker instructions and handling.
 
@@ -653,7 +653,7 @@
 
 ### Features
 
-- **Linear CLI restored** — Ported the full Linear CLI entry point (`pnpm af-linear`) from the renseiai repo. Provides 16 subcommands (`get-issue`, `create-issue`, `update-issue`, `create-comment`, `list-comments`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-blocked`, `list-backlog-issues`, `list-unblocked-backlog`, `check-deployment`) wrapping `@renseiai/agentfactory-linear`. Runs via `node --import tsx` so it works in worktrees without a build step.
+- **Linear CLI restored** — Ported the full Linear CLI entry point (`pnpm af-linear`) from the renseiai repo. Provides 16 subcommands (`get-issue`, `create-issue`, `update-issue`, `create-comment`, `list-comments`, `add-relation`, `list-relations`, `remove-relation`, `list-sub-issues`, `list-sub-issue-statuses`, `update-sub-issue`, `check-blocked`, `list-backlog-issues`, `list-unblocked-backlog`, `check-deployment`) wrapping `@renseiai/plugin-linear`. Runs via `node --import tsx` so it works in worktrees without a build step.
 - **CLAUDE.md project instructions** — Added root-level `CLAUDE.md` with Linear CLI reference, autonomous mode detection, project structure, worktree lifecycle rules, and explicit prohibition of Linear MCP tools.
 - **Agent definitions** — Added full agent definitions to `examples/agent-definitions/` for backlog-writer, developer, qa-reviewer, coordinator, and acceptance-handler. Each includes Linear CLI instructions and MCP prohibition.
 - **Orchestrator CLI guidance** — All 10 work types in `generatePromptForWorkType()` now include explicit instructions to use `pnpm af-linear` instead of MCP tools.

@@ -135,7 +135,7 @@ Redeploy the governor for the change to take effect.
 **TypeScript projects:**
 
 ```bash
-npm install @renseiai/agentfactory @renseiai/agentfactory-linear @renseiai/agentfactory-cli @renseiai/agentfactory-server
+npm install @renseiai/agentfactory @renseiai/plugin-linear @renseiai/agentfactory-cli @renseiai/agentfactory-server
 ```
 
 Or scaffold a full project with the CLI:

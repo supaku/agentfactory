@@ -6,7 +6,7 @@
  * route tree that maps 1:1 onto Next.js App Router exports.
  *
  * When optional config fields are omitted, sensible defaults from
- * @renseiai/agentfactory-linear are used (defaultGeneratePrompt, etc.).
+ * @renseiai/plugin-linear are used (defaultGeneratePrompt, etc.).
  */
 
 import type { RouteHandler, RouteConfig, WebhookConfig, ResolvedWebhookConfig, CronConfig } from './types.js'
@@ -16,7 +16,7 @@ import {
   defaultGetPriority,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 
 // Worker handlers
 import { createWorkerRegisterHandler } from './handlers/workers/register.js'
@@ -109,7 +109,7 @@ export interface AllRoutesConfig extends WebhookConfig, CronConfig {
 /**
  * Create all route handlers from a single config object.
  *
- * Optional fields fall back to sensible defaults from @renseiai/agentfactory-linear:
+ * Optional fields fall back to sensible defaults from @renseiai/plugin-linear:
  * - `generatePrompt` → `defaultGeneratePrompt`
  * - `detectWorkTypeFromPrompt` → `defaultDetectWorkTypeFromPrompt`
  * - `getPriority` → `defaultGetPriority`

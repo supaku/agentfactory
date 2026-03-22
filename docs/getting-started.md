@@ -36,7 +36,7 @@ If you prefer to add AgentFactory to an existing project:
 npm install @renseiai/agentfactory-nextjs
 
 # Core + Linear integration (for CLI-only usage)
-npm install @renseiai/agentfactory @renseiai/agentfactory-linear
+npm install @renseiai/agentfactory @renseiai/plugin-linear
 
 # Optional: CLI tools (orchestrator, worker, fleet)
 npm install @renseiai/agentfactory-cli

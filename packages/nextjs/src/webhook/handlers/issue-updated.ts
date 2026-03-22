@@ -9,8 +9,9 @@
  */
 
 import { NextResponse } from 'next/server'
-import { buildFailureContextBlock, type WorkflowContext } from '@renseiai/agentfactory-linear'
-import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import { buildFailureContextBlock, type WorkflowContext } from '@renseiai/plugin-linear'
+import type { LinearWebhookPayload } from '@renseiai/plugin-linear'
 import {
   checkIssueDeploymentStatus,
   formatFailedDeployments,

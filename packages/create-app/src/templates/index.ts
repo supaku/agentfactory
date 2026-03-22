@@ -119,7 +119,7 @@ function packageJson(opts: TemplateOptions): string {
   const deps: Record<string, string> = {
     '@renseiai/agentfactory': '^0.7.6',
     '@renseiai/agentfactory-cli': '^0.7.6',
-    '@renseiai/agentfactory-linear': '^0.7.6',
+    '@renseiai/plugin-linear': '^0.7.6',
     '@renseiai/agentfactory-nextjs': '^0.7.6',
     '@renseiai/agentfactory-server': '^0.7.6',
     'next': '^16.1.0',

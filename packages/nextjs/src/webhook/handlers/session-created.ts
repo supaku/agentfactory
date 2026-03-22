@@ -3,7 +3,8 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import type { LinearWebhookPayload } from '@renseiai/plugin-linear'
 import {
   TERMINAL_STATUSES,
   validateWorkTypeForStatus,
@@ -12,7 +13,7 @@ import {
   getValidWorkTypesForStatus,
   buildFailureContextBlock,
   type WorkflowContext,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 import {
   generateIdempotencyKey,
   isWebhookProcessed,

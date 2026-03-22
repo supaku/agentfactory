@@ -6,7 +6,7 @@
  */
 
 import type { ScanResult } from '@renseiai/agentfactory'
-import type { LinearApiQuota } from '@renseiai/agentfactory-linear'
+import type { LinearApiQuota } from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // ANSI colors (matching packages/core/src/logger.ts)

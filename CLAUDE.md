@@ -7,7 +7,7 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 | Package | Path | Purpose |
 |---------|------|---------|
 | `@renseiai/agentfactory` | `packages/core` | Orchestrator, providers, crash recovery, deployment checker |
-| `@renseiai/agentfactory-linear` | `packages/linear` | Linear SDK client, agent sessions, webhook types |
+| `@renseiai/plugin-linear` | `packages/linear` | Linear SDK client, agent sessions, webhook types |
 | `@renseiai/agentfactory-server` | `packages/server` | Work queue server for webhook-driven execution |
 | `@renseiai/agentfactory-nextjs` | `packages/nextjs` | Next.js webhook handlers and middleware |
 | `@renseiai/agentfactory-dashboard` | `packages/dashboard` | Fleet management dashboard UI |
@@ -18,7 +18,7 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 
 **Use `pnpm af-linear` for ALL Linear operations. Do NOT use Linear MCP tools.**
 
-The Linear CLI wraps the `@renseiai/agentfactory-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
+The Linear CLI wraps the `@renseiai/plugin-linear` SDK and outputs JSON to stdout. All agents must use this CLI instead of MCP tools for Linear interactions.
 
 > **Tool plugins (Claude provider only):** When agents run via the orchestrator with the Claude provider, they receive typed `af_linear_*` tools (e.g., `af_linear_get_issue`, `af_linear_create_comment`) as in-process MCP tools instead of using the CLI via Bash. These tools call the same `runLinear()` function — same behavior, no subprocess overhead. Non-Claude providers and human users continue using `pnpm af-linear` as before. See `docs/providers.md` for details.
 

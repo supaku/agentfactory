@@ -12,6 +12,6 @@
     "typescript": "^5.7.3",
     "vitest": "^3.2.3",
     "@renseiai/agentfactory": "workspace:*",
-    "@renseiai/agentfactory-linear": "workspace:*"
+    "@renseiai/plugin-linear": "workspace:*"
   }
 }

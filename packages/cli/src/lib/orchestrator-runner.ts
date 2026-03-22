@@ -18,7 +18,7 @@ import {
   LinearIssueTrackerClient,
   createLinearStatusMappings,
   linearPlugin,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // Public types

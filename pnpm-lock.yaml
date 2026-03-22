@@ -29,12 +29,12 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
-        specifier: workspace:*
-        version: link:../linear
       '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
+      '@renseiai/plugin-linear':
+        specifier: workspace:*
+        version: link:../linear
       dotenv:
         specifier: ^17.2.3
         version: 17.2.4
@@ -211,12 +211,12 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
-        specifier: workspace:*
-        version: link:../linear
       '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
+      '@renseiai/plugin-linear':
+        specifier: workspace:*
+        version: link:../linear
     devDependencies:
       '@types/node':
         specifier: ^22.5.4
@@ -236,7 +236,7 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
+      '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear
       ioredis:
@@ -258,7 +258,7 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
+      '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear
       typescript:

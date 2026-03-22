@@ -17,7 +17,7 @@ import {
   type AgentOrchestrator,
   type Logger,
 } from '@renseiai/agentfactory'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // Public config interface

@@ -1,11 +1,11 @@
-# @renseiai/agentfactory-linear
+# @renseiai/plugin-linear
 
 Linear issue tracker integration for [AgentFactory](https://github.com/renseiai/agentfactory). Provides the Linear API client, agent sessions, status transitions, activity streaming, and work type routing.
 
 ## Installation
 
 ```bash
-npm install @renseiai/agentfactory-linear
+npm install @renseiai/plugin-linear
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ npm install @renseiai/agentfactory-linear
 ### Linear Client
 
 ```typescript
-import { createLinearAgentClient } from '@renseiai/agentfactory-linear'
+import { createLinearAgentClient } from '@renseiai/plugin-linear'
 
 const client = createLinearAgentClient({ apiKey: process.env.LINEAR_API_KEY! })
 
@@ -27,7 +27,7 @@ await client.createComment(issue.id, 'Work in progress...')
 Manage the lifecycle of an agent working on an issue:
 
 ```typescript
-import { createAgentSession } from '@renseiai/agentfactory-linear'
+import { createAgentSession } from '@renseiai/plugin-linear'
 
 const session = createAgentSession({
   client: linearClient.linearClient,
@@ -67,7 +67,7 @@ import {
   defaultGeneratePrompt,
   defaultDetectWorkTypeFromPrompt,
   defaultGetPriority,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 ```
 
 ## Key Exports

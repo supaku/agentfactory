@@ -21,7 +21,7 @@ import {
   createAgentSession,
   createLinearAgentClient,
   type RetryConfig,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 import {
   createLogger,
   generateIdempotencyKey,

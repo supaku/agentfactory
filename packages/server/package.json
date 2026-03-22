@@ -44,7 +44,7 @@
   ],
   "dependencies": {
     "@renseiai/agentfactory": "workspace:*",
-    "@renseiai/agentfactory-linear": "workspace:*",
+    "@renseiai/plugin-linear": "workspace:*",
     "ioredis": "^5.4.2"
   },
   "devDependencies": {

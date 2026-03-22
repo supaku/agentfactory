@@ -6,7 +6,7 @@
  * (from @renseiai/agentfactory-server).
  */
 
-import type { LinearAgentClient, WorkflowContext } from '@renseiai/agentfactory-linear'
+import type { LinearAgentClient, WorkflowContext } from '@renseiai/plugin-linear'
 import type {
   GovernorDependencies,
   GovernorIssue,

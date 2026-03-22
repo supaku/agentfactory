@@ -1,5 +1,5 @@
 {
-  "name": "@renseiai/agentfactory-linear",
+  "name": "@renseiai/plugin-linear",
   "version": "0.8.4",
   "type": "module",
   "description": "Linear issue tracker integration for AgentFactory — status transitions, agent sessions, work routing",

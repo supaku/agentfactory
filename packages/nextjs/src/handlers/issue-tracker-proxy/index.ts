@@ -26,8 +26,8 @@ import type {
   ProxyRequest,
   ProxyResponse,
   IssueTrackerMethod,
-} from '@renseiai/agentfactory-linear'
-import { isCircuitOpenError } from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
+import { isCircuitOpenError } from '@renseiai/plugin-linear'
 import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import { serializeIssue, serializeComment, serializeViewer, serializeTeam } from './serializer.js'
 import type { ProxyHandlerConfig } from './types.js'

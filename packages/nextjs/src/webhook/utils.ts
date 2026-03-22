@@ -4,8 +4,9 @@
  * Shared helpers used by webhook sub-handlers.
  */
 
-import type { LinearAgentClient, AgentWorkType } from '@renseiai/agentfactory-linear'
-import { STATUS_WORK_TYPE_MAP } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import type { LinearAgentClient } from '@renseiai/plugin-linear'
+import { STATUS_WORK_TYPE_MAP } from '@renseiai/plugin-linear'
 import {
   getSessionState,
   updateSessionStatus,

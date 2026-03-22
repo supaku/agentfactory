@@ -101,7 +101,7 @@
   ],
   "dependencies": {
     "@renseiai/agentfactory": "workspace:*",
-    "@renseiai/agentfactory-linear": "workspace:*",
+    "@renseiai/plugin-linear": "workspace:*",
     "@renseiai/agentfactory-server": "workspace:*",
     "dotenv": "^17.2.3"
   },

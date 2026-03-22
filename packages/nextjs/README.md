@@ -150,7 +150,7 @@ const { middleware } = createAgentFactoryMiddleware({
 | Package | Description |
 |---------|-------------|
 | [@renseiai/agentfactory](https://www.npmjs.com/package/@renseiai/agentfactory) | Core orchestrator |
-| [@renseiai/agentfactory-linear](https://www.npmjs.com/package/@renseiai/agentfactory-linear) | Linear integration |
+| [@renseiai/plugin-linear](https://www.npmjs.com/package/@renseiai/plugin-linear) | Linear integration |
 | [@renseiai/agentfactory-server](https://www.npmjs.com/package/@renseiai/agentfactory-server) | Redis infrastructure |
 | [@renseiai/agentfactory-cli](https://www.npmjs.com/package/@renseiai/agentfactory-cli) | CLI tools |
 

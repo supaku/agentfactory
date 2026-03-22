@@ -15,7 +15,7 @@ import {
   disconnectRedis,
   type AgentSessionState,
 } from '@renseiai/agentfactory-server'
-import { createLinearAgentClient } from '@renseiai/agentfactory-linear'
+import { createLinearAgentClient } from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // Public types
