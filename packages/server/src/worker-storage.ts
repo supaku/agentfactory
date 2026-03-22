@@ -391,3 +391,52 @@ export async function getTotalCapacity(prefetchedWorkers?: WorkerInfo[]): Promis
     return { totalCapacity: 0, totalActive: 0, availableCapacity: 0 }
   }
 }
+
+/**
+ * Set a nudge flag for a worker.
+ * The worker checks for this flag during its heartbeat cycle
+ * and responds with an extended status report.
+ *
+ * Redis key: work:worker:{workerId}:nudge (30s TTL)
+ */
+export async function nudgeWorker(workerId: string): Promise<boolean> {
+  if (!isRedisConfigured()) {
+    return false
+  }
+
+  try {
+    const key = `${WORKER_PREFIX}${workerId}:nudge`
+    await redisSet(key, { nudgedAt: Date.now() }, 30)
+    log.info('Nudge set for worker', { workerId })
+    return true
+  } catch (error) {
+    log.error('Failed to nudge worker', { error, workerId })
+    return false
+  }
+}
+
+/**
+ * Check and clear the nudge flag for a worker.
+ * Called by the worker during heartbeat processing.
+ */
+export async function checkAndClearNudge(
+  workerId: string
+): Promise<boolean> {
+  if (!isRedisConfigured()) {
+    return false
+  }
+
+  try {
+    const key = `${WORKER_PREFIX}${workerId}:nudge`
+    const nudge = await redisGet(key)
+    if (nudge) {
+      await redisDel(key)
+      log.info('Nudge cleared for worker', { workerId })
+      return true
+    }
+    return false
+  } catch (error) {
+    log.error('Failed to check nudge', { error, workerId })
+    return false
+  }
+}
