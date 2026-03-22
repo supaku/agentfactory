@@ -865,6 +865,8 @@ export class AgentOrchestrator {
   private validateCommand?: string
   // Tool plugin registry for in-process agent tools
   private readonly toolRegistry: ToolRegistry
+  // Git repository root for running git commands (resolved from worktreePath or cwd)
+  private readonly gitRoot: string
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     const apiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
@@ -894,9 +896,12 @@ export class AgentOrchestrator {
       inactivityTimeoutMs: config.inactivityTimeoutMs ?? envInactivityTimeout ?? DEFAULT_CONFIG.inactivityTimeoutMs,
       maxSessionTimeoutMs: config.maxSessionTimeoutMs ?? envMaxSessionTimeout ?? DEFAULT_CONFIG.maxSessionTimeoutMs,
     }
+    // Resolve git root from worktreePath (which may point to a different repo than cwd)
+    this.gitRoot = findRepoRoot(resolve(this.config.worktreePath)) ?? findRepoRoot(process.cwd()) ?? process.cwd()
+
     // Validate git remote matches configured repository (if set)
     if (this.config.repository) {
-      validateGitRemote(this.config.repository)
+      validateGitRemote(this.config.repository, this.gitRoot)
     }
 
     this.client = createLinearAgentClient({ apiKey })
@@ -913,8 +918,8 @@ export class AgentOrchestrator {
       if (config.templateDir) {
         templateDirs.push(config.templateDir)
       }
-      // Auto-detect .agentfactory/templates/ in working directory
-      const projectTemplateDir = resolve(process.cwd(), '.agentfactory', 'templates')
+      // Auto-detect .agentfactory/templates/ in target repo
+      const projectTemplateDir = resolve(this.gitRoot, '.agentfactory', 'templates')
       if (existsSync(projectTemplateDir) && !templateDirs.includes(projectTemplateDir)) {
         templateDirs.push(projectTemplateDir)
       }
@@ -931,7 +936,7 @@ export class AgentOrchestrator {
 
     // Auto-load .agentfactory/config.yaml from repository root
     try {
-      const repoRoot = findRepoRoot(process.cwd())
+      const repoRoot = this.gitRoot
       if (repoRoot) {
         const repoConfig = loadRepositoryConfig(repoRoot)
         if (repoConfig) {
@@ -939,7 +944,7 @@ export class AgentOrchestrator {
           // Use repository from config as fallback if not set in OrchestratorConfig
           if (!this.config.repository && repoConfig.repository) {
             this.config.repository = repoConfig.repository
-            validateGitRemote(this.config.repository)
+            validateGitRemote(this.config.repository, this.gitRoot)
           }
           // Store allowedProjects for backlog filtering
           if (repoConfig.projectPaths) {
@@ -1236,6 +1241,7 @@ export class AgentOrchestrator {
       const output = execSync('git worktree list --porcelain', {
         stdio: 'pipe',
         encoding: 'utf-8',
+        cwd: this.gitRoot,
       })
       const mainTreeMatch = output.match(/^worktree (.+)$/m)
       if (mainTreeMatch) {
@@ -1302,7 +1308,7 @@ export class AgentOrchestrator {
     if (!existsSync(conflictPath)) {
       // Directory doesn't exist - just prune git's worktree list
       try {
-        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
         console.log(`Pruned stale worktree reference for branch ${branchName}`)
         return true
       } catch {
@@ -1380,6 +1386,7 @@ export class AgentOrchestrator {
       execSync(`git worktree remove "${conflictPath}" --force`, {
         stdio: 'pipe',
         encoding: 'utf-8',
+        cwd: this.gitRoot,
       })
       console.log(`Removed stale worktree: ${conflictPath}`)
       return true
@@ -1399,7 +1406,7 @@ export class AgentOrchestrator {
       // this path is inside .worktrees/ and is not the main tree)
       try {
         execSync(`rm -rf "${conflictPath}"`, { stdio: 'pipe', encoding: 'utf-8' })
-        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
         console.log(`Force-removed stale worktree: ${conflictPath}`)
         return true
       } catch {
@@ -1454,7 +1461,7 @@ export class AgentOrchestrator {
 
     // Prune any stale worktrees first (handles deleted directories)
     try {
-      execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+      execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
     } catch {
       // Ignore prune errors
     }
@@ -1503,6 +1510,7 @@ export class AgentOrchestrator {
         execSync(`git worktree add "${worktreePath}" -b ${branchName} ${baseBranch}`, {
           stdio: 'pipe',
           encoding: 'utf-8',
+          cwd: this.gitRoot,
         })
       } catch (error) {
         // Branch might already exist or be checked out elsewhere
@@ -1532,6 +1540,7 @@ export class AgentOrchestrator {
             execSync(`git worktree add "${worktreePath}" ${branchName}`, {
               stdio: 'pipe',
               encoding: 'utf-8',
+              cwd: this.gitRoot,
             })
           } catch (innerError) {
             const innerMsg = this.getExecSyncErrorMessage(innerError)
@@ -1570,7 +1579,7 @@ export class AgentOrchestrator {
         if (existsSync(worktreePath)) {
           execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe', encoding: 'utf-8' })
         }
-        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
       } catch {
         // Ignore cleanup errors
       }
@@ -1610,12 +1619,13 @@ export class AgentOrchestrator {
         execSync(`git worktree remove "${worktreePath}" --force`, {
           stdio: 'pipe',
           encoding: 'utf-8',
+          cwd: this.gitRoot,
         })
       } catch (error) {
         console.warn(`Failed to remove worktree via git, trying fallback:`, error)
         try {
           execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe', encoding: 'utf-8' })
-          execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+          execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
         } catch (fallbackError) {
           console.warn(`Fallback worktree removal also failed:`, fallbackError)
         }
@@ -1623,7 +1633,7 @@ export class AgentOrchestrator {
     } else {
       // Directory gone but git may still track it
       try {
-        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8' })
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
       } catch {
         // Ignore
       }
@@ -3048,7 +3058,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     // Defense in depth: re-validate git remote before spawning (guards against long-running instances)
     if (this.config.repository) {
-      validateGitRemote(this.config.repository)
+      validateGitRemote(this.config.repository, this.gitRoot)
     }
 
     // Auto-detect work type from issue status if not provided
