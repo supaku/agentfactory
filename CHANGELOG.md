@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.8.7
+
+### Features
+
+- **Add code-intelligence package** — New `@renseiai/agentfactory-code-intelligence` package with regex-based symbol extraction (TypeScript, Python, Go, Rust), BM25 code search, incremental Merkle-tree indexing, PageRank repo maps, and xxHash64/SimHash memory deduplication. Registers four MCP tools for Claude agents.
+- **Add inflight-coordination work type** — Parent issues already in Started status now receive an `inflight-coordination` workflow instead of being skipped, allowing the orchestrator to manage sub-agent dispatch mid-flight.
+- **Add cleanup CLI with branch pruning** — `pnpm af-cleanup` now supports `--skip-worktrees` and `--skip-branches` flags, with merged/gone branch detection and IDE safety checks.
+
+### Fixes
+
+- **Fix release workflow for renamed plugin-linear package** — Release CI referenced the old `@renseiai/agentfactory-linear` name in 4 places; updated to `@renseiai/plugin-linear`.
+- **Add code-intelligence to release pipeline** — `@renseiai/agentfactory-code-intelligence` was missing from the release workflow's version bump and publish steps.
+- **Prevent code-producing agents from completing without committing** — Agents that produce code changes but skip the commit step are now caught before marking work as complete.
+- **Re-validate coordination upgrade when workType is provided** — `spawnAgentForIssue` now rechecks whether an issue should be upgraded to coordination even when an explicit work type is passed.
+- **Remove plugin-linear compile-time dependency on core** — `@renseiai/plugin-linear` no longer imports from `@renseiai/agentfactory` at build time, fixing circular dependency issues.
+
+### Chores
+
+- **Gitignore .agentfactory/ directory** — Project-local `.agentfactory/` config and templates are now excluded from version control.
+
 ## v0.8.6
 
 ### Fixes
