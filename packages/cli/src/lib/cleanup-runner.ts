@@ -25,14 +25,28 @@ export interface CleanupRunnerConfig {
   worktreePath?: string
   /** Git root for default worktree path (default: auto-detect) */
   gitRoot?: string
+  /** Skip worktree cleanup (default: false) */
+  skipWorktrees?: boolean
+  /** Skip branch cleanup (default: false) */
+  skipBranches?: boolean
 }
 
-export interface CleanupResult {
+export interface WorktreeCleanupResult {
   scanned: number
   orphaned: number
   cleaned: number
   skipped: number
   errors: Array<{ path: string; error: string }>
+}
+
+export interface CleanupResult extends WorktreeCleanupResult {
+  branches: BranchCleanupResult
+}
+
+export interface BranchCleanupResult {
+  scanned: number
+  deleted: number
+  errors: Array<{ branch: string; error: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -262,8 +276,8 @@ function removeWorktree(
 /**
  * Core cleanup logic
  */
-function cleanup(options: CleanupOptions): CleanupResult {
-  const result: CleanupResult = {
+function cleanup(options: CleanupOptions): WorktreeCleanupResult {
+  const result: WorktreeCleanupResult = {
     scanned: 0,
     orphaned: 0,
     cleaned: 0,
@@ -350,6 +364,164 @@ function cleanup(options: CleanupOptions): CleanupResult {
 }
 
 // ---------------------------------------------------------------------------
+// Branch cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the current branch name (to avoid deleting it).
+ */
+function getCurrentBranch(): string {
+  try {
+    return execSync('git rev-parse --abbrev-ref HEAD', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Get branches that have been merged into the given base branch.
+ */
+function getMergedBranches(baseBranch: string): string[] {
+  try {
+    const output = execSync(`git branch --merged ${baseBranch}`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    return output
+      .split('\n')
+      .map((line) => line.replace(/^[*+]?\s+/, '').trim())
+      .filter((b) => b && b !== baseBranch)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Get local branches whose remote tracking branch is gone.
+ */
+function getGoneBranches(): string[] {
+  try {
+    // Fetch prune first so we have up-to-date remote state
+    execSync('git fetch --prune 2>/dev/null || true', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 15000,
+    })
+
+    const output = execSync('git branch -vv', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    const gone: string[] = []
+    for (const line of output.split('\n')) {
+      // Match lines like "  SUP-123  abc1234 [origin/SUP-123: gone] commit msg"
+      if (/\[.*: gone\]/.test(line)) {
+        const branch = line.replace(/^\*?\s+/, '').split(/\s+/)[0]
+        if (branch) gone.push(branch)
+      }
+    }
+    return gone
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Clean up stale local branches.
+ *
+ * Default: deletes branches merged into main.
+ * With force: also deletes branches whose remote tracking branch is gone.
+ */
+function cleanupBranches(options: CleanupOptions): BranchCleanupResult {
+  const result: BranchCleanupResult = {
+    scanned: 0,
+    deleted: 0,
+    errors: [],
+  }
+
+  // Prune stale worktree metadata first so that branches from prunable
+  // worktrees (e.g. research agents) are no longer locked.
+  try {
+    execSync('git worktree prune', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  } catch {
+    // Ignore prune errors
+  }
+
+  console.log('Scanning local branches...\n')
+
+  const currentBranch = getCurrentBranch()
+
+  // Determine the base branch (main or master)
+  const baseBranch = branchExists('main') ? 'main' : branchExists('master') ? 'master' : ''
+  if (!baseBranch) {
+    console.log('Could not determine base branch (main/master). Skipping branch cleanup.\n')
+    return result
+  }
+
+  // Collect branches to delete
+  const toDelete = new Set<string>()
+  const mergedBranches = getMergedBranches(baseBranch)
+  for (const b of mergedBranches) {
+    toDelete.add(b)
+  }
+
+  if (options.force) {
+    const goneBranches = getGoneBranches()
+    for (const b of goneBranches) {
+      toDelete.add(b)
+    }
+  }
+
+  // Never delete base branch or current branch
+  toDelete.delete(baseBranch)
+  toDelete.delete(currentBranch)
+
+  result.scanned = toDelete.size
+
+  if (toDelete.size === 0) {
+    console.log('No stale branches found.\n')
+    return result
+  }
+
+  const merged = new Set(mergedBranches)
+  const sorted = [...toDelete].sort()
+
+  for (const branch of sorted) {
+    const isMerged = merged.has(branch)
+    const reason = isMerged ? 'merged' : 'remote gone'
+
+    if (options.dryRun) {
+      console.log(`  Would delete: ${branch} (${reason})`)
+      continue
+    }
+
+    // Use -d for merged, -D for gone (unmerged)
+    const flag = isMerged ? '-d' : '-D'
+    try {
+      execSync(`git branch ${flag} "${branch}"`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      console.log(`  deleted: ${branch} (${reason})`)
+      result.deleted++
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(`  FAILED: ${branch} — ${msg}`)
+      result.errors.push({ branch, error: msg })
+    }
+  }
+
+  console.log('')
+  return result
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
@@ -362,5 +534,13 @@ export function runCleanup(config?: CleanupRunnerConfig): CleanupResult {
     worktreePath: config?.worktreePath ?? resolve(gitRoot, '.worktrees'),
   }
 
-  return cleanup(options)
+  const worktreeResult = config?.skipWorktrees
+    ? { scanned: 0, orphaned: 0, cleaned: 0, skipped: 0, errors: [] as Array<{ path: string; error: string }> }
+    : cleanup(options)
+
+  const branchResult = config?.skipBranches
+    ? { scanned: 0, deleted: 0, errors: [] as Array<{ branch: string; error: string }> }
+    : cleanupBranches(options)
+
+  return { ...worktreeResult, branches: branchResult }
 }
