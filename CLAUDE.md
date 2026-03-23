@@ -315,6 +315,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/repo-validation}}` | Pre-push git remote URL validation |
 | `{{> partials/path-scoping}}` | Monorepo directory scoping instructions |
 | `{{> partials/native-build-validation}}` | Build system detection and safety checks for native projects |
+| `{{> partials/task-lifecycle}}` | Task spawning and waiting rules for coordination workflows |
 
 ### Tool Permissions
 

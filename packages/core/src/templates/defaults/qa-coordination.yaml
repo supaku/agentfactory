@@ -21,7 +21,10 @@ prompt: |
   2. Create Claude Code Tasks for each sub-issue's QA verification
   3. Spawn qa-reviewer sub-agents in parallel — no dependency graph needed, all sub-issues are already Finished
   4. Each sub-agent: reads sub-issue requirements, runs scoped tests, validates implementation, emits pass/fail
-  5. Collect results — ALL sub-issues must pass QA for the parent to pass
+  5. Wait for ALL sub-agents to return results (see TASK LIFECYCLE below), then collect results
+  6. ALL sub-issues must pass QA for the parent to pass
+
+  {{> partials/task-lifecycle}}
 
   RESULT HANDLING:
   - If ALL pass: Emit <!-- WORK_RESULT:passed --> in your final message. The orchestrator will promote to Delivered.

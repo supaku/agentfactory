@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: task-lifecycle
+  description: Instructions for spawning and waiting on sub-agent Tasks in coordination workflows
+content: |
+
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  TASK LIFECYCLE — HOW TO SPAWN AND WAIT FOR SUB-AGENTS          ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  You coordinate sub-issues by spawning Claude Code Tasks. Each Task runs a sub-agent
+  that implements one sub-issue. You MUST follow this lifecycle exactly:
+
+  1. SPAWN TASKS IN FOREGROUND (NOT background):
+     Use the Agent tool to spawn each sub-agent. Do NOT set run_in_background=true.
+     Foreground tasks block until the sub-agent completes and returns its result.
+     You can spawn multiple foreground tasks in parallel by including multiple Agent
+     tool calls in a single message — they will run concurrently and you will receive
+     all results together when the last one finishes.
+
+  2. WAVE-BASED EXECUTION:
+     Group sub-issues into waves based on their dependency graph:
+     - Wave 1: All sub-issues with no dependencies (spawn in parallel)
+     - Wave 2: Sub-issues whose dependencies were all in Wave 1 (spawn after Wave 1 completes)
+     - Continue until all waves are complete.
+     Each wave MUST complete before the next wave starts. A wave is complete when ALL
+     tasks in that wave have returned their results.
+
+  3. PROCESS RESULTS AFTER EACH WAVE:
+     When a wave completes, for each sub-agent result:
+     - If successful: update the sub-issue to Finished
+     - If failed: post a comment with the failure reason, decide whether to retry or skip
+     Then check which sub-issues in the next wave are now unblocked and spawn them.
+
+  4. DO NOT EXIT EARLY:
+     You are NOT done until every sub-issue is in Finished status (or explicitly failed/skipped).
+     Reporting "agents are running" or "work is in progress" is NOT a valid completion state.
+     You must wait for all results, verify all statuses, commit, push, create a PR, and
+     THEN emit your WORK_RESULT marker.
+
+  5. NEVER USE run_in_background FOR SUB-AGENT TASKS:
+     Background tasks return immediately without results. If you use them, you will lose
+     track of sub-agent completion and exit prematurely. Always use foreground (default).
+
+  6. NEVER CHECK SUB-AGENT STATUS VIA LOG FILES:
+     Do not use tail, cat, or any file-based approach to monitor sub-agents.
+     The Agent/Task tool handles all communication — just wait for the result.
