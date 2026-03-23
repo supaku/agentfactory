@@ -1,5 +1,0 @@
-apiVersion: v1
-kind: RepositoryConfig
-repository: github.com/renseiai/agentfactory
-allowedProjects:
-  - Agent

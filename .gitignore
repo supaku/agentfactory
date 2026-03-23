@@ -32,3 +32,6 @@ coverage/
 # Runtime
 .worktrees/
 .agent-logs/
+
+# Project-specific orchestrator config (contains Linear project names and template overrides)
+.agentfactory/
