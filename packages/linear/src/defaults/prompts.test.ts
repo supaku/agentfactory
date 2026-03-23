@@ -172,7 +172,7 @@ describe('defaultGeneratePrompt read-only constraint', () => {
     })
   }
 
-  const writableWorkTypes = ['development', 'coordination', 'refinement', 'research', 'backlog-creation', 'inflight'] as const
+  const writableWorkTypes = ['development', 'coordination', 'inflight-coordination', 'refinement', 'research', 'backlog-creation', 'inflight'] as const
 
   for (const workType of writableWorkTypes) {
     it(`does NOT include READ-ONLY constraint for ${workType}`, () => {

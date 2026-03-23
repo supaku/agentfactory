@@ -147,7 +147,7 @@ export function parseWorkResult(
     }
   }
 
-  if (workType === 'coordination') {
+  if (workType === 'coordination' || workType === 'inflight-coordination') {
     if (COORDINATION_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }

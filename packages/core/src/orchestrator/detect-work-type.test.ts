@@ -64,8 +64,8 @@ describe('detectWorkType', () => {
       expect(detectWorkType('Icebox', true, STATUS_TO_WORK_TYPE)).toBe('research')
     })
 
-    it('does not upgrade inflight (Started) — no coordination variant', () => {
-      expect(detectWorkType('Started', true, STATUS_TO_WORK_TYPE)).toBe('inflight')
+    it('upgrades Started/inflight to inflight-coordination', () => {
+      expect(detectWorkType('Started', true, STATUS_TO_WORK_TYPE)).toBe('inflight-coordination')
     })
 
     it('upgrades unknown status (defaults to development → coordination)', () => {

@@ -159,6 +159,9 @@ Do NOT wait for user approval - create issues automatically.`
     case 'inflight':
       basePrompt = `Continue work on ${identifier}. Resume where you left off.`
       break
+    case 'inflight-coordination':
+      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}. Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.`
+      break
     case 'qa':
       basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.
 ${READ_ONLY_CONSTRAINT}

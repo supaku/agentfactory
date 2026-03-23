@@ -150,9 +150,9 @@ describe('TemplateRegistry', () => {
   describe('built-in defaults', () => {
     it('loads built-in default templates when useBuiltinDefaults is true', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      // Should have loaded templates for all 11 base work types + 5 strategy templates
+      // Should have loaded templates for all 12 base work types + 5 strategy templates
       const workTypes = fullRegistry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(16)
+      expect(workTypes.length).toBe(17)
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
       expect(workTypes).toContain('coordination')

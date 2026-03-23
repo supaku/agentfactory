@@ -168,6 +168,7 @@ export function defaultGetPriority(workType: AgentWorkType): number {
     case 'refinement': return 2
     case 'refinement-coordination': return 2
     case 'inflight': return 2
+    case 'inflight-coordination': return 2
     case 'backlog-creation': return 3
     case 'development': return 3
     case 'research': return 4
@@ -204,6 +205,7 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   'backlog-creation': 'Backlog creation queued. Agent will break down the story into separate issues...',
   development: 'Development work queued. Waiting for an available worker...',
   inflight: 'Resuming in-flight work. Agent will continue where it left off...',
+  'inflight-coordination': 'Resuming in-flight coordination. Agent will continue orchestrating sub-issues...',
   qa: 'QA work queued. Waiting for an available worker to validate the implementation...',
   acceptance: 'Acceptance testing queued. Agent will verify the deployed preview...',
   refinement: 'Refinement work queued. Agent will address rejection feedback...',

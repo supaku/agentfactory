@@ -296,6 +296,7 @@ export function createRealDependencies(
         // Parent issues use coordination variants for development, QA, acceptance, and refinement
         if (parentIssueIds.has(issueId)) {
           if (workType === 'development') workType = 'coordination'
+          else if (workType === 'inflight') workType = 'inflight-coordination'
           else if (workType === 'qa') workType = 'qa-coordination'
           else if (workType === 'acceptance') workType = 'acceptance-coordination'
           else if (workType === 'refinement') workType = 'refinement-coordination'

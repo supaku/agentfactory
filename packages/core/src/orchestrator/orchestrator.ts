@@ -544,6 +544,47 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
+    case 'inflight-coordination':
+      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}.
+Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.
+
+SUB-ISSUE STATUS MANAGEMENT:
+You MUST update sub-issue statuses in Linear as work progresses:
+- When starting work on a sub-issue: pnpm af-linear update-sub-issue <id> --state Started
+- When a sub-agent completes a sub-issue: pnpm af-linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
+- If a sub-agent fails on a sub-issue: pnpm af-linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
+
+COMPLETION VERIFICATION:
+Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
+  pnpm af-linear list-sub-issue-statuses ${identifier}
+If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
+
+SUB-AGENT SAFETY RULES (CRITICAL):
+This is a SHARED WORKTREE. Multiple sub-agents run concurrently in this directory.
+Every sub-agent prompt you construct MUST include these rules:
+
+1. NEVER run: git worktree remove, git worktree prune
+2. NEVER run: git checkout, git switch (to a different branch)
+3. NEVER run: git reset --hard, git clean -fd, git restore .
+4. NEVER delete or modify the .git file in the worktree root
+5. Only the orchestrator manages worktree lifecycle
+6. Work only on files relevant to your sub-issue to minimize conflicts
+7. Commit changes with descriptive messages before reporting completion
+
+Prefix every sub-agent prompt with: "SHARED WORKTREE — DO NOT MODIFY GIT STATE"
+
+DEPENDENCY INSTALLATION:
+Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
+If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
+(never with run_in_background). Never use sleep or polling loops to wait for commands.
+
+IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
+- Use Grep to search for specific code patterns instead of reading entire files
+- Use Read with offset/limit parameters to paginate through large files
+- Avoid reading auto-generated files like payload-types.ts (use Grep instead)
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
+      break
+
     case 'qa':
       basePrompt = `QA ${identifier}.
 Validate the implementation against acceptance criteria.
@@ -756,6 +797,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'backlog-creation': 'BC',
   development: 'DEV',
   inflight: 'INF',
+  'inflight-coordination': 'INF-COORD',
   coordination: 'COORD',
   qa: 'QA',
   acceptance: 'AC',
@@ -797,6 +839,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
     if (workType === 'development') workType = 'coordination'
     else if (workType === 'qa') workType = 'qa-coordination'
     else if (workType === 'acceptance') workType = 'acceptance-coordination'
+    else if (workType === 'inflight') workType = 'inflight-coordination'
     else if (workType === 'refinement') workType = 'refinement-coordination'
     console.log(`Upgraded to coordination work type: ${workType} (parent issue)`)
   }
@@ -2109,7 +2152,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     env.LINEAR_WORK_TYPE = workType
 
     // Flag shared worktree for coordination mode so sub-agents know not to modify git state
-    if (workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination') {
+    if (workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination') {
       env.SHARED_WORKTREE = 'true'
     }
 
@@ -2133,7 +2176,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Coordinators need significantly more turns than standard agents
     // since they spawn sub-agents and poll their status repeatedly.
     // Inflight also gets the bump — it may be resuming coordination work.
-    const needsMoreTurns = workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
+    const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
     // Spawn agent via provider interface

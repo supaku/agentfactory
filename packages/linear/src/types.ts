@@ -322,6 +322,7 @@ export type AgentWorkType =
   | 'backlog-creation'      // Icebox: Create backlog issues from researched story
   | 'development'           // Backlog: Implement the feature/fix
   | 'inflight'              // Started: Continue in-progress work
+  | 'inflight-coordination' // Started: Resume coordination of sub-issues for in-progress parent issues
   | 'qa'                    // Finished: Validate implementation
   | 'acceptance'            // Delivered: Final acceptance testing
   | 'refinement'            // Rejected: Address feedback, prep for retry
@@ -358,6 +359,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'backlog-creation': null,  // No transition from Icebox on start
   'development': 'Started',  // Backlog -> Started when agent begins
   'inflight': null,          // Already Started, no change
+  'inflight-coordination': null, // Already Started, no change
   'qa': null,                // Already Finished
   'acceptance': null,        // Already Delivered
   'refinement': null,        // Already Rejected
@@ -376,6 +378,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'backlog-creation': null,  // Issues created in Backlog, source stays in Icebox
   'development': 'Finished', // Started -> Finished when work done
   'inflight': 'Finished',    // Started -> Finished when work done
+  'inflight-coordination': 'Finished', // Started -> Finished when all sub-issues done
   'qa': 'Delivered',         // Finished -> Delivered on QA pass
   'acceptance': 'Accepted',  // Delivered -> Accepted on acceptance pass
   'refinement': 'Backlog',   // Rejected -> Backlog after refinement
@@ -394,6 +397,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'backlog-creation': null,
   'development': null,
   'inflight': null,
+  'inflight-coordination': null,
   'qa': 'Backlog',              // QA failure -> Backlog (developer/coordinator picks up with failure context)
   'acceptance': 'Rejected',    // Acceptance failure -> Rejected (rejection handler diagnoses next steps)
   'refinement': null,
@@ -411,6 +415,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
 export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set([
   'development',
   'inflight',
+  'inflight-coordination',
   'qa',
   'acceptance',
   'coordination',
@@ -431,6 +436,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'backlog-creation': ['Icebox'],
   'development': ['Backlog'],
   'inflight': ['Started'],
+  'inflight-coordination': ['Started'],
   'qa': ['Finished'],
   'acceptance': ['Delivered'],
   'refinement': ['Rejected'],
@@ -452,7 +458,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
 export const STATUS_VALID_WORK_TYPES: Record<string, AgentWorkType[]> = {
   'Icebox': ['research', 'backlog-creation'],
   'Backlog': ['development', 'coordination'],
-  'Started': ['inflight'],
+  'Started': ['inflight', 'inflight-coordination'],
   'Finished': ['qa', 'qa-coordination'],
   'Delivered': ['acceptance', 'acceptance-coordination'],
   'Rejected': ['refinement', 'refinement-coordination'],

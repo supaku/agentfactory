@@ -14,6 +14,7 @@ const knownWorkTypes = [
   'research',
   'backlog-creation',
   'inflight',
+  'inflight-coordination',
   'refinement',
   'refinement-coordination',
   'refactor',

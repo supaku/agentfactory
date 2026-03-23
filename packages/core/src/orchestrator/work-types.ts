@@ -15,6 +15,7 @@ export type AgentWorkType =
   | 'backlog-creation'
   | 'development'
   | 'inflight'
+  | 'inflight-coordination'
   | 'qa'
   | 'acceptance'
   | 'refinement'

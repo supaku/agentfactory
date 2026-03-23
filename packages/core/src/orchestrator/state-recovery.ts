@@ -277,6 +277,7 @@ export function getTaskListId(
     'backlog-creation': 'BC',
     development: 'DEV',
     inflight: 'INF',
+    'inflight-coordination': 'INF-COORD',
     coordination: 'COORD',
     qa: 'QA',
     acceptance: 'AC',

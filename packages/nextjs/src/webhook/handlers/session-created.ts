@@ -148,7 +148,8 @@ export async function handleSessionCreated(
     // For mentions: unconstrained detection (pass all work types)
     const allWorkTypes: AgentWorkType[] = [
       'coordination', 'backlog-creation', 'research', 'qa', 'inflight',
-      'acceptance', 'refinement', 'development', 'qa-coordination', 'acceptance-coordination',
+      'inflight-coordination', 'acceptance', 'refinement', 'development',
+      'qa-coordination', 'acceptance-coordination',
     ]
     const mentionWorkType = config.detectWorkTypeFromPrompt(promptContext, allWorkTypes)
     if (mentionWorkType) {
@@ -188,17 +189,19 @@ export async function handleSessionCreated(
   }
 
   // Phase 2.5: Auto-detect parent/child issues for coordination routing
-  // Apply to all status-derived work types that have coordination variants
-  const coordinationUpgradeable = workTypeSource === 'status' && (
-    workType === 'development' || workType === 'refinement'
-  )
+  // Apply to ALL work types that have coordination variants, regardless of
+  // whether the work type was derived from status or mention. Parent issues
+  // with sub-issues must always use coordination agents.
+  const coordinationUpgradeable =
+    workType === 'development' || workType === 'refinement' ||
+    workType === 'qa' || workType === 'acceptance'
   if (coordinationUpgradeable) {
     try {
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
       // Skip child/sub-issues for non-mention sessions — these are managed
       // by the parent issue's coordinator agent, not dispatched independently.
-      if (workType === 'development') {
+      if (workTypeSource === 'status' && workType === 'development') {
         const isChild = await linearClient.isChildIssue(issueId)
         if (isChild) {
           sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
@@ -227,7 +230,10 @@ export async function handleSessionCreated(
       const isParent = await linearClient.isParentIssue(issueId)
       if (isParent) {
         if (workType === 'development') workType = 'coordination'
+        else if (workType === 'inflight') workType = 'inflight-coordination'
         else if (workType === 'refinement') workType = 'refinement-coordination'
+        else if (workType === 'qa') workType = 'qa-coordination'
+        else if (workType === 'acceptance') workType = 'acceptance-coordination'
         sessionLog.info('Parent issue detected, switching to coordination work type', {
           issueIdentifier,
           workType,

@@ -202,6 +202,7 @@ const WORK_TYPES = [
   'backlog-creation',
   'development',
   'inflight',
+  'inflight-coordination',
   'qa',
   'acceptance',
   'refinement',
