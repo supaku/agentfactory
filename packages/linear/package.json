@@ -46,7 +46,6 @@
     "@linear/sdk": "^70.0.0"
   },
   "peerDependencies": {
-    "@renseiai/agentfactory": "workspace:*",
     "@anthropic-ai/claude-agent-sdk": "^0.2.7",
     "zod": "^4.3.6"
   },

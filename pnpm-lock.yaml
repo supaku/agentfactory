@@ -167,9 +167,6 @@ importers:
       '@linear/sdk':
         specifier: ^70.0.0
         version: 70.0.0(graphql@16.12.0)
-      '@renseiai/agentfactory':
-        specifier: workspace:*
-        version: link:../core
       zod:
         specifier: ^4.3.6
         version: 4.3.6

@@ -10,8 +10,25 @@
 
 import { z } from 'zod'
 import { tool, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk'
-import type { ToolPlugin, ToolPluginContext } from '@renseiai/agentfactory'
 import { runLinear } from './linear-runner.js'
+
+// ---------------------------------------------------------------------------
+// Tool plugin types (structurally identical to @renseiai/agentfactory)
+// Defined locally to avoid compile-time dependency on core.
+// ---------------------------------------------------------------------------
+
+/** A plugin that contributes agent tools from CLI functionality */
+export interface ToolPlugin {
+  name: string
+  description: string
+  createTools(context: ToolPluginContext): SdkMcpToolDefinition<any>[]
+}
+
+/** Context passed to plugins during tool creation */
+export interface ToolPluginContext {
+  env: Record<string, string>
+  cwd: string
+}
 
 function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>[] {
   async function run(command: string, args: Record<string, string | string[] | boolean> = {}, positionalArgs: string[] = []) {

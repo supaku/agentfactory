@@ -1,21 +1,17 @@
 /**
  * Linear Issue Tracker Adapter
  *
- * Implements the platform-agnostic IssueTrackerClient interface from core
+ * Implements the platform-agnostic IssueTrackerClient interface
  * by wrapping LinearAgentClient and AgentSession.
+ *
+ * Types are defined locally (structurally identical to core) to avoid
+ * a compile-time dependency on @renseiai/agentfactory.
  */
 
-import type {
-  IssueTrackerClient,
-  IssueTrackerIssue,
-  IssueTrackerSession,
-  SessionConfig,
-  CommentChunk,
-} from '@renseiai/agentfactory'
 import { LinearAgentClient, createLinearAgentClient } from './agent-client.js'
 import { AgentSession, createAgentSession } from './agent-session.js'
 import { buildCompletionComments } from './utils.js'
-import type { WorkTypeStatusMappings } from '@renseiai/agentfactory'
+import type { AgentWorkType } from './types.js'
 import {
   STATUS_WORK_TYPE_MAP,
   WORK_TYPE_START_STATUS,
@@ -25,8 +21,86 @@ import {
   WORK_TYPES_REQUIRING_WORKTREE,
 } from './types.js'
 
-// Re-export for convenience
-export type { WorkTypeStatusMappings }
+// ---------------------------------------------------------------------------
+// Platform-agnostic types (structurally identical to @renseiai/agentfactory)
+// Defined locally to avoid circular dependency: core -> linear -> core
+// ---------------------------------------------------------------------------
+
+/** Platform-agnostic issue representation. */
+export interface IssueTrackerIssue {
+  id: string
+  identifier: string
+  title: string
+  description?: string
+  url: string
+  priority: number
+  status?: string
+  labels: string[]
+  teamName?: string
+  projectName?: string
+}
+
+/** Configuration for creating an issue tracker session. */
+export interface SessionConfig {
+  issueId: string
+  sessionId: string
+  autoTransition?: boolean
+}
+
+/** Platform-agnostic session for streaming agent activities. */
+export interface IssueTrackerSession {
+  emitThought(content: string, ephemeral?: boolean): Promise<void>
+  emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean): Promise<void>
+  emitToolResult(tool: string, output: string, ephemeral?: boolean): Promise<void>
+  emitResponse(content: string): Promise<void>
+  emitError(error: Error): Promise<void>
+  reportEnvironmentIssue(
+    title: string,
+    description: string,
+    options?: unknown
+  ): Promise<{ id: string; identifier: string; url: string } | null>
+  setPullRequestUrl(url: string): Promise<void>
+  addExternalUrl(url: { url: string; label: string }): Promise<void>
+  complete(): Promise<void>
+}
+
+/** Comment chunk returned by buildCompletionComments. */
+export interface CommentChunk {
+  body: string
+  partNumber: number
+  totalParts: number
+}
+
+/** Platform-agnostic issue tracker client. */
+export interface IssueTrackerClient {
+  getIssue(idOrIdentifier: string): Promise<IssueTrackerIssue>
+  isParentIssue(issueId: string): Promise<boolean>
+  createComment(issueId: string, body: string): Promise<{ id: string }>
+  updateIssueStatus(issueId: string, status: string): Promise<void>
+  unassignIssue(issueId: string): Promise<void>
+  queryIssues(options: {
+    project?: string
+    status?: string
+    maxResults?: number
+  }): Promise<IssueTrackerIssue[]>
+  getProjectRepositoryUrl(projectName: string): Promise<string | null>
+  createSession(config: SessionConfig): IssueTrackerSession
+  buildCompletionComments(
+    resultMessage: string,
+    planItems: unknown[],
+    sessionId: string | null
+  ): CommentChunk[]
+}
+
+/** Maps between workflow statuses and agent work types. */
+export interface WorkTypeStatusMappings {
+  statusToWorkType: Record<string, AgentWorkType>
+  workTypeStartStatus: Record<AgentWorkType, string | null>
+  workTypeCompleteStatus: Record<AgentWorkType, string | null>
+  workTypeFailStatus: Record<AgentWorkType, string | null>
+  terminalStatuses: readonly string[]
+  workTypesRequiringWorktree: ReadonlySet<AgentWorkType>
+}
 
 /**
  * Wraps a Linear AgentSession to implement IssueTrackerSession.
