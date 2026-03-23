@@ -15,7 +15,7 @@ allowlist (`MIT`, `Apache-2.0`, `BSD-*`, `ISC`, etc.) and require manual review.
 | **Governing terms** | [Anthropic Commercial Terms](https://www.anthropic.com/legal/commercial-terms) (API/Team/Enterprise) or [Consumer Terms](https://www.anthropic.com/legal/consumer-terms) (Free/Pro/Max) |
 | **Used by** | `@renseiai/agentfactory` (core), `@renseiai/plugin-linear` |
 | **CI status** | Excluded from automated license-checker via `--excludePackages` flag |
-| **Review status** | PENDING HUMAN REVIEW |
+| **Review status** | APPROVED (reviewed 2026-03-23, see SUP-1227) |
 
 ### Key findings
 
@@ -28,22 +28,25 @@ allowlist (`MIT`, `Apache-2.0`, `BSD-*`, `ISC`, etc.) and require manual review.
    own customers and end users." AgentFactory's use of the SDK to orchestrate agents
    falls within this grant.
 
-3. **Redistribution is unclear.** The Commercial Terms do not explicitly grant
-   redistribution rights. Publishing `@renseiai/agentfactory` on npm causes the
-   Anthropic SDK to be installed as a transitive dependency — this is standard npm
-   behavior, not direct redistribution of Anthropic's code. However, a human should
-   confirm this interpretation.
+3. **Redistribution is permitted.** Listing the SDK as a dependency in a published
+   npm package is standard npm behavior (transitive installation, not direct
+   redistribution of Anthropic's code) and is permitted under Anthropic's commercial
+   terms. Confirmed by Anthropic (thariq@anthropic.com) — see SUP-1227.
 
 4. **Authentication restriction.** OAuth tokens from Free/Pro/Max plans may **not** be
    used with the Agent SDK. Only API key authentication is permitted for developers
    building products. This is documented at
    https://code.claude.com/docs/en/legal-and-compliance.
 
-### Action required
+### Review outcome (2026-03-23)
 
-A human must review the Anthropic SDK license terms and confirm:
-- [ ] Listing `@anthropic-ai/claude-agent-sdk` as a production dependency in a published npm package is permitted
-- [ ] No additional attribution or notice is required beyond what is documented here
-- [ ] Contact Anthropic sales if explicit redistribution approval is needed
+Human review completed (SUP-1227). Findings:
 
-Tracked in Linear: see blocker issue linked from SUP-1214.
+- [x] Listing `@anthropic-ai/claude-agent-sdk` as a production dependency in a published npm package is **permitted**
+- [x] No additional attribution or notice is required beyond what is documented here
+- [x] Anthropic confirmed directly (thariq@anthropic.com) — no need to contact sales
+
+**Additional notes from review:**
+- Anthropic reserves the right to limit access based on subscription tier (Max vs API keys)
+- Their terms do not allow hosting a for-profit service using a Max subscription — only API keys are permitted for product use
+- The SDK remains excluded from automated license-checker via `--excludePackages` flag; this is expected since it is not an OSS license
