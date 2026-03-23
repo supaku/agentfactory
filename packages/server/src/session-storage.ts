@@ -85,6 +85,13 @@ export interface AgentSessionState {
   inputTokens?: number
   /** Total output tokens consumed */
   outputTokens?: number
+
+  /** Last tool name reported by worker heartbeat (for tool loop detection) */
+  lastToolName?: string
+  /** Epoch ms when this tool was first seen continuously */
+  lastToolCalledAt?: number
+  /** Consecutive calls to the same tool */
+  toolCallCount?: number
 }
 
 /**

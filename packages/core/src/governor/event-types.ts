@@ -74,6 +74,24 @@ export interface PollSnapshotEvent {
   source: EventSource
 }
 
+/**
+ * Fired when a nudge action is taken on a stuck agent session.
+ * Tracks nudge lifecycle: sent, succeeded (activity resumed), or failed (escalated).
+ */
+export interface NudgeEvent {
+  type: 'nudge-sent' | 'nudge-succeeded' | 'nudge-failed'
+  sessionId: string
+  issueId: string
+  issueIdentifier: string
+  workerId: string
+  attemptNumber: number
+  nudgeMessage: string
+  reason: string
+  /** ISO-8601 timestamp */
+  timestamp: string
+  source: EventSource
+}
+
 // ---------------------------------------------------------------------------
 // Event source
 // ---------------------------------------------------------------------------
@@ -89,6 +107,7 @@ export type GovernorEvent =
   | CommentAddedEvent
   | SessionCompletedEvent
   | PollSnapshotEvent
+  | NudgeEvent
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,6 +127,10 @@ export function eventDedupKey(event: GovernorEvent): string {
       return `${event.issueId}:session:${event.sessionId}`
     case 'poll-snapshot':
       return `${event.issueId}:${event.issue.status}`
+    case 'nudge-sent':
+    case 'nudge-succeeded':
+    case 'nudge-failed':
+      return `${event.sessionId}:nudge:${event.type}:${event.attemptNumber}`
   }
 }
 

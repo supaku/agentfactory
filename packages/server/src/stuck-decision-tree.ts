@@ -85,6 +85,30 @@ export function decideRemediation(
     return null
   }
 
+  // Nudge effectiveness check: if a nudge was sent, check if activity resumed within timeout
+  if (record.nudgeCount > 0 && record.nudgeTimestamps.length > 0) {
+    const lastNudge = record.nudgeTimestamps[record.nudgeTimestamps.length - 1]
+    const timeSinceNudge = now - lastNudge
+
+    if (timeSinceNudge >= config.nudgeEffectivenessTimeoutMs) {
+      // Check if activity resumed: if the signal says activity resumed, nudge worked
+      if (signals.activityResumedAfterNudge) {
+        // Nudge succeeded — activity resumed, clear stuck state by returning null
+        return null
+      }
+      // Nudge failed — no activity within timeout, escalate to restart immediately
+      // This bypasses the normal cooldown
+      return {
+        sessionId: record.sessionId,
+        workerId: '',
+        action: 'restart',
+        reason: `Nudge failed: no activity within ${Math.round(config.nudgeEffectivenessTimeoutMs / 60_000)} minutes`,
+        attemptNumber: record.restartCount + 1,
+        maxAttempts: config.maxRestarts,
+      }
+    }
+  }
+
   // Time guard: force escalation if total time exceeded
   const totalTime = now - record.firstDetectedAt
   if (totalTime > config.maxTotalRemediationMs) {
@@ -163,6 +187,9 @@ function buildReason(signals: StuckSignals, prefix: string): string {
   }
   if (signals.claimStuck) {
     parts.push('claim stuck')
+  }
+  if (signals.toolLoopStuck) {
+    parts.push('tool loop detected')
   }
 
   if (signals.stuckDurationMs > 0) {

@@ -84,6 +84,10 @@ export interface StuckSignals {
   heartbeatStale: boolean
   /** Session has been in 'claimed' status too long without transitioning to 'running' */
   claimStuck: boolean
+  /** Same tool has been called continuously for too long */
+  toolLoopStuck: boolean
+  /** Whether activity has resumed after the last nudge */
+  activityResumedAfterNudge?: boolean
   /** How long the situation has persisted (ms) */
   stuckDurationMs: number
   /** Whether any signal is active */
@@ -137,6 +141,26 @@ export interface RemediationRecord {
 }
 
 // ---------------------------------------------------------------------------
+// Nudge Prompt Configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Configuration for nudge prompt messages per work type.
+ */
+export interface NudgePromptConfig {
+  /** Default prompt when work type is not configured */
+  defaultPrompt: string
+  /** Work-type-specific prompts */
+  prompts?: Record<string, string>
+}
+
+export const DEFAULT_NUDGE_PROMPTS: Record<string, string> = {
+  default: 'You appear to be stuck in a loop calling the same tool repeatedly. Please step back, reassess your approach, and try a different strategy to make progress.',
+  development: "You've been calling the same tool repeatedly for an extended period. Please pause, review what you've accomplished so far, and consider an alternative approach to complete the task.",
+  review: 'You appear stuck reviewing the same area repeatedly. Please summarize your findings so far and move to the next review item.',
+}
+
+// ---------------------------------------------------------------------------
 // Stuck Worker Decision Tree Configuration
 // ---------------------------------------------------------------------------
 
@@ -160,6 +184,12 @@ export interface StuckDetectionConfig {
   remediationCooldownMs: number
   /** Total max time before forced escalation regardless of budgets (ms) */
   maxTotalRemediationMs: number
+  /** Max time same tool can be called continuously before considered stuck (ms) */
+  maxSameToolDurationMs: number
+  /** Time to wait after nudge before checking effectiveness (ms) */
+  nudgeEffectivenessTimeoutMs: number
+  /** Nudge prompt configuration per work type */
+  nudgePrompts?: NudgePromptConfig
 }
 
 export const DEFAULT_STUCK_DETECTION_CONFIG: StuckDetectionConfig = {
@@ -171,6 +201,8 @@ export const DEFAULT_STUCK_DETECTION_CONFIG: StuckDetectionConfig = {
   maxReassigns: 1,
   remediationCooldownMs: 5 * 60_000,
   maxTotalRemediationMs: 45 * 60_000,
+  maxSameToolDurationMs: 10 * 60_000,  // 10 minutes
+  nudgeEffectivenessTimeoutMs: 3 * 60_000,  // 3 minutes
 }
 
 // ---------------------------------------------------------------------------

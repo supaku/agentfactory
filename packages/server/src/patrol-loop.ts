@@ -42,22 +42,26 @@ import type {
   RemediationDecision,
   WorkerHealthStatus,
 } from './fleet-supervisor-types.js'
-import { DEFAULT_PATROL_CONFIG } from './fleet-supervisor-types.js'
+import { DEFAULT_PATROL_CONFIG, DEFAULT_NUDGE_PROMPTS } from './fleet-supervisor-types.js'
+import type { GovernorEventBus } from '@renseiai/agentfactory'
 
 const log = createLogger('patrol-loop')
 
 export class PatrolLoop {
   private config: PatrolConfig
   private callbacks: PatrolCallbacks
+  private eventBus?: GovernorEventBus
   private intervalHandle: ReturnType<typeof setInterval> | null = null
   private patrolling = false
 
   constructor(
     config: Partial<PatrolConfig> = {},
-    callbacks: PatrolCallbacks = {}
+    callbacks: PatrolCallbacks = {},
+    eventBus?: GovernorEventBus
   ) {
     this.config = { ...DEFAULT_PATROL_CONFIG, ...config }
     this.callbacks = callbacks
+    this.eventBus = eventBus
   }
 
   /**
@@ -224,7 +228,19 @@ export class PatrolLoop {
             Date.now()
           )
 
-          if (!signals.isStuck) continue
+          // Check for nudge success: session no longer stuck but has previous nudges
+          if (!signals.isStuck) {
+            const prevRecord = await getRemediationRecord(session.linearSessionId)
+            if (prevRecord && prevRecord.nudgeCount > 0 && !prevRecord.escalated) {
+              await this.publishNudgeEvent(
+                'nudge-succeeded',
+                session,
+                prevRecord.nudgeCount,
+                'Activity resumed after nudge'
+              )
+            }
+            continue
+          }
 
           // Record stuck session
           result.stuckSessions.push({
@@ -272,6 +288,26 @@ export class PatrolLoop {
             decision.action
           )
 
+          // Publish nudge lifecycle events to the governor event bus
+          if (decision.action === 'nudge') {
+            const nudgeMsg = this.getNudgePrompt(session.workType)
+            await this.publishNudgeEvent(
+              'nudge-sent',
+              session,
+              decision.attemptNumber,
+              decision.reason,
+              nudgeMsg
+            )
+          }
+          if (decision.action === 'restart' && decision.reason.includes('Nudge failed')) {
+            await this.publishNudgeEvent(
+              'nudge-failed',
+              session,
+              record?.nudgeCount ?? 0,
+              decision.reason
+            )
+          }
+
           // Fire remediation callback
           if (this.callbacks.onRemediation) {
             try {
@@ -313,7 +349,7 @@ export class PatrolLoop {
 
     switch (decision.action) {
       case 'nudge':
-        await this.executeNudge(decision.workerId)
+        await this.executeNudge(decision.workerId, session.workType)
         break
       case 'restart':
         await this.executeRestart(decision.workerId, session)
@@ -328,12 +364,26 @@ export class PatrolLoop {
   }
 
   /**
-   * Nudge: Set a Redis flag for the worker to check on its next heartbeat.
-   * This is a passive "wait and see" action.
+   * Resolve the nudge prompt for a given work type.
+   * Falls back to configured default, then to built-in default.
    */
-  private async executeNudge(workerId: string): Promise<void> {
+  private getNudgePrompt(workType?: string): string {
+    const config = this.config.stuckDetection.nudgePrompts
+    if (workType && config?.prompts?.[workType]) {
+      return config.prompts[workType]
+    }
+    return config?.defaultPrompt ?? DEFAULT_NUDGE_PROMPTS.default
+  }
+
+  /**
+   * Nudge: Send a redirect message to the worker via Redis.
+   * The worker picks it up and injects it into the agent conversation
+   * via AgentHandle.injectMessage().
+   */
+  private async executeNudge(workerId: string, workType?: string): Promise<void> {
     if (workerId) {
-      await nudgeWorker(workerId)
+      const prompt = this.getNudgePrompt(workType)
+      await nudgeWorker(workerId, prompt)
     }
     log.info('Nudge sent', { workerId })
   }
@@ -450,6 +500,40 @@ export class PatrolLoop {
       const errorMsg = err instanceof Error ? err.message : String(err)
       log.error('Orphan cleanup failed during patrol', { error: errorMsg })
       result.errors.push({ context: 'orphan-cleanup', error: errorMsg })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Event Publishing
+  // -------------------------------------------------------------------------
+
+  /**
+   * Publish a nudge lifecycle event to the governor event bus.
+   * No-op when the event bus is not configured.
+   */
+  private async publishNudgeEvent(
+    type: 'nudge-sent' | 'nudge-succeeded' | 'nudge-failed',
+    session: import('./session-storage.js').AgentSessionState,
+    attemptNumber: number,
+    reason: string,
+    nudgeMessage: string = ''
+  ): Promise<void> {
+    if (!this.eventBus) return
+    try {
+      await this.eventBus.publish({
+        type,
+        sessionId: session.linearSessionId,
+        issueId: session.issueId,
+        issueIdentifier: session.issueIdentifier ?? '',
+        workerId: session.workerId ?? '',
+        attemptNumber,
+        nudgeMessage,
+        reason,
+        timestamp: new Date().toISOString(),
+        source: 'manual' as const,
+      })
+    } catch (err) {
+      log.warn('Failed to publish nudge event', { type, error: err })
     }
   }
 
