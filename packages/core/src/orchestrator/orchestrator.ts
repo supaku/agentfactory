@@ -2341,8 +2341,43 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             }
           }
         } else {
-          // Non-QA/acceptance: unchanged behavior — always promote on completion
-          targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+          // Non-QA/acceptance: promote on completion, but validate code-producing work types first
+          const isCodeProducing = workType === 'development' || workType === 'inflight'
+
+          if (isCodeProducing && agent.worktreePath && !agent.pullRequestUrl) {
+            // Code-producing agent completed without a detected PR — check for commits
+            const incompleteCheck = checkForIncompleteWork(agent.worktreePath)
+
+            if (incompleteCheck.hasIncompleteWork) {
+              // Agent has uncommitted/unpushed changes — block promotion
+              log?.error('Code-producing agent completed without PR and has incomplete work — blocking promotion', {
+                workType,
+                reason: incompleteCheck.reason,
+                details: incompleteCheck.details,
+              })
+
+              // Post a diagnostic comment
+              try {
+                await this.client.createComment(
+                  issueId,
+                  `⚠️ **Agent completed but work was not persisted.**\n\n` +
+                  `The agent reported success but no PR was detected, and the worktree has ${incompleteCheck.details}.\n\n` +
+                  `**Issue status was NOT promoted** to prevent lost work from advancing through the pipeline.\n\n` +
+                  `The worktree has been preserved at \`${agent.worktreePath}\`. ` +
+                  `To recover: cd into the worktree, commit, push, and create a PR manually.`
+                )
+              } catch {
+                // Best-effort comment
+              }
+
+              // Do NOT set targetStatus — leave issue in current state
+            } else {
+              // No PR but worktree is clean — either no changes needed or agent cleaned up
+              targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+            }
+          } else {
+            targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+          }
         }
 
         if (targetStatus) {
