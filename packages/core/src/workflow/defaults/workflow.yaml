@@ -1,0 +1,102 @@
+apiVersion: v1.1
+kind: WorkflowDefinition
+metadata:
+  name: default-workflow
+  description: >
+    Default workflow matching the v1.0 hard-coded decision engine behavior.
+    Defines the standard dev-QA-acceptance pipeline with escalation ladder.
+
+# ─── Phases ───────────────────────────────────────────────────────────────────
+# Each phase references a WorkflowTemplate by name and optionally provides
+# strategy-specific template variants for escalation scenarios.
+
+phases:
+  - name: research
+    description: Flesh out sparse Icebox issues with research
+    template: research
+
+  - name: backlog-creation
+    description: Create sub-issues from well-researched Icebox stories
+    template: backlog-creation
+
+  - name: development
+    description: Implement the feature/fix
+    template: development
+
+  - name: qa
+    description: Validate the implementation
+    template: qa
+
+  - name: acceptance
+    description: Final acceptance testing before merge
+    template: acceptance
+
+  - name: refinement
+    description: Address rejection feedback and prep for retry
+    template: refinement
+    variants:
+      context-enriched: refinement-context-enriched
+      decompose: refinement-decompose
+
+  - name: coordination
+    description: Orchestrate sub-issue execution for parent issues
+    template: coordination
+
+  - name: qa-coordination
+    description: Coordinate QA across sub-issues
+    template: qa-coordination
+
+  - name: acceptance-coordination
+    description: Coordinate acceptance across sub-issues
+    template: acceptance-coordination
+
+  - name: refinement-coordination
+    description: Coordinate refinement across sub-issues
+    template: refinement-coordination
+
+# ─── Transitions ──────────────────────────────────────────────────────────────
+# Maps Linear statuses to target phases. Higher priority transitions are
+# evaluated first when multiple transitions share the same source status.
+
+transitions:
+  # Icebox routing (top-of-funnel)
+  - from: Icebox
+    to: research
+    condition: "{{ not researchCompleted }}"
+    priority: 10
+
+  - from: Icebox
+    to: backlog-creation
+    condition: "{{ researchCompleted and not backlogCreationCompleted }}"
+    priority: 5
+
+  # Standard pipeline
+  - from: Backlog
+    to: development
+
+  - from: Finished
+    to: qa
+
+  - from: Delivered
+    to: acceptance
+
+  - from: Rejected
+    to: refinement
+
+# ─── Escalation ───────────────────────────────────────────────────────────────
+# Configurable escalation ladder replacing the hard-coded computeStrategy()
+# function in agent-tracking.ts. The highest cycle <= current cycle wins.
+
+escalation:
+  ladder:
+    - cycle: 1
+      strategy: normal
+    - cycle: 2
+      strategy: context-enriched
+    - cycle: 3
+      strategy: decompose
+    - cycle: 4
+      strategy: escalate-human
+  circuitBreaker:
+    maxSessionsPerIssue: 8    # MAX_TOTAL_SESSIONS from agent-tracking.ts
+    maxSessionsPerPhase: 3    # MAX_SESSION_ATTEMPTS from decision-engine.ts
