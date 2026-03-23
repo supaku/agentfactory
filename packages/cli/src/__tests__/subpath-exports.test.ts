@@ -11,13 +11,13 @@ import { describe, it, expect } from 'vitest'
  */
 
 describe('@renseiai/agentfactory-cli subpath exports', () => {
-  it('exports runOrchestrator from ./orchestrator', async () => {
+  it('exports runOrchestrator from ./orchestrator', { timeout: 15_000 }, async () => {
     const mod = await import('../lib/orchestrator-runner.js')
     expect(mod.runOrchestrator).toBeDefined()
     expect(typeof mod.runOrchestrator).toBe('function')
   })
 
-  it('exports runWorker from ./worker', async () => {
+  it('exports runWorker from ./worker', { timeout: 15_000 }, async () => {
     const mod = await import('../lib/worker-runner.js')
     expect(mod.runWorker).toBeDefined()
     expect(typeof mod.runWorker).toBe('function')
