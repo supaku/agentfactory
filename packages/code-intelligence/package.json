@@ -44,8 +44,19 @@
     "LICENSE"
   ],
   "dependencies": {
-    "xxhash-wasm": "^1.1.0",
+    "xxhash-wasm": "^1.1.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.7",
     "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.5.4",

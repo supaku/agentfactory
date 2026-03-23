@@ -23,6 +23,7 @@ import {
   linearPlugin,
   type AgentWorkType,
 } from '@renseiai/plugin-linear'
+import { codeIntelligencePlugin } from '@renseiai/agentfactory-code-intelligence'
 
 // ---------------------------------------------------------------------------
 // Public config interface
@@ -629,7 +630,7 @@ export async function runWorker(
           worktreePath: path.resolve(gitRoot, '.worktrees'),
           issueTrackerClient,
           statusMappings,
-          toolPlugins: [linearPlugin],
+          toolPlugins: [linearPlugin, codeIntelligencePlugin],
           apiActivityConfig: {
             baseUrl: workerConfig.apiUrl,
             apiKey: workerConfig.apiKey,

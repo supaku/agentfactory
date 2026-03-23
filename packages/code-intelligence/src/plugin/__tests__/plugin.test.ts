@@ -30,15 +30,15 @@ describe('codeIntelligencePlugin', () => {
 
   it('tools have input schemas', () => {
     const tools = codeIntelligencePlugin.createTools({ env: {}, cwd: '/tmp' })
-    for (const tool of tools) {
-      expect(tool.inputSchema).toBeDefined()
+    for (const t of tools) {
+      expect(t.inputSchema).toBeDefined()
     }
   })
 
   it('search tool returns results', async () => {
     const tools = codeIntelligencePlugin.createTools({ env: {}, cwd: '/tmp' })
     const searchTool = tools.find(t => t.name === 'af_code_search_symbols')!
-    const result = await searchTool.execute({ query: 'test' })
+    const result = await searchTool.handler({ query: 'test' }, {})
     expect(result.content).toBeDefined()
     expect(result.content[0].type).toBe('text')
   })
@@ -46,9 +46,10 @@ describe('codeIntelligencePlugin', () => {
   it('duplicate check tool works', async () => {
     const tools = codeIntelligencePlugin.createTools({ env: {}, cwd: '/tmp' })
     const dedupTool = tools.find(t => t.name === 'af_code_check_duplicate')!
-    const result = await dedupTool.execute({ content: 'test content' })
+    const result = await dedupTool.handler({ content: 'test content' }, {})
     expect(result.content).toBeDefined()
-    const parsed = JSON.parse(result.content[0].text)
+    const firstContent = result.content[0] as { type: 'text'; text: string }
+    const parsed = JSON.parse(firstContent.text)
     expect(parsed.isDuplicate).toBe(false)
   })
 })

@@ -19,6 +19,7 @@ import {
   createLinearStatusMappings,
   linearPlugin,
 } from '@renseiai/plugin-linear'
+import { codeIntelligencePlugin } from '@renseiai/agentfactory-code-intelligence'
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -152,7 +153,7 @@ export async function runOrchestrator(
     linearApiKey: config.linearApiKey,
     issueTrackerClient,
     statusMappings,
-    toolPlugins: [linearPlugin],
+    toolPlugins: [linearPlugin, codeIntelligencePlugin],
   }
   if (config.templateDir) {
     orchestratorConfig.templateDir = config.templateDir
