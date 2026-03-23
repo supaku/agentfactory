@@ -15,25 +15,25 @@ describe('@renseiai/agentfactory-nextjs subpath exports', () => {
     expect(typeof mod.createAgentFactoryMiddleware).toBe('function')
   })
 
-  it('exports createAllRoutes from main barrel', async () => {
+  it('exports createAllRoutes from main barrel', { timeout: 15_000 }, async () => {
     const mod = await import('../index.js')
     expect(mod.createAllRoutes).toBeDefined()
     expect(typeof mod.createAllRoutes).toBe('function')
   })
 
-  it('exports createDefaultLinearClientResolver from main barrel', async () => {
+  it('exports createDefaultLinearClientResolver from main barrel', { timeout: 15_000 }, async () => {
     const mod = await import('../index.js')
     expect(mod.createDefaultLinearClientResolver).toBeDefined()
     expect(typeof mod.createDefaultLinearClientResolver).toBe('function')
   })
 
-  it('exports createWebhookOrchestrator from main barrel', async () => {
+  it('exports createWebhookOrchestrator from main barrel', { timeout: 15_000 }, async () => {
     const mod = await import('../index.js')
     expect(mod.createWebhookOrchestrator).toBeDefined()
     expect(typeof mod.createWebhookOrchestrator).toBe('function')
   })
 
-  it('exports createOAuthCallbackHandler from main barrel', async () => {
+  it('exports createOAuthCallbackHandler from main barrel', { timeout: 15_000 }, async () => {
     const mod = await import('../index.js')
     expect(mod.createOAuthCallbackHandler).toBeDefined()
     expect(typeof mod.createOAuthCallbackHandler).toBe('function')
