@@ -31,6 +31,7 @@
     "analyze-logs": "node --import tsx packages/cli/src/analyze-logs.ts",
     "af-linear": "node --import tsx packages/cli/src/linear.ts",
     "af-agent": "node --import tsx packages/cli/src/agent.ts",
+    "af-cleanup": "node --import tsx packages/cli/src/cleanup.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
