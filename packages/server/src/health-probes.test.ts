@@ -373,4 +373,109 @@ describe('detectStuckSignals', () => {
     expect(result.isStuck).toBe(true)
     expect(result.stuckDurationMs).toBe(120_000) // max of the two
   })
+
+  // -------------------------------------------------------------------------
+  // Tool Loop Detection (SUP-1255)
+  // -------------------------------------------------------------------------
+
+  it('detects tool loop when same tool called for > maxSameToolDurationMs', () => {
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now, // not running too long
+      lastToolName: 'Read',
+      lastToolCalledAt: now - config.maxSameToolDurationMs - 60_000,
+    })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    expect(result.isStuck).toBe(true)
+    expect(result.toolLoopStuck).toBe(true)
+    expect(result.stuckDurationMs).toBe(60_000)
+  })
+
+  it('does not detect tool loop when tool changed within threshold', () => {
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now,
+      lastToolName: 'Read',
+      lastToolCalledAt: now - 30_000, // 30s < 10min
+    })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    expect(result.toolLoopStuck).toBe(false)
+  })
+
+  it('does not detect tool loop when no tool data available', () => {
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now,
+      lastToolName: undefined,
+      lastToolCalledAt: undefined,
+    })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    expect(result.toolLoopStuck).toBe(false)
+  })
+
+  it('respects custom maxSameToolDurationMs', () => {
+    const customConfig = { ...config, maxSameToolDurationMs: 60_000 }
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now,
+      lastToolName: 'Read',
+      lastToolCalledAt: now - 61_000,
+    })
+
+    const result = detectStuckSignals(session, null, customConfig, now)
+
+    expect(result.toolLoopStuck).toBe(true)
+  })
+
+  it('handles empty tool name gracefully', () => {
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now,
+      lastToolName: '',
+      lastToolCalledAt: now - config.maxSameToolDurationMs - 60_000,
+    })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    // Empty string is falsy so tool loop check is skipped
+    expect(result.toolLoopStuck).toBe(false)
+  })
+
+  // -------------------------------------------------------------------------
+  // Nudge Effectiveness Proxy (SUP-1262)
+  // -------------------------------------------------------------------------
+
+  it('sets activityResumedAfterNudge true when no tool loop or running-too-long', () => {
+    const now = 1_000_000
+    const session = makeSession({ status: 'running', updatedAt: now })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    expect(result.activityResumedAfterNudge).toBe(true)
+  })
+
+  it('sets activityResumedAfterNudge false when tool loop is active', () => {
+    const now = 1_000_000
+    const session = makeSession({
+      status: 'running',
+      updatedAt: now,
+      lastToolName: 'Read',
+      lastToolCalledAt: now - config.maxSameToolDurationMs - 60_000,
+    })
+
+    const result = detectStuckSignals(session, null, config, now)
+
+    expect(result.activityResumedAfterNudge).toBe(false)
+  })
 })
