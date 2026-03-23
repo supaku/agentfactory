@@ -117,11 +117,11 @@ function routeReexport(post: string | null, get?: string, del?: string): string 
 
 function packageJson(opts: TemplateOptions): string {
   const deps: Record<string, string> = {
-    '@renseiai/agentfactory': '^0.7.6',
-    '@renseiai/agentfactory-cli': '^0.7.6',
-    '@renseiai/plugin-linear': '^0.7.6',
-    '@renseiai/agentfactory-nextjs': '^0.7.6',
-    '@renseiai/agentfactory-server': '^0.7.6',
+    '@renseiai/agentfactory': '^0.8.4',
+    '@renseiai/agentfactory-cli': '^0.8.4',
+    '@renseiai/plugin-linear': '^0.8.4',
+    '@renseiai/agentfactory-nextjs': '^0.8.4',
+    '@renseiai/agentfactory-server': '^0.8.4',
     'next': '^16.1.0',
     'react': '^19.0.0',
     'react-dom': '^19.0.0',
@@ -142,7 +142,7 @@ function packageJson(opts: TemplateOptions): string {
   }
 
   if (opts.includeDashboard) {
-    deps['@renseiai/agentfactory-dashboard'] = '^0.7.6'
+    deps['@renseiai/agentfactory-dashboard'] = '^0.8.4'
     devDeps['@tailwindcss/postcss'] = '^4'
     devDeps['tailwindcss'] = '^4'
   }

@@ -91,7 +91,7 @@ describe('runSyncRoutes', () => {
     // Add dashboard dependency to package.json
     writeFileSync(
       join(tmpDir, 'package.json'),
-      JSON.stringify({ dependencies: { '@renseiai/agentfactory-dashboard': '^0.7.6' } }),
+      JSON.stringify({ dependencies: { '@renseiai/agentfactory-dashboard': '^0.8.4' } }),
     )
 
     const result = runSyncRoutes({ projectRoot: tmpDir, pages: true })
