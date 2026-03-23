@@ -29,6 +29,12 @@ export interface PublicSessionDetailResponse {
     started?: string
     completed?: string
   }
+  provider?: string
+  branch?: string
+  issueTitle?: string
+  costUsd?: number
+  inputTokens?: number
+  outputTokens?: number
 }
 
 function toPublicStatus(
@@ -89,6 +95,13 @@ async function toPublicSessionDetail(
         ? new Date(session.updatedAt * 1000).toISOString()
         : undefined,
     },
+    provider: session.provider,
+    branch: session.worktreePath
+      ? session.worktreePath.split('/').pop()
+      : undefined,
+    issueTitle: session.issueIdentifier
+      ? `${session.issueIdentifier}`
+      : undefined,
   }
 }
 
