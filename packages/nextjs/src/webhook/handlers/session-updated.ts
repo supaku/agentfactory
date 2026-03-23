@@ -3,7 +3,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload } from '@renseiai/agentfactory-linear'
+import type { LinearWebhookPayload } from '@renseiai/plugin-linear'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import { handleStopSignal } from '../utils.js'
 import type { createLogger } from '@renseiai/agentfactory-server'

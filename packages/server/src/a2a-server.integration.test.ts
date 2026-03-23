@@ -269,6 +269,7 @@ describe('A2A Server — AgentCard generation', () => {
     expect(skillIds).toContain('research-analysis')
     expect(skillIds).toContain('backlog-creation')
     expect(skillIds).toContain('inflight-work')
+    expect(skillIds).toContain('inflight-coordination')
     expect(skillIds).toContain('acceptance-review')
     expect(skillIds).toContain('refinement')
     expect(skillIds).toContain('coordination')

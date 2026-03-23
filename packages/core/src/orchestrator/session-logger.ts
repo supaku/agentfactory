@@ -17,7 +17,7 @@ import {
   readFileSync,
 } from 'fs'
 import { resolve, dirname } from 'path'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from './work-types.js'
 
 /**
  * Session event types for categorization

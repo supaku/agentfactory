@@ -130,6 +130,9 @@ When all sub-issues are complete:
 
 1. **Run validation**:
    ```bash
+   # Verify lockfile consistency (sub-agents may have added dependencies)
+   pnpm install --frozen-lockfile
+
    pnpm typecheck
    pnpm test
    ```

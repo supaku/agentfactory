@@ -15,7 +15,7 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 | Package | npm | Description |
 |---------|-----|-------------|
 | **[@renseiai/agentfactory](./packages/core)** | `@renseiai/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
-| **[@renseiai/agentfactory-linear](./packages/linear)** | `@renseiai/agentfactory-linear` | Linear issue tracker integration |
+| **[@renseiai/plugin-linear](./packages/linear)** | `@renseiai/plugin-linear` | Linear issue tracker integration |
 | **[@renseiai/agentfactory-server](./packages/server)** | `@renseiai/agentfactory-server` | Redis work queue, session storage, worker pool |
 | **[@renseiai/agentfactory-cli](./packages/cli)** | `@renseiai/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
 | **[@renseiai/agentfactory-nextjs](./packages/nextjs)** | `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
@@ -299,7 +299,7 @@ interface OrchestratorConfig {
 
 ## Linear Integration
 
-The `@renseiai/agentfactory-linear` package provides:
+The `@renseiai/plugin-linear` package provides:
 
 - **Agent sessions** — lifecycle management with status transitions
 - **Activity streaming** — thoughts, actions, and responses visible in Linear
@@ -308,7 +308,7 @@ The `@renseiai/agentfactory-linear` package provides:
 - **Sub-issue coordination** — dependency-aware parallel execution
 
 ```typescript
-import { createLinearAgentClient, createAgentSession } from '@renseiai/agentfactory-linear'
+import { createLinearAgentClient, createAgentSession } from '@renseiai/plugin-linear'
 
 const client = createLinearAgentClient({ apiKey: process.env.LINEAR_API_KEY! })
 const session = createAgentSession({

@@ -7,7 +7,7 @@ Part of the [AgentFactory](https://github.com/renseiai/agentfactory) monorepo.
 ## Installation
 
 ```bash
-npm install @renseiai/agentfactory @renseiai/agentfactory-linear
+npm install @renseiai/agentfactory @renseiai/plugin-linear
 ```
 
 ## Quick Start
@@ -115,7 +115,7 @@ The governor evaluates each issue against status, active sessions, cooldowns, hu
 
 | Package | Description |
 |---------|-------------|
-| [@renseiai/agentfactory-linear](https://www.npmjs.com/package/@renseiai/agentfactory-linear) | Linear issue tracker integration |
+| [@renseiai/plugin-linear](https://www.npmjs.com/package/@renseiai/plugin-linear) | Linear issue tracker integration |
 | [@renseiai/agentfactory-server](https://www.npmjs.com/package/@renseiai/agentfactory-server) | Redis work queue, distributed workers |
 | [@renseiai/agentfactory-cli](https://www.npmjs.com/package/@renseiai/agentfactory-cli) | CLI tools |
 | [@renseiai/agentfactory-nextjs](https://www.npmjs.com/package/@renseiai/agentfactory-nextjs) | Next.js webhook server |

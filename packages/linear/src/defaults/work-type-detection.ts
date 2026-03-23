@@ -28,6 +28,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
   'inflight': [
     'continue', 'resume', 'pick up where', 'keep going',
   ],
+  'inflight-coordination': [
+    'resume coordination', 'continue coordination', 'resume sub-issues',
+    'continue sub-issues', 'pick up coordination',
+  ],
   'acceptance': [
     'acceptance', 'final test', 'preview deploy', 'merge pr', 'merge the pr',
     'complete acceptance', 'finalize',
@@ -67,6 +71,7 @@ const WORK_TYPE_PRIORITY_ORDER: AgentWorkType[] = [
   'qa',
   'acceptance-coordination',
   'acceptance',
+  'inflight-coordination',
   'inflight',
   'refinement',
   'development',

@@ -3,7 +3,8 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import type { LinearWebhookPayload } from '@renseiai/plugin-linear'
 import {
   getSessionState,
   updateSessionStatus,

@@ -29,7 +29,7 @@ pnpm test
 ```
 packages/
   core/        @renseiai/agentfactory              — orchestrator, providers, crash recovery
-  linear/      @renseiai/agentfactory-linear        — Linear issue tracker integration
+  linear/      @renseiai/plugin-linear        — Linear issue tracker integration
   server/      @renseiai/agentfactory-server        — Redis queues, session storage, worker pool
   cli/         @renseiai/agentfactory-cli           — CLI tools (orchestrator, worker, fleet)
   nextjs/      @renseiai/agentfactory-nextjs        — Next.js route handlers, webhook, middleware

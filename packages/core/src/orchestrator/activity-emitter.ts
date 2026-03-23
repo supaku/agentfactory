@@ -13,13 +13,13 @@
  * - error → error (persisted)
  */
 
-import type { AgentSession } from '@renseiai/agentfactory-linear'
-import { ENVIRONMENT_ISSUE_TYPES } from '@renseiai/agentfactory-linear'
+import type { IssueTrackerSession } from './issue-tracker-client.js'
+import { ENVIRONMENT_ISSUE_TYPES } from './work-types.js'
 
 /** Configuration for the activity emitter */
 export interface ActivityEmitterConfig {
-  /** AgentSession to emit activities to */
-  session: AgentSession
+  /** Issue tracker session to emit activities to */
+  session: IssueTrackerSession
   /** Minimum interval between activities in ms (default: 500ms) */
   minInterval?: number
   /** Maximum length for tool outputs before truncation (default: 2000) */
@@ -50,7 +50,7 @@ const DEFAULT_MAX_OUTPUT_LENGTH = 2000
  * Handles rate-limited emission of Claude events to Linear activities.
  */
 export class ActivityEmitter {
-  private readonly session: AgentSession
+  private readonly session: IssueTrackerSession
   private readonly minInterval: number
   private readonly maxOutputLength: number
   private readonly includeTimestamps: boolean

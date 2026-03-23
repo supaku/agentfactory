@@ -29,12 +29,12 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
-        specifier: workspace:*
-        version: link:../linear
       '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
+      '@renseiai/plugin-linear':
+        specifier: workspace:*
+        version: link:../linear
       dotenv:
         specifier: ^17.2.3
         version: 17.2.4
@@ -73,9 +73,6 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.2.7
         version: 0.2.37(zod@4.3.6)
-      '@renseiai/agentfactory-linear':
-        specifier: workspace:*
-        version: link:../linear
       dotenv:
         specifier: ^17.2.3
         version: 17.2.4
@@ -183,9 +180,15 @@ importers:
 
   packages/linear:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ^0.2.7
+        version: 0.2.37(zod@4.3.6)
       '@linear/sdk':
         specifier: ^70.0.0
         version: 70.0.0(graphql@16.12.0)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^22.5.4
@@ -224,12 +227,12 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
-        specifier: workspace:*
-        version: link:../linear
       '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
+      '@renseiai/plugin-linear':
+        specifier: workspace:*
+        version: link:../linear
     devDependencies:
       '@types/node':
         specifier: ^22.5.4
@@ -249,7 +252,7 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
+      '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear
       ioredis:
@@ -271,7 +274,7 @@ importers:
       '@renseiai/agentfactory':
         specifier: workspace:*
         version: link:../core
-      '@renseiai/agentfactory-linear':
+      '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear
       typescript:

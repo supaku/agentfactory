@@ -22,6 +22,8 @@ const DEV_QUEUED_PREFIX = 'agent:dev-queued:'
 const ACCEPTANCE_QUEUED_PREFIX = 'agent:acceptance-queued:'
 const ACCEPTANCE_COMPLETED_PREFIX = 'agent:acceptance-completed:'
 const WORKFLOW_STATE_PREFIX = 'workflow:state:'
+const SESSION_FAILURES_PREFIX = 'session:failures:'
+const DISPATCH_COUNT_PREFIX = 'session:dispatch-count:'
 
 // TTLs in seconds
 const AGENT_WORKED_TTL = 7 * 24 * 60 * 60 // 7 days
@@ -31,6 +33,13 @@ const DEV_QUEUED_TTL = 300 // 5 minutes
 const ACCEPTANCE_QUEUED_TTL = 300 // 5 minutes
 const ACCEPTANCE_COMPLETED_TTL = 30 * 60 // 30 minutes
 const WORKFLOW_STATE_TTL = 30 * 24 * 60 * 60 // 30 days
+const SESSION_FAILURES_TTL = 60 * 60 // 1 hour — auto-clears if no failures for an hour
+const DISPATCH_COUNT_TTL = 4 * 60 * 60 // 4 hours — sliding window for dispatch counting
+
+// Session failure circuit breaker constants
+const SESSION_FAILURE_BASE_DELAY_S = 120 // 2 minutes initial backoff
+const SESSION_FAILURE_MAX_DELAY_S = 1800 // 30 minutes maximum backoff
+const SESSION_FAILURE_HARD_STOP = 5 // stop dispatching after this many consecutive failures
 
 /**
  * Record of an issue that was worked on by an agent
@@ -430,6 +439,7 @@ export async function cleanupAcceptedIssue(issueId: string): Promise<void> {
     `${ACCEPTANCE_QUEUED_PREFIX}${issueId}`,
     `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`,
     `${WORKFLOW_STATE_PREFIX}${issueId}`,
+    `${SESSION_FAILURES_PREFIX}${issueId}`,
   ]
 
   await Promise.all(keysToDelete.map((key) => redisDel(key)))
@@ -483,4 +493,221 @@ export async function clearAcceptanceCompleted(issueId: string): Promise<void> {
   const key = `${ACCEPTANCE_COMPLETED_PREFIX}${issueId}`
   await redisDel(key)
   log.debug('Cleared acceptance completed marker', { issueId })
+}
+
+// ---------------------------------------------------------------------------
+// Per-issue dispatch counter
+//
+// Simple sliding-window counter that tracks how many sessions have been
+// dispatched for an issue, regardless of work type or outcome. Unlike the
+// workflow-state-based getTotalSessionCount (which only counts sessions
+// recorded in specific phases), this counter increments on EVERY dispatch
+// and catches runaway loops where sessions complete without recording a
+// phase (e.g., "already done" no-op sessions).
+// ---------------------------------------------------------------------------
+
+interface DispatchCountState {
+  count: number
+  firstDispatchAt: number
+  lastDispatchAt: number
+}
+
+/**
+ * Increment the dispatch counter for an issue.
+ * Call this every time a session is dispatched (from any trigger path).
+ */
+export async function incrementDispatchCount(issueId: string): Promise<number> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  const existing = await redisGet<DispatchCountState>(key)
+
+  const state: DispatchCountState = {
+    count: (existing?.count ?? 0) + 1,
+    firstDispatchAt: existing?.firstDispatchAt ?? Date.now(),
+    lastDispatchAt: Date.now(),
+  }
+
+  await redisSet(key, state, DISPATCH_COUNT_TTL)
+  return state.count
+}
+
+/**
+ * Get the current dispatch count for an issue within the sliding window.
+ */
+export async function getDispatchCount(issueId: string): Promise<number> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  const state = await redisGet<DispatchCountState>(key)
+  return state?.count ?? 0
+}
+
+/**
+ * Clear the dispatch counter for an issue (e.g., when issue reaches terminal status).
+ */
+export async function clearDispatchCount(issueId: string): Promise<void> {
+  const key = `${DISPATCH_COUNT_PREFIX}${issueId}`
+  await redisDel(key)
+}
+
+// ---------------------------------------------------------------------------
+// Session failure circuit breaker
+//
+// Tracks consecutive session failures per issue with exponential backoff.
+// Prevents runaway retry loops when an agent keeps crashing immediately
+// (e.g., API auth error, missing infrastructure, broken worktree).
+//
+// Backoff schedule:
+//   1 failure  → 2 min
+//   2 failures → 4 min
+//   3 failures → 8 min
+//   4 failures → 16 min
+//   5+ failures → hard stop (human intervention required)
+// ---------------------------------------------------------------------------
+
+/**
+ * State tracked per issue for the session failure circuit breaker
+ */
+export interface SessionFailureState {
+  issueId: string
+  failureCount: number
+  lastFailedAt: number
+  lastError?: string
+}
+
+/**
+ * Result of checking the session failure circuit breaker
+ */
+export interface SessionFailureCheck {
+  /** Whether dispatch should proceed */
+  allowed: boolean
+  /** Reason dispatch was blocked */
+  reason?: 'backoff' | 'hard_stop'
+  /** Current failure count */
+  failureCount: number
+  /** Seconds remaining in backoff (0 if allowed or hard-stopped) */
+  backoffRemainingS: number
+  /** Human-readable message for Linear activity */
+  message?: string
+}
+
+/**
+ * Compute the backoff delay in seconds for a given failure count.
+ * Uses exponential backoff: BASE * 2^(n-1), capped at MAX.
+ */
+export function computeSessionBackoffS(failureCount: number): number {
+  if (failureCount <= 0) return 0
+  const delay = SESSION_FAILURE_BASE_DELAY_S * Math.pow(2, failureCount - 1)
+  return Math.min(delay, SESSION_FAILURE_MAX_DELAY_S)
+}
+
+/**
+ * Record a session failure for an issue.
+ * Call this when a worker reports a session as failed.
+ */
+export async function recordSessionFailure(
+  issueId: string,
+  error?: string
+): Promise<SessionFailureState> {
+  const key = `${SESSION_FAILURES_PREFIX}${issueId}`
+  const existing = await redisGet<SessionFailureState>(key)
+
+  const state: SessionFailureState = {
+    issueId,
+    failureCount: (existing?.failureCount ?? 0) + 1,
+    lastFailedAt: Date.now(),
+    lastError: error,
+  }
+
+  await redisSet(key, state, SESSION_FAILURES_TTL)
+
+  log.info('Recorded session failure', {
+    issueId,
+    failureCount: state.failureCount,
+    backoffS: computeSessionBackoffS(state.failureCount),
+    error: error?.substring(0, 100),
+  })
+
+  return state
+}
+
+/**
+ * Check whether a new session dispatch should be allowed for an issue.
+ * Returns allowed=false with a reason if the issue is in backoff or hard-stopped.
+ */
+export async function checkSessionFailureBackoff(
+  issueId: string
+): Promise<SessionFailureCheck> {
+  const key = `${SESSION_FAILURES_PREFIX}${issueId}`
+  const state = await redisGet<SessionFailureState>(key)
+
+  // No failure history — proceed
+  if (!state || state.failureCount === 0) {
+    return { allowed: true, failureCount: 0, backoffRemainingS: 0 }
+  }
+
+  // Hard stop after too many consecutive failures
+  if (state.failureCount >= SESSION_FAILURE_HARD_STOP) {
+    return {
+      allowed: false,
+      reason: 'hard_stop',
+      failureCount: state.failureCount,
+      backoffRemainingS: 0,
+      message:
+        `Agent has failed ${state.failureCount} consecutive times. ` +
+        `Automated dispatch is paused — human intervention is needed.\n\n` +
+        (state.lastError
+          ? `**Last error:** ${state.lastError.substring(0, 300)}\n\n`
+          : '') +
+        `Move the issue to a different status or resolve the underlying problem, ` +
+        `then mention the agent to retry.`,
+    }
+  }
+
+  // Exponential backoff check
+  const backoffS = computeSessionBackoffS(state.failureCount)
+  const elapsedS = (Date.now() - state.lastFailedAt) / 1000
+  const remainingS = Math.max(0, backoffS - elapsedS)
+
+  if (remainingS > 0) {
+    const remainingMin = Math.ceil(remainingS / 60)
+    return {
+      allowed: false,
+      reason: 'backoff',
+      failureCount: state.failureCount,
+      backoffRemainingS: Math.ceil(remainingS),
+      message:
+        `Agent failed ${state.failureCount} time${state.failureCount > 1 ? 's' : ''} consecutively. ` +
+        `Waiting ${remainingMin} minute${remainingMin > 1 ? 's' : ''} before retrying ` +
+        `(exponential backoff: attempt ${state.failureCount}/${SESSION_FAILURE_HARD_STOP}).\n\n` +
+        (state.lastError
+          ? `**Last error:** ${state.lastError.substring(0, 300)}\n\n`
+          : '') +
+        `To retry immediately, mention the agent on the issue.`,
+    }
+  }
+
+  // Backoff period elapsed — allow retry
+  return {
+    allowed: true,
+    failureCount: state.failureCount,
+    backoffRemainingS: 0,
+  }
+}
+
+/**
+ * Clear session failure state for an issue.
+ * Call this when a session completes successfully.
+ */
+export async function clearSessionFailures(issueId: string): Promise<void> {
+  const key = `${SESSION_FAILURES_PREFIX}${issueId}`
+  await redisDel(key)
+  log.debug('Cleared session failure state', { issueId })
+}
+
+/**
+ * Get current session failure state (for diagnostics/dashboard).
+ */
+export async function getSessionFailureState(
+  issueId: string
+): Promise<SessionFailureState | null> {
+  const key = `${SESSION_FAILURES_PREFIX}${issueId}`
+  return redisGet<SessionFailureState>(key)
 }

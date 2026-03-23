@@ -156,6 +156,56 @@ describe('parseWorkResult', () => {
     it('does not false-positive on "tests pass" (no bold)', () => {
       expect(parseWorkResult('All tests pass and everything looks good.', 'qa')).toBe('unknown')
     })
+
+    // "Already done" patterns — agent recognized prior work was complete
+    it('detects "already done" as pass for qa', () => {
+      expect(parseWorkResult(
+        'QA coordination for SUP-1145 is already done — the report was posted.',
+        'qa'
+      )).toBe('passed')
+    })
+
+    it('detects "already complete" as pass for qa-coordination', () => {
+      expect(parseWorkResult(
+        'QA coordination is already complete. No further action needed.',
+        'qa-coordination'
+      )).toBe('passed')
+    })
+
+    it('detects "APPROVED FOR MERGE" as pass', () => {
+      expect(parseWorkResult(
+        '**Status: APPROVED FOR MERGE**\n\nAll checks passed.',
+        'qa-coordination'
+      )).toBe('passed')
+    })
+
+    it('detects "all checks passed" as pass', () => {
+      expect(parseWorkResult(
+        'The report was posted to Linear and all checks passed.',
+        'qa'
+      )).toBe('passed')
+    })
+
+    it('detects "QA Coordination Complete" inline text as pass', () => {
+      expect(parseWorkResult(
+        'QA Coordination Complete for SUP-1145\n\nFound and fixed 2 blocking rework issues.',
+        'qa-coordination'
+      )).toBe('passed')
+    })
+
+    it('detects "QA Complete" inline text as pass', () => {
+      expect(parseWorkResult(
+        'QA Complete — all sub-issues verified.',
+        'qa'
+      )).toBe('passed')
+    })
+
+    it('fail patterns take precedence over "QA Complete" when fail indicators present', () => {
+      expect(parseWorkResult(
+        '## QA Complete\n\nStatus: 3 Issues Found\n\nQA Coordination Complete',
+        'qa-coordination'
+      )).toBe('failed')
+    })
   })
 
   // Acceptance heuristic pattern tests

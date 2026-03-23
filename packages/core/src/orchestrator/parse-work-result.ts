@@ -1,4 +1,4 @@
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from './work-types.js'
 import type { AgentWorkResult } from './types.js'
 
 /**
@@ -26,6 +26,14 @@ const QA_PASS_PATTERNS = [
   /Roll-?Up\s+Verdict:\s*PASS/i,
   // Bold standalone PASS (agents commonly output **PASS** or **PASS.**)
   /\*\*PASS\.?\*\*/,
+  // "Already done" patterns — agent recognized prior QA passed, treat as pass
+  /\b(?:QA\s+(?:coordination\s+)?)?(?:is\s+)?already\s+(?:done|complete|completed)\b/i,
+  // "APPROVED FOR MERGE" — explicit approval language
+  /\bAPPROVED\s+FOR\s+MERGE\b/i,
+  // "all checks passed" — agent confirmed all checks passed
+  /\ball\s+checks\s+passed\b/i,
+  // "QA Coordination Complete" / "QA Complete" — inline text (not heading)
+  /\bQA\s+(?:Coordination\s+)?Complete\b/i,
 ]
 
 const QA_FAIL_PATTERNS = [
@@ -139,7 +147,7 @@ export function parseWorkResult(
     }
   }
 
-  if (workType === 'coordination') {
+  if (workType === 'coordination' || workType === 'inflight-coordination') {
     if (COORDINATION_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }

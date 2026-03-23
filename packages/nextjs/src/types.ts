@@ -6,7 +6,8 @@
  */
 
 import type { NextRequest, NextResponse } from 'next/server'
-import type { LinearAgentClient, AgentWorkType, SubIssueStatus, WorkflowContext } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import type { LinearAgentClient, SubIssueStatus, WorkflowContext } from '@renseiai/plugin-linear'
 
 /**
  * Resolves a Linear client for a given organization.
@@ -42,7 +43,7 @@ export interface AutoTriggerConfig {
  * Configuration for the webhook processor.
  *
  * `generatePrompt` is optional — if not provided, falls back to
- * `defaultGeneratePrompt` from @renseiai/agentfactory-linear.
+ * `defaultGeneratePrompt` from @renseiai/plugin-linear.
  */
 export interface WebhookConfig extends RouteConfig {
   webhookSecret?: string // falls back to LINEAR_WEBHOOK_SECRET

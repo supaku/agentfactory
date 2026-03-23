@@ -7,7 +7,7 @@
  */
 
 import Handlebars from 'handlebars'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '../orchestrator/work-types.js'
 import type {
   WorkflowTemplate,
   TemplateContext,

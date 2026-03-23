@@ -25,6 +25,7 @@ export function defaultGetPriority(workType: AgentWorkType): number {
     case 'refinement':
     case 'refinement-coordination':
     case 'inflight':
+    case 'inflight-coordination':
     case 'coordination':
     case 'qa-coordination':
     case 'acceptance-coordination':

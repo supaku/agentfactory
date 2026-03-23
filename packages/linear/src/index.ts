@@ -189,3 +189,11 @@ export {
 // Platform adapter (Governor event integration)
 export { LinearPlatformAdapter } from './platform-adapter.js'
 export type { GovernorIssue as LinearGovernorIssue } from './platform-adapter.js'
+
+// Issue tracker adapter (implements core's IssueTrackerClient)
+export { LinearIssueTrackerClient, createLinearStatusMappings } from './issue-tracker-adapter.js'
+
+// Tool plugin and runner (moved from core)
+export { linearPlugin } from './tools/linear-plugin.js'
+export { runLinear, parseLinearArgs } from './tools/linear-runner.js'
+export type { LinearRunnerConfig, LinearRunnerResult } from './tools/linear-runner.js'

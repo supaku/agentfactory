@@ -42,7 +42,7 @@ import {
 } from './lib/governor-logger.js'
 import { getVersion, checkForUpdate, printUpdateNotification } from './lib/version.js'
 import { maybeAutoUpdate, isAutoUpdateEnabled } from './lib/auto-updater.js'
-import { createLinearAgentClient, type LinearAgentClient, type LinearApiQuota } from '@renseiai/agentfactory-linear'
+import { createLinearAgentClient, type LinearAgentClient, type LinearApiQuota } from '@renseiai/plugin-linear'
 import { createLogger, initTouchpointStorage } from '@renseiai/agentfactory'
 import {
   RedisOverrideStorage,
@@ -52,7 +52,7 @@ import {
   createRedisCircuitBreaker,
 } from '@renseiai/agentfactory-server'
 import type { GovernorDependencies, GovernorIssue, GovernorAction, ScanResult } from '@renseiai/agentfactory'
-import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@renseiai/agentfactory-linear'
+import type { RateLimiterStrategy, CircuitBreakerStrategy } from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // Logger

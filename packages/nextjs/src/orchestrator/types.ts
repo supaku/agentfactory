@@ -3,7 +3,7 @@
  */
 
 import type { AgentProcess, StopAgentResult, ForwardPromptResult } from '@renseiai/agentfactory'
-import type { RetryConfig } from '@renseiai/agentfactory-linear'
+import type { RetryConfig } from '@renseiai/plugin-linear'
 
 /**
  * Configuration for the webhook orchestrator.

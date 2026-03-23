@@ -17,7 +17,12 @@ import {
   type AgentOrchestrator,
   type Logger,
 } from '@renseiai/agentfactory'
-import type { AgentWorkType } from '@renseiai/agentfactory-linear'
+import {
+  LinearIssueTrackerClient,
+  createLinearStatusMappings,
+  linearPlugin,
+  type AgentWorkType,
+} from '@renseiai/plugin-linear'
 
 // ---------------------------------------------------------------------------
 // Public config interface
@@ -615,10 +620,16 @@ export async function runWorker(
       )
 
       // Create orchestrator with API activity proxy
+      const issueTrackerClient = new LinearIssueTrackerClient({ apiKey: linearApiKey! })
+      const statusMappings = createLinearStatusMappings()
+
       const orchestrator = createOrchestrator(
         {
           maxConcurrent: 1,
           worktreePath: path.resolve(gitRoot, '.worktrees'),
+          issueTrackerClient,
+          statusMappings,
+          toolPlugins: [linearPlugin],
           apiActivityConfig: {
             baseUrl: workerConfig.apiUrl,
             apiKey: workerConfig.apiKey,

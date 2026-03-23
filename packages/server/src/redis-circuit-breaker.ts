@@ -11,13 +11,13 @@
  * - `linear:circuit:{workspaceId}:opened_at` — timestamp when circuit was opened
  * - `linear:circuit:{workspaceId}:reset_timeout` — current reset timeout (for backoff)
  *
- * Implements CircuitBreakerStrategy from @renseiai/agentfactory-linear
+ * Implements CircuitBreakerStrategy from @renseiai/plugin-linear
  * so it can be injected into LinearAgentClient.
  */
 
 import { getRedisClient } from './redis.js'
 import { createLogger } from './logger.js'
-import type { CircuitBreakerStrategy, CircuitBreakerConfig } from '@renseiai/agentfactory-linear'
+import type { CircuitBreakerStrategy, CircuitBreakerConfig } from '@renseiai/plugin-linear'
 
 const log = createLogger('redis-circuit-breaker')
 

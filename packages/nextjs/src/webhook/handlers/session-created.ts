@@ -3,7 +3,8 @@
  */
 
 import { NextResponse } from 'next/server'
-import type { LinearWebhookPayload, AgentWorkType } from '@renseiai/agentfactory-linear'
+import type { AgentWorkType } from '@renseiai/agentfactory'
+import type { LinearWebhookPayload } from '@renseiai/plugin-linear'
 import {
   TERMINAL_STATUSES,
   validateWorkTypeForStatus,
@@ -12,7 +13,7 @@ import {
   getValidWorkTypesForStatus,
   buildFailureContextBlock,
   type WorkflowContext,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 import {
   generateIdempotencyKey,
   isWebhookProcessed,
@@ -22,6 +23,12 @@ import {
   dispatchWork,
   type QueuedWork,
   getWorkflowState,
+  checkSessionFailureBackoff,
+  clearSessionFailures,
+  getTotalSessionCount,
+  MAX_TOTAL_SESSIONS,
+  incrementDispatchCount,
+  getDispatchCount,
 } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
 import {
@@ -141,7 +148,8 @@ export async function handleSessionCreated(
     // For mentions: unconstrained detection (pass all work types)
     const allWorkTypes: AgentWorkType[] = [
       'coordination', 'backlog-creation', 'research', 'qa', 'inflight',
-      'acceptance', 'refinement', 'development', 'qa-coordination', 'acceptance-coordination',
+      'inflight-coordination', 'acceptance', 'refinement', 'development',
+      'qa-coordination', 'acceptance-coordination',
     ]
     const mentionWorkType = config.detectWorkTypeFromPrompt(promptContext, allWorkTypes)
     if (mentionWorkType) {
@@ -181,17 +189,19 @@ export async function handleSessionCreated(
   }
 
   // Phase 2.5: Auto-detect parent/child issues for coordination routing
-  // Apply to all status-derived work types that have coordination variants
-  const coordinationUpgradeable = workTypeSource === 'status' && (
-    workType === 'development' || workType === 'refinement'
-  )
+  // Apply to ALL work types that have coordination variants, regardless of
+  // whether the work type was derived from status or mention. Parent issues
+  // with sub-issues must always use coordination agents.
+  const coordinationUpgradeable =
+    workType === 'development' || workType === 'refinement' ||
+    workType === 'qa' || workType === 'acceptance'
   if (coordinationUpgradeable) {
     try {
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
       // Skip child/sub-issues for non-mention sessions — these are managed
       // by the parent issue's coordinator agent, not dispatched independently.
-      if (workType === 'development') {
+      if (workTypeSource === 'status' && workType === 'development') {
         const isChild = await linearClient.isChildIssue(issueId)
         if (isChild) {
           sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
@@ -220,7 +230,10 @@ export async function handleSessionCreated(
       const isParent = await linearClient.isParentIssue(issueId)
       if (isParent) {
         if (workType === 'development') workType = 'coordination'
+        else if (workType === 'inflight') workType = 'inflight-coordination'
         else if (workType === 'refinement') workType = 'refinement-coordination'
+        else if (workType === 'qa') workType = 'qa-coordination'
+        else if (workType === 'acceptance') workType = 'acceptance-coordination'
         sessionLog.info('Parent issue detected, switching to coordination work type', {
           issueIdentifier,
           workType,
@@ -283,6 +296,100 @@ export async function handleSessionCreated(
         message: validation.error,
       })
     }
+  }
+
+  // Session failure circuit breaker — prevent runaway retry loops.
+  // Mentions bypass the backoff timer (user explicitly asked for a retry)
+  // but NOT the hard stop (too many consecutive failures need human investigation).
+  const failureCheck = await checkSessionFailureBackoff(issueId)
+  if (!failureCheck.allowed) {
+    const isHardStop = failureCheck.reason === 'hard_stop'
+    const canBypass = isMention && !isHardStop
+
+    if (!canBypass) {
+      sessionLog.warn('Session dispatch blocked by failure circuit breaker', {
+        reason: failureCheck.reason,
+        failureCount: failureCheck.failureCount,
+        backoffRemainingS: failureCheck.backoffRemainingS,
+        isMention,
+      })
+
+      try {
+        const linearClient = await config.linearClient.getClient(payload.organizationId)
+        await emitActivity(
+          linearClient,
+          sessionId,
+          'response',
+          failureCheck.message ?? 'Agent dispatch paused due to repeated failures.'
+        )
+      } catch (err) {
+        sessionLog.warn('Failed to emit circuit breaker activity', { error: err })
+      }
+
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        reason: `session_failure_${failureCheck.reason}`,
+        failureCount: failureCheck.failureCount,
+        backoffRemainingS: failureCheck.backoffRemainingS,
+      })
+    }
+
+    // Mention bypassing backoff — clear failures so the retry starts fresh
+    sessionLog.info('Mention bypassing session failure backoff', {
+      failureCount: failureCheck.failureCount,
+    })
+    await clearSessionFailures(issueId)
+  }
+
+  // Total session hard cap — prevent infinite dispatch loops.
+  // Uses two counters: workflow-state-based (tracks phase-recorded sessions)
+  // and dispatch counter (tracks ALL dispatches including no-op sessions).
+  // When an issue accumulates too many sessions (e.g., agent keeps completing
+  // without producing a WORK_RESULT marker, leaving the issue in a non-terminal
+  // state that triggers new auto-sessions), this cap stops the cycle.
+  // Mentions bypass only if under 2× the cap (absolute safety valve).
+  try {
+    const [totalSessions, dispatchCount] = await Promise.all([
+      getTotalSessionCount(issueId),
+      getDispatchCount(issueId),
+    ])
+    const effectiveCount = Math.max(totalSessions, dispatchCount)
+
+    if (effectiveCount >= MAX_TOTAL_SESSIONS) {
+      const canBypassCap = isMention && effectiveCount < MAX_TOTAL_SESSIONS * 2
+      if (!canBypassCap) {
+        sessionLog.warn('Session hard cap reached, blocking dispatch', {
+          totalSessions,
+          dispatchCount,
+          effectiveCount,
+          maxTotalSessions: MAX_TOTAL_SESSIONS,
+          isMention,
+        })
+
+        try {
+          const linearClient = await config.linearClient.getClient(payload.organizationId)
+          await emitActivity(
+            linearClient,
+            sessionId,
+            'response',
+            `⚠️ **Session hard cap reached** (${effectiveCount}/${MAX_TOTAL_SESSIONS}). ` +
+            `No more automated sessions will be created for this issue. Manual intervention required.`
+          )
+        } catch (err) {
+          sessionLog.warn('Failed to emit session cap activity', { error: err })
+        }
+
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          reason: 'session_hard_cap',
+          totalSessions: effectiveCount,
+        })
+      }
+    }
+  } catch (err) {
+    sessionLog.warn('Failed to check total session count', { error: err })
   }
 
   // Extract PR info for QA/acceptance agents so they know which PRs to validate
@@ -394,6 +501,13 @@ export async function handleSessionCreated(
   const result = await dispatchWork(work)
 
   if (result.dispatched || result.parked) {
+    // Increment per-issue dispatch counter for hard cap enforcement
+    try {
+      await incrementDispatchCount(issueId)
+    } catch (err) {
+      sessionLog.warn('Failed to increment dispatch count', { error: err })
+    }
+
     sessionLog.info('Work dispatched', {
       sessionId,
       issueIdentifier,

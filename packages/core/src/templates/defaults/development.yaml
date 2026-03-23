@@ -22,6 +22,7 @@ prompt: |
   {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{> partials/commit-push-pr}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

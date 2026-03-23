@@ -30,6 +30,10 @@ describe('getWorktreeIdentifier', () => {
     expect(getWorktreeIdentifier('SUP-123', 'inflight')).toBe('SUP-123-INF')
   })
 
+  it('returns identifier with INF-COORD suffix for inflight-coordination', () => {
+    expect(getWorktreeIdentifier('SUP-123', 'inflight-coordination')).toBe('SUP-123-INF-COORD')
+  })
+
   it('returns identifier with REF suffix for refinement', () => {
     expect(getWorktreeIdentifier('SUP-123', 'refinement')).toBe('SUP-123-REF')
   })

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: commit-push-pr
+  description: Mandatory commit, push, and PR creation instructions for code-producing work types
+content: |
+
+  MANDATORY — PERSIST YOUR WORK (non-negotiable):
+  Your work is NOT done until all three steps are complete:
+  1. COMMIT: git add <files> && git commit -m "descriptive message"
+  2. PUSH: git push -u origin $(git branch --show-current)
+  3. PR: gh pr create --title "..." --body "..."
+  If you skip any step, your work will be LOST when the session ends.
+  The orchestrator will mark your work as FAILED if no PR is detected.
+  Do NOT report completion until the PR URL appears in your output.

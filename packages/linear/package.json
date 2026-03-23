@@ -1,6 +1,6 @@
 {
-  "name": "@renseiai/agentfactory-linear",
-  "version": "0.8.4",
+  "name": "@renseiai/plugin-linear",
+  "version": "0.8.6",
   "type": "module",
   "description": "Linear issue tracker integration for AgentFactory — status transitions, agent sessions, work routing",
   "author": "Rensei AI (https://rensei.ai)",
@@ -44,6 +44,18 @@
   ],
   "dependencies": {
     "@linear/sdk": "^70.0.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.7",
+    "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^22.5.4",

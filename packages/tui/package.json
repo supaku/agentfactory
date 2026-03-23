@@ -1,0 +1,6 @@
+{
+  "name": "@renseiai/agentfactory-tui",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Terminal fleet dashboard for AgentFactory"
+}

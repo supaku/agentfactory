@@ -21,7 +21,7 @@ import {
   type LinearAgentClient,
   type CircuitBreakerStrategy,
   type RateLimiterStrategy,
-} from '@renseiai/agentfactory-linear'
+} from '@renseiai/plugin-linear'
 import {
   getAccessToken,
   isRedisConfigured,

@@ -37,7 +37,7 @@ AgentFactory is split into six packages:
 | Package | Responsibility |
 |---------|---------------|
 | `@renseiai/agentfactory` | Core orchestrator, provider abstraction, crash recovery |
-| `@renseiai/agentfactory-linear` | Linear API integration, sessions, status transitions |
+| `@renseiai/plugin-linear` | Linear API integration, sessions, status transitions |
 | `@renseiai/agentfactory-server` | Redis work queue, session storage, distributed workers |
 | `@renseiai/agentfactory-cli` | CLI tools for local and remote operation |
 | `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
@@ -50,20 +50,20 @@ AgentFactory is split into six packages:
 
 @renseiai/agentfactory-nextjs
   ├── @renseiai/agentfactory (core)
-  ├── @renseiai/agentfactory-linear
+  ├── @renseiai/plugin-linear
   └── @renseiai/agentfactory-server
 
 @renseiai/agentfactory-cli
   ├── @renseiai/agentfactory (core)
-  ├── @renseiai/agentfactory-linear
+  ├── @renseiai/plugin-linear
   └── @renseiai/agentfactory-server
 
 @renseiai/agentfactory-server
   ├── @renseiai/agentfactory (core)
-  └── @renseiai/agentfactory-linear
+  └── @renseiai/plugin-linear
 ```
 
-For a full webhook-driven setup, install `@renseiai/agentfactory-nextjs` (it pulls in all dependencies). For CLI-only local orchestration, install `@renseiai/agentfactory` and `@renseiai/agentfactory-linear`.
+For a full webhook-driven setup, install `@renseiai/agentfactory-nextjs` (it pulls in all dependencies). For CLI-only local orchestration, install `@renseiai/agentfactory` and `@renseiai/plugin-linear`.
 
 ## Core Components
 

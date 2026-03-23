@@ -72,6 +72,12 @@ const workTypes: Record<string, WorkTypeConfig> = {
     bgColor: 'bg-yellow-400/10',
     borderColor: 'border-yellow-400/15',
   },
+  'inflight-coordination': {
+    label: 'Inflight Coord',
+    color: 'text-yellow-300',
+    bgColor: 'bg-yellow-300/10',
+    borderColor: 'border-yellow-300/15',
+  },
   refinement: {
     label: 'Refinement',
     color: 'text-lime-400',

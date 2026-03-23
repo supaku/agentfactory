@@ -116,7 +116,7 @@ This is a [Next.js](https://nextjs.org) application that provides:
 | `@renseiai/agentfactory-nextjs` | Route handlers and middleware |
 | `@renseiai/agentfactory-dashboard` | UI components and pages |
 | `@renseiai/agentfactory-server` | Redis-backed session/worker persistence |
-| `@renseiai/agentfactory-linear` | Linear SDK client |
+| `@renseiai/plugin-linear` | Linear SDK client |
 
 ## Platform Comparison
 
@@ -138,7 +138,7 @@ This template lives in the [AgentFactory monorepo](https://github.com/renseiai/a
 To manually update package versions:
 
 ```bash
-npm install @renseiai/agentfactory@latest @renseiai/agentfactory-linear@latest \
+npm install @renseiai/agentfactory@latest @renseiai/plugin-linear@latest \
   @renseiai/agentfactory-nextjs@latest @renseiai/agentfactory-server@latest \
   @renseiai/agentfactory-dashboard@latest @renseiai/agentfactory-cli@latest
 ```

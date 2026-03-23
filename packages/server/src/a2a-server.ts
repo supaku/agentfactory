@@ -79,6 +79,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Continue work on in-progress tasks',
     tags: ['workflow'],
   },
+  'inflight-coordination': {
+    id: 'inflight-coordination',
+    name: 'In-Flight Coordination',
+    description: 'Resume coordination of sub-issues for in-progress parent tasks',
+    tags: ['workflow', 'coordination'],
+  },
   acceptance: {
     id: 'acceptance-review',
     name: 'Acceptance Review',
