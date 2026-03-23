@@ -12,53 +12,66 @@ func renderMetadata(s api.SessionDetail, width int) string {
 	labelStyle := theme.StatLabel()
 	valueStyle := theme.StatValue()
 
-	wtColor := theme.GetWorkTypeColor(s.WorkType)
-	wtLabel := theme.GetWorkTypeLabel(s.WorkType)
+	// Row 1: Issue title
+	issueTitle := "--"
+	if s.IssueTitle != nil {
+		issueTitle = *s.IssueTitle
+	}
+	maxTitleLen := width - 14 // "  Issue:  " prefix + padding
+	if maxTitleLen < 20 {
+		maxTitleLen = 20
+	}
+	if len(issueTitle) > maxTitleLen {
+		issueTitle = issueTitle[:maxTitleLen-3] + "..."
+	}
+	row1 := "  " + labelStyle.Render("Issue: ") + valueStyle.Render(issueTitle)
 
-	colWidth := (width - 4) / 4
-	if colWidth < 14 {
-		colWidth = 14
+	// Row 2: Branch, Provider, Cost
+	branchVal := "--"
+	if s.Branch != nil {
+		branchVal = *s.Branch
+	}
+	providerVal := format.ProviderName(s.Provider)
+	costVal := format.Cost(s.CostUsd)
+
+	row2Parts := []string{
+		labelStyle.Render("Branch: ") + valueStyle.Render(branchVal),
+		labelStyle.Render("Provider: ") + theme.Muted().Render(providerVal),
+		labelStyle.Render("Cost: ") + theme.StatValueTeal().Render(costVal),
+	}
+	row2 := "  " + lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width((width-4)/3).Render(row2Parts[0]),
+		lipgloss.NewStyle().Width((width-4)/3).Render(row2Parts[1]),
+		lipgloss.NewStyle().Width((width-4)/3).Render(row2Parts[2]),
+	)
+
+	rows := []string{row1, row2}
+
+	// Row 3: Duration, Tokens (skip for narrow terminals)
+	if width >= 80 {
+		durationVal := format.Duration(s.Duration)
+		inputTokens := format.Tokens(s.InputTokens)
+		outputTokens := format.Tokens(s.OutputTokens)
+		tokensVal := inputTokens + " in / " + outputTokens + " out"
+
+		row3Parts := []string{
+			labelStyle.Render("Duration: ") + valueStyle.Render(durationVal),
+			labelStyle.Render("Tokens: ") + theme.Muted().Render(tokensVal),
+		}
+		row3 := "  " + lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.NewStyle().Width((width-4)/3).Render(row3Parts[0]),
+			lipgloss.NewStyle().Width((width-4)*2/3).Render(row3Parts[1]),
+		)
+		rows = append(rows, row3)
 	}
 
-	cols := []string{
-		lipgloss.NewStyle().Width(colWidth).Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				labelStyle.Render("WORK TYPE"),
-				lipgloss.NewStyle().Foreground(wtColor).Bold(true).Render(wtLabel),
-			),
-		),
-		lipgloss.NewStyle().Width(colWidth).Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				labelStyle.Render("DURATION"),
-				valueStyle.Render(format.Duration(s.Duration)),
-			),
-		),
-		lipgloss.NewStyle().Width(colWidth).Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				labelStyle.Render("COST"),
-				theme.StatValueTeal().Render(format.Cost(nil)),
-			),
-		),
-		lipgloss.NewStyle().Width(colWidth).Render(
-			lipgloss.JoinVertical(lipgloss.Left,
-				labelStyle.Render("STARTED"),
-				valueStyle.Render(format.Timestamp(s.StartedAt)),
-			),
-		),
-	}
-
-	// For narrow terminals, use 2 columns
-	if width < 80 {
-		cols = cols[:2]
-	}
-
-	row := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
+	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return lipgloss.NewStyle().
-		Padding(0, 1).
+		Padding(0, 0).
 		Width(width).
 		BorderBottom(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(theme.SurfaceBorder).
-		Render(row)
+		Render(content)
 }

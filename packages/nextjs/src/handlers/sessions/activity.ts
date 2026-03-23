@@ -9,6 +9,7 @@ import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import { getSessionState, createLogger } from '@renseiai/agentfactory-server'
 import { createAgentSession } from '@renseiai/plugin-linear'
 import type { RouteConfig } from '../../types.js'
+import { storeActivity } from './activity-store.js'
 
 const log = createLogger('api:sessions:activity')
 
@@ -66,6 +67,14 @@ export function createSessionActivityHandler(config: RouteConfig) {
           { status: 403 }
         )
       }
+
+      // Store activity for TUI streaming
+      storeActivity(sessionId, {
+        type: activity.type,
+        content: activity.content,
+        toolName: activity.toolName,
+        timestamp: activity.timestamp || new Date().toISOString(),
+      })
 
       // Skip Linear forwarding for governor-generated fake session IDs.
       // When the governor can't create a real agent session on Linear (e.g., OAuth

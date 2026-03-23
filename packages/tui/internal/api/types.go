@@ -54,17 +54,50 @@ type SessionTimeline struct {
 
 // SessionDetail is the inner session object in the detail response.
 type SessionDetail struct {
-	ID         string          `json:"id"`
-	Identifier string          `json:"identifier"`
-	Status     SessionStatus   `json:"status"`
-	WorkType   string          `json:"workType"`
-	StartedAt  string          `json:"startedAt"`
-	Duration   int             `json:"duration"`
-	Timeline   SessionTimeline `json:"timeline"`
+	ID           string          `json:"id"`
+	Identifier   string          `json:"identifier"`
+	Status       SessionStatus   `json:"status"`
+	WorkType     string          `json:"workType"`
+	StartedAt    string          `json:"startedAt"`
+	Duration     int             `json:"duration"`
+	Timeline     SessionTimeline `json:"timeline"`
+	Provider     *string         `json:"provider,omitempty"`
+	Branch       *string         `json:"branch,omitempty"`
+	IssueTitle   *string         `json:"issueTitle,omitempty"`
+	CostUsd      *float64        `json:"costUsd,omitempty"`
+	InputTokens  *int            `json:"inputTokens,omitempty"`
+	OutputTokens *int            `json:"outputTokens,omitempty"`
 }
 
 // SessionDetailResponse matches GET /api/public/sessions/:id.
 type SessionDetailResponse struct {
 	Session   SessionDetail `json:"session"`
 	Timestamp string        `json:"timestamp"`
+}
+
+// ActivityType represents the type of an agent activity event.
+type ActivityType string
+
+const (
+	ActivityThought  ActivityType = "thought"
+	ActivityAction   ActivityType = "action"
+	ActivityResponse ActivityType = "response"
+	ActivityError    ActivityType = "error"
+	ActivityProgress ActivityType = "progress"
+)
+
+// ActivityEvent represents a single activity from the streaming API.
+type ActivityEvent struct {
+	ID        string       `json:"id"`
+	Type      ActivityType `json:"type"`
+	Content   string       `json:"content"`
+	ToolName  *string      `json:"toolName,omitempty"`
+	Timestamp string       `json:"timestamp"`
+}
+
+// ActivityListResponse matches GET /api/public/sessions/:id/activities.
+type ActivityListResponse struct {
+	Activities    []ActivityEvent `json:"activities"`
+	Cursor        *string         `json:"cursor,omitempty"`
+	SessionStatus SessionStatus   `json:"sessionStatus"`
 }

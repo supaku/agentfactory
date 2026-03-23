@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import { getSessionState, createLogger } from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
+import { storeActivity } from './activity-store.js'
 
 const log = createLogger('api:sessions:progress')
 
@@ -71,6 +72,13 @@ export function createSessionProgressHandler(config: RouteConfig) {
           { status: 403 }
         )
       }
+
+      // Store progress as activity for TUI streaming
+      storeActivity(sessionId, {
+        type: 'progress',
+        content: message,
+        timestamp: new Date().toISOString(),
+      })
 
       // Skip Linear forwarding for governor-generated fake session IDs.
       if (sessionId.startsWith('governor-')) {
