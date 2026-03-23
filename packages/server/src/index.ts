@@ -72,3 +72,10 @@ export * from './a2a-types.js'
 
 // A2A Server (AgentCard + JSON-RPC handlers)
 export * from './a2a-server.js'
+
+// Fleet supervision (Erlang-inspired)
+export * from './fleet-supervisor-types.js'
+export * from './supervisor-storage.js'
+export * from './health-probes.js'
+export * from './stuck-decision-tree.js'
+export * from './patrol-loop.js'
