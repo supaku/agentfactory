@@ -1,0 +1,63 @@
+{
+  "name": "@renseiai/agentfactory-code-intelligence",
+  "version": "0.8.4",
+  "type": "module",
+  "description": "Code intelligence for AgentFactory — tree-sitter AST parsing, BM25 search, incremental indexing, memory deduplication",
+  "author": "Rensei AI (https://rensei.ai)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RenseiAI/agentfactory.git",
+    "directory": "packages/code-intelligence"
+  },
+  "homepage": "https://github.com/RenseiAI/agentfactory/tree/main/packages/code-intelligence",
+  "bugs": {
+    "url": "https://github.com/RenseiAI/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "code-intelligence",
+    "tree-sitter",
+    "bm25",
+    "search",
+    "agent",
+    "ast"
+  ],
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "xxhash-wasm": "^1.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
+  }
+}

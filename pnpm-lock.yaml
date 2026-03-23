@@ -49,6 +49,25 @@ importers:
         specifier: ^3.2.3
         version: 3.2.4(@types/node@22.19.10)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/code-intelligence:
+    dependencies:
+      xxhash-wasm:
+        specifier: ^1.1.0
+        version: 1.1.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.19.10
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.3
+        version: 3.2.4(@types/node@22.19.10)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/core:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
@@ -2678,6 +2697,9 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  xxhash-wasm@1.1.0:
+    resolution: {integrity: sha512-147y/6YNh+tlp6nd/2pWq38i9h6mz/EuQ6njIrmW8D1BS5nCqs0P6DG+m6zTGnNz5I+uhZ0SHxBs9BsPrwcKDA==}
+
   yaml@2.8.2:
     resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
     engines: {node: '>= 14.6'}
@@ -4911,6 +4933,8 @@ snapshots:
       strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
+
+  xxhash-wasm@1.1.0: {}
 
   yaml@2.8.2: {}
 

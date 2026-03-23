@@ -9,4 +9,5 @@ export default defineWorkspace([
   'packages/mcp-server',
   'packages/dashboard',
   'packages/test-utils',
+  'packages/code-intelligence',
 ])
