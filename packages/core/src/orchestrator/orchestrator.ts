@@ -3075,6 +3075,21 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     if (!effectiveWorkType) {
       const statusName = issue.status ?? 'Backlog'
       effectiveWorkType = await this.detectWorkType(issueId, statusName)
+    } else {
+      // Re-validate: upgrade to coordination variant if this is a parent issue
+      // The caller may have a stale work type from before the session was queued
+      try {
+        const isParent = await this.client.isParentIssue(issueId)
+        if (isParent) {
+          const upgraded = detectWorkType(issue.status ?? 'Backlog', isParent, this.statusMappings.statusToWorkType)
+          if (upgraded !== effectiveWorkType) {
+            console.log(`Upgrading work type from ${effectiveWorkType} to ${upgraded} (parent issue detected)`)
+            effectiveWorkType = upgraded
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to check parent status for coordination upgrade:`, err)
+      }
     }
 
     // Create isolated worktree for the agent
