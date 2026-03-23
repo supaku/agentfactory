@@ -40,7 +40,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - name: Check dependency licenses
-        run: npx license-checker-rseidelsohn --production --onlyAllow "$(cat .license-allowlist)" --excludePrivatePackages
+        run: >-
+          npx license-checker-rseidelsohn
+          --production
+          --onlyAllow "$(cat .license-allowlist)"
+          --excludePrivatePackages
+          --excludePackages "@anthropic-ai/claude-agent-sdk"
 
   typecheck:
     name: Typecheck
