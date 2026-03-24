@@ -57,6 +57,9 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'refinement coordination', 'refine sub-issues', 'refine all sub-issues',
     'triage failures', 'route feedback',
   ],
+  'merge': [
+    'merge queue', 'add to merge queue', 'enqueue merge', 'merge this',
+  ],
 }
 
 /**

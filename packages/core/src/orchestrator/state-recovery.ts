@@ -285,6 +285,7 @@ export function getTaskListId(
     'refinement-coordination': 'REF-COORD',
     'qa-coordination': 'QA-COORD',
     'acceptance-coordination': 'AC-COORD',
+    merge: 'MRG',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

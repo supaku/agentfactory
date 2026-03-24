@@ -48,6 +48,7 @@ import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
+import { createMergeQueueAdapter } from '../merge-queue/index.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -118,7 +119,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -857,7 +858,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -907,6 +908,8 @@ export class AgentOrchestrator {
   private validateCommand?: string
   // Tool plugin registry for in-process agent tools
   private readonly toolRegistry: ToolRegistry
+  // Merge queue adapter for automated merge operations (initialized from config or repo config)
+  private mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
   // Git repository root for running git commands (resolved from worktreePath or cwd)
   private readonly gitRoot: string
 
@@ -1026,10 +1029,27 @@ export class AgentOrchestrator {
           }
           // Store providers config for per-spawn resolution
           this.configProviders = getProvidersConfig(repoConfig)
+
+          // Initialize merge queue adapter from repository config
+          if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
+            try {
+              this.mergeQueueAdapter = createMergeQueueAdapter(
+                repoConfig.mergeQueue.provider ?? 'github-native'
+              )
+              console.log(`[orchestrator] Merge queue adapter initialized: ${repoConfig.mergeQueue.provider ?? 'github-native'}`)
+            } catch (error) {
+              console.warn(`[orchestrator] Failed to initialize merge queue adapter: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
         }
       }
     } catch (err) {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
+    }
+
+    // Accept merge queue adapter passed directly via config (takes precedence over repo config)
+    if (config.mergeQueueAdapter) {
+      this.mergeQueueAdapter = config.mergeQueueAdapter
     }
 
     // Initialize tool plugin registry with injected plugins

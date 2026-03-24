@@ -121,6 +121,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Coordinate refinement across sub-issues after QA/acceptance failure',
     tags: ['refinement', 'coordination'],
   },
+  merge: {
+    id: 'merge-queue',
+    name: 'Merge Queue',
+    description: 'Add approved PRs to the merge queue for automated merging',
+    tags: ['merge', 'automation'],
+  },
 }
 
 /**
