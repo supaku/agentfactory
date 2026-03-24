@@ -93,6 +93,8 @@ export { createPublicSessionsListHandler } from './handlers/public/sessions-list
 export type { PublicSessionResponse } from './handlers/public/sessions-list.js'
 export { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
 export type { PublicSessionDetailResponse } from './handlers/public/session-detail.js'
+export { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
+export type { PublicRoutingMetricsResponse } from './handlers/public/routing-metrics.js'
 export { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
 export type { PublicActivityResponse } from './handlers/public/session-activities.js'
 

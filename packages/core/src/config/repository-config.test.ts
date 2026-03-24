@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath, getProvidersConfig, ProvidersConfigSchema } from './repository-config.js'
+import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath, getProvidersConfig, getRoutingConfig, ProvidersConfigSchema, RoutingConfigSectionSchema } from './repository-config.js'
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -619,5 +619,165 @@ describe('getProvidersConfig', () => {
       kind: 'RepositoryConfig',
     })
     expect(getProvidersConfig(config)).toBeUndefined()
+  })
+})
+
+describe('RoutingConfigSectionSchema', () => {
+  it('validates a complete routing config', () => {
+    const result = RoutingConfigSectionSchema.parse({
+      enabled: true,
+      explorationRate: 0.2,
+      windowSize: 200,
+      discountFactor: 0.95,
+      minObservationsForExploit: 10,
+      changeDetectionThreshold: 0.3,
+    })
+    expect(result.enabled).toBe(true)
+    expect(result.explorationRate).toBe(0.2)
+    expect(result.windowSize).toBe(200)
+    expect(result.discountFactor).toBe(0.95)
+    expect(result.minObservationsForExploit).toBe(10)
+    expect(result.changeDetectionThreshold).toBe(0.3)
+  })
+
+  it('applies defaults when only enabled is provided', () => {
+    const result = RoutingConfigSectionSchema.parse({ enabled: true })
+    expect(result.enabled).toBe(true)
+    expect(result.explorationRate).toBe(0.1)
+    expect(result.windowSize).toBe(100)
+    expect(result.discountFactor).toBe(0.99)
+    expect(result.minObservationsForExploit).toBe(5)
+    expect(result.changeDetectionThreshold).toBe(0.2)
+  })
+
+  it('applies defaults for an empty object (enabled defaults to false)', () => {
+    const result = RoutingConfigSectionSchema.parse({})
+    expect(result.enabled).toBe(false)
+    expect(result.explorationRate).toBe(0.1)
+  })
+
+  it('rejects explorationRate outside 0-1 range', () => {
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, explorationRate: 1.5 })).toThrow()
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, explorationRate: -0.1 })).toThrow()
+  })
+
+  it('rejects non-positive windowSize', () => {
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, windowSize: 0 })).toThrow()
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, windowSize: -1 })).toThrow()
+  })
+
+  it('rejects discountFactor outside 0-1 range', () => {
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, discountFactor: 1.1 })).toThrow()
+  })
+
+  it('rejects negative minObservationsForExploit', () => {
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, minObservationsForExploit: -1 })).toThrow()
+  })
+
+  it('rejects negative changeDetectionThreshold', () => {
+    expect(() => RoutingConfigSectionSchema.parse({ enabled: true, changeDetectionThreshold: -0.1 })).toThrow()
+  })
+})
+
+describe('RepositoryConfigSchema with routing', () => {
+  it('validates config with routing field', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      routing: {
+        enabled: true,
+        explorationRate: 0.05,
+      },
+    })
+    expect(result.routing).toBeDefined()
+    expect(result.routing!.enabled).toBe(true)
+    expect(result.routing!.explorationRate).toBe(0.05)
+    // Defaults should be applied
+    expect(result.routing!.windowSize).toBe(100)
+  })
+
+  it('validates config without routing field', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(result.routing).toBeUndefined()
+  })
+
+  it('validates config with both providers and routing', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      providers: { default: 'codex' },
+      routing: { enabled: true },
+    })
+    expect(result.providers).toEqual({ default: 'codex' })
+    expect(result.routing!.enabled).toBe(true)
+  })
+})
+
+describe('loadRepositoryConfig with routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('parses config with routing section', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+routing:
+  enabled: true
+  explorationRate: 0.05
+  windowSize: 50
+`
+    )
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result?.routing).toBeDefined()
+    expect(result?.routing?.enabled).toBe(true)
+    expect(result?.routing?.explorationRate).toBe(0.05)
+    expect(result?.routing?.windowSize).toBe(50)
+    // Defaults applied for unspecified fields
+    expect(result?.routing?.discountFactor).toBe(0.99)
+    expect(result?.routing?.minObservationsForExploit).toBe(5)
+    expect(result?.routing?.changeDetectionThreshold).toBe(0.2)
+  })
+
+  it('parses config with routing disabled (default)', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+routing:
+  enabled: false
+`
+    )
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result?.routing?.enabled).toBe(false)
+  })
+})
+
+describe('getRoutingConfig', () => {
+  it('returns routing config when present', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      routing: { enabled: true },
+    })
+    const routing = getRoutingConfig(config)
+    expect(routing).toBeDefined()
+    expect(routing!.enabled).toBe(true)
+  })
+
+  it('returns undefined when routing not set', () => {
+    const config = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(getRoutingConfig(config)).toBeUndefined()
   })
 })

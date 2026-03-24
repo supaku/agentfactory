@@ -46,6 +46,7 @@ import { createSessionToolErrorHandler } from './handlers/sessions/tool-error.js
 import { createPublicStatsHandler } from './handlers/public/stats.js'
 import { createPublicSessionsListHandler } from './handlers/public/sessions-list.js'
 import { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
+import { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
 import { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
 
 // Cleanup handler
@@ -93,6 +94,7 @@ export interface AllRoutes {
     stats: { GET: RouteHandler }
     sessions: { GET: RouteHandler }
     sessionDetail: { GET: RouteHandler }
+    routingMetrics: { GET: RouteHandler }
     sessionActivities: { GET: RouteHandler }
   }
   config: { GET: RouteHandler }
@@ -192,6 +194,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       stats: { GET: createPublicStatsHandler() },
       sessions: { GET: createPublicSessionsListHandler() },
       sessionDetail: { GET: createPublicSessionDetailHandler() },
+      routingMetrics: { GET: createPublicRoutingMetricsHandler() },
       sessionActivities: { GET: createPublicSessionActivitiesHandler() },
     },
     config: { GET: configHandler.GET },

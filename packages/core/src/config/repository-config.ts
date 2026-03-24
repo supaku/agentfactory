@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import YAML from 'yaml'
 import type { ProvidersConfig } from '../providers/index.js'
+import type { RoutingConfig } from '../routing/types.js'
 
 // ---------------------------------------------------------------------------
 // Zod Schema
@@ -50,6 +51,22 @@ export const ProvidersConfigSchema = z.object({
   byWorkType: z.record(z.string(), AgentProviderNameSchema).optional(),
   /** Provider overrides by project name (e.g., { Social: 'codex' }) */
   byProject: z.record(z.string(), AgentProviderNameSchema).optional(),
+})
+
+/** Routing configuration for MAB-based provider selection */
+export const RoutingConfigSectionSchema = z.object({
+  /** Enable MAB-based intelligent routing (default: false) */
+  enabled: z.boolean().default(false),
+  /** Exploration rate for Thompson Sampling (0-1, default: 0.1) */
+  explorationRate: z.number().min(0).max(1).default(0.1),
+  /** Observation window size (default: 100) */
+  windowSize: z.number().int().positive().default(100),
+  /** Discount factor for older observations (default: 0.99) */
+  discountFactor: z.number().min(0).max(1).default(0.99),
+  /** Minimum observations before exploiting (default: 5) */
+  minObservationsForExploit: z.number().int().min(0).default(5),
+  /** Change detection threshold (default: 0.2) */
+  changeDetectionThreshold: z.number().min(0).default(0.2),
 })
 
 export const RepositoryConfigSchema = z.object({
@@ -100,6 +117,11 @@ export const RepositoryConfigSchema = z.object({
    * Allows routing agents to different providers by work type or project.
    */
   providers: ProvidersConfigSchema.optional(),
+  /**
+   * Routing configuration for MAB-based intelligent provider selection.
+   * When enabled, Thompson Sampling is used to learn optimal provider routing.
+   */
+  routing: RoutingConfigSectionSchema.optional(),
   /**
    * Merge queue configuration.
    * Controls which merge queue provider agents use for automated merging.
@@ -186,6 +208,14 @@ export function getProjectPath(config: RepositoryConfig, projectName: string): s
  */
 export function getProvidersConfig(config: RepositoryConfig): ProvidersConfig | undefined {
   return config.providers as ProvidersConfig | undefined
+}
+
+/**
+ * Returns the routing config from a RepositoryConfig, if present.
+ * Convenience helper for passing to async provider resolution.
+ */
+export function getRoutingConfig(config: RepositoryConfig): RoutingConfig | undefined {
+  return config.routing as RoutingConfig | undefined
 }
 
 // ---------------------------------------------------------------------------

@@ -91,6 +91,11 @@ export * from './health-probes.js'
 export * from './stuck-decision-tree.js'
 export * from './patrol-loop.js'
 
+// Routing stores
+export { RedisPosteriorStore } from './routing-posterior-store.js'
+export type { RedisObservationStoreOptions } from './routing-observation-store.js'
+export { createRedisObservationStore } from './routing-observation-store.js'
+
 // Scheduler (K8s-inspired filter/score pipeline)
 export * from './scheduler/index.js'
 
