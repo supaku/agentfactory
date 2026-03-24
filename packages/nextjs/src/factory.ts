@@ -63,6 +63,9 @@ import { createOAuthCallbackHandler, type OAuthConfig } from './handlers/oauth/c
 // Issue tracker proxy handler
 import { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
 
+// Workflow handlers
+import { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'
+
 export interface AllRoutes {
   workers: {
     register: { POST: RouteHandler }
@@ -99,6 +102,9 @@ export interface AllRoutes {
     callback: { GET: RouteHandler }
   }
   issueTrackerProxy: { POST: RouteHandler; GET: RouteHandler }
+  workflows: {
+    deploy: { POST: RouteHandler }
+  }
 }
 
 /**
@@ -195,5 +201,8 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       callback: { GET: oauth.GET },
     },
     issueTrackerProxy: { POST: issueTrackerProxy.POST, GET: issueTrackerProxy.GET },
+    workflows: {
+      deploy: { POST: createWorkflowDeployHandler() },
+    },
   }
 }
