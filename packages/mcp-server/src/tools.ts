@@ -319,27 +319,26 @@ export function registerFleetTools(server: McpServer): void {
           }
         }
 
-        try {
-          const streamId = await publishUrgent(agentId, {
-            type: 'directive',
-            sessionId: session.linearSessionId,
-            payload: args.message,
-            createdAt: Date.now(),
-          })
+        const streamId = await publishUrgent(agentId, {
+          type: 'directive',
+          sessionId: session.linearSessionId,
+          payload: args.message,
+          createdAt: Date.now(),
+        })
 
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: JSON.stringify(
-                  {
-                    forwarded: true,
-                    streamId,
-                    taskId: session.linearSessionId,
-                    issueId: session.issueId,
-                    sessionStatus: session.status,
-                  },
-                  null,
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  forwarded: true,
+                  streamId,
+                  taskId: session.linearSessionId,
+                  issueId: session.issueId,
+                  sessionStatus: session.status,
+                },
+                null,
                 2,
               ),
             },
