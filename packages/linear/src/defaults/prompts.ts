@@ -285,6 +285,17 @@ Refinement Coordination Steps:
 
 IMPORTANT: Do NOT implement fixes yourself — only triage and route feedback to the correct sub-issues.`
       break
+    case 'merge':
+      basePrompt = `Handle merge queue operations for ${identifier}.
+
+WORKFLOW:
+1. Check PR merge readiness (CI status, approvals)
+2. Pull latest main and rebase feature branch
+3. If conflicts arise, resolve using mergiraf-enhanced git merge
+4. Push updated branch
+5. Add PR to merge queue via configured provider (gh pr merge --merge-queue)
+6. Monitor queue status until merged or failed`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION

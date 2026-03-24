@@ -117,6 +117,8 @@ export interface OrchestratorConfig {
    * at startup and before spawning agents. Supports both HTTPS and SSH URL formats.
    */
   repository?: string
+  /** Merge queue adapter for automated merge operations */
+  mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
 }
 
 export interface OrchestratorIssue {

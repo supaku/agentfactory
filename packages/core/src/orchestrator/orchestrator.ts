@@ -48,6 +48,7 @@ import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
+import { createMergeQueueAdapter } from '../merge-queue/index.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -118,7 +119,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -775,6 +776,14 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
 See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'merge':
+      basePrompt = `Handle merge queue operations for ${identifier}.
+Check PR merge readiness (CI status, approvals).
+Attempt rebase onto latest main.
+Resolve conflicts using mergiraf-enhanced git merge if available.
+Push updated branch and trigger merge via configured merge queue provider.${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries
@@ -805,6 +814,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'refinement-coordination': 'REF-COORD',
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
+  merge: 'MRG',
 }
 
 /**
@@ -848,7 +858,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -898,6 +908,8 @@ export class AgentOrchestrator {
   private validateCommand?: string
   // Tool plugin registry for in-process agent tools
   private readonly toolRegistry: ToolRegistry
+  // Merge queue adapter for automated merge operations (initialized from config or repo config)
+  private mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
   // Git repository root for running git commands (resolved from worktreePath or cwd)
   private readonly gitRoot: string
 
@@ -1017,10 +1029,27 @@ export class AgentOrchestrator {
           }
           // Store providers config for per-spawn resolution
           this.configProviders = getProvidersConfig(repoConfig)
+
+          // Initialize merge queue adapter from repository config
+          if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
+            try {
+              this.mergeQueueAdapter = createMergeQueueAdapter(
+                repoConfig.mergeQueue.provider ?? 'github-native'
+              )
+              console.log(`[orchestrator] Merge queue adapter initialized: ${repoConfig.mergeQueue.provider ?? 'github-native'}`)
+            } catch (error) {
+              console.warn(`[orchestrator] Failed to initialize merge queue adapter: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
         }
       }
     } catch (err) {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
+    }
+
+    // Accept merge queue adapter passed directly via config (takes precedence over repo config)
+    if (config.mergeQueueAdapter) {
+      this.mergeQueueAdapter = config.mergeQueueAdapter
     }
 
     // Initialize tool plugin registry with injected plugins
@@ -1616,6 +1645,9 @@ export class AgentOrchestrator {
     // Write helper scripts into .agent/ for agent use
     this.writeWorktreeHelpers(worktreePath)
 
+    // Configure mergiraf merge driver if enabled
+    this.configureMergiraf(worktreePath)
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -1696,6 +1728,42 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Log but don't fail — the helper is optional
       console.warn(
         `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  /**
+   * Configure mergiraf as the git merge driver in a worktree.
+   * Falls back silently to default git merge if mergiraf is not installed.
+   */
+  private configureMergiraf(worktreePath: string): void {
+    // Check if mergiraf is disabled via config
+    if (this.repoConfig?.mergeDriver === 'default') {
+      return
+    }
+
+    try {
+      // Check if mergiraf binary is available
+      execSync('which mergiraf', { stdio: 'pipe', encoding: 'utf-8' })
+    } catch {
+      // mergiraf not installed — fall back to default merge silently
+      console.log('mergiraf not found on PATH, using default git merge driver')
+      return
+    }
+
+    try {
+      // Register mergiraf as the merge driver in this worktree
+      // This sets up .git/config merge driver entries and .gitattributes
+      execSync('mergiraf register', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+      console.log(`mergiraf registered as merge driver in ${worktreePath}`)
+    } catch (error) {
+      // Log warning but don't fail — merge driver is non-critical
+      console.warn(
+        `Failed to register mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   }
@@ -2394,6 +2462,27 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log?.info('No auto-transition configured for work type', { workType })
         }
 
+        // Merge queue: enqueue PR after successful merge work
+        if (workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+          try {
+            const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+            if (prMatch) {
+              const [, owner, repo, prNum] = prMatch
+              const canEnqueue = await this.mergeQueueAdapter.canEnqueue(owner, repo, parseInt(prNum, 10))
+              if (canEnqueue) {
+                const status = await this.mergeQueueAdapter.enqueue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR enqueued in merge queue', { owner, repo, prNumber: prNum, state: status.state })
+              } else {
+                log?.info('PR not eligible for merge queue', { owner, repo, prNumber: prNum })
+              }
+            }
+          } catch (error) {
+            log?.warn('Failed to enqueue PR in merge queue', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
         // Unassign agent from issue for clean handoff visibility
         // This enables automated QA pickup via webhook
         // Skip unassignment for research work (user should decide when to move to backlog)
@@ -2757,6 +2846,22 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
           progressLogger?.logError('Agent error result', new Error(errorMessage))
           sessionLogger?.logError('Agent error result', new Error(errorMessage), { subtype: event.errorSubtype })
+
+          // Merge queue: dequeue PR on merge agent failure
+          if (agent.workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+            try {
+              const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+              if (prMatch) {
+                const [, owner, repo, prNum] = prMatch
+                await this.mergeQueueAdapter.dequeue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR dequeued from merge queue after failure', { owner, repo, prNumber: prNum })
+              }
+            } catch (dequeueError) {
+              log?.warn('Failed to dequeue PR from merge queue', {
+                error: dequeueError instanceof Error ? dequeueError.message : String(dequeueError),
+              })
+            }
+          }
 
           // Report tool errors as Linear issues for tracking
           // Only report for 'error_during_execution' subtype (tool/execution errors)
@@ -3223,6 +3328,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       projectName,
       labels: labelNames,
     })
+  }
+
+  /**
+   * Get the merge queue adapter, if configured.
+   * Returns undefined if no merge queue is enabled.
+   */
+  getMergeQueueAdapter(): import('../merge-queue/types.js').MergeQueueAdapter | undefined {
+    return this.mergeQueueAdapter
   }
 
   /**
