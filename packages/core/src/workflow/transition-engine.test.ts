@@ -30,6 +30,8 @@ function makeWorkflow(overrides?: Partial<WorkflowDefinition>): WorkflowDefiniti
       { name: 'qa', template: 'qa' },
       { name: 'acceptance', template: 'acceptance' },
       { name: 'refinement', template: 'refinement' },
+      { name: 'research', template: 'research' },
+      { name: 'backlog-creation', template: 'backlog-creation' },
     ],
     transitions: [
       { from: 'Backlog', to: 'development' },
@@ -208,10 +210,10 @@ describe('evaluateTransitions', () => {
     })
   })
 
-  // --- Conditional transitions (Phase 2 behavior: skip conditions) ---
+  // --- Conditional transitions (conditions now evaluated) ---
 
-  describe('conditional transitions (Phase 2: conditions skipped)', () => {
-    it('skips transitions with conditions in Phase 2', () => {
+  describe('conditional transitions', () => {
+    it('evaluates condition and selects matching conditional transition', () => {
       const workflow = makeWorkflow({
         transitions: [
           { from: 'Backlog', to: 'qa', condition: '{{ isParentIssue }}', priority: 10 },
@@ -221,14 +223,33 @@ describe('evaluateTransitions', () => {
       const ctx = makeContext({
         issue: makeIssue({ status: 'Backlog' }),
         registry: registryWith(workflow),
+        isParentIssue: true,
       })
       const result = evaluateTransitions(ctx)
 
-      // Conditional transition skipped, falls through to unconditional
+      // isParentIssue is true, so conditional transition matches
+      expect(result.action).toBe('trigger-qa')
+    })
+
+    it('skips conditional transition when condition is false and falls through to unconditional', () => {
+      const workflow = makeWorkflow({
+        transitions: [
+          { from: 'Backlog', to: 'qa', condition: '{{ isParentIssue }}', priority: 10 },
+          { from: 'Backlog', to: 'development' },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+        isParentIssue: false,
+      })
+      const result = evaluateTransitions(ctx)
+
+      // isParentIssue is false, so conditional transition skipped, falls through to unconditional
       expect(result.action).toBe('trigger-development')
     })
 
-    it('returns none when all transitions have conditions', () => {
+    it('selects first true condition when all transitions are conditional', () => {
       const workflow = makeWorkflow({
         transitions: [
           { from: 'Backlog', to: 'development', condition: '{{ true }}' },
@@ -241,9 +262,93 @@ describe('evaluateTransitions', () => {
       })
       const result = evaluateTransitions(ctx)
 
+      expect(result.action).toBe('trigger-development')
+    })
+
+    it('returns none when all conditional transitions evaluate to false', () => {
+      const workflow = makeWorkflow({
+        transitions: [
+          { from: 'Backlog', to: 'development', condition: '{{ false }}' },
+          { from: 'Backlog', to: 'qa', condition: '{{ false }}' },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+      })
+      const result = evaluateTransitions(ctx)
+
       expect(result.action).toBe('none')
-      expect(result.reason).toContain('conditions')
-      expect(result.reason).toContain('Phase 3')
+      expect(result.reason).toContain('No transition conditions satisfied')
+    })
+
+    it('falls through conditional to next conditional when first is false', () => {
+      const workflow = makeWorkflow({
+        transitions: [
+          { from: 'Backlog', to: 'development', condition: '{{ false }}', priority: 10 },
+          { from: 'Backlog', to: 'qa', condition: '{{ true }}', priority: 5 },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+      })
+      const result = evaluateTransitions(ctx)
+
+      // First condition false, second condition true
+      expect(result.action).toBe('trigger-qa')
+    })
+
+    it('mix of conditional and unconditional transitions — conditional wins when true', () => {
+      const workflow = makeWorkflow({
+        transitions: [
+          { from: 'Backlog', to: 'qa', condition: '{{ true }}', priority: 10 },
+          { from: 'Backlog', to: 'development', priority: 5 },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+      })
+      const result = evaluateTransitions(ctx)
+
+      expect(result.action).toBe('trigger-qa')
+    })
+
+    it('phaseState variables affect condition evaluation', () => {
+      const workflow = makeWorkflow({
+        transitions: [
+          { from: 'Icebox', to: 'research', condition: '{{ not researchCompleted }}', priority: 10 },
+          { from: 'Icebox', to: 'backlog-creation', condition: '{{ researchCompleted and not backlogCreationCompleted }}', priority: 5 },
+        ],
+      })
+
+      // No research done yet
+      const ctx1 = makeContext({
+        issue: makeIssue({ status: 'Icebox' }),
+        registry: registryWith(workflow),
+        phaseState: { researchCompleted: false, backlogCreationCompleted: false },
+      })
+      const result1 = evaluateTransitions(ctx1)
+      expect(result1.action).toBe('trigger-research')
+
+      // Research done, backlog not done
+      const ctx2 = makeContext({
+        issue: makeIssue({ status: 'Icebox' }),
+        registry: registryWith(workflow),
+        phaseState: { researchCompleted: true, backlogCreationCompleted: false },
+      })
+      const result2 = evaluateTransitions(ctx2)
+      expect(result2.action).toBe('trigger-backlog-creation')
+
+      // Both done
+      const ctx3 = makeContext({
+        issue: makeIssue({ status: 'Icebox' }),
+        registry: registryWith(workflow),
+        phaseState: { researchCompleted: true, backlogCreationCompleted: true },
+      })
+      const result3 = evaluateTransitions(ctx3)
+      expect(result3.action).toBe('none')
     })
   })
 
@@ -358,15 +463,36 @@ describe('evaluateTransitions', () => {
       expect(result.action).toBe('decompose')
     })
 
-    it('Icebox has only conditional transitions — returns none in Phase 2', () => {
+    it('Icebox with phaseState routes to research when researchCompleted is false', () => {
+      const result = evaluateTransitions({
+        issue: makeIssue({ status: 'Icebox' }),
+        registry: builtinRegistry,
+        isParentIssue: false,
+        phaseState: { researchCompleted: false, backlogCreationCompleted: false },
+      })
+      // researchCompleted is false, so "not researchCompleted" is true → research phase
+      expect(result.action).toBe('trigger-research')
+    })
+
+    it('Icebox with phaseState routes to backlog-creation when research done', () => {
+      const result = evaluateTransitions({
+        issue: makeIssue({ status: 'Icebox' }),
+        registry: builtinRegistry,
+        isParentIssue: false,
+        phaseState: { researchCompleted: true, backlogCreationCompleted: false },
+      })
+      // researchCompleted is true and backlogCreationCompleted is false → backlog-creation
+      expect(result.action).toBe('trigger-backlog-creation')
+    })
+
+    it('Icebox with no phaseState routes to research (undefined vars are falsy)', () => {
       const result = evaluateTransitions({
         issue: makeIssue({ status: 'Icebox' }),
         registry: builtinRegistry,
         isParentIssue: false,
       })
-      // Icebox transitions all have conditions, which are skipped in Phase 2.
-      // This is expected — Icebox routing is handled by decideIcebox() directly.
-      expect(result.action).toBe('none')
+      // No phaseState → researchCompleted is undefined → falsy → "not researchCompleted" is true
+      expect(result.action).toBe('trigger-research')
     })
   })
 })

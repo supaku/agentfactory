@@ -47,6 +47,10 @@ export interface PhaseDefinition {
    * Example: { "context-enriched": "refinement-context-enriched" }
    */
   variants?: Record<string, string>
+  /** Per-template retry configuration override */
+  retry?: TemplateRetryConfig
+  /** Per-template timeout configuration */
+  timeout?: TemplateTimeoutConfig
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +162,51 @@ export interface ParallelismGroupDefinition {
 }
 
 // ---------------------------------------------------------------------------
+// Template Retry & Timeout Configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-template retry configuration. Overrides phase-level and global
+ * escalation settings when attached to a phase or branching block.
+ */
+export interface TemplateRetryConfig {
+  /** Max attempts before escalation action. Overrides circuitBreaker.maxSessionsPerPhase */
+  maxAttempts?: number
+  /** Override escalation ladder for this template */
+  ladder?: EscalationLadderRung[]
+}
+
+/**
+ * Per-template timeout configuration. When the duration elapses,
+ * the specified action is taken.
+ */
+export interface TemplateTimeoutConfig {
+  /** Duration string: "30m", "2h", "1d" */
+  duration: string
+  /** Action when timeout is reached */
+  action: 'escalate' | 'skip' | 'fail'
+}
+
+// ---------------------------------------------------------------------------
+// Branching Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * A branching block that conditionally selects a template.
+ * Evaluated in order; the first matching branch wins.
+ */
+export interface BranchingDefinition {
+  /** Unique name for this branching rule */
+  name: string
+  /** Condition expression (Handlebars-style, e.g., "{{ isParentIssue }}") */
+  condition: string
+  /** Template to select when condition is true */
+  then: { template: string; retry?: TemplateRetryConfig; timeout?: TemplateTimeoutConfig }
+  /** Optional template to select when condition is false */
+  else?: { template: string; retry?: TemplateRetryConfig; timeout?: TemplateTimeoutConfig }
+}
+
+// ---------------------------------------------------------------------------
 // Workflow Definition
 // ---------------------------------------------------------------------------
 
@@ -183,18 +232,13 @@ export interface WorkflowDefinition {
   gates?: GateDefinition[]
   /** Parallelism groups for concurrent phase execution (Phase 4) */
   parallelism?: ParallelismGroupDefinition[]
+  /** Branching blocks for conditional template selection */
+  branching?: BranchingDefinition[]
 }
 
 // ---------------------------------------------------------------------------
 // Zod Schemas
 // ---------------------------------------------------------------------------
-
-export const PhaseDefinitionSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  template: z.string().min(1),
-  variants: z.record(z.string(), z.string()).optional(),
-})
 
 export const TransitionDefinitionSchema = z.object({
   from: z.string().min(1),
@@ -206,6 +250,25 @@ export const TransitionDefinitionSchema = z.object({
 export const EscalationLadderRungSchema = z.object({
   cycle: z.number().int().nonnegative(),
   strategy: z.string().min(1),
+})
+
+export const TemplateRetryConfigSchema = z.object({
+  maxAttempts: z.number().int().positive().optional(),
+  ladder: z.array(EscalationLadderRungSchema).min(1).optional(),
+})
+
+export const TemplateTimeoutConfigSchema = z.object({
+  duration: z.string().min(1),
+  action: z.enum(['escalate', 'skip', 'fail']),
+})
+
+export const PhaseDefinitionSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  template: z.string().min(1),
+  variants: z.record(z.string(), z.string()).optional(),
+  retry: TemplateRetryConfigSchema.optional(),
+  timeout: TemplateTimeoutConfigSchema.optional(),
 })
 
 export const EscalationConfigSchema = z.object({
@@ -237,6 +300,21 @@ export const ParallelismGroupDefinitionSchema = z.object({
   waitForAll: z.boolean().optional(),
 })
 
+export const BranchingDefinitionSchema = z.object({
+  name: z.string().min(1),
+  condition: z.string().min(1),
+  then: z.object({
+    template: z.string().min(1),
+    retry: TemplateRetryConfigSchema.optional(),
+    timeout: TemplateTimeoutConfigSchema.optional(),
+  }),
+  else: z.object({
+    template: z.string().min(1),
+    retry: TemplateRetryConfigSchema.optional(),
+    timeout: TemplateTimeoutConfigSchema.optional(),
+  }).optional(),
+})
+
 export const WorkflowDefinitionSchema = z.object({
   apiVersion: z.literal('v1.1'),
   kind: z.literal('WorkflowDefinition'),
@@ -249,6 +327,7 @@ export const WorkflowDefinitionSchema = z.object({
   escalation: EscalationConfigSchema.optional(),
   gates: z.array(GateDefinitionSchema).optional(),
   parallelism: z.array(ParallelismGroupDefinitionSchema).optional(),
+  branching: z.array(BranchingDefinitionSchema).optional(),
 })
 
 // ---------------------------------------------------------------------------
