@@ -22,6 +22,7 @@ import {
   createLogger,
   recordSessionFailure,
   clearSessionFailures,
+  archiveInbox,
 } from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
 
@@ -204,6 +205,23 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
 
         await releaseClaim(sessionId)
         await removeWorkerSession(workerId, sessionId)
+
+        // Archive inbox streams (non-destructive — renames with TTL)
+        if (session.agentId) {
+          try {
+            await archiveInbox(session.agentId, sessionId)
+            log.info('Inbox streams archived', {
+              sessionId,
+              agentId: session.agentId,
+            })
+          } catch (err) {
+            log.error('Failed to archive inbox streams', {
+              sessionId,
+              agentId: session.agentId,
+              error: err,
+            })
+          }
+        }
 
         if (session.issueId) {
           try {

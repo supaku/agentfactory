@@ -76,6 +76,7 @@ export { createSessionClaimHandler } from './handlers/sessions/claim.js'
 export { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
 export { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
 export { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+export { createSessionInboxAckHandler } from './handlers/sessions/inbox-ack.js'
 export { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)

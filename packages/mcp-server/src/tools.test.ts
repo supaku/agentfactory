@@ -8,7 +8,7 @@ vi.mock('@renseiai/agentfactory-server', () => ({
   getSessionStateByIssue: vi.fn(),
   storeSessionState: vi.fn(),
   updateSessionStatus: vi.fn(),
-  storePendingPrompt: vi.fn(),
+  publishUrgent: vi.fn(),
 }))
 
 // ── Mock @modelcontextprotocol/sdk ──────────────────────────────────────────
@@ -23,7 +23,7 @@ import {
   getSessionStateByIssue,
   storeSessionState,
   updateSessionStatus,
-  storePendingPrompt,
+  publishUrgent,
 } from '@renseiai/agentfactory-server'
 import { registerFleetTools } from './tools.js'
 
@@ -60,6 +60,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     totalCostUsd: 0.5,
     inputTokens: 1000,
     outputTokens: 500,
+    agentId: 'agent-001',
     ...overrides,
   }
 }
@@ -333,36 +334,28 @@ describe('stop-agent', () => {
 })
 
 describe('forward-prompt', () => {
-  it('forwards a prompt to a running session', async () => {
+  it('forwards a prompt to a running session via agent inbox', async () => {
     const handler = tools.get('forward-prompt')!
     vi.mocked(getSessionState).mockResolvedValue(makeSession({ status: 'running' }) as never)
-    vi.mocked(storePendingPrompt).mockResolvedValue({
-      id: 'prm_123',
-      sessionId: 'ses-123',
-      issueId: 'issue-abc',
-      prompt: 'Please also fix the tests',
-      createdAt: Date.now(),
-    } as never)
+    vi.mocked(publishUrgent).mockResolvedValue('1234567890-0')
 
     const result = await handler({ taskId: 'ses-123', message: 'Please also fix the tests' })
     const data = parseResult(result)
 
     expect(data.forwarded).toBe(true)
-    expect(data.promptId).toBe('prm_123')
+    expect(data.streamId).toBe('1234567890-0')
     expect(data.taskId).toBe('ses-123')
-    expect(storePendingPrompt).toHaveBeenCalledWith('ses-123', 'issue-abc', 'Please also fix the tests')
+    expect(publishUrgent).toHaveBeenCalledWith('agent-001', expect.objectContaining({
+      type: 'directive',
+      sessionId: 'ses-123',
+      payload: 'Please also fix the tests',
+    }))
   })
 
   it('forwards a prompt to a claimed session', async () => {
     const handler = tools.get('forward-prompt')!
     vi.mocked(getSessionState).mockResolvedValue(makeSession({ status: 'claimed' }) as never)
-    vi.mocked(storePendingPrompt).mockResolvedValue({
-      id: 'prm_456',
-      sessionId: 'ses-123',
-      issueId: 'issue-abc',
-      prompt: 'extra context',
-      createdAt: Date.now(),
-    } as never)
+    vi.mocked(publishUrgent).mockResolvedValue('1234567891-0')
 
     const result = await handler({ taskId: 'ses-123', message: 'extra context' })
     const data = parseResult(result)
@@ -375,13 +368,7 @@ describe('forward-prompt', () => {
     const handler = tools.get('forward-prompt')!
     vi.mocked(getSessionState).mockResolvedValue(null as never)
     vi.mocked(getSessionStateByIssue).mockResolvedValue(makeSession() as never)
-    vi.mocked(storePendingPrompt).mockResolvedValue({
-      id: 'prm_789',
-      sessionId: 'ses-123',
-      issueId: 'issue-abc',
-      prompt: 'msg',
-      createdAt: Date.now(),
-    } as never)
+    vi.mocked(publishUrgent).mockResolvedValue('1234567892-0')
 
     const result = await handler({ taskId: 'issue-abc', message: 'msg' })
 
@@ -419,14 +406,24 @@ describe('forward-prompt', () => {
     expect(result.content[0].text).toContain('No task found')
   })
 
-  it('returns error when storePendingPrompt fails', async () => {
+  it('returns error when session has no agentId', async () => {
     const handler = tools.get('forward-prompt')!
-    vi.mocked(getSessionState).mockResolvedValue(makeSession({ status: 'running' }) as never)
-    vi.mocked(storePendingPrompt).mockResolvedValue(null as never)
+    vi.mocked(getSessionState).mockResolvedValue(makeSession({ status: 'running', agentId: undefined }) as never)
 
     const result = await handler({ taskId: 'ses-123', message: 'hello' })
 
     expect(result.isError).toBe(true)
-    expect(result.content[0].text).toContain('Failed to store pending prompt')
+    expect(result.content[0].text).toContain('no agentId')
+  })
+
+  it('returns error when publishUrgent throws', async () => {
+    const handler = tools.get('forward-prompt')!
+    vi.mocked(getSessionState).mockResolvedValue(makeSession({ status: 'running' }) as never)
+    vi.mocked(publishUrgent).mockRejectedValue(new Error('Redis not configured'))
+
+    const result = await handler({ taskId: 'ses-123', message: 'hello' })
+
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain('Redis not configured')
   })
 })

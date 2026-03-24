@@ -32,6 +32,7 @@ import { createSessionClaimHandler } from './handlers/sessions/claim.js'
 import { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
 import { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
 import { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+import { createSessionInboxAckHandler } from './handlers/sessions/inbox-ack.js'
 import { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)
@@ -77,6 +78,7 @@ export interface AllRoutes {
     status: { GET: RouteHandler; POST: RouteHandler }
     lockRefresh: { POST: RouteHandler }
     prompts: { GET: RouteHandler; POST: RouteHandler }
+    inboxAck: { POST: RouteHandler }
     transferOwnership: { POST: RouteHandler }
     activity: { POST: RouteHandler }
     completion: { POST: RouteHandler }
@@ -172,6 +174,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       status: { GET: createSessionStatusGetHandler(), POST: createSessionStatusPostHandler(routeConfig) },
       lockRefresh: { POST: createSessionLockRefreshHandler() },
       prompts: { GET: createSessionPromptsGetHandler(), POST: createSessionPromptsPostHandler() },
+      inboxAck: { POST: createSessionInboxAckHandler() },
       transferOwnership: { POST: createSessionTransferOwnershipHandler() },
       activity: { POST: createSessionActivityHandler(routeConfig) },
       completion: { POST: createSessionCompletionHandler(routeConfig) },
