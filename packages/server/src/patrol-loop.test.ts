@@ -83,6 +83,14 @@ vi.mock('./scheduler/migration.js', () => ({
   })),
 }))
 
+vi.mock('./fleet-quota-storage.js', () => ({
+  getAllQuotaConfigs: vi.fn(() => []),
+}))
+
+vi.mock('./fleet-quota-tracker.js', () => ({
+  cleanupStaleSessions: vi.fn(() => 0),
+}))
+
 import { PatrolLoop } from './patrol-loop.js'
 import { listWorkers, nudgeWorker, deregisterWorker } from './worker-storage.js'
 import { getSessionsByStatus, resetSessionForRequeue } from './session-storage.js'

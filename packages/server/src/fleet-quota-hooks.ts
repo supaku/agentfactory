@@ -10,12 +10,14 @@
  */
 
 import { createLogger } from './logger.js'
-import { getQuotaConfig } from './fleet-quota-storage.js'
+import { getQuotaConfig, getCohortConfig } from './fleet-quota-storage.js'
 import {
   addConcurrentSession,
   removeConcurrentSession,
+  getConcurrentSessionCount,
   addDailyCost,
 } from './fleet-quota-tracker.js'
+import { tryAtomicBorrow } from './fleet-quota-cohort.js'
 
 const log = createLogger('fleet-quota-hooks')
 
@@ -35,6 +37,62 @@ export async function onSessionClaimed(
     const config = await getQuotaConfig(projectName)
     if (!config) return
 
+    const currentCount = await getConcurrentSessionCount(config.name)
+
+    if (
+      currentCount >= config.maxConcurrentSessions &&
+      config.cohort &&
+      (config.borrowingLimit ?? 0) > 0
+    ) {
+      // Over own limit — use atomic borrow from cohort
+      const cohort = await getCohortConfig(config.cohort)
+      if (cohort) {
+        const peers = (
+          await Promise.all(
+            cohort.projects
+              .filter((p) => p !== projectName)
+              .map(async (p) => {
+                const peerConfig = await getQuotaConfig(p)
+                return peerConfig
+                  ? {
+                      quotaName: peerConfig.name,
+                      maxConcurrentSessions: peerConfig.maxConcurrentSessions,
+                      lendingLimit: peerConfig.lendingLimit ?? 0,
+                    }
+                  : null
+              })
+          )
+        ).filter((p): p is NonNullable<typeof p> => p !== null)
+
+        const borrowed = await tryAtomicBorrow(
+          config.name,
+          sessionId,
+          config.maxConcurrentSessions,
+          config.borrowingLimit!,
+          peers
+        )
+
+        if (borrowed) {
+          log.info('Quota incremented via atomic borrow', {
+            quotaName: config.name,
+            sessionId,
+            cohort: config.cohort,
+          })
+        } else {
+          // Borrow failed — capacity consumed between filter and claim.
+          // Fall back to simple SADD so session still runs; patrol loop will reconcile.
+          await addConcurrentSession(config.name, sessionId)
+          log.warn('Atomic borrow failed — capacity consumed between filter and claim', {
+            quotaName: config.name,
+            sessionId,
+            projectName,
+          })
+        }
+        return
+      }
+    }
+
+    // Under own limit or no cohort — simple add
     const count = await addConcurrentSession(config.name, sessionId)
     log.info('Quota incremented on claim', {
       quotaName: config.name,
