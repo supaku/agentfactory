@@ -5,8 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // ---------------------------------------------------------------------------
 
 const mockSubscribe = vi.fn<
-  [(event: { action: string; id: string; version?: number }) => void],
-  Promise<() => Promise<void>>
+  (listener: (event: { action: string; id: string; version?: number }) => void) => Promise<() => Promise<void>>
 >()
 
 const mockWorkflowStoreGet = vi.fn()
