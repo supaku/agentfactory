@@ -34,6 +34,7 @@ import {
 import { createHeartbeatWriter, getHeartbeatIntervalFromEnv, type HeartbeatWriter } from './heartbeat-writer.js'
 import { createProgressLogger, type ProgressLogger } from './progress-logger.js'
 import { createSessionLogger, type SessionLogger } from './session-logger.js'
+import { ContextManager } from './context-manager.js'
 import { isSessionLoggingEnabled, isAutoAnalyzeEnabled, getLogAnalysisConfig } from './log-config.js'
 import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
@@ -878,6 +879,7 @@ export class AgentOrchestrator {
   private readonly progressLoggers: Map<string, ProgressLogger> = new Map()
   // Session loggers per agent for verbose analysis logging
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
+  private readonly contextManagers: Map<string, ContextManager> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
@@ -2044,6 +2046,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
         }
 
+        // Initialize context manager for context window management
+        const contextManager = ContextManager.load(worktreePath)
+        this.contextManagers.set(issueId, contextManager)
+
         log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
       } catch (stateError) {
         // Log but don't fail - state persistence is optional
@@ -2613,6 +2619,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log?.debug('Status change', { status: event.message })
         } else if (event.subtype === 'compact_boundary') {
           log?.debug('Context compacted')
+          // Trigger incremental summarization on compaction boundary
+          this.contextManagers.get(issueId)?.handleCompaction()
         } else if (event.subtype === 'hook_response') {
           // Provider-specific hook handling — access raw event for details
           const raw = event.raw as { exit_code?: number; hook_name?: string }
@@ -2631,6 +2639,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'tool_result':
         // Tool results — track activity and detect PR URLs
         this.updateLastActivity(issueId, 'tool_result')
+
+        // Feed to context manager for artifact tracking
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         sessionLogger?.logToolResult(event.toolUseId ?? 'unknown', event.content, event.isError)
 
         // Detect GitHub PR URLs in tool output (from gh pr create)
@@ -2647,6 +2659,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'assistant_text':
         // Assistant text output
         this.updateLastActivity(issueId, 'assistant')
+
+        // Feed to context manager for session intent extraction
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         heartbeatWriter?.recordThinking()
         sessionLogger?.logAssistant(event.text)
         if (emitter) {
@@ -2657,6 +2673,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'tool_use':
         // Tool invocation
         this.updateLastActivity(issueId, 'assistant')
+
+        // Feed to context manager for artifact tracking
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         log?.toolCall(event.toolName, event.input)
         heartbeatWriter?.recordToolCall(event.toolName)
         progressLogger?.logTool(event.toolName, event.input)
@@ -2963,6 +2983,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     if (progressLogger) {
       progressLogger.stop()
       this.progressLoggers.delete(issueId)
+    }
+
+    // Persist and cleanup context manager
+    const contextManager = this.contextManagers.get(issueId)
+    if (contextManager) {
+      try {
+        contextManager.persist()
+      } catch {
+        // Ignore persistence errors during cleanup
+      }
+      this.contextManagers.delete(issueId)
     }
 
     // Session logger is cleaned up separately (in finalizeSessionLogger)
@@ -3666,6 +3697,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           this.sessionLoggers.set(issueId, sessionLogger)
           log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
         }
+
+        // Initialize context manager for context window management
+        const contextManager = ContextManager.load(worktreePath)
+        this.contextManagers.set(issueId, contextManager)
 
         log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
       } catch (stateError) {

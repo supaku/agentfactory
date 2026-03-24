@@ -5,7 +5,7 @@
  * Enables crash recovery and duplicate agent prevention.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
 import { resolve } from 'path'
 import type {
   WorktreeState,
@@ -13,6 +13,7 @@ import type {
   TodosState,
   RecoveryCheckResult,
   WorktreeStatus,
+  StructuredSummary,
 } from './state-types.js'
 import type { AgentWorkType } from './work-types.js'
 
@@ -294,9 +295,19 @@ export function getTaskListId(
  */
 export function buildRecoveryPrompt(
   state: WorktreeState,
-  todos?: TodosState
+  todos?: TodosState,
+  contextSection?: string
 ): string {
   const lines: string[] = []
+
+  // Inject structured summary context at the top (if available)
+  if (contextSection) {
+    lines.push(contextSection)
+    lines.push('')
+    lines.push('---')
+    lines.push('You are resuming work on this task. The context above summarizes your progress so far.')
+    lines.push('')
+  }
 
   lines.push(`Resume work on ${state.issueIdentifier}.`)
   lines.push('')
@@ -336,8 +347,31 @@ export function buildRecoveryPrompt(
   lines.push('3. Review the codebase for any partial changes')
   lines.push('4. Continue from where the previous session left off')
   lines.push('5. If work appears complete, verify and create PR if needed')
+  // Repeat key context at the end to mitigate "lost in the middle" phenomenon
+  if (contextSection) {
+    lines.push('')
+    lines.push('KEY CONTEXT REMINDER:')
+    lines.push(contextSection)
+  }
+
   lines.push('')
   lines.push(`Original prompt: ${state.prompt}`)
+
+  return lines.join('\n')
+}
+
+/**
+ * Build a context injection string for session resume (non-crash).
+ * Returns empty string if no context is available.
+ * Uses neutral framing to avoid "context anxiety" (from SUP-1186 research).
+ */
+export function buildResumeContext(contextSection: string): string {
+  if (!contextSection) return ''
+
+  const lines: string[] = []
+  lines.push('Here is your session context:')
+  lines.push('')
+  lines.push(contextSection)
 
   return lines.join('\n')
 }
@@ -368,4 +402,30 @@ export function getMaxRecoveryAttemptsFromEnv(): number {
     }
   }
   return DEFAULT_MAX_RECOVERY_ATTEMPTS
+}
+
+/**
+ * Get the path to the summary.json file
+ */
+export function getSummaryPath(worktreePath: string): string {
+  return resolve(getAgentDir(worktreePath), 'summary.json')
+}
+
+/**
+ * Read the persisted structured summary from a worktree
+ */
+export function readSummary(worktreePath: string): StructuredSummary | null {
+  return readJsonSafe<StructuredSummary>(getSummaryPath(worktreePath))
+}
+
+/**
+ * Write the structured summary with atomic writes (write to temp, then rename).
+ * This ensures the summary survives process crashes.
+ */
+export function writeSummary(worktreePath: string, summary: StructuredSummary): void {
+  const summaryPath = getSummaryPath(worktreePath)
+  initializeAgentDir(worktreePath)
+  const tempPath = summaryPath + '.tmp'
+  writeFileSync(tempPath, JSON.stringify(summary, null, 2))
+  renameSync(tempPath, summaryPath)
 }
