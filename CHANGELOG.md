@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.8.8
+
+### Features
+
+- **Network API for remote workflow deployment** — `POST /api/workflows/deploy` endpoint with Redis-backed WorkflowStore, hot-reload via Redis pub/sub, and YAML/JSON content support (SUP-1492).
+- **Inline `af status` command** — Quick fleet status checks from the CLI (SUP-1240).
+- **Context window management** — Structured summarization with artifact tracking to keep agents within context limits (SUP-1242).
+- **Expression evaluator and conditional routing** — Workflow branching with runtime expression evaluation (SUP-1228).
+- **K8s-inspired filter/score scheduling pipeline** — Scheduler uses Kubernetes-style filter and score phases for issue dispatch (SUP-1234).
+- **Merge queue support** — Provider-agnostic merge queue adapter interface, GitHub native implementation, merge work type with status mappings and template (SUP-1257, SUP-1259, SUP-1261, SUP-1263).
+- **Mergiraf as default git merge driver** — Automatic semantic merge conflict resolution in agent worktrees (SUP-1254).
+- **Agent inbox with Valkey Streams** — Stream-based message inbox for inter-agent communication (SUP-1232).
+- **Command palette with fuzzy search** — Dashboard command palette with MCP tool actions and key triggers (SUP-1239).
+- **Stuck agent NUDGE action** — Inject-message delivery for agents that appear stalled (SUP-1233).
+- **Agent detail view with live activity streaming** — Dashboard view for monitoring individual agent sessions (SUP-1238).
+- **Comprehensive test infrastructure for create-app** — Test suite for the project scaffolding CLI (SUP-1245).
+
+### Fixes
+
+- **Prevent code-producing agents from promoting without a PR** — Agents that push commits but exit before creating a PR are now caught: the orchestrator checks for branches ahead of main with no associated PR and blocks promotion with a diagnostic comment.
+- **Scan all event types for PR URLs** — PR URL detection now covers `assistant_text` and `result` events in addition to `tool_result`, preventing missed PRs when the URL appears outside tool output.
+- **Post-exit PR detection fallback** — After agent exit, the orchestrator runs `gh pr list --head <branch>` to catch PRs that were created but whose output wasn't captured during the session.
+- **Add task-lifecycle partial** — Prevents coordinators from exiting early (SUP-1238).
+- **Resolve QA failures** — Typecheck, adapter wiring, and test fixes (SUP-1237).
+- **Add merge work type to template schema** — Template schema and prompt generator updated for merge workflows.
+
+### Chores
+
+- **Anthropic SDK license review** — Marked as approved (SUP-1227).
+
 ## v0.8.7
 
 ### Features

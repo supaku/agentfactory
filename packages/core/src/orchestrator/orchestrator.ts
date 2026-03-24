@@ -458,6 +458,69 @@ function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
 }
 
 /**
+ * Check if a worktree branch has been pushed to remote with commits ahead of main
+ * but no PR was created. This catches the case where an agent pushes code and exits
+ * before running `gh pr create`.
+ */
+interface PushedWorkCheck {
+  hasPushedWork: boolean
+  branch?: string
+  details?: string
+}
+
+function checkForPushedWorkWithoutPR(worktreePath: string): PushedWorkCheck {
+  try {
+    const currentBranch = execSync('git branch --show-current', {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+
+    // If on main, no work to check
+    if (currentBranch === 'main' || currentBranch === 'master') {
+      return { hasPushedWork: false }
+    }
+
+    // Count commits ahead of main
+    const aheadOutput = execSync(`git rev-list --count main..HEAD`, {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+
+    const aheadCount = parseInt(aheadOutput, 10)
+    if (aheadCount === 0) {
+      return { hasPushedWork: false }
+    }
+
+    // Branch has commits ahead of main — check if they've been pushed
+    try {
+      const remoteRef = execSync(`git ls-remote --heads origin ${currentBranch}`, {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 10000,
+      }).trim()
+
+      if (remoteRef.length > 0) {
+        // Branch exists on remote with commits ahead of main — likely missing a PR
+        return {
+          hasPushedWork: true,
+          branch: currentBranch,
+          details: `Branch \`${currentBranch}\` has ${aheadCount} commit(s) ahead of main and has been pushed to the remote, but no PR was detected.`,
+        }
+      }
+    } catch {
+      // ls-remote failed — can't confirm remote state
+    }
+
+    return { hasPushedWork: false }
+  } catch {
+    // Git commands failed — don't block on our check failing
+    return { hasPushedWork: false }
+  }
+}
+
+/**
  * Generate a prompt for the agent based on work type
  *
  * @param identifier - Issue identifier (e.g., SUP-123)
@@ -2361,6 +2424,43 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         await emitter.flush()
       }
 
+      // Post-exit PR detection: if the agent exited without a detected PR URL,
+      // check GitHub directly in case the PR was created but the output wasn't captured
+      if (agent.status === 'completed' && !agent.pullRequestUrl && agent.worktreePath) {
+        const postExitWorkType = agent.workType ?? 'development'
+        const isPostExitCodeProducing = postExitWorkType === 'development' || postExitWorkType === 'inflight'
+        if (isPostExitCodeProducing) {
+          try {
+            const currentBranch = execSync('git branch --show-current', {
+              cwd: agent.worktreePath,
+              encoding: 'utf-8',
+              timeout: 10000,
+            }).trim()
+
+            if (currentBranch && currentBranch !== 'main' && currentBranch !== 'master') {
+              const prJson = execSync(`gh pr list --head "${currentBranch}" --json url --limit 1`, {
+                cwd: agent.worktreePath,
+                encoding: 'utf-8',
+                timeout: 15000,
+              }).trim()
+
+              const prs = JSON.parse(prJson) as Array<{ url: string }>
+              if (prs.length > 0 && prs[0].url) {
+                log?.info('Post-exit PR detection found existing PR', { prUrl: prs[0].url, branch: currentBranch })
+                agent.pullRequestUrl = prs[0].url
+                if (sessionId) {
+                  await this.updateSessionPullRequest(sessionId, prs[0].url, agent)
+                }
+              }
+            }
+          } catch (error) {
+            log?.debug('Post-exit PR detection failed (non-fatal)', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+      }
+
       // Update Linear status based on work type if auto-transition is enabled
       if (agent.status === 'completed' && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
@@ -2446,8 +2546,36 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
               // Do NOT set targetStatus — leave issue in current state
             } else {
-              // No PR but worktree is clean — either no changes needed or agent cleaned up
-              targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+              // Worktree is clean (no uncommitted/unpushed changes) — but check if branch
+              // has commits ahead of main that should have resulted in a PR
+              const hasPushedWork = checkForPushedWorkWithoutPR(agent.worktreePath)
+
+              if (hasPushedWork.hasPushedWork) {
+                // Agent pushed commits to remote but never created a PR — block promotion
+                log?.error('Code-producing agent pushed commits but no PR was created — blocking promotion', {
+                  workType,
+                  details: hasPushedWork.details,
+                })
+
+                try {
+                  await this.client.createComment(
+                    issueId,
+                    `⚠️ **Agent completed and pushed code, but no PR was created.**\n\n` +
+                    `${hasPushedWork.details}\n\n` +
+                    `**Issue status was NOT promoted** because work cannot be reviewed without a PR.\n\n` +
+                    `The branch has been pushed to the remote. To recover:\n` +
+                    `\`\`\`bash\ngh pr create --head ${hasPushedWork.branch} --title "feat: <title>" --body "..."\n\`\`\`\n` +
+                    `Or re-trigger the agent to complete the PR creation step.`
+                  )
+                } catch {
+                  // Best-effort comment
+                }
+
+                // Do NOT set targetStatus — leave issue in current state
+              } else {
+                // No PR and no pushed commits ahead of main — genuinely clean completion
+                targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+              }
             }
           } else {
             targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
@@ -2754,6 +2882,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
         heartbeatWriter?.recordThinking()
         sessionLogger?.logAssistant(event.text)
+
+        // Detect GitHub PR URLs in assistant text (backup for tool_result detection)
+        if (sessionId && !agent.pullRequestUrl) {
+          const prUrl = this.extractPullRequestUrl(event.text)
+          if (prUrl) {
+            log?.info('Pull request detected in assistant text', { prUrl })
+            agent.pullRequestUrl = prUrl
+            await this.updateSessionPullRequest(sessionId, prUrl, agent)
+          }
+        }
+
         if (emitter) {
           await emitter.emitThought(event.text.substring(0, 200))
         }
@@ -2816,6 +2955,16 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           // Store full result for completion comment posting later
           if (event.message) {
             agent.resultMessage = event.message
+
+            // Detect GitHub PR URLs in final result message (backup for tool_result detection)
+            if (sessionId && !agent.pullRequestUrl) {
+              const prUrl = this.extractPullRequestUrl(event.message)
+              if (prUrl) {
+                log?.info('Pull request detected in result message', { prUrl })
+                agent.pullRequestUrl = prUrl
+                await this.updateSessionPullRequest(sessionId, prUrl, agent)
+              }
+            }
           }
 
           // Update state to completing/completed (only for worktree-based agents)
