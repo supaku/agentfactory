@@ -28,6 +28,8 @@ import {
 } from './issue-lock.js'
 import { cleanupOrphanedSessions } from './orphan-cleanup.js'
 import { runQueueMaintenance } from './scheduler/migration.js'
+import { getAllQuotaConfigs } from './fleet-quota-storage.js'
+import { cleanupStaleSessions, getConcurrentSessionIds } from './fleet-quota-tracker.js'
 import { evaluateWorkerHealth, detectStuckSignals } from './health-probes.js'
 import { decideRemediation } from './stuck-decision-tree.js'
 import {
@@ -148,6 +150,15 @@ export class PatrolLoop {
         }
       } catch (err) {
         log.error('queue_maintenance_failed', { error: String(err) })
+      }
+
+      // Step 5: Fleet quota stale session cleanup
+      try {
+        await this.cleanupQuotaStaleSessions()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        log.error('Fleet quota stale session cleanup failed', { error: errorMsg })
+        result.errors.push({ context: 'quota-stale-cleanup', error: errorMsg })
       }
 
       // Fire completion callback
@@ -511,6 +522,33 @@ export class PatrolLoop {
       const errorMsg = err instanceof Error ? err.message : String(err)
       log.error('Orphan cleanup failed during patrol', { error: errorMsg })
       result.errors.push({ context: 'orphan-cleanup', error: errorMsg })
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 5: Fleet Quota Stale Session Cleanup
+  // -------------------------------------------------------------------------
+
+  /**
+   * For each configured fleet quota, compare the concurrent session set
+   * against actually active sessions in Redis. Remove stale entries that
+   * belong to crashed/terminated workers.
+   */
+  private async cleanupQuotaStaleSessions(): Promise<void> {
+    const quotas = await getAllQuotaConfigs()
+    if (quotas.length === 0) return
+
+    const activeSessions = await getSessionsByStatus(['running', 'claimed'])
+    const activeIds = new Set(activeSessions.map((s) => s.linearSessionId))
+
+    let totalRemoved = 0
+    for (const quota of quotas) {
+      const removed = await cleanupStaleSessions(quota.name, activeIds)
+      totalRemoved += removed
+    }
+
+    if (totalRemoved > 0) {
+      log.info('Fleet quota stale sessions cleaned up', { totalRemoved })
     }
   }
 

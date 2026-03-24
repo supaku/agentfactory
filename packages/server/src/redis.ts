@@ -454,3 +454,19 @@ export async function redisIncrByFloat(
   const result = await redis.incrbyfloat(key, increment)
   return parseFloat(result)
 }
+
+/**
+ * Execute a Lua script atomically via EVAL.
+ * @param script - The Lua script source
+ * @param keys - KEYS array passed to the script
+ * @param args - ARGV array passed to the script
+ * @returns the script's return value
+ */
+export async function redisEval(
+  script: string,
+  keys: string[],
+  args: (string | number)[]
+): Promise<unknown> {
+  const redis = getRedisClient()
+  return redis.eval(script, keys.length, ...keys, ...args.map(String))
+}
