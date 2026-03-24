@@ -25,8 +25,8 @@ export * from './agent-tracking.js'
 // Webhook idempotency
 export * from './webhook-idempotency.js'
 
-// Pending prompts
-export * from './pending-prompts.js'
+// Agent inbox (Valkey Streams — replaces pending-prompts)
+export * from './agent-inbox.js'
 
 // Orphan cleanup
 export * from './orphan-cleanup.js'
