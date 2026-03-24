@@ -5,9 +5,10 @@ vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
+  renameSync: vi.fn(),
 }))
 
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs'
 import { resolve } from 'path'
 import {
   getAgentDir,
@@ -20,8 +21,12 @@ import {
   checkRecovery,
   createInitialState,
   buildRecoveryPrompt,
+  buildResumeContext,
   getHeartbeatTimeoutFromEnv,
   getMaxRecoveryAttemptsFromEnv,
+  getSummaryPath,
+  readSummary,
+  writeSummary,
 } from './state-recovery.js'
 import type { HeartbeatState, WorktreeState, TodosState } from './state-types.js'
 
@@ -437,6 +442,74 @@ describe('buildRecoveryPrompt', () => {
 
     expect(prompt).not.toContain('PREVIOUS TODO LIST')
   })
+
+  it('includes context section at beginning when provided', () => {
+    const state = makeState()
+    const contextSection = '<context-summary>\n## Session Intent\nFix auth bug\n</context-summary>'
+
+    const prompt = buildRecoveryPrompt(state, undefined, contextSection)
+
+    // Context should be at the beginning
+    expect(prompt.startsWith('<context-summary>')).toBe(true)
+    expect(prompt).toContain('You are resuming work on this task')
+  })
+
+  it('duplicates context at end for lost-in-the-middle mitigation', () => {
+    const state = makeState()
+    const contextSection = '<context-summary>\n## Session Intent\nFix auth bug\n</context-summary>'
+
+    const prompt = buildRecoveryPrompt(state, undefined, contextSection)
+
+    expect(prompt).toContain('KEY CONTEXT REMINDER:')
+    // Should appear twice
+    const occurrences = prompt.split('<context-summary>').length - 1
+    expect(occurrences).toBe(2)
+  })
+
+  it('works without context section (backward compatible)', () => {
+    const state = makeState()
+    const prompt = buildRecoveryPrompt(state)
+
+    expect(prompt).not.toContain('<context-summary>')
+    expect(prompt).not.toContain('KEY CONTEXT REMINDER')
+    expect(prompt).toContain('Resume work on SUP-42')
+  })
+
+  it('does not expose token counts or anxiety language', () => {
+    const state = makeState()
+    const contextSection = '<context-summary>\n## Session Intent\nTest\n</context-summary>'
+
+    const prompt = buildRecoveryPrompt(state, undefined, contextSection)
+
+    expect(prompt).not.toContain('token')
+    expect(prompt).not.toContain('compressed')
+    expect(prompt).not.toContain('limited')
+    expect(prompt).not.toContain('running out')
+  })
+})
+
+describe('buildResumeContext', () => {
+  it('returns empty string when no context provided', () => {
+    expect(buildResumeContext('')).toBe('')
+  })
+
+  it('wraps context section with neutral framing', () => {
+    const contextSection = '<context-summary>\n## Session Intent\nTest\n</context-summary>'
+    const result = buildResumeContext(contextSection)
+
+    expect(result).toContain('Here is your session context')
+    expect(result).toContain('<context-summary>')
+  })
+
+  it('does not include anxiety-inducing language', () => {
+    const contextSection = '<context-summary>Test</context-summary>'
+    const result = buildResumeContext(contextSection)
+
+    expect(result).not.toContain('compres')
+    expect(result).not.toContain('token')
+    expect(result).not.toContain('limit')
+    expect(result).not.toContain('lost')
+  })
 })
 
 describe('getHeartbeatTimeoutFromEnv', () => {
@@ -510,5 +583,67 @@ describe('getMaxRecoveryAttemptsFromEnv', () => {
   it('returns default for negative value', () => {
     process.env.AGENT_MAX_RECOVERY_ATTEMPTS = '-1'
     expect(getMaxRecoveryAttemptsFromEnv()).toBe(3)
+  })
+})
+
+describe('getSummaryPath', () => {
+  it('returns summary.json path under .agent directory', () => {
+    expect(getSummaryPath(WORKTREE)).toBe(resolve(WORKTREE, '.agent', 'summary.json'))
+  })
+})
+
+describe('readSummary', () => {
+  it('returns parsed summary when file exists', () => {
+    const summary = {
+      schemaVersion: 1,
+      sessionIntent: 'Fix auth bug',
+      fileModifications: [],
+      decisionsMade: [],
+      nextSteps: ['Write tests'],
+      compactionCount: 0,
+      lastCompactedAt: 1000,
+      tokenEstimate: 500,
+    }
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockReturnValue(JSON.stringify(summary))
+
+    const result = readSummary(WORKTREE)
+    expect(result).toEqual(summary)
+  })
+
+  it('returns null when file does not exist', () => {
+    vi.mocked(existsSync).mockReturnValue(false)
+    expect(readSummary(WORKTREE)).toBeNull()
+  })
+
+  it('returns null when file contains invalid JSON', () => {
+    vi.mocked(existsSync).mockReturnValue(true)
+    vi.mocked(readFileSync).mockReturnValue('not json')
+    expect(readSummary(WORKTREE)).toBeNull()
+  })
+})
+
+describe('writeSummary', () => {
+  it('writes summary atomically using temp file and rename', () => {
+    const summary = {
+      schemaVersion: 1,
+      sessionIntent: 'Test intent',
+      fileModifications: [],
+      decisionsMade: [],
+      nextSteps: [],
+      compactionCount: 0,
+      lastCompactedAt: 1000,
+      tokenEstimate: 100,
+    }
+
+    vi.mocked(existsSync).mockReturnValue(true)
+    writeSummary(WORKTREE, summary)
+
+    const summaryPath = getSummaryPath(WORKTREE)
+    expect(writeFileSync).toHaveBeenCalledWith(
+      summaryPath + '.tmp',
+      JSON.stringify(summary, null, 2)
+    )
+    expect(renameSync).toHaveBeenCalledWith(summaryPath + '.tmp', summaryPath)
   })
 })

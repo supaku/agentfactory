@@ -59,6 +59,11 @@ export interface WorktreeState {
    * Enables task persistence across crashes and subagent coordination
    */
   taskListId?: string
+  /**
+   * Version counter for coordinating summary freshness.
+   * Incremented each time the StructuredSummary is updated.
+   */
+  summaryVersion?: number
 }
 
 /**
@@ -191,4 +196,68 @@ export interface ProgressLoggerConfig {
   agentDir: string
   /** Maximum log file size in bytes before rotation (default: 1MB) */
   maxSizeBytes?: number
+}
+
+// --- Context Window Management Types ---
+
+/**
+ * Schema version for forward compatibility of summary files
+ */
+export const SUMMARY_SCHEMA_VERSION = 1
+
+/**
+ * Action performed on a file during the session
+ */
+export type FileAction = 'read' | 'created' | 'modified' | 'deleted'
+
+/**
+ * Record of a file operation during the session
+ */
+export interface FileModification {
+  /** Absolute or relative file path */
+  path: string
+  /** Type of operation performed */
+  action: FileAction
+  /** Why this file was touched */
+  reason: string
+  /** Unix timestamp of last modification */
+  lastModifiedAt: number
+}
+
+/**
+ * A decision made during the session with rationale
+ */
+export interface Decision {
+  /** What was decided */
+  description: string
+  /** Why this choice was made */
+  rationale: string
+  /** What alternatives were rejected */
+  alternatives?: string[]
+  /** Unix timestamp when decision was made */
+  madeAt: number
+}
+
+/**
+ * Structured summary for context window management.
+ * Persisted to .agent/summary.json for crash recovery and session resume.
+ * Uses Factory.ai-style structured summarization with incremental compression.
+ */
+export interface StructuredSummary {
+  /** Schema version for forward compatibility */
+  schemaVersion: number
+  /** What the agent is trying to accomplish */
+  sessionIntent: string
+  /** Files touched with action and reason */
+  fileModifications: FileModification[]
+  /** Choices made with rationale */
+  decisionsMade: Decision[]
+  /** Remaining planned work */
+  nextSteps: string[]
+  /** How many compression passes have occurred */
+  compactionCount: number
+  /** Unix timestamp of last compression */
+  lastCompactedAt: number
+  /** Approximate token count of this summary */
+  tokenEstimate: number
 }
