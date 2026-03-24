@@ -2462,6 +2462,27 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log?.info('No auto-transition configured for work type', { workType })
         }
 
+        // Merge queue: enqueue PR after successful merge work
+        if (workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+          try {
+            const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+            if (prMatch) {
+              const [, owner, repo, prNum] = prMatch
+              const canEnqueue = await this.mergeQueueAdapter.canEnqueue(owner, repo, parseInt(prNum, 10))
+              if (canEnqueue) {
+                const status = await this.mergeQueueAdapter.enqueue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR enqueued in merge queue', { owner, repo, prNumber: prNum, state: status.state })
+              } else {
+                log?.info('PR not eligible for merge queue', { owner, repo, prNumber: prNum })
+              }
+            }
+          } catch (error) {
+            log?.warn('Failed to enqueue PR in merge queue', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
         // Unassign agent from issue for clean handoff visibility
         // This enables automated QA pickup via webhook
         // Skip unassignment for research work (user should decide when to move to backlog)
@@ -2825,6 +2846,22 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
           progressLogger?.logError('Agent error result', new Error(errorMessage))
           sessionLogger?.logError('Agent error result', new Error(errorMessage), { subtype: event.errorSubtype })
+
+          // Merge queue: dequeue PR on merge agent failure
+          if (agent.workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+            try {
+              const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+              if (prMatch) {
+                const [, owner, repo, prNum] = prMatch
+                await this.mergeQueueAdapter.dequeue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR dequeued from merge queue after failure', { owner, repo, prNumber: prNum })
+              }
+            } catch (dequeueError) {
+              log?.warn('Failed to dequeue PR from merge queue', {
+                error: dequeueError instanceof Error ? dequeueError.message : String(dequeueError),
+              })
+            }
+          }
 
           // Report tool errors as Linear issues for tracking
           // Only report for 'error_during_execution' subtype (tool/execution errors)
@@ -3291,6 +3328,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       projectName,
       labels: labelNames,
     })
+  }
+
+  /**
+   * Get the merge queue adapter, if configured.
+   * Returns undefined if no merge queue is enabled.
+   */
+  getMergeQueueAdapter(): import('../merge-queue/types.js').MergeQueueAdapter | undefined {
+    return this.mergeQueueAdapter
   }
 
   /**
