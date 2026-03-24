@@ -152,6 +152,10 @@ export interface TemplateContext {
   testCommand?: string
   /** Validation command override — replaces typecheck for compiled projects (e.g. 'cargo clippy') */
   validateCommand?: string
+
+  // Phase output data (parallel data passing)
+  /** Collected outputs from upstream phases, keyed by phase name then output key */
+  phaseOutputs?: Record<string, Record<string, unknown>>
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +282,8 @@ export const TemplateContextSchema = z.object({
   buildCommand: z.string().optional(),
   testCommand: z.string().optional(),
   validateCommand: z.string().optional(),
+  // Phase output data (parallel data passing)
+  phaseOutputs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 })
 
 // ---------------------------------------------------------------------------

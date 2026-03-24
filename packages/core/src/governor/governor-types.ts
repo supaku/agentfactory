@@ -33,6 +33,7 @@ export type GovernorAction =
   | 'trigger-qa'
   | 'trigger-acceptance'
   | 'trigger-refinement'
+  | 'trigger-parallel-group'
   | 'decompose'
   | 'escalate-human'
   | 'none'

@@ -19,6 +19,9 @@ import { DEFAULT_GOVERNOR_CONFIG } from './governor-types.js'
 import { decideAction, type DecisionContext } from './decision-engine.js'
 import type { OverridePriority } from './override-parser.js'
 import { WorkflowRegistry, type WorkflowRegistryConfig } from '../workflow/workflow-registry.js'
+import { ParallelismExecutor } from '../workflow/parallelism-executor.js'
+import type { ParallelTask } from '../workflow/parallelism-types.js'
+import { FanOutStrategy, FanInStrategy, RaceStrategy } from '../workflow/strategies/index.js'
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -86,6 +89,8 @@ export interface GovernorDependencies {
   getCompletedSessionCount: (issueId: string) => Promise<number>
   /** Dispatch work for an issue with a specific action */
   dispatchWork: (issue: GovernorIssue, action: GovernorAction) => Promise<void>
+  /** Get sub-issues for a parent issue (for parallel dispatch) */
+  getSubIssues?: (parentId: string) => Promise<GovernorIssue[]>
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +111,7 @@ export class WorkflowGovernor {
   private readonly deps: GovernorDependencies
   private readonly callbacks: WorkflowGovernorCallbacks
   private readonly workflowRegistry: WorkflowRegistry
+  private readonly parallelismExecutor: ParallelismExecutor
   private intervalHandle: ReturnType<typeof setInterval> | null = null
   private running = false
   private scanning = false
@@ -114,12 +120,23 @@ export class WorkflowGovernor {
     config: Partial<GovernorConfig> & { workflow?: WorkflowRegistryConfig },
     deps: GovernorDependencies,
     callbacks?: WorkflowGovernorCallbacks,
+    parallelismExecutor?: ParallelismExecutor,
   ) {
     const { workflow: workflowConfig, ...governorConfig } = config
     this.config = { ...DEFAULT_GOVERNOR_CONFIG, ...governorConfig }
     this.deps = deps
     this.callbacks = callbacks ?? {}
     this.workflowRegistry = WorkflowRegistry.create(workflowConfig)
+
+    // Use the provided executor or create a default one with all strategies registered
+    if (parallelismExecutor) {
+      this.parallelismExecutor = parallelismExecutor
+    } else {
+      this.parallelismExecutor = new ParallelismExecutor()
+      this.parallelismExecutor.registerStrategy('fan-out', new FanOutStrategy())
+      this.parallelismExecutor.registerStrategy('fan-in', new FanInStrategy())
+      this.parallelismExecutor.registerStrategy('race', new RaceStrategy())
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -308,6 +325,20 @@ export class WorkflowGovernor {
       }
 
       try {
+        // Handle parallel group dispatch separately
+        if (item.action === 'trigger-parallel-group') {
+          await this.handleParallelGroupDispatch(item.issue)
+          result.actionsDispatched++
+
+          log.info('Dispatched parallel group action', {
+            issueIdentifier: item.issue.identifier,
+            action: item.action,
+            reason: item.reason,
+            priority: item.priority ?? 'none',
+          })
+          continue
+        }
+
         await this.deps.dispatchWork(item.issue, item.action)
         result.actionsDispatched++
 
@@ -378,5 +409,59 @@ export class WorkflowGovernor {
     }
 
     return decideAction(ctx)
+  }
+
+  /**
+   * Handle dispatching work for a parallel group.
+   *
+   * Fetches sub-issues for the parent, finds the applicable parallelism group,
+   * and executes the group using the ParallelismExecutor.
+   */
+  private async handleParallelGroupDispatch(issue: GovernorIssue): Promise<void> {
+    if (!this.deps.getSubIssues) {
+      log.warn('getSubIssues dependency not provided, falling back to normal dispatch')
+      return
+    }
+
+    const workflow = this.workflowRegistry.getWorkflow()
+    if (!workflow?.parallelism) return
+
+    const subIssues = await this.deps.getSubIssues(issue.id)
+
+    // Find the applicable parallelism group.
+    // Use the first group whose phases include a phase that can be
+    // resolved from the current workflow transitions.
+    const group = workflow.parallelism.find(g => g.phases.length > 0)
+    if (!group) return
+
+    const tasks: ParallelTask[] = subIssues.map(sub => ({
+      id: sub.id,
+      issueId: sub.identifier,
+      phaseName: group.phases[0]!,
+    }))
+
+    const result = await this.parallelismExecutor.execute(
+      group,
+      tasks,
+      async (task) => {
+        await this.deps.dispatchWork(
+          subIssues.find(s => s.id === task.id)!,
+          `trigger-${task.phaseName}` as GovernorAction,
+        )
+        return {
+          id: task.id,
+          issueId: task.issueId,
+          success: true,
+        }
+      },
+    )
+
+    log.info('Parallel group dispatched', {
+      group: group.name,
+      strategy: group.strategy,
+      completed: result.completed.length,
+      failed: result.failed.length,
+      cancelled: result.cancelled.length,
+    })
   }
 }

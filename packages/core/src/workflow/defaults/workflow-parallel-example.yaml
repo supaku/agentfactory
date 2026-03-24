@@ -1,0 +1,114 @@
+apiVersion: v1.1
+kind: WorkflowDefinition
+metadata:
+  name: parallel-development
+  description: >
+    Example workflow demonstrating parallelism groups. Uses fan-in strategy
+    to develop all sub-issues concurrently and wait for completion before QA.
+
+# ─── Phases ───────────────────────────────────────────────────────────────────
+# Each phase references a WorkflowTemplate by name. The development phase
+# declares structured outputs that downstream phases (qa) consume as inputs.
+
+phases:
+  - name: research
+    template: research
+    description: Research issue requirements and feasibility
+
+  - name: backlog-creation
+    template: backlog-writer
+    description: Create sub-issues from research findings
+
+  - name: development
+    template: development
+    description: Implement the feature or fix
+    outputs:
+      prUrl:
+        type: url
+        required: true
+        description: Pull request URL created by the agent
+      testsPassed:
+        type: boolean
+        description: Whether all tests passed
+
+  - name: qa
+    template: qa-coordination
+    description: Run QA across all completed work
+    inputs:
+      prUrls:
+        from: development.prUrl
+        description: PR URLs from parallel development branches
+
+  - name: acceptance
+    template: acceptance-coordination
+    description: Final human acceptance review
+
+  - name: refinement
+    template: refinement
+    description: Address rejection feedback
+    variants:
+      context-enriched: refinement-context-enriched
+      decompose: refinement-decompose
+
+# ─── Parallelism ─────────────────────────────────────────────────────────────
+# Defines groups of phases that execute concurrently. The fan-in strategy
+# spawns one execution per sub-issue and waits for all to complete before
+# allowing downstream phases to proceed.
+
+parallelism:
+  - name: sub-issue-fan-out
+    description: Develop all sub-issues concurrently with bounded parallelism
+    phases:
+      - development
+    strategy: fan-in
+    maxConcurrent: 5
+    waitForAll: true
+
+# ─── Transitions ──────────────────────────────────────────────────────────────
+# Maps Linear statuses to target phases. Higher priority transitions are
+# evaluated first when multiple transitions share the same source status.
+
+transitions:
+  # Icebox routing (top-of-funnel)
+  - from: Icebox
+    to: research
+    condition: "{{ not researchCompleted }}"
+    priority: 10
+
+  - from: Icebox
+    to: backlog-creation
+    condition: "{{ researchCompleted and not backlogCreationCompleted }}"
+    priority: 5
+
+  # Standard pipeline
+  - from: Backlog
+    to: development
+
+  - from: Started
+    to: development
+
+  - from: Finished
+    to: qa
+
+  - from: Delivered
+    to: acceptance
+
+  - from: Rejected
+    to: refinement
+
+# ─── Escalation ───────────────────────────────────────────────────────────────
+# Configurable escalation ladder. The highest cycle <= current cycle wins.
+
+escalation:
+  ladder:
+    - cycle: 1
+      strategy: normal
+    - cycle: 2
+      strategy: context-enriched
+    - cycle: 3
+      strategy: decompose
+    - cycle: 4
+      strategy: escalate-human
+  circuitBreaker:
+    maxSessionsPerIssue: 8
+    maxSessionsPerPhase: 3

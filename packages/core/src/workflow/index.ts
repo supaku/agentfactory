@@ -8,6 +8,8 @@
 export type {
   EscalationStrategy,
   PhaseDefinition,
+  PhaseOutputDeclaration,
+  PhaseInputDeclaration,
   TransitionDefinition,
   EscalationLadderRung,
   EscalationConfig,
@@ -21,6 +23,8 @@ export type {
 
 export {
   PhaseDefinitionSchema,
+  PhaseOutputDeclarationSchema,
+  PhaseInputDeclarationSchema,
   TransitionDefinitionSchema,
   EscalationLadderRungSchema,
   EscalationConfigSchema,
@@ -122,3 +126,25 @@ export {
   clearGatesForIssue,
   getApplicableGates,
 } from './gates/gate-evaluator.js'
+
+// Phase output/input handling
+export { PhaseOutputCollector } from './phase-output-collector.js'
+export { PhaseContextInjector } from './phase-context-injector.js'
+
+// Parallelism types and executor
+export type {
+  ParallelTask,
+  ParallelTaskResult,
+  ParallelTaskError,
+  ParallelismResult,
+  ParallelismStrategy,
+  ParallelismStrategyOptions,
+} from './parallelism-types.js'
+
+export { ConcurrencySemaphore } from './concurrency-semaphore.js'
+export { ParallelismExecutor } from './parallelism-executor.js'
+
+export type { AgentCancellation } from './agent-cancellation.js'
+export { InMemoryAgentCancellation } from './agent-cancellation.js'
+
+export { FanOutStrategy, FanInStrategy, RaceStrategy } from './strategies/index.js'

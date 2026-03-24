@@ -31,6 +31,29 @@ export type EscalationStrategy =
 // ---------------------------------------------------------------------------
 
 /**
+ * Declares a structured output that a phase produces.
+ * Outputs are extracted from agent results using marker comments.
+ */
+export interface PhaseOutputDeclaration {
+  /** Data type of the output value */
+  type: 'string' | 'json' | 'url' | 'boolean'
+  /** Human-readable description of the output */
+  description?: string
+  /** Whether this output must be present (default: false) */
+  required?: boolean
+}
+
+/**
+ * Declares an input dependency on an upstream phase's output.
+ */
+export interface PhaseInputDeclaration {
+  /** Reference to upstream output in "phaseName.outputKey" format */
+  from: string
+  /** Human-readable description of the input */
+  description?: string
+}
+
+/**
  * A phase in the workflow graph. Each phase references a WorkflowTemplate
  * by name and optionally provides strategy-specific template variants.
  */
@@ -51,6 +74,30 @@ export interface PhaseDefinition {
   retry?: TemplateRetryConfig
   /** Per-template timeout configuration */
   timeout?: TemplateTimeoutConfig
+  /**
+   * Structured outputs this phase produces.
+   * Keys are output names; values describe the output type and requirements.
+   *
+   * Outputs are extracted from agent session results using marker comments
+   * and made available to downstream phases via {@link PhaseInputDeclaration.from}.
+   *
+   * When a phase runs inside a parallelism group, each parallel branch
+   * produces its own output values. Downstream phases that declare inputs
+   * referencing these outputs receive an aggregated array of all branch values
+   * (e.g., an array of PR URLs from all parallel development branches).
+   */
+  outputs?: Record<string, PhaseOutputDeclaration>
+  /**
+   * Input dependencies on upstream phase outputs.
+   * Keys are local input names; values reference upstream outputs
+   * using "phaseName.outputKey" dot-notation in the `from` field.
+   *
+   * The orchestrator resolves these references before phase execution,
+   * injecting the upstream output values into the agent session context.
+   * If the upstream phase is part of a parallelism group, the input receives
+   * the collected array of all branch outputs rather than a single value.
+   */
+  inputs?: Record<string, PhaseInputDeclaration>
 }
 
 // ---------------------------------------------------------------------------
@@ -145,19 +192,72 @@ export interface GateDefinition {
 
 /**
  * Defines a group of phases that can execute concurrently.
+ *
+ * Parallelism groups allow the orchestrator to spawn multiple concurrent
+ * executions of the listed phases (e.g., one per sub-issue). The strategy
+ * controls how branches are dispatched and how their results are collected.
+ *
+ * **Strategies:**
+ *
+ * - **fan-out** -- Spawn one execution per work item and let them run
+ *   independently. Use when downstream phases do not depend on the results
+ *   of all branches completing (e.g., independent deploys).
+ *
+ * - **fan-in** -- Spawn one execution per work item and **wait for every
+ *   branch to complete** before allowing downstream phases to proceed. Use
+ *   when a subsequent phase (e.g., QA) needs the collected outputs from all
+ *   branches (e.g., all PR URLs). This is the most common strategy for
+ *   parallel sub-issue development.
+ *
+ * - **race** -- Spawn multiple executions but **only keep the first one
+ *   that succeeds**, cancelling the rest. Use for speculative execution
+ *   where multiple approaches are tried and the fastest wins (e.g.,
+ *   competing solution strategies).
+ *
+ * **Output aggregation:** When phases inside a parallelism group declare
+ * `outputs`, each branch produces its own values. Downstream phases that
+ * reference those outputs via `inputs.from` receive an aggregated array
+ * of all branch results (fan-in) or the winning branch's result (race).
  */
 export interface ParallelismGroupDefinition {
-  /** Unique group name */
+  /** Unique group name used to reference this parallelism configuration */
   name: string
-  /** Human-readable description */
+  /** Human-readable description of the parallelism group's purpose */
   description?: string
-  /** Phase names to execute in parallel */
+  /**
+   * Phase names to execute in parallel. Each listed phase must be defined
+   * in the top-level `phases` array. The orchestrator spawns concurrent
+   * executions of these phases (e.g., one per sub-issue).
+   */
   phases: string[]
-  /** Parallelism strategy: fan-out, fan-in, or race */
+  /**
+   * Parallelism strategy controlling dispatch and result collection.
+   *
+   * - `fan-out`: fire-and-forget concurrent execution
+   * - `fan-in`: concurrent execution with barrier -- wait for all branches
+   * - `race`: concurrent execution -- keep first success, cancel the rest
+   */
   strategy: 'fan-out' | 'fan-in' | 'race'
-  /** Maximum concurrent executions (default: unlimited) */
+  /**
+   * Maximum number of concurrent branch executions (default: unlimited).
+   *
+   * This limit applies **within this parallelism group only** and is
+   * independent of the orchestrator-level `maxConcurrent` setting. The
+   * effective concurrency is the minimum of both values. For example, if
+   * the orchestrator allows 10 concurrent sessions and this group sets
+   * `maxConcurrent: 5`, at most 5 branches run at once for this group.
+   *
+   * Values above 10 trigger a validation warning as they may overwhelm
+   * downstream services or CI systems.
+   */
   maxConcurrent?: number
-  /** Whether to wait for all parallel executions to complete */
+  /**
+   * Whether to wait for all parallel executions to complete before
+   * proceeding to downstream phases. Defaults to `false`.
+   *
+   * Typically set to `true` with the `fan-in` strategy so that a
+   * subsequent phase (e.g., QA) can consume outputs from every branch.
+   */
   waitForAll?: boolean
 }
 
@@ -240,6 +340,17 @@ export interface WorkflowDefinition {
 // Zod Schemas
 // ---------------------------------------------------------------------------
 
+export const PhaseOutputDeclarationSchema = z.object({
+  type: z.enum(['string', 'json', 'url', 'boolean']),
+  description: z.string().optional(),
+  required: z.boolean().optional(),
+})
+
+export const PhaseInputDeclarationSchema = z.object({
+  from: z.string().min(1),
+  description: z.string().optional(),
+})
+
 export const TransitionDefinitionSchema = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
@@ -269,6 +380,8 @@ export const PhaseDefinitionSchema = z.object({
   variants: z.record(z.string(), z.string()).optional(),
   retry: TemplateRetryConfigSchema.optional(),
   timeout: TemplateTimeoutConfigSchema.optional(),
+  outputs: z.record(z.string(), PhaseOutputDeclarationSchema).optional(),
+  inputs: z.record(z.string(), PhaseInputDeclarationSchema).optional(),
 })
 
 export const EscalationConfigSchema = z.object({
@@ -337,14 +450,89 @@ export const WorkflowDefinitionSchema = z.object({
 /**
  * Validate a parsed YAML object as a WorkflowDefinition.
  * Throws ZodError with detailed messages on failure.
+ *
+ * After Zod schema validation succeeds, performs cross-validation to ensure:
+ * - Parallelism group phase names reference defined phases
+ * - Phase input `from` references point to valid phase.output declarations
+ * - Warns (via console.warn) if maxConcurrent exceeds 10
  */
 export function validateWorkflowDefinition(data: unknown, filePath?: string): WorkflowDefinition {
   try {
-    return WorkflowDefinitionSchema.parse(data)
+    const workflow = WorkflowDefinitionSchema.parse(data)
+
+    // Cross-validation after schema parse succeeds
+    crossValidateWorkflow(workflow, filePath)
+
+    return workflow
   } catch (error) {
     if (filePath && error instanceof z.ZodError) {
       throw new Error(`Invalid workflow definition at ${filePath}: ${error.message}`, { cause: error })
     }
     throw error
+  }
+}
+
+/**
+ * Perform cross-validation checks that go beyond what Zod schema can enforce.
+ * Validates referential integrity between phases, parallelism groups, and input/output declarations.
+ */
+function crossValidateWorkflow(workflow: WorkflowDefinition, filePath?: string): void {
+  const phaseNames = new Set(workflow.phases.map(p => p.name))
+  const phaseOutputs = new Map<string, Set<string>>()
+
+  // Build map of phase outputs
+  for (const phase of workflow.phases) {
+    if (phase.outputs) {
+      phaseOutputs.set(phase.name, new Set(Object.keys(phase.outputs)))
+    }
+  }
+
+  // Validate parallelism group phase references
+  if (workflow.parallelism) {
+    for (const group of workflow.parallelism) {
+      for (const phaseName of group.phases) {
+        if (!phaseNames.has(phaseName)) {
+          const loc = filePath ? ` in ${filePath}` : ''
+          throw new Error(
+            `Parallelism group "${group.name}" references undefined phase "${phaseName}"${loc}`
+          )
+        }
+      }
+      // Warn if maxConcurrent is very high
+      if (group.maxConcurrent && group.maxConcurrent > 10) {
+        console.warn(
+          `[workflow] Parallelism group "${group.name}" has maxConcurrent=${group.maxConcurrent} which may be excessive`
+        )
+      }
+    }
+  }
+
+  // Validate phase input references
+  for (const phase of workflow.phases) {
+    if (phase.inputs) {
+      for (const [inputName, decl] of Object.entries(phase.inputs)) {
+        const parts = decl.from.split('.')
+        if (parts.length !== 2) {
+          const loc = filePath ? ` in ${filePath}` : ''
+          throw new Error(
+            `Phase "${phase.name}" input "${inputName}" has invalid from reference "${decl.from}" — expected "phaseName.outputKey" format${loc}`
+          )
+        }
+        const [sourcePhaseName, sourceOutputKey] = parts
+        if (!phaseNames.has(sourcePhaseName)) {
+          const loc = filePath ? ` in ${filePath}` : ''
+          throw new Error(
+            `Phase "${phase.name}" input "${inputName}" references undefined phase "${sourcePhaseName}"${loc}`
+          )
+        }
+        const sourceOutputs = phaseOutputs.get(sourcePhaseName)
+        if (sourceOutputs && !sourceOutputs.has(sourceOutputKey)) {
+          const loc = filePath ? ` in ${filePath}` : ''
+          throw new Error(
+            `Phase "${phase.name}" input "${inputName}" references undefined output "${sourceOutputKey}" on phase "${sourcePhaseName}"${loc}`
+          )
+        }
+      }
+    }
   }
 }

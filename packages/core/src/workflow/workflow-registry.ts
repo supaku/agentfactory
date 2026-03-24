@@ -11,7 +11,7 @@
  */
 
 import fs from 'node:fs'
-import type { WorkflowDefinition, EscalationConfig } from './workflow-types.js'
+import type { WorkflowDefinition, EscalationConfig, ParallelismGroupDefinition } from './workflow-types.js'
 import { loadWorkflowDefinitionFile, getBuiltinWorkflowPath } from './workflow-loader.js'
 
 // ---------------------------------------------------------------------------
@@ -197,6 +197,14 @@ export class WorkflowRegistry {
     const match = sorted.find(rung => cycleCount >= rung.cycle)
 
     return match?.strategy ?? 'normal'
+  }
+
+  /**
+   * Get the parallelism group that contains the given phase, if any.
+   */
+  getParallelismGroup(phaseName: string): ParallelismGroupDefinition | undefined {
+    if (!this.workflow?.parallelism) return undefined
+    return this.workflow.parallelism.find(g => g.phases.includes(phaseName))
   }
 
   /**
