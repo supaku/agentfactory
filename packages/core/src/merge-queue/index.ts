@@ -4,6 +4,8 @@
  * Factory and exports for merge queue adapters.
  */
 
+import { GitHubNativeMergeQueueAdapter } from './adapters/github-native.js'
+
 export type { MergeQueueAdapter, MergeQueueStatus, MergeQueueProviderName } from './types.js'
 
 /**
@@ -19,11 +21,7 @@ export type { MergeQueueAdapter, MergeQueueStatus, MergeQueueProviderName } from
 export function createMergeQueueAdapter(name: import('./types.js').MergeQueueProviderName): import('./types.js').MergeQueueAdapter {
   switch (name) {
     case 'github-native':
-      // Lazy import to avoid circular dependencies
-      // Implementation will be added in SUP-1261
-      throw new Error(
-        'GitHub native merge queue adapter not yet implemented. See SUP-1261.'
-      )
+      return new GitHubNativeMergeQueueAdapter()
     case 'mergify':
       throw new Error(
         'Mergify merge queue adapter not yet implemented. Contributions welcome.'
