@@ -233,3 +233,24 @@ func (m *MockClient) GetActivities(sessionID string, afterCursor *string) (*Acti
 		SessionStatus: status,
 	}, nil
 }
+
+func (m *MockClient) SubmitTask(req SubmitTaskRequest) (*SubmitTaskResponse, error) {
+	return &SubmitTaskResponse{Submitted: true, TaskID: "mock-task", IssueID: req.IssueID, Status: "pending", Priority: 3, WorkType: "development"}, nil
+}
+
+func (m *MockClient) StopAgent(req StopAgentRequest) (*StopAgentResponse, error) {
+	return &StopAgentResponse{Stopped: true, TaskID: req.TaskID, PreviousStatus: "running", NewStatus: "stopped"}, nil
+}
+
+func (m *MockClient) ForwardPrompt(req ForwardPromptRequest) (*ForwardPromptResponse, error) {
+	return &ForwardPromptResponse{Forwarded: true, PromptID: "mock-prompt", TaskID: req.TaskID, SessionStatus: "running"}, nil
+}
+
+func (m *MockClient) GetCostReport() (*CostReportResponse, error) {
+	return &CostReportResponse{TotalSessions: 5, SessionsWithCostData: 3, TotalCostUsd: 12.50, TotalInputTokens: 50000, TotalOutputTokens: 25000}, nil
+}
+
+func (m *MockClient) ListFleet() (*ListFleetResponse, error) {
+	sessions, _ := m.GetSessions()
+	return &ListFleetResponse{Total: len(sessions.Sessions), Returned: len(sessions.Sessions), Sessions: sessions.Sessions}, nil
+}

@@ -17,6 +17,11 @@ type DataSource interface {
 	GetActivities(sessionID string, afterCursor *string) (*ActivityListResponse, error)
 	StopSession(id string) error
 	SendPrompt(id string, prompt string) error
+	SubmitTask(req SubmitTaskRequest) (*SubmitTaskResponse, error)
+	StopAgent(req StopAgentRequest) (*StopAgentResponse, error)
+	ForwardPrompt(req ForwardPromptRequest) (*ForwardPromptResponse, error)
+	GetCostReport() (*CostReportResponse, error)
+	ListFleet() (*ListFleetResponse, error)
 }
 
 // Client is the HTTP implementation of DataSource.
@@ -120,4 +125,49 @@ func (c *Client) StopSession(id string) error {
 func (c *Client) SendPrompt(id string, prompt string) error {
 	body := map[string]string{"prompt": prompt}
 	return c.post("/api/public/sessions/"+id+"/prompt", body, nil)
+}
+
+// SubmitTask submits a new task to the fleet work queue.
+func (c *Client) SubmitTask(req SubmitTaskRequest) (*SubmitTaskResponse, error) {
+	var resp SubmitTaskResponse
+	if err := c.post("/api/mcp/submit-task", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// StopAgent requests to stop a running agent.
+func (c *Client) StopAgent(req StopAgentRequest) (*StopAgentResponse, error) {
+	var resp StopAgentResponse
+	if err := c.post("/api/mcp/stop-agent", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ForwardPrompt forwards a message to a running agent session.
+func (c *Client) ForwardPrompt(req ForwardPromptRequest) (*ForwardPromptResponse, error) {
+	var resp ForwardPromptResponse
+	if err := c.post("/api/mcp/forward-prompt", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GetCostReport fetches the fleet-wide cost report.
+func (c *Client) GetCostReport() (*CostReportResponse, error) {
+	var resp CostReportResponse
+	if err := c.get("/api/mcp/cost-report", &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListFleet fetches a list of agents with optional filtering.
+func (c *Client) ListFleet() (*ListFleetResponse, error) {
+	var resp ListFleetResponse
+	if err := c.get("/api/mcp/list-fleet", &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
