@@ -58,3 +58,67 @@ export { resolveRetryConfig, resolveTimeoutConfig } from './retry-resolver.js'
 // Expression module re-exports for consumers
 export type { EvaluationContext } from './expression/index.js'
 export { buildEvaluationContext, evaluateCondition } from './expression/index.js'
+
+// Gate state types
+export type { GateState, GateStorage } from './gate-state.js'
+export {
+  InMemoryGateStorage,
+  initGateStorage,
+  activateGate,
+  satisfyGate,
+  timeoutGate,
+} from './gate-state.js'
+export { parseDuration as parseGateDuration } from './gate-state.js'
+
+// Signal gate types and functions
+export type { SignalGateTrigger, SignalGateResult } from './gates/signal-gate.js'
+export {
+  isSignalGateTrigger,
+  evaluateSignalGate,
+  getApplicableSignalGates,
+  createImplicitHoldGate,
+  createImplicitResumeGate,
+  IMPLICIT_HOLD_GATE_NAME,
+  IMPLICIT_RESUME_GATE_NAME,
+} from './gates/signal-gate.js'
+
+// Webhook gate types and functions
+export type { WebhookGateTrigger, WebhookGateResult, WebhookGateActivation } from './gates/webhook-gate.js'
+export {
+  generateWebhookToken,
+  buildCallbackUrl,
+  validateWebhookCallback,
+  evaluateWebhookGate,
+  isWebhookGateTrigger,
+  getApplicableWebhookGates,
+  createWebhookGateActivation,
+} from './gates/webhook-gate.js'
+
+// Timeout engine types and functions
+export type { TimeoutCheckResult, TimedOutGate, TimeoutResolution } from './gates/timeout-engine.js'
+export {
+  checkGateTimeout,
+  checkAllGateTimeouts,
+  resolveTimeoutAction,
+  processGateTimeouts,
+} from './gates/timeout-engine.js'
+
+// Timer gate types and functions
+export type { TimerGateTrigger, TimerGateResult } from './gates/timer-gate.js'
+export {
+  evaluateTimerGate,
+  computeNextCronFireTime,
+  isTimerGateTrigger,
+  getApplicableTimerGates,
+  parseCronField,
+  parseCronExpression,
+} from './gates/timer-gate.js'
+
+// Gate evaluator (main orchestration)
+export type { GateEvaluationOptions, GateEvaluationResult } from './gates/gate-evaluator.js'
+export {
+  evaluateGatesForPhase,
+  activateGatesForPhase,
+  clearGatesForIssue,
+  getApplicableGates,
+} from './gates/gate-evaluator.js'

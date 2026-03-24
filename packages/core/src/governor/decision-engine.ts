@@ -16,6 +16,7 @@ import {
 } from './top-of-funnel.js'
 import type { WorkflowRegistry } from '../workflow/workflow-registry.js'
 import { evaluateTransitions } from '../workflow/transition-engine.js'
+import type { GateEvaluationResult } from '../workflow/gates/gate-evaluator.js'
 
 // ---------------------------------------------------------------------------
 // Decision Context
@@ -44,6 +45,8 @@ export interface DecisionContext {
    * switch statement. Falls back to the switch statement when absent.
    */
   workflowRegistry?: WorkflowRegistry
+  /** Gate evaluation result from the gate system (Phase 4) */
+  gateEvaluation?: GateEvaluationResult
 }
 
 /** Max agent sessions before the circuit breaker trips and the issue is held */
@@ -100,6 +103,18 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
 
   if (ctx.isHeld) {
     return { action: 'none', reason: `Issue ${issue.identifier} is held (HOLD override active)` }
+  }
+
+  // --- Gate check (Phase 4) ---
+  // When the governor has evaluated gates for the current phase and any are
+  // unsatisfied, block the transition. The governor populates gateEvaluation
+  // via the gate evaluator before calling decideAction().
+  if (ctx.gateEvaluation && !ctx.gateEvaluation.allSatisfied) {
+    const activeNames = ctx.gateEvaluation.activeGates.map(g => g.gateName).join(', ')
+    return {
+      action: 'none',
+      reason: `Issue ${issue.identifier} has unsatisfied gates: ${activeNames}`,
+    }
   }
 
   // --- Circuit breaker ---

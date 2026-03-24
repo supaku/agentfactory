@@ -91,3 +91,9 @@ export * from './workflow-store.js'
 
 // Workflow registry watcher (hot-reload via Redis pub/sub)
 export * from './workflow-registry-watcher.js'
+
+// Gate storage (Redis-backed gate lifecycle state)
+export * from './gate-storage.js'
+
+// Webhook gate endpoint handler (framework-agnostic)
+export * from './webhook-gate-handler.js'
