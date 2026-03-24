@@ -23,6 +23,7 @@ export type AgentWorkType =
   | 'coordination'
   | 'qa-coordination'
   | 'acceptance-coordination'
+  | 'merge'                 // Merge queue: handle PR merge operations
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').
