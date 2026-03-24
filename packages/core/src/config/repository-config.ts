@@ -101,6 +101,20 @@ export const RepositoryConfigSchema = z.object({
    */
   providers: ProvidersConfigSchema.optional(),
   /**
+   * Merge queue configuration.
+   * Controls which merge queue provider agents use for automated merging.
+   */
+  mergeQueue: z.object({
+    /** Merge queue provider to use */
+    provider: z.enum(['github-native', 'mergify', 'trunk']).default('github-native'),
+    /** Whether merge queue integration is enabled */
+    enabled: z.boolean().default(false),
+    /** Automatically add approved PRs to merge queue */
+    autoMerge: z.boolean().default(true),
+    /** Required CI checks that must pass before merge (provider-specific) */
+    requiredChecks: z.array(z.string()).optional(),
+  }).optional(),
+  /**
    * Git merge driver to use in agent worktrees.
    * 'mergiraf' enables syntax-aware merging for supported file types.
    * Defaults to 'default' (standard git line-based merge).
