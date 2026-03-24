@@ -1,18 +1,13 @@
 /**
  * GET, POST /api/sessions/[id]/prompts
  *
- * Get pending prompts or claim a specific prompt.
+ * DEPRECATED: Replaced by agent inbox streams (readInbox/ack).
+ * These endpoints return 410 Gone to signal callers to migrate.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireWorkerAuth } from '../../middleware/worker-auth.js'
-import {
-  getSessionState,
-  getPendingPrompts,
-  popPendingPrompt,
-  claimPendingPrompt,
-  createLogger,
-} from '@renseiai/agentfactory-server'
+import { createLogger } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:sessions:prompts')
 
@@ -26,56 +21,15 @@ export function createSessionPromptsGetHandler() {
     if (authError) return authError
 
     const { id: sessionId } = await params
-    const url = new URL(request.url)
-    const shouldPop = url.searchParams.get('pop') === 'true'
+    log.warn('Deprecated prompts GET endpoint called', { sessionId })
 
-    try {
-      const session = await getSessionState(sessionId)
-      if (!session) {
-        return NextResponse.json(
-          { error: 'Not Found', message: 'Session not found' },
-          { status: 404 }
-        )
-      }
-
-      if (shouldPop) {
-        const prompt = await popPendingPrompt(sessionId)
-
-        if (prompt) {
-          log.info('Prompt popped successfully', {
-            sessionId,
-            promptId: prompt.id,
-            promptLength: prompt.prompt.length,
-          })
-        }
-
-        return NextResponse.json({
-          prompt,
-          hasMore: prompt ? true : false,
-        })
-      }
-
-      const prompts = await getPendingPrompts(sessionId)
-
-      if (prompts.length > 0) {
-        log.info('Prompts retrieved', {
-          sessionId,
-          promptCount: prompts.length,
-          promptIds: prompts.map((p) => p.id),
-        })
-      }
-
-      return NextResponse.json({
-        prompts,
-        count: prompts.length,
-      })
-    } catch (error) {
-      log.error('Failed to get pending prompts', { error, sessionId })
-      return NextResponse.json(
-        { error: 'Internal Server Error', message: 'Failed to get pending prompts' },
-        { status: 500 }
-      )
-    }
+    return NextResponse.json(
+      {
+        error: 'Gone',
+        message: 'Pending prompts endpoint is deprecated. Use agent inbox streams via poll response.',
+      },
+      { status: 410 }
+    )
   }
 }
 
@@ -85,51 +39,14 @@ export function createSessionPromptsPostHandler() {
     if (authError) return authError
 
     const { id: sessionId } = await params
+    log.warn('Deprecated prompts POST endpoint called', { sessionId })
 
-    try {
-      const body = await request.json()
-      const { promptId } = body as { promptId: string }
-
-      if (!promptId || typeof promptId !== 'string') {
-        return NextResponse.json(
-          { error: 'Bad Request', message: 'promptId is required' },
-          { status: 400 }
-        )
-      }
-
-      const session = await getSessionState(sessionId)
-      if (!session) {
-        return NextResponse.json(
-          { error: 'Not Found', message: 'Session not found' },
-          { status: 404 }
-        )
-      }
-
-      const prompt = await claimPendingPrompt(sessionId, promptId)
-
-      if (!prompt) {
-        return NextResponse.json(
-          { error: 'Not Found', message: 'Prompt not found or already claimed' },
-          { status: 404 }
-        )
-      }
-
-      log.info('Prompt claimed', {
-        sessionId,
-        promptId,
-        promptLength: prompt.prompt.length,
-      })
-
-      return NextResponse.json({
-        claimed: true,
-        prompt,
-      })
-    } catch (error) {
-      log.error('Failed to claim prompt', { error, sessionId })
-      return NextResponse.json(
-        { error: 'Internal Server Error', message: 'Failed to claim prompt' },
-        { status: 500 }
-      )
-    }
+    return NextResponse.json(
+      {
+        error: 'Gone',
+        message: 'Prompt claiming is deprecated. Use /api/sessions/{id}/inbox/ack instead.',
+      },
+      { status: 410 }
+    )
   }
 }

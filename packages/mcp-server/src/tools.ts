@@ -7,7 +7,7 @@ import {
   getSessionStateByIssue,
   storeSessionState,
   updateSessionStatus,
-  storePendingPrompt,
+  publishUrgent,
 } from '@renseiai/agentfactory-server'
 import type { AgentSessionStatus } from '@renseiai/agentfactory-server'
 
@@ -311,18 +311,20 @@ export function registerFleetTools(server: McpServer): void {
           }
         }
 
-        const pending = await storePendingPrompt(
-          session.linearSessionId,
-          session.issueId,
-          args.message,
-        )
-
-        if (!pending) {
+        const agentId = session.agentId
+        if (!agentId) {
           return {
-            content: [{ type: 'text' as const, text: `Error: Failed to store pending prompt. Redis may not be configured.` }],
+            content: [{ type: 'text' as const, text: `Error: Session has no agentId. Cannot publish to agent inbox.` }],
             isError: true,
           }
         }
+
+        const streamId = await publishUrgent(agentId, {
+          type: 'directive',
+          sessionId: session.linearSessionId,
+          payload: args.message,
+          createdAt: Date.now(),
+        })
 
         return {
           content: [
@@ -331,7 +333,7 @@ export function registerFleetTools(server: McpServer): void {
               text: JSON.stringify(
                 {
                   forwarded: true,
-                  promptId: pending.id,
+                  streamId,
                   taskId: session.linearSessionId,
                   issueId: session.issueId,
                   sessionStatus: session.status,

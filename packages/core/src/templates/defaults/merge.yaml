@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: merge
+  description: Handle merge queue operations for a PR
+  workType: merge
+
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "git rebase *"
+    - shell: "git merge *"
+    - shell: "git push *"
+    - shell: "gh pr *"
+    - shell: "gh api *"
+    - shell: "pnpm af-linear *"
+    - shell: "mergiraf *"
+  disallow:
+    - user-input
+
+prompt: |
+  Handle merge queue operations for {{identifier}}.
+
+  WORKFLOW:
+  1. Check PR merge readiness (CI status, approvals)
+  2. Pull latest main and rebase feature branch
+  3. If conflicts arise, resolve using mergiraf-enhanced git merge
+  4. Push updated branch
+  5. Add PR to merge queue via configured provider (gh pr merge --merge-queue)
+  6. Monitor queue status until merged or failed
+
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

@@ -26,6 +26,7 @@ Commands:
   analyze-logs    Analyze agent session logs for errors
   linear          Linear issue tracker operations
   sync-routes     Generate missing route and page files from manifest
+  status          Show fleet status (inline one-line summary)
   help            Show this help message
 
 Run 'agentfactory <command> --help' for command-specific options.
@@ -64,6 +65,9 @@ switch (command) {
     break
   case 'sync-routes':
     import('./sync-routes')
+    break
+  case 'status':
+    import('./status')
     break
   case 'help':
   case '--help':

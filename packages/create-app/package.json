@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/create-agentfactory-app",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "type": "module",
   "description": "Create an AgentFactory app — multi-agent fleet management for coding agents",
   "author": "Rensei AI (https://rensei.ai)",
@@ -52,12 +52,15 @@
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.5.4",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "pnpm clean && pnpm build"
+    "prepublishOnly": "pnpm clean && pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }

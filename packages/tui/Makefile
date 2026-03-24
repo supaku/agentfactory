@@ -1,16 +1,26 @@
-BINARY := af-tui
 GOFLAGS := -ldflags="-s -w"
 
-.PHONY: build run test clean
+.PHONY: build build-tui build-status run run-mock test clean
 
-build:
-	go build $(GOFLAGS) -o bin/$(BINARY) ./cmd/af-tui
+build: build-tui build-status
 
-run: build
-	./bin/$(BINARY)
+build-tui:
+	go build $(GOFLAGS) -o bin/af-tui ./cmd/af-tui
 
-run-mock: build
-	./bin/$(BINARY) --mock
+build-status:
+	go build $(GOFLAGS) -o bin/af-status ./cmd/af-status
+
+run: build-tui
+	./bin/af-tui
+
+run-mock: build-tui
+	./bin/af-tui --mock
+
+run-status: build-status
+	./bin/af-status
+
+run-status-mock: build-status
+	./bin/af-status --mock
 
 test:
 	go test ./...

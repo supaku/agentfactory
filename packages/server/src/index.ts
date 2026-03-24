@@ -13,6 +13,9 @@ export * from './session-storage.js'
 // Work queue
 export * from './work-queue.js'
 
+// Scheduling queue (three-tier: active, backoff, suspended)
+export * from './scheduling-queue.js'
+
 // Worker pool
 export * from './worker-storage.js'
 
@@ -25,8 +28,8 @@ export * from './agent-tracking.js'
 // Webhook idempotency
 export * from './webhook-idempotency.js'
 
-// Pending prompts
-export * from './pending-prompts.js'
+// Agent inbox (Valkey Streams — replaces pending-prompts)
+export * from './agent-inbox.js'
 
 // Orphan cleanup
 export * from './orphan-cleanup.js'
@@ -73,6 +76,14 @@ export * from './a2a-types.js'
 // A2A Server (AgentCard + JSON-RPC handlers)
 export * from './a2a-server.js'
 
+// Fleet quotas (Kueue-inspired per-project budgets)
+export * from './fleet-quota-types.js'
+export * from './fleet-quota-storage.js'
+export * from './fleet-quota-tracker.js'
+export * from './fleet-quota-hooks.js'
+export * from './fleet-quota-filter.js'
+export * from './fleet-quota-cohort.js'
+
 // Fleet supervision (Erlang-inspired)
 export * from './fleet-supervisor-types.js'
 export * from './supervisor-storage.js'
@@ -84,3 +95,18 @@ export * from './patrol-loop.js'
 export { RedisPosteriorStore } from './routing-posterior-store.js'
 export type { RedisObservationStoreOptions } from './routing-observation-store.js'
 export { createRedisObservationStore } from './routing-observation-store.js'
+
+// Scheduler (K8s-inspired filter/score pipeline)
+export * from './scheduler/index.js'
+
+// Workflow store (Redis-backed persistent workflow definitions)
+export * from './workflow-store.js'
+
+// Workflow registry watcher (hot-reload via Redis pub/sub)
+export * from './workflow-registry-watcher.js'
+
+// Gate storage (Redis-backed gate lifecycle state)
+export * from './gate-storage.js'
+
+// Webhook gate endpoint handler (framework-agnostic)
+export * from './webhook-gate-handler.js'

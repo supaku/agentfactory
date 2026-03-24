@@ -10,4 +10,5 @@ export default defineWorkspace([
   'packages/dashboard',
   'packages/test-utils',
   'packages/code-intelligence',
+  'packages/create-app',
 ])

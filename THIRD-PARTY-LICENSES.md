@@ -50,3 +50,7 @@ Human review completed (SUP-1227). Findings:
 - Anthropic reserves the right to limit access based on subscription tier (Max vs API keys)
 - Their terms do not allow hosting a for-profit service using a Max subscription — only API keys are permitted for product use
 - The SDK remains excluded from automated license-checker via `--excludePackages` flag; this is expected since it is not an OSS license
+
+## FOSSA License Policy
+
+For the complete license policy configuration used with FOSSA, see [docs/license-policy.md](docs/license-policy.md).

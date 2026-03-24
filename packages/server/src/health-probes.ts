@@ -194,6 +194,7 @@ export function detectStuckSignals(
     sessionRunningTooLong: false,
     heartbeatStale: false,
     claimStuck: false,
+    toolLoopStuck: false,
     stuckDurationMs: 0,
     isStuck: false,
   }
@@ -234,10 +235,27 @@ export function detectStuckSignals(
     }
   }
 
+  // Tool loop detection: same tool called continuously for too long
+  if (session.lastToolName && session.lastToolCalledAt) {
+    const toolDuration = now - session.lastToolCalledAt
+    if (toolDuration > config.maxSameToolDurationMs) {
+      signals.toolLoopStuck = true
+      signals.stuckDurationMs = Math.max(
+        signals.stuckDurationMs,
+        toolDuration - config.maxSameToolDurationMs
+      )
+    }
+  }
+
+  // Nudge effectiveness proxy: if tool loop is no longer detected,
+  // the agent has resumed different activity (nudge may have worked)
+  signals.activityResumedAfterNudge = !signals.toolLoopStuck && !signals.sessionRunningTooLong
+
   signals.isStuck =
     signals.sessionRunningTooLong ||
     signals.heartbeatStale ||
-    signals.claimStuck
+    signals.claimStuck ||
+    signals.toolLoopStuck
 
   return signals
 }

@@ -72,3 +72,15 @@ func ProviderName(provider *string) string {
 	}
 	return *provider
 }
+
+// Tokens formats a token count for display.
+func Tokens(count *int) string {
+	if count == nil {
+		return "--"
+	}
+	n := *count
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+}

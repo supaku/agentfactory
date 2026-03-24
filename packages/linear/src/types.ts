@@ -330,6 +330,7 @@ export type AgentWorkType =
   | 'coordination'          // Backlog: Coordinate sub-issue execution for parent issues
   | 'qa-coordination'       // Finished: Coordinate QA across sub-issues for parent issues
   | 'acceptance-coordination' // Delivered: Coordinate acceptance across sub-issues for parent issues
+  | 'merge'                 // Merge queue: handle PR merge operations
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -367,6 +368,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'coordination': 'Started', // Backlog -> Started when coordinator begins
   'qa-coordination': null,   // Already Finished
   'acceptance-coordination': null, // Already Delivered
+  'merge': null,            // Merge is triggered programmatically, no status transition
 }
 
 /**
@@ -386,6 +388,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'coordination': 'Finished', // Started -> Finished when all sub-issues done
   'qa-coordination': 'Delivered', // Finished -> Delivered when QA coordination passes
   'acceptance-coordination': 'Accepted', // Delivered -> Accepted when acceptance coordination passes
+  'merge': null,            // Merge completion is handled by the merge queue adapter
 }
 
 /**
@@ -405,6 +408,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'coordination': null,
   'qa-coordination': 'Rejected',    // QA coordination failure -> Rejected (refinement-coordination reads QA feedback and dispatches targeted fixes to failing sub-issues)
   'acceptance-coordination': 'Rejected', // Acceptance coordination failure -> Rejected
+  'merge': null,            // Merge failure is handled by the merge queue adapter
 }
 
 /**
@@ -425,6 +429,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'backlog-creation',
   'refinement',
   'refinement-coordination',
+  'merge',
 ])
 
 /**
@@ -444,6 +449,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'coordination': ['Backlog', 'Started'],
   'qa-coordination': ['Finished'],
   'acceptance-coordination': ['Delivered'],
+  'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
 }
 
 /**
@@ -458,7 +464,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
 export const STATUS_VALID_WORK_TYPES: Record<string, AgentWorkType[]> = {
   'Icebox': ['research', 'backlog-creation'],
   'Backlog': ['development', 'coordination'],
-  'Started': ['inflight', 'inflight-coordination'],
+  'Started': ['inflight', 'inflight-coordination', 'merge'],
   'Finished': ['qa', 'qa-coordination'],
   'Delivered': ['acceptance', 'acceptance-coordination'],
   'Rejected': ['refinement', 'refinement-coordination'],

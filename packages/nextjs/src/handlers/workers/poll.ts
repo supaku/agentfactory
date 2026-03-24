@@ -1,7 +1,8 @@
 /**
  * GET /api/workers/[id]/poll
  *
- * Poll for pending work items and follow-up prompts.
+ * Poll for pending work items and inbox messages.
+ * Reads from agent inbox streams (urgent-first) instead of pending-prompts Lists.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -9,10 +10,13 @@ import { requireWorkerAuth } from '../../middleware/worker-auth.js'
 import {
   getWorker,
   peekWork,
-  getPendingPrompts,
-  type PendingPrompt,
+  getSessionState,
+  readInbox,
+  type InboxMessage,
   maybeCleanupOrphans,
   createLogger,
+  getSchedulerMode,
+  filterByQuota,
 } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:workers:poll')
@@ -46,6 +50,8 @@ export function createWorkerPollHandler() {
       const availableCapacity = worker.capacity - worker.activeSessions.length
       let work: Awaited<ReturnType<typeof peekWork>> = []
 
+      // TODO(SUP-1292): When SCHEDULER_MODE=pipeline, use scheduler orchestrator here
+      // For now, legacy inline dispatch is used regardless of mode
       if (availableCapacity > 0) {
         const desiredCount = Math.min(availableCapacity, 5)
         const workerProjects = worker.projects
@@ -65,24 +71,50 @@ export function createWorkerPollHandler() {
         } else {
           work = allWork.slice(0, desiredCount)
         }
+
+        // QuotaFilter: exclude work from over-quota projects
+        const quotaResult = await filterByQuota(work)
+        work = quotaResult.allowed
+        if (quotaResult.rejected.length > 0) {
+          log.info('Quota filter rejected work items', {
+            workerId,
+            rejected: quotaResult.rejected.map(r => ({
+              sessionId: r.work.sessionId,
+              project: r.work.projectName,
+              reason: r.reason,
+            })),
+          })
+        }
       }
 
-      const pendingPrompts: Record<string, PendingPrompt[]> = {}
-      let totalPendingPrompts = 0
+      // Read inbox messages for active sessions (urgent-first via streams)
+      const inboxMessages: Record<string, InboxMessage[]> = {}
+      let totalInboxMessages = 0
 
       if (worker.activeSessions.length > 0) {
         await Promise.all(
           worker.activeSessions.map(async (sessionId) => {
-            const prompts = await getPendingPrompts(sessionId)
-            if (prompts.length > 0) {
-              pendingPrompts[sessionId] = prompts
-              totalPendingPrompts += prompts.length
+            try {
+              const session = await getSessionState(sessionId)
+              const agentId = session?.agentId
+              if (!agentId) return
+
+              const messages = await readInbox(agentId, workerId)
+              if (messages.length > 0) {
+                inboxMessages[sessionId] = messages
+                totalInboxMessages += messages.length
+              }
+            } catch (err) {
+              log.warn('Failed to read inbox for session', {
+                sessionId,
+                error: err,
+              })
             }
           })
         )
       }
 
-      if (work.length > 0 || totalPendingPrompts > 0) {
+      if (work.length > 0 || totalInboxMessages > 0) {
         log.info('Poll result with items', {
           workerId,
           availableCapacity,
@@ -94,12 +126,13 @@ export function createWorkerPollHandler() {
             projectName: w.projectName,
           })),
           activeSessionCount: worker.activeSessions.length,
-          pendingPromptsCount: totalPendingPrompts,
-          pendingPromptsBySession: Object.entries(pendingPrompts).map(
-            ([sessionId, prompts]) => ({
+          inboxMessageCount: totalInboxMessages,
+          inboxMessagesBySession: Object.entries(inboxMessages).map(
+            ([sessionId, messages]) => ({
               sessionId,
-              count: prompts.length,
-              promptIds: prompts.map((p) => p.id),
+              count: messages.length,
+              messageIds: messages.map((m) => m.id),
+              types: messages.map((m) => m.type),
             })
           ),
         })
@@ -113,8 +146,8 @@ export function createWorkerPollHandler() {
 
       return NextResponse.json({
         work,
-        pendingPrompts,
-        hasPendingPrompts: totalPendingPrompts > 0,
+        inboxMessages,
+        hasInboxMessages: totalInboxMessages > 0,
       })
     } catch (error) {
       log.error('Failed to poll for work', { error, workerId })

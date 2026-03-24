@@ -213,6 +213,68 @@ describe('WorkflowRegistry', () => {
     })
   })
 
+  describe('getParallelismGroup()', () => {
+    it('returns the group containing the given phase', () => {
+      const custom = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+          {
+            name: 'qa-parallel',
+            phases: ['qa'],
+            strategy: 'fan-in',
+          },
+        ],
+      })
+      const registry = WorkflowRegistry.create({ workflow: custom })
+
+      const group = registry.getParallelismGroup('development')
+      expect(group).toBeDefined()
+      expect(group!.name).toBe('dev-parallel')
+      expect(group!.strategy).toBe('fan-out')
+    })
+
+    it('returns undefined for phase not in any group', () => {
+      const custom = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+        ],
+      })
+      const registry = WorkflowRegistry.create({ workflow: custom })
+
+      expect(registry.getParallelismGroup('qa')).toBeUndefined()
+    })
+
+    it('returns undefined when no parallelism defined', () => {
+      const custom = makeWorkflow() // No parallelism
+      const registry = WorkflowRegistry.create({ workflow: custom })
+
+      expect(registry.getParallelismGroup('development')).toBeUndefined()
+    })
+
+    it('returns undefined for a completely unknown phase name', () => {
+      const custom = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+        ],
+      })
+      const registry = WorkflowRegistry.create({ workflow: custom })
+
+      expect(registry.getParallelismGroup('nonexistent-phase')).toBeUndefined()
+    })
+  })
+
   describe('getEscalation()', () => {
     it('returns escalation config from workflow', () => {
       const registry = WorkflowRegistry.create()

@@ -17,6 +17,7 @@ function makeSignals(overrides: Partial<StuckSignals> = {}): StuckSignals {
     sessionRunningTooLong: true,
     heartbeatStale: false,
     claimStuck: false,
+    toolLoopStuck: false,
     stuckDurationMs: 60_000,
     isStuck: true,
     ...overrides,
@@ -221,5 +222,104 @@ describe('decideRemediation', () => {
     const result = decideRemediation(record, signals, config, now)
 
     expect(result!.action).toBe('escalate')
+  })
+
+  it('includes tool loop in reason when toolLoopStuck is true', () => {
+    const signals = makeSignals({ toolLoopStuck: true })
+    const result = decideRemediation(null, signals, config, 2_000_000)
+
+    expect(result!.reason).toContain('tool loop detected')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Nudge Effectiveness & Escalation (SUP-1262)
+// ---------------------------------------------------------------------------
+
+describe('decideRemediation — nudge effectiveness', () => {
+  it('escalates to restart when nudge fails (no activity within timeout)', () => {
+    const nudgeTime = 1_000_000
+    const record = makeRecord({
+      nudgeCount: 1,
+      nudgeTimestamps: [nudgeTime],
+      lastActionAt: nudgeTime,
+    })
+    const signals = makeSignals({ activityResumedAfterNudge: false })
+    // Past the nudge effectiveness timeout
+    const now = nudgeTime + config.nudgeEffectivenessTimeoutMs + 1
+
+    const result = decideRemediation(record, signals, config, now)
+
+    expect(result).not.toBeNull()
+    expect(result!.action).toBe('restart')
+    expect(result!.reason).toContain('Nudge failed')
+    expect(result!.attemptNumber).toBe(1)
+  })
+
+  it('returns null when activity resumes after nudge within timeout', () => {
+    const nudgeTime = 1_000_000
+    const record = makeRecord({
+      nudgeCount: 1,
+      nudgeTimestamps: [nudgeTime],
+      lastActionAt: nudgeTime,
+    })
+    const signals = makeSignals({ activityResumedAfterNudge: true })
+    // Past the nudge effectiveness timeout
+    const now = nudgeTime + config.nudgeEffectivenessTimeoutMs + 1
+
+    const result = decideRemediation(record, signals, config, now)
+
+    expect(result).toBeNull()
+  })
+
+  it('nudge failure escalation bypasses normal cooldown', () => {
+    const nudgeTime = 1_000_000
+    const record = makeRecord({
+      nudgeCount: 1,
+      nudgeTimestamps: [nudgeTime],
+      lastActionAt: nudgeTime,
+    })
+    const signals = makeSignals({ activityResumedAfterNudge: false })
+    // Past nudge effectiveness timeout but within normal cooldown
+    const now = nudgeTime + config.nudgeEffectivenessTimeoutMs + 1
+    expect(now - nudgeTime).toBeLessThan(config.remediationCooldownMs) // verify bypass
+
+    const result = decideRemediation(record, signals, config, now)
+
+    expect(result!.action).toBe('restart')
+  })
+
+  it('does not check nudge effectiveness before timeout', () => {
+    const nudgeTime = 1_000_000
+    const record = makeRecord({
+      nudgeCount: 1,
+      nudgeTimestamps: [nudgeTime],
+      lastActionAt: nudgeTime,
+    })
+    const signals = makeSignals({ activityResumedAfterNudge: false })
+    // Before nudge effectiveness timeout — still within the timeout window
+    const now = nudgeTime + config.nudgeEffectivenessTimeoutMs - 1000
+
+    const result = decideRemediation(record, signals, config, now)
+
+    // Should return null because within cooldown, not escalate
+    expect(result).toBeNull()
+  })
+
+  it('nudgeEffectivenessTimeoutMs is configurable', () => {
+    const customConfig = { ...config, nudgeEffectivenessTimeoutMs: 60_000 }
+    const nudgeTime = 1_000_000
+    const record = makeRecord({
+      nudgeCount: 1,
+      nudgeTimestamps: [nudgeTime],
+      lastActionAt: nudgeTime,
+    })
+    const signals = makeSignals({ activityResumedAfterNudge: false })
+    const now = nudgeTime + 60_001
+
+    const result = decideRemediation(record, signals, customConfig, now)
+
+    expect(result!.action).toBe('restart')
+    expect(result!.reason).toContain('1 minutes')
   })
 })

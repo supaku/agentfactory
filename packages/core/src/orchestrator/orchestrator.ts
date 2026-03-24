@@ -34,6 +34,7 @@ import {
 import { createHeartbeatWriter, getHeartbeatIntervalFromEnv, type HeartbeatWriter } from './heartbeat-writer.js'
 import { createProgressLogger, type ProgressLogger } from './progress-logger.js'
 import { createSessionLogger, type SessionLogger } from './session-logger.js'
+import { ContextManager } from './context-manager.js'
 import { isSessionLoggingEnabled, isAutoAnalyzeEnabled, getLogAnalysisConfig } from './log-config.js'
 import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
@@ -48,6 +49,7 @@ import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
+import { createMergeQueueAdapter } from '../merge-queue/index.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -118,7 +120,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -456,6 +458,69 @@ function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
 }
 
 /**
+ * Check if a worktree branch has been pushed to remote with commits ahead of main
+ * but no PR was created. This catches the case where an agent pushes code and exits
+ * before running `gh pr create`.
+ */
+interface PushedWorkCheck {
+  hasPushedWork: boolean
+  branch?: string
+  details?: string
+}
+
+function checkForPushedWorkWithoutPR(worktreePath: string): PushedWorkCheck {
+  try {
+    const currentBranch = execSync('git branch --show-current', {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+
+    // If on main, no work to check
+    if (currentBranch === 'main' || currentBranch === 'master') {
+      return { hasPushedWork: false }
+    }
+
+    // Count commits ahead of main
+    const aheadOutput = execSync(`git rev-list --count main..HEAD`, {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+
+    const aheadCount = parseInt(aheadOutput, 10)
+    if (aheadCount === 0) {
+      return { hasPushedWork: false }
+    }
+
+    // Branch has commits ahead of main — check if they've been pushed
+    try {
+      const remoteRef = execSync(`git ls-remote --heads origin ${currentBranch}`, {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 10000,
+      }).trim()
+
+      if (remoteRef.length > 0) {
+        // Branch exists on remote with commits ahead of main — likely missing a PR
+        return {
+          hasPushedWork: true,
+          branch: currentBranch,
+          details: `Branch \`${currentBranch}\` has ${aheadCount} commit(s) ahead of main and has been pushed to the remote, but no PR was detected.`,
+        }
+      }
+    } catch {
+      // ls-remote failed — can't confirm remote state
+    }
+
+    return { hasPushedWork: false }
+  } catch {
+    // Git commands failed — don't block on our check failing
+    return { hasPushedWork: false }
+  }
+}
+
+/**
  * Generate a prompt for the agent based on work type
  *
  * @param identifier - Issue identifier (e.g., SUP-123)
@@ -775,6 +840,14 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
 See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'merge':
+      basePrompt = `Handle merge queue operations for ${identifier}.
+Check PR merge readiness (CI status, approvals).
+Attempt rebase onto latest main.
+Resolve conflicts using mergiraf-enhanced git merge if available.
+Push updated branch and trigger merge via configured merge queue provider.${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries
@@ -805,6 +878,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'refinement-coordination': 'REF-COORD',
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
+  merge: 'MRG',
 }
 
 /**
@@ -848,7 +922,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -878,6 +952,7 @@ export class AgentOrchestrator {
   private readonly progressLoggers: Map<string, ProgressLogger> = new Map()
   // Session loggers per agent for verbose analysis logging
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
+  private readonly contextManagers: Map<string, ContextManager> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
@@ -898,6 +973,8 @@ export class AgentOrchestrator {
   private validateCommand?: string
   // Tool plugin registry for in-process agent tools
   private readonly toolRegistry: ToolRegistry
+  // Merge queue adapter for automated merge operations (initialized from config or repo config)
+  private mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
   // Git repository root for running git commands (resolved from worktreePath or cwd)
   private readonly gitRoot: string
 
@@ -1017,10 +1094,27 @@ export class AgentOrchestrator {
           }
           // Store providers config for per-spawn resolution
           this.configProviders = getProvidersConfig(repoConfig)
+
+          // Initialize merge queue adapter from repository config
+          if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
+            try {
+              this.mergeQueueAdapter = createMergeQueueAdapter(
+                repoConfig.mergeQueue.provider ?? 'github-native'
+              )
+              console.log(`[orchestrator] Merge queue adapter initialized: ${repoConfig.mergeQueue.provider ?? 'github-native'}`)
+            } catch (error) {
+              console.warn(`[orchestrator] Failed to initialize merge queue adapter: ${error instanceof Error ? error.message : String(error)}`)
+            }
+          }
         }
       }
     } catch (err) {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
+    }
+
+    // Accept merge queue adapter passed directly via config (takes precedence over repo config)
+    if (config.mergeQueueAdapter) {
+      this.mergeQueueAdapter = config.mergeQueueAdapter
     }
 
     // Initialize tool plugin registry with injected plugins
@@ -1616,6 +1710,9 @@ export class AgentOrchestrator {
     // Write helper scripts into .agent/ for agent use
     this.writeWorktreeHelpers(worktreePath)
 
+    // Configure mergiraf merge driver if enabled
+    this.configureMergiraf(worktreePath)
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -1696,6 +1793,42 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Log but don't fail — the helper is optional
       console.warn(
         `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  /**
+   * Configure mergiraf as the git merge driver in a worktree.
+   * Falls back silently to default git merge if mergiraf is not installed.
+   */
+  private configureMergiraf(worktreePath: string): void {
+    // Check if mergiraf is disabled via config
+    if (this.repoConfig?.mergeDriver === 'default') {
+      return
+    }
+
+    try {
+      // Check if mergiraf binary is available
+      execSync('which mergiraf', { stdio: 'pipe', encoding: 'utf-8' })
+    } catch {
+      // mergiraf not installed — fall back to default merge silently
+      console.log('mergiraf not found on PATH, using default git merge driver')
+      return
+    }
+
+    try {
+      // Register mergiraf as the merge driver in this worktree
+      // This sets up .git/config merge driver entries and .gitattributes
+      execSync('mergiraf register', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+      console.log(`mergiraf registered as merge driver in ${worktreePath}`)
+    } catch (error) {
+      // Log warning but don't fail — merge driver is non-critical
+      console.warn(
+        `Failed to register mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   }
@@ -2044,6 +2177,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
         }
 
+        // Initialize context manager for context window management
+        const contextManager = ContextManager.load(worktreePath)
+        this.contextManagers.set(issueId, contextManager)
+
         log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
       } catch (stateError) {
         // Log but don't fail - state persistence is optional
@@ -2287,6 +2424,43 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         await emitter.flush()
       }
 
+      // Post-exit PR detection: if the agent exited without a detected PR URL,
+      // check GitHub directly in case the PR was created but the output wasn't captured
+      if (agent.status === 'completed' && !agent.pullRequestUrl && agent.worktreePath) {
+        const postExitWorkType = agent.workType ?? 'development'
+        const isPostExitCodeProducing = postExitWorkType === 'development' || postExitWorkType === 'inflight'
+        if (isPostExitCodeProducing) {
+          try {
+            const currentBranch = execSync('git branch --show-current', {
+              cwd: agent.worktreePath,
+              encoding: 'utf-8',
+              timeout: 10000,
+            }).trim()
+
+            if (currentBranch && currentBranch !== 'main' && currentBranch !== 'master') {
+              const prJson = execSync(`gh pr list --head "${currentBranch}" --json url --limit 1`, {
+                cwd: agent.worktreePath,
+                encoding: 'utf-8',
+                timeout: 15000,
+              }).trim()
+
+              const prs = JSON.parse(prJson) as Array<{ url: string }>
+              if (prs.length > 0 && prs[0].url) {
+                log?.info('Post-exit PR detection found existing PR', { prUrl: prs[0].url, branch: currentBranch })
+                agent.pullRequestUrl = prs[0].url
+                if (sessionId) {
+                  await this.updateSessionPullRequest(sessionId, prs[0].url, agent)
+                }
+              }
+            }
+          } catch (error) {
+            log?.debug('Post-exit PR detection failed (non-fatal)', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+      }
+
       // Update Linear status based on work type if auto-transition is enabled
       if (agent.status === 'completed' && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
@@ -2372,8 +2546,36 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
               // Do NOT set targetStatus — leave issue in current state
             } else {
-              // No PR but worktree is clean — either no changes needed or agent cleaned up
-              targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+              // Worktree is clean (no uncommitted/unpushed changes) — but check if branch
+              // has commits ahead of main that should have resulted in a PR
+              const hasPushedWork = checkForPushedWorkWithoutPR(agent.worktreePath)
+
+              if (hasPushedWork.hasPushedWork) {
+                // Agent pushed commits to remote but never created a PR — block promotion
+                log?.error('Code-producing agent pushed commits but no PR was created — blocking promotion', {
+                  workType,
+                  details: hasPushedWork.details,
+                })
+
+                try {
+                  await this.client.createComment(
+                    issueId,
+                    `⚠️ **Agent completed and pushed code, but no PR was created.**\n\n` +
+                    `${hasPushedWork.details}\n\n` +
+                    `**Issue status was NOT promoted** because work cannot be reviewed without a PR.\n\n` +
+                    `The branch has been pushed to the remote. To recover:\n` +
+                    `\`\`\`bash\ngh pr create --head ${hasPushedWork.branch} --title "feat: <title>" --body "..."\n\`\`\`\n` +
+                    `Or re-trigger the agent to complete the PR creation step.`
+                  )
+                } catch {
+                  // Best-effort comment
+                }
+
+                // Do NOT set targetStatus — leave issue in current state
+              } else {
+                // No PR and no pushed commits ahead of main — genuinely clean completion
+                targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+              }
             }
           } else {
             targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
@@ -2392,6 +2594,27 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
         } else if (!isResultSensitive) {
           log?.info('No auto-transition configured for work type', { workType })
+        }
+
+        // Merge queue: enqueue PR after successful merge work
+        if (workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+          try {
+            const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+            if (prMatch) {
+              const [, owner, repo, prNum] = prMatch
+              const canEnqueue = await this.mergeQueueAdapter.canEnqueue(owner, repo, parseInt(prNum, 10))
+              if (canEnqueue) {
+                const status = await this.mergeQueueAdapter.enqueue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR enqueued in merge queue', { owner, repo, prNumber: prNum, state: status.state })
+              } else {
+                log?.info('PR not eligible for merge queue', { owner, repo, prNumber: prNum })
+              }
+            }
+          } catch (error) {
+            log?.warn('Failed to enqueue PR in merge queue', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
         }
 
         // Unassign agent from issue for clean handoff visibility
@@ -2613,6 +2836,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           log?.debug('Status change', { status: event.message })
         } else if (event.subtype === 'compact_boundary') {
           log?.debug('Context compacted')
+          // Trigger incremental summarization on compaction boundary
+          this.contextManagers.get(issueId)?.handleCompaction()
         } else if (event.subtype === 'hook_response') {
           // Provider-specific hook handling — access raw event for details
           const raw = event.raw as { exit_code?: number; hook_name?: string }
@@ -2631,6 +2856,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'tool_result':
         // Tool results — track activity and detect PR URLs
         this.updateLastActivity(issueId, 'tool_result')
+
+        // Feed to context manager for artifact tracking
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         sessionLogger?.logToolResult(event.toolUseId ?? 'unknown', event.content, event.isError)
 
         // Detect GitHub PR URLs in tool output (from gh pr create)
@@ -2647,8 +2876,23 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'assistant_text':
         // Assistant text output
         this.updateLastActivity(issueId, 'assistant')
+
+        // Feed to context manager for session intent extraction
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         heartbeatWriter?.recordThinking()
         sessionLogger?.logAssistant(event.text)
+
+        // Detect GitHub PR URLs in assistant text (backup for tool_result detection)
+        if (sessionId && !agent.pullRequestUrl) {
+          const prUrl = this.extractPullRequestUrl(event.text)
+          if (prUrl) {
+            log?.info('Pull request detected in assistant text', { prUrl })
+            agent.pullRequestUrl = prUrl
+            await this.updateSessionPullRequest(sessionId, prUrl, agent)
+          }
+        }
+
         if (emitter) {
           await emitter.emitThought(event.text.substring(0, 200))
         }
@@ -2657,6 +2901,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       case 'tool_use':
         // Tool invocation
         this.updateLastActivity(issueId, 'assistant')
+
+        // Feed to context manager for artifact tracking
+        this.contextManagers.get(issueId)?.processEvent(event)
+
         log?.toolCall(event.toolName, event.input)
         heartbeatWriter?.recordToolCall(event.toolName)
         progressLogger?.logTool(event.toolName, event.input)
@@ -2707,6 +2955,16 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           // Store full result for completion comment posting later
           if (event.message) {
             agent.resultMessage = event.message
+
+            // Detect GitHub PR URLs in final result message (backup for tool_result detection)
+            if (sessionId && !agent.pullRequestUrl) {
+              const prUrl = this.extractPullRequestUrl(event.message)
+              if (prUrl) {
+                log?.info('Pull request detected in result message', { prUrl })
+                agent.pullRequestUrl = prUrl
+                await this.updateSessionPullRequest(sessionId, prUrl, agent)
+              }
+            }
           }
 
           // Update state to completing/completed (only for worktree-based agents)
@@ -2757,6 +3015,22 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           }
           progressLogger?.logError('Agent error result', new Error(errorMessage))
           sessionLogger?.logError('Agent error result', new Error(errorMessage), { subtype: event.errorSubtype })
+
+          // Merge queue: dequeue PR on merge agent failure
+          if (agent.workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+            try {
+              const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+              if (prMatch) {
+                const [, owner, repo, prNum] = prMatch
+                await this.mergeQueueAdapter.dequeue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR dequeued from merge queue after failure', { owner, repo, prNumber: prNum })
+              }
+            } catch (dequeueError) {
+              log?.warn('Failed to dequeue PR from merge queue', {
+                error: dequeueError instanceof Error ? dequeueError.message : String(dequeueError),
+              })
+            }
+          }
 
           // Report tool errors as Linear issues for tracking
           // Only report for 'error_during_execution' subtype (tool/execution errors)
@@ -2963,6 +3237,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     if (progressLogger) {
       progressLogger.stop()
       this.progressLoggers.delete(issueId)
+    }
+
+    // Persist and cleanup context manager
+    const contextManager = this.contextManagers.get(issueId)
+    if (contextManager) {
+      try {
+        contextManager.persist()
+      } catch {
+        // Ignore persistence errors during cleanup
+      }
+      this.contextManagers.delete(issueId)
     }
 
     // Session logger is cleaned up separately (in finalizeSessionLogger)
@@ -3223,6 +3508,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       projectName,
       labels: labelNames,
     })
+  }
+
+  /**
+   * Get the merge queue adapter, if configured.
+   * Returns undefined if no merge queue is enabled.
+   */
+  getMergeQueueAdapter(): import('../merge-queue/types.js').MergeQueueAdapter | undefined {
+    return this.mergeQueueAdapter
   }
 
   /**
@@ -3666,6 +3959,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           this.sessionLoggers.set(issueId, sessionLogger)
           log.debug('Session logging initialized', { logsDir: logConfig.logsDir })
         }
+
+        // Initialize context manager for context window management
+        const contextManager = ContextManager.load(worktreePath)
+        this.contextManagers.set(issueId, contextManager)
 
         log.debug('State persistence initialized', { agentDir: resolve(worktreePath, '.agent') })
       } catch (stateError) {

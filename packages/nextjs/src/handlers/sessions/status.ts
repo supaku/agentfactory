@@ -22,6 +22,8 @@ import {
   createLogger,
   recordSessionFailure,
   clearSessionFailures,
+  archiveInbox,
+  onSessionTerminated,
 } from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
 
@@ -114,6 +116,11 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
           )
         }
 
+        // Fleet quota: decrement concurrent session count and record final cost
+        onSessionTerminated(session.projectName, sessionId, totalCostUsd).catch((err) => {
+          log.error('Fleet quota onSessionTerminated failed', { sessionId, error: err })
+        })
+
         // Track session failures for circuit breaker (exponential backoff)
         if (session.issueId) {
           if (status === 'failed') {
@@ -204,6 +211,23 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
 
         await releaseClaim(sessionId)
         await removeWorkerSession(workerId, sessionId)
+
+        // Archive inbox streams (non-destructive — renames with TTL)
+        if (session.agentId) {
+          try {
+            await archiveInbox(session.agentId, sessionId)
+            log.info('Inbox streams archived', {
+              sessionId,
+              agentId: session.agentId,
+            })
+          } catch (err) {
+            log.error('Failed to archive inbox streams', {
+              sessionId,
+              agentId: session.agentId,
+              error: err,
+            })
+          }
+        }
 
         if (session.issueId) {
           try {

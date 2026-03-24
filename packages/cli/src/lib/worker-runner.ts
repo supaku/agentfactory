@@ -71,20 +71,21 @@ interface WorkItem {
   workType?: AgentWorkType
 }
 
-interface PendingPrompt {
+interface InboxMessage {
   id: string
+  type: 'stop' | 'directive' | 'hook-result' | 'nudge'
   sessionId: string
-  issueId: string
-  prompt: string
+  payload: string
   userId?: string
   userName?: string
   createdAt: number
+  lane: 'urgent' | 'normal'
 }
 
 interface PollResult {
   work: WorkItem[]
-  pendingPrompts: Record<string, PendingPrompt[]>
-  hasPendingPrompts: boolean
+  inboxMessages: Record<string, InboxMessage[]>
+  hasInboxMessages: boolean
 }
 
 type ApiError =
@@ -430,7 +431,7 @@ export async function runWorker(
   // -----------------------------------------------------------------------
 
   async function pollForWork(): Promise<PollResult> {
-    if (!workerId) return { work: [], pendingPrompts: {}, hasPendingPrompts: false }
+    if (!workerId) return { work: [], inboxMessages: {}, hasInboxMessages: false }
 
     const result = await apiRequestWithError<PollResult>(
       `/api/workers/${workerId}/poll`,
@@ -438,27 +439,28 @@ export async function runWorker(
 
     if (result.error?.type === 'worker_not_found') {
       await attemptReregistration()
-      return { work: [], pendingPrompts: {}, hasPendingPrompts: false }
+      return { work: [], inboxMessages: {}, hasInboxMessages: false }
     }
 
     if (!result.data) {
-      return { work: [], pendingPrompts: {}, hasPendingPrompts: false }
+      return { work: [], inboxMessages: {}, hasInboxMessages: false }
     }
 
     const pollData = result.data
 
-    if (pollData.hasPendingPrompts) {
-      const totalPrompts = Object.values(pollData.pendingPrompts).reduce(
-        (sum, prompts) => sum + prompts.length,
+    if (pollData.hasInboxMessages) {
+      const totalMessages = Object.values(pollData.inboxMessages).reduce(
+        (sum, messages) => sum + messages.length,
         0,
       )
-      log.info('Received pending prompts', {
-        sessionCount: Object.keys(pollData.pendingPrompts).length,
-        totalPrompts,
-        sessions: Object.entries(pollData.pendingPrompts).map(([sessionId, prompts]) => ({
+      log.info('Received inbox messages', {
+        sessionCount: Object.keys(pollData.inboxMessages).length,
+        totalMessages,
+        sessions: Object.entries(pollData.inboxMessages).map(([sessionId, messages]) => ({
           sessionId: sessionId.substring(0, 8),
-          promptCount: prompts.length,
-          promptIds: prompts.map((p) => p.id),
+          messageCount: messages.length,
+          messageIds: messages.map((m) => m.id),
+          types: messages.map((m) => m.type),
         })),
       })
     }
@@ -474,6 +476,19 @@ export async function runWorker(
     return apiRequest(`/api/sessions/${sessionId}/claim`, {
       method: 'POST',
       body: JSON.stringify({ workerId }),
+    })
+  }
+
+  async function ackInboxMessage(
+    sessionId: string,
+    message: InboxMessage,
+  ): Promise<void> {
+    await apiRequest(`/api/sessions/${sessionId}/inbox/ack`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messageId: message.id,
+        lane: message.lane,
+      }),
     })
   }
 
@@ -973,23 +988,62 @@ export async function runWorker(
           }
         }
 
-        // Handle pending prompts for active sessions
-        if (pollResult.hasPendingPrompts) {
-          for (const [sessionId, prompts] of Object.entries(pollResult.pendingPrompts)) {
-            for (const prompt of prompts) {
-              log.info('Processing pending prompt', {
-                sessionId: sessionId.substring(0, 8),
-                promptId: prompt.id,
-                promptLength: prompt.prompt.length,
-                userName: prompt.userName,
-              })
+        // Handle inbox messages for active sessions (urgent-first)
+        if (pollResult.hasInboxMessages) {
+          for (const [sessionId, messages] of Object.entries(pollResult.inboxMessages)) {
+            for (const message of messages) {
+              // Handle nudge: no-op wake signal, just discard
+              if (message.type === 'nudge') {
+                log.debug('Nudge received (no-op)', {
+                  sessionId: sessionId.substring(0, 8),
+                  messageId: message.id,
+                })
+                await ackInboxMessage(sessionId, message)
+                continue
+              }
 
               const orchestrator = activeOrchestrators.get(sessionId)
+
+              // Handle stop signal: trigger graceful agent shutdown
+              if (message.type === 'stop') {
+                log.info('Stop signal received', {
+                  sessionId: sessionId.substring(0, 8),
+                  messageId: message.id,
+                })
+                if (orchestrator) {
+                  const agent = orchestrator.getAgentBySession(sessionId)
+                  if (agent) {
+                    try {
+                      await orchestrator.stopAgent(agent.issueId, false)
+                      log.success('Agent stopped via inbox signal', {
+                        sessionId: sessionId.substring(0, 8),
+                      })
+                    } catch (error) {
+                      log.error('Failed to stop agent', {
+                        sessionId: sessionId.substring(0, 8),
+                        error: error instanceof Error ? error.message : String(error),
+                      })
+                    }
+                  }
+                }
+                await ackInboxMessage(sessionId, message)
+                continue
+              }
+
+              // Handle directive and hook-result: inject as follow-up prompt
+              log.info('Processing inbox message', {
+                sessionId: sessionId.substring(0, 8),
+                messageId: message.id,
+                type: message.type,
+                lane: message.lane,
+                payloadLength: message.payload.length,
+                userName: message.userName,
+              })
 
               if (!orchestrator) {
                 log.warn('No active orchestrator found for session', {
                   sessionId: sessionId.substring(0, 8),
-                  promptId: prompt.id,
+                  messageId: message.id,
                 })
                 continue
               }
@@ -997,18 +1051,11 @@ export async function runWorker(
               const agent = orchestrator.getAgentBySession(sessionId)
               const providerSessionId = agent?.providerSessionId
 
-              log.info('Forwarding prompt to provider session', {
-                sessionId: sessionId.substring(0, 8),
-                promptId: prompt.id,
-                hasProviderSession: !!providerSessionId,
-                agentStatus: agent?.status,
-              })
-
               try {
                 const result = await orchestrator.forwardPrompt(
-                  prompt.issueId,
+                  agent?.issueId ?? '',
                   sessionId,
-                  prompt.prompt,
+                  message.payload,
                   providerSessionId,
                   agent?.workType,
                 )
@@ -1017,41 +1064,32 @@ export async function runWorker(
                   log.success(
                     result.injected
                       ? 'Message injected into running session'
-                      : 'Prompt forwarded successfully',
+                      : 'Inbox message forwarded successfully',
                     {
                       sessionId: sessionId.substring(0, 8),
-                      promptId: prompt.id,
+                      messageId: message.id,
+                      type: message.type,
                       injected: result.injected ?? false,
                       resumed: result.resumed,
                       newAgentPid: result.agent?.pid,
                     },
                   )
 
-                  const claimResult = await apiRequest<{ claimed: boolean }>(
-                    `/api/sessions/${sessionId}/prompts`,
-                    {
-                      method: 'POST',
-                      body: JSON.stringify({ promptId: prompt.id }),
-                    },
-                  )
-
-                  if (claimResult?.claimed) {
-                    log.debug('Prompt claimed', { promptId: prompt.id })
-                  } else {
-                    log.warn('Failed to claim prompt', { promptId: prompt.id })
-                  }
+                  // ACK after successful delivery
+                  await ackInboxMessage(sessionId, message)
                 } else {
-                  log.error('Failed to forward prompt', {
+                  log.error('Failed to forward inbox message', {
                     sessionId: sessionId.substring(0, 8),
-                    promptId: prompt.id,
+                    messageId: message.id,
+                    type: message.type,
                     reason: result.reason,
                     error: result.error?.message,
                   })
                 }
               } catch (error) {
-                log.error('Error forwarding prompt', {
+                log.error('Error forwarding inbox message', {
                   sessionId: sessionId.substring(0, 8),
-                  promptId: prompt.id,
+                  messageId: message.id,
                   error: error instanceof Error ? error.message : String(error),
                 })
               }

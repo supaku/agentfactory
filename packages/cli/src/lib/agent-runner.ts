@@ -11,7 +11,7 @@ import {
   getAllSessions,
   updateSessionStatus,
   storeSessionState,
-  storePendingPrompt,
+  publishUrgent,
   disconnectRedis,
   type AgentSessionState,
 } from '@renseiai/agentfactory-server'
@@ -165,16 +165,23 @@ async function chatWithAgent(issueId: string, message: string): Promise<void> {
     return
   }
 
-  const prompt = await storePendingPrompt(
-    session.linearSessionId,
-    session.issueId,
-    message,
-  )
+  const agentId = session.agentId
+  if (!agentId) {
+    console.error(`${C.red}Session has no agentId — cannot publish to inbox${C.reset}`)
+    await disconnectRedis()
+    return
+  }
 
-  if (prompt) {
-    console.log(`${C.green}Message queued${C.reset} (id: ${prompt.id}) — worker will pick up within ~5 seconds`)
-  } else {
-    console.error(`${C.red}Failed to store pending prompt${C.reset}`)
+  try {
+    const streamId = await publishUrgent(agentId, {
+      type: 'directive',
+      sessionId: session.linearSessionId,
+      payload: message,
+      createdAt: Date.now(),
+    })
+    console.log(`${C.green}Message queued${C.reset} (id: ${streamId}) — worker will pick up within ~5 seconds`)
+  } catch (err) {
+    console.error(`${C.red}Failed to publish to inbox: ${err instanceof Error ? err.message : String(err)}${C.reset}`)
   }
 
   await disconnectRedis()

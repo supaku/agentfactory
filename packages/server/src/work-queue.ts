@@ -44,9 +44,9 @@ const log = {
   debug: (_msg: string, _data?: Record<string, unknown>) => {},
 }
 
-// Redis key constants
-const WORK_QUEUE_KEY = 'work:queue' // Sorted set: priority queue
-const WORK_ITEMS_KEY = 'work:items' // Hash: sessionId -> work item
+// Redis key constants (exported for scheduling-queue.ts reuse)
+export const WORK_QUEUE_KEY = 'work:queue' // Sorted set: priority queue
+export const WORK_ITEMS_KEY = 'work:items' // Hash: sessionId -> work item
 const WORK_CLAIM_PREFIX = 'work:claim:'
 
 // Legacy key for migration
@@ -83,7 +83,7 @@ export interface QueuedWork {
  * Score = (priority * 1e13) + timestamp
  * This ensures priority is the primary sort key, timestamp is secondary
  */
-function calculateScore(priority: number, queuedAt: number): number {
+export function calculateScore(priority: number, queuedAt: number): number {
   // Clamp priority to 1-9 to ensure score calculation works correctly
   const clampedPriority = Math.max(1, Math.min(9, priority))
   // Use 1e13 multiplier to leave room for timestamps up to year ~2286

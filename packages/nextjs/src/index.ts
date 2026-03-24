@@ -76,6 +76,7 @@ export { createSessionClaimHandler } from './handlers/sessions/claim.js'
 export { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
 export { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
 export { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+export { createSessionInboxAckHandler } from './handlers/sessions/inbox-ack.js'
 export { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)
@@ -94,6 +95,8 @@ export { createPublicSessionDetailHandler } from './handlers/public/session-deta
 export type { PublicSessionDetailResponse } from './handlers/public/session-detail.js'
 export { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
 export type { PublicRoutingMetricsResponse } from './handlers/public/routing-metrics.js'
+export { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
+export type { PublicActivityResponse } from './handlers/public/session-activities.js'
 
 // Cleanup handler
 export { createCleanupHandler } from './handlers/cleanup.js'
@@ -104,3 +107,6 @@ export { createConfigHandler } from './handlers/config.js'
 // Issue tracker proxy handler (centralized API gateway for agents/governors)
 export { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
 export type { ProxyHandlerConfig } from './handlers/issue-tracker-proxy/types.js'
+
+// Workflow handlers
+export { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'

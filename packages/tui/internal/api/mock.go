@@ -144,17 +144,113 @@ func (m *MockClient) GetSessionDetail(id string) (*SessionDetailResponse, error)
 
 			return &SessionDetailResponse{
 				Session: SessionDetail{
-					ID:         s.ID,
-					Identifier: s.Identifier,
-					Status:     s.Status,
-					WorkType:   s.WorkType,
-					StartedAt:  s.StartedAt,
-					Duration:   s.Duration,
-					Timeline:   timeline,
+					ID:           s.ID,
+					Identifier:   s.Identifier,
+					Status:       s.Status,
+					WorkType:     s.WorkType,
+					StartedAt:    s.StartedAt,
+					Duration:     s.Duration,
+					Timeline:     timeline,
+					Provider:     s.Provider,
+					CostUsd:      s.CostUsd,
+					Branch:       ptr(s.Identifier + "-DEV"),
+					IssueTitle:   ptr("Add user authentication to login flow"),
+					InputTokens:  ptr(45200),
+					OutputTokens: ptr(12800),
 				},
 				Timestamp: time.Now().Format(time.RFC3339),
 			}, nil
 		}
 	}
 	return nil, fmt.Errorf("session not found: %s", id)
+}
+
+// StopSession is a no-op in the mock client.
+func (m *MockClient) StopSession(id string) error {
+	return nil
+}
+
+// SendPrompt is a no-op in the mock client.
+func (m *MockClient) SendPrompt(id string, prompt string) error {
+	return nil
+}
+
+// GetActivities returns mock activity events for a session.
+func (m *MockClient) GetActivities(sessionID string, afterCursor *string) (*ActivityListResponse, error) {
+	// Find the session to get status
+	var status SessionStatus
+	for _, s := range m.sessions {
+		if s.ID == sessionID {
+			status = s.Status
+			break
+		}
+	}
+	if status == "" {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	now := time.Now()
+	allActivities := []ActivityEvent{
+		{ID: "1", Type: ActivityThought, Content: "Analyzing issue requirements and codebase structure", Timestamp: now.Add(-10 * time.Minute).Format(time.RFC3339)},
+		{ID: "2", Type: ActivityAction, Content: "Reading src/auth/login.ts", ToolName: ptr("Read"), Timestamp: now.Add(-9 * time.Minute).Format(time.RFC3339)},
+		{ID: "3", Type: ActivityThought, Content: "Found existing auth patterns, need to extend middleware", Timestamp: now.Add(-8 * time.Minute).Format(time.RFC3339)},
+		{ID: "4", Type: ActivityAction, Content: "Reading src/auth/middleware.ts", ToolName: ptr("Read"), Timestamp: now.Add(-7 * time.Minute).Format(time.RFC3339)},
+		{ID: "5", Type: ActivityProgress, Content: "Research phase complete", Timestamp: now.Add(-6 * time.Minute).Format(time.RFC3339)},
+		{ID: "6", Type: ActivityAction, Content: "Writing src/auth/jwt-validator.ts", ToolName: ptr("Write"), Timestamp: now.Add(-5 * time.Minute).Format(time.RFC3339)},
+		{ID: "7", Type: ActivityThought, Content: "JWT validation middleware created, adding route guards", Timestamp: now.Add(-4 * time.Minute).Format(time.RFC3339)},
+		{ID: "8", Type: ActivityAction, Content: "Editing src/routes/protected.ts", ToolName: ptr("Edit"), Timestamp: now.Add(-3 * time.Minute).Format(time.RFC3339)},
+		{ID: "9", Type: ActivityResponse, Content: "Added JWT validation to 3 protected routes", Timestamp: now.Add(-2 * time.Minute).Format(time.RFC3339)},
+		{ID: "10", Type: ActivityAction, Content: "Running npm test -- --grep auth", ToolName: ptr("Bash"), Timestamp: now.Add(-90 * time.Second).Format(time.RFC3339)},
+		{ID: "11", Type: ActivityProgress, Content: "Tests passing: 12/12", Timestamp: now.Add(-60 * time.Second).Format(time.RFC3339)},
+		{ID: "12", Type: ActivityAction, Content: "Creating pull request", ToolName: ptr("Bash"), Timestamp: now.Add(-30 * time.Second).Format(time.RFC3339)},
+		{ID: "13", Type: ActivityResponse, Content: "PR #47 created: Add JWT authentication middleware", Timestamp: now.Add(-15 * time.Second).Format(time.RFC3339)},
+	}
+
+	// Filter by cursor
+	activities := allActivities
+	if afterCursor != nil {
+		cursorNum := 0
+		fmt.Sscanf(*afterCursor, "%d", &cursorNum)
+		filtered := make([]ActivityEvent, 0)
+		for _, a := range allActivities {
+			aNum := 0
+			fmt.Sscanf(a.ID, "%d", &aNum)
+			if aNum > cursorNum {
+				filtered = append(filtered, a)
+			}
+		}
+		activities = filtered
+	}
+
+	var cursor *string
+	if len(activities) > 0 {
+		cursor = &activities[len(activities)-1].ID
+	}
+
+	return &ActivityListResponse{
+		Activities:    activities,
+		Cursor:        cursor,
+		SessionStatus: status,
+	}, nil
+}
+
+func (m *MockClient) SubmitTask(req SubmitTaskRequest) (*SubmitTaskResponse, error) {
+	return &SubmitTaskResponse{Submitted: true, TaskID: "mock-task", IssueID: req.IssueID, Status: "pending", Priority: 3, WorkType: "development"}, nil
+}
+
+func (m *MockClient) StopAgent(req StopAgentRequest) (*StopAgentResponse, error) {
+	return &StopAgentResponse{Stopped: true, TaskID: req.TaskID, PreviousStatus: "running", NewStatus: "stopped"}, nil
+}
+
+func (m *MockClient) ForwardPrompt(req ForwardPromptRequest) (*ForwardPromptResponse, error) {
+	return &ForwardPromptResponse{Forwarded: true, PromptID: "mock-prompt", TaskID: req.TaskID, SessionStatus: "running"}, nil
+}
+
+func (m *MockClient) GetCostReport() (*CostReportResponse, error) {
+	return &CostReportResponse{TotalSessions: 5, SessionsWithCostData: 3, TotalCostUsd: 12.50, TotalInputTokens: 50000, TotalOutputTokens: 25000}, nil
+}
+
+func (m *MockClient) ListFleet() (*ListFleetResponse, error) {
+	sessions, _ := m.GetSessions()
+	return &ListFleetResponse{Total: len(sessions.Sessions), Returned: len(sessions.Sessions), Sessions: sessions.Sessions}, nil
 }

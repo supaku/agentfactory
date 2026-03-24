@@ -12,6 +12,7 @@
 import type { GovernorAction, GovernorIssue } from '../governor/governor-types.js'
 import type { WorkflowDefinition, TransitionDefinition } from './workflow-types.js'
 import type { WorkflowRegistry } from './workflow-registry.js'
+import { evaluateCondition, buildEvaluationContext } from './expression/index.js'
 
 // ---------------------------------------------------------------------------
 // Transition Context
@@ -29,6 +30,8 @@ export interface TransitionContext {
   workflowStrategy?: string
   /** Whether the issue is a parent (has sub-issues) */
   isParentIssue: boolean
+  /** Phase completion state for condition evaluation (e.g., { researchCompleted: true }) */
+  phaseState?: Record<string, boolean>
 }
 
 // ---------------------------------------------------------------------------
@@ -82,12 +85,12 @@ function phaseToAction(phaseName: string): GovernorAction | undefined {
  * The evaluation order is:
  *   1. Filter transitions whose `from` matches the issue status
  *   2. Sort by priority (higher first), then by definition order
- *   3. Pick the first matching transition (conditions are Phase 3)
+ *   3. Pick the first matching transition (unconditional or condition evaluates to true)
  *   4. Check escalation strategy for override actions (decompose, escalate-human)
  *   5. Map the target phase name to a GovernorAction
  */
 export function evaluateTransitions(ctx: TransitionContext): TransitionResult {
-  const { issue, registry, workflowStrategy, isParentIssue } = ctx
+  const { issue, registry, workflowStrategy, isParentIssue, phaseState } = ctx
   const workflow = registry.getWorkflow()
 
   if (!workflow) {
@@ -108,15 +111,21 @@ export function evaluateTransitions(ctx: TransitionContext): TransitionResult {
     }
   }
 
-  // Phase 2: Pick the first unconditional transition, or the first
-  // transition that has a condition (conditions are not evaluated until Phase 3;
-  // for now, transitions with conditions are skipped).
-  const match = candidates.find((t: TransitionDefinition) => !t.condition) ?? null
+  // Build evaluation context for condition expressions
+  const evalContext = buildEvaluationContext(issue, phaseState, { hasSubIssues: isParentIssue })
+
+  // Pick the first matching transition:
+  // - Unconditional transitions always match
+  // - Conditional transitions match when their condition evaluates to true
+  const match = candidates.find((t: TransitionDefinition) => {
+    if (!t.condition) return true // unconditional always matches
+    return evaluateCondition(t.condition, evalContext)
+  }) ?? null
 
   if (!match) {
     return {
       action: 'none',
-      reason: `All transitions for status '${issue.status}' have conditions (evaluation deferred to Phase 3)`,
+      reason: `No transition conditions satisfied for status '${issue.status}' in workflow '${workflow.metadata.name}'`,
     }
   }
 
@@ -144,6 +153,19 @@ export function evaluateTransitions(ctx: TransitionContext): TransitionResult {
     return {
       action: 'none',
       reason: `Phase '${match.to}' does not map to a known GovernorAction`,
+    }
+  }
+
+  // Check if the target phase belongs to a parallelism group.
+  // Only parent issues trigger parallel dispatch — sub-issues are dispatched
+  // individually by the ParallelismExecutor within the Governor.
+  if (isParentIssue) {
+    const group = registry.getParallelismGroup(match.to)
+    if (group) {
+      return {
+        action: 'trigger-parallel-group' as GovernorAction,
+        reason: `Issue ${issue.identifier} in '${issue.status}' → parallel group '${group.name}' (strategy: ${group.strategy})`,
+      }
     }
   }
 

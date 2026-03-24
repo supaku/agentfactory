@@ -26,7 +26,9 @@ prompt: |
   3. Identify sub-issues still in Backlog or Started — these need work
   4. Read issue comments for any context from previous agent runs
   5. Create Claude Code Tasks for remaining work, spawn sub-agents for unblocked sub-issues
-  6. Monitor completion and create/update the PR with all changes when done
+  6. Wait for all sub-agents to complete (see TASK LIFECYCLE below), then create/update the PR
+
+  {{> partials/task-lifecycle}}
 
   SUB-ISSUE STATUS MANAGEMENT:
   You MUST update sub-issue statuses in Linear as work progresses:

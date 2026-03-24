@@ -18,8 +18,10 @@ tools:
 prompt: |
   Coordinate sub-issue execution for parent issue {{identifier}}.
   Fetch sub-issues with dependency graph, create Claude Code Tasks mapping to each sub-issue,
-  spawn sub-agents for unblocked sub-issues in parallel, monitor completion,
+  spawn sub-agents for unblocked sub-issues in parallel, wait for them to finish,
   and create a single PR with all changes when done.
+
+  {{> partials/task-lifecycle}}
 
   SUB-ISSUE STATUS MANAGEMENT:
   You MUST update sub-issue statuses in Linear as work progresses:

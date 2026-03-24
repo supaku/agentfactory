@@ -10,6 +10,10 @@ export {
   DedupResultSchema,
   IndexMetadataSchema,
   RepoMapEntrySchema,
+  EmbeddingChunkSchema,
+  EmbeddingProviderConfigSchema,
+  VectorSearchResultSchema,
+  VectorIndexConfigSchema,
 } from './types.js'
 export type {
   SymbolKind,
@@ -22,6 +26,10 @@ export type {
   DedupResult,
   IndexMetadata,
   RepoMapEntry,
+  EmbeddingChunk,
+  EmbeddingProviderConfig,
+  VectorSearchResult,
+  VectorIndexConfig,
 } from './types.js'
 
 // Parser
@@ -37,12 +45,16 @@ export { MerkleTree, type MerkleNode } from './indexing/merkle-tree.js'
 export { GitHashProvider } from './indexing/git-hash-provider.js'
 export { ChangeDetector } from './indexing/change-detector.js'
 export { IncrementalIndexer } from './indexing/incremental-indexer.js'
+export { VectorIndexer } from './indexing/vector-indexer.js'
 
 // Search
 export { CodeTokenizer } from './search/tokenizer.js'
 export { InvertedIndex } from './search/inverted-index.js'
 export { BM25 } from './search/bm25.js'
 export { SearchEngine } from './search/search-engine.js'
+export { HybridSearchEngine } from './search/hybrid-search.js'
+export { classifyQuery } from './search/query-classifier.js'
+export { minMaxNormalize } from './search/score-normalizer.js'
 
 // Repo Map
 export { DependencyGraph } from './repo-map/dependency-graph.js'
@@ -55,6 +67,20 @@ export { SimHash } from './memory/simhash.js'
 export { DedupPipeline } from './memory/dedup-pipeline.js'
 export type { MemoryStore } from './memory/memory-store.js'
 export { InMemoryStore } from './memory/memory-store.js'
+
+// Embedding
+export type { EmbeddingProvider } from './embedding/embedding-provider.js'
+export { VoyageCodeProvider } from './embedding/voyage-provider.js'
+export { Chunker } from './embedding/chunker.js'
+
+// Vector Store
+export type { VectorStore } from './vector/vector-store.js'
+export { InMemoryVectorStore } from './vector/hnsw-store.js'
+
+// Reranking
+export type { RerankerProvider, RerankDocument, RerankResult, RerankerConfig } from './reranking/reranker-provider.js'
+export { CohereReranker } from './reranking/cohere-reranker.js'
+export { VoyageReranker } from './reranking/voyage-reranker.js'
 
 // Plugin
 export { codeIntelligencePlugin } from './plugin/code-intelligence-plugin.js'

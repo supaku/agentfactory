@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-cli",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Rensei AI (https://rensei.ai)",
@@ -37,7 +37,8 @@
     "af-analyze-logs": "dist/src/analyze-logs.js",
     "af-linear": "dist/src/linear.js",
     "af-governor": "dist/src/governor.js",
-    "af-sync-routes": "dist/src/sync-routes.js"
+    "af-sync-routes": "dist/src/sync-routes.js",
+    "af-status": "dist/src/status.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
@@ -92,6 +93,11 @@
       "types": "./dist/src/lib/sync-routes-runner.d.ts",
       "import": "./dist/src/lib/sync-routes-runner.js",
       "default": "./dist/src/lib/sync-routes-runner.js"
+    },
+    "./status": {
+      "types": "./dist/src/lib/status-runner.d.ts",
+      "import": "./dist/src/lib/status-runner.js",
+      "default": "./dist/src/lib/status-runner.js"
     }
   },
   "files": [

@@ -23,6 +23,9 @@ vi.mock('./session-storage.js', () => ({
 
 vi.mock('./work-queue.js', () => ({
   releaseClaim: vi.fn(),
+  WORK_QUEUE_KEY: 'work:queue',
+  WORK_ITEMS_KEY: 'work:items',
+  calculateScore: vi.fn((priority: number, queuedAt: number) => priority * 1e13 + queuedAt),
 }))
 
 vi.mock('./issue-lock.js', () => ({
@@ -55,6 +58,7 @@ vi.mock('./health-probes.js', () => ({
     sessionRunningTooLong: false,
     heartbeatStale: false,
     claimStuck: false,
+    toolLoopStuck: false,
     stuckDurationMs: 0,
     isStuck: false,
   })),
@@ -70,6 +74,23 @@ vi.mock('./supervisor-storage.js', () => ({
   setWorkerHealthSnapshot: vi.fn(),
 }))
 
+vi.mock('./scheduler/migration.js', () => ({
+  runQueueMaintenance: vi.fn(() => ({
+    promoted: 0,
+    reevaluated: 0,
+    stats: null,
+    skipped: true,
+  })),
+}))
+
+vi.mock('./fleet-quota-storage.js', () => ({
+  getAllQuotaConfigs: vi.fn(() => []),
+}))
+
+vi.mock('./fleet-quota-tracker.js', () => ({
+  cleanupStaleSessions: vi.fn(() => 0),
+}))
+
 import { PatrolLoop } from './patrol-loop.js'
 import { listWorkers, nudgeWorker, deregisterWorker } from './worker-storage.js'
 import { getSessionsByStatus, resetSessionForRequeue } from './session-storage.js'
@@ -81,6 +102,7 @@ import { decideRemediation } from './stuck-decision-tree.js'
 import { getRemediationRecord, recordRemediationAction, setWorkerHealthSnapshot } from './supervisor-storage.js'
 import type { WorkerInfo } from './worker-storage.js'
 import type { AgentSessionState } from './session-storage.js'
+import { DEFAULT_STUCK_DETECTION_CONFIG } from './fleet-supervisor-types.js'
 
 const mockListWorkers = vi.mocked(listWorkers)
 const mockNudgeWorker = vi.mocked(nudgeWorker)
@@ -212,6 +234,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -231,6 +254,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -248,7 +272,7 @@ describe('PatrolLoop', () => {
 
       expect(result.remediations).toHaveLength(1)
       expect(result.remediations[0]!.action).toBe('nudge')
-      expect(mockNudgeWorker).toHaveBeenCalledWith('wkr_abc')
+      expect(mockNudgeWorker).toHaveBeenCalledWith('wkr_abc', expect.any(String))
       expect(mockRecordRemediationAction).toHaveBeenCalledWith(
         'sess-1', 'issue-1', 'SUP-100', 'nudge'
       )
@@ -262,6 +286,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -291,6 +316,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -321,6 +347,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -384,6 +411,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -406,6 +434,7 @@ describe('PatrolLoop', () => {
         sessionRunningTooLong: true,
         heartbeatStale: false,
         claimStuck: false,
+        toolLoopStuck: false,
         stuckDurationMs: 60_000,
         isStuck: true,
       })
@@ -493,6 +522,7 @@ describe('PatrolLoop', () => {
           sessionRunningTooLong: false,
           heartbeatStale: false,
           claimStuck: false,
+          toolLoopStuck: false,
           stuckDurationMs: 0,
           isStuck: false,
         }
@@ -505,6 +535,446 @@ describe('PatrolLoop', () => {
       expect(callCount).toBe(2)
       // One error recorded
       expect(result.errors.some((e) => e.context.includes('sess-1'))).toBe(true)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Nudge Delivery with Message (SUP-1258, SUP-1260)
+  // -------------------------------------------------------------------------
+
+  describe('patrolOnce — nudge delivery', () => {
+    it('passes nudge prompt message to nudgeWorker', async () => {
+      const session = makeSession({ workType: 'development' })
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop()
+      await loop.patrolOnce()
+
+      expect(mockNudgeWorker).toHaveBeenCalledWith('wkr_abc', expect.any(String))
+      // The prompt should be the development-specific one
+      const passedPrompt = mockNudgeWorker.mock.calls[0]![1]
+      expect(passedPrompt).toContain('same tool repeatedly')
+    })
+
+    it('falls back to default prompt for work type without custom prompt', async () => {
+      const session = makeSession({ workType: 'research' })
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop()
+      await loop.patrolOnce()
+
+      const passedPrompt = mockNudgeWorker.mock.calls[0]![1]
+      expect(passedPrompt).toBeTruthy()
+    })
+
+    it('uses custom nudge prompt from config', async () => {
+      const session = makeSession({ workType: 'research' })
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop({
+        stuckDetection: {
+          ...DEFAULT_STUCK_DETECTION_CONFIG,
+          nudgePrompts: {
+            defaultPrompt: 'fallback',
+            prompts: { research: 'Custom nudge message' },
+          },
+        },
+      })
+      await loop.patrolOnce()
+
+      const passedPrompt = mockNudgeWorker.mock.calls[0]![1]
+      expect(passedPrompt).toBe('Custom nudge message')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Event Publishing (SUP-1264)
+  // -------------------------------------------------------------------------
+
+  describe('patrolOnce — event publishing', () => {
+    it('publishes nudge-sent event after nudge execution', async () => {
+      const mockPublish = vi.fn()
+      const mockEventBus = { publish: mockPublish, subscribe: vi.fn(), close: vi.fn() }
+
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop({}, {}, mockEventBus as any)
+      await loop.patrolOnce()
+
+      expect(mockPublish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'nudge-sent',
+          sessionId: 'sess-1',
+          attemptNumber: 1,
+        })
+      )
+    })
+
+    it('publishes nudge-succeeded event when activity resumes', async () => {
+      const mockPublish = vi.fn()
+      const mockEventBus = { publish: mockPublish, subscribe: vi.fn(), close: vi.fn() }
+
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      // Session is NOT stuck now (activity resumed)
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: false,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 0,
+        isStuck: false,
+      })
+      // But had previous nudges
+      mockGetRemediationRecord.mockResolvedValue({
+        sessionId: 'sess-1',
+        issueId: 'issue-1',
+        issueIdentifier: 'SUP-100',
+        nudgeCount: 1,
+        nudgeTimestamps: [900_000],
+        restartCount: 0,
+        restartTimestamps: [],
+        reassignCount: 0,
+        reassignTimestamps: [],
+        escalated: false,
+        firstDetectedAt: 800_000,
+        lastActionAt: 900_000,
+        updatedAt: 900_000,
+      })
+
+      const loop = new PatrolLoop({}, {}, mockEventBus as any)
+      await loop.patrolOnce()
+
+      expect(mockPublish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'nudge-succeeded',
+          sessionId: 'sess-1',
+        })
+      )
+    })
+
+    it('publishes nudge-failed event on escalation to restart', async () => {
+      const mockPublish = vi.fn()
+      const mockEventBus = { publish: mockPublish, subscribe: vi.fn(), close: vi.fn() }
+
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockGetRemediationRecord.mockResolvedValue({
+        sessionId: 'sess-1',
+        issueId: 'issue-1',
+        issueIdentifier: 'SUP-100',
+        nudgeCount: 1,
+        nudgeTimestamps: [900_000],
+        restartCount: 0,
+        restartTimestamps: [],
+        reassignCount: 0,
+        reassignTimestamps: [],
+        escalated: false,
+        firstDetectedAt: 800_000,
+        lastActionAt: 900_000,
+        updatedAt: 900_000,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'restart',
+        reason: 'Nudge failed: no activity within 3 minutes',
+        attemptNumber: 1,
+        maxAttempts: 3,
+      })
+
+      const loop = new PatrolLoop({}, {}, mockEventBus as any)
+      await loop.patrolOnce()
+
+      expect(mockPublish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'nudge-failed',
+          sessionId: 'sess-1',
+        })
+      )
+    })
+
+    it('does not publish events when event bus not provided', async () => {
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      // No event bus
+      const loop = new PatrolLoop()
+      const result = await loop.patrolOnce()
+
+      // Should complete without error (orphan cleanup errors are unrelated)
+      expect(result.remediations).toHaveLength(1)
+      // No stuck-detection related errors
+      expect(result.errors.filter((e) => e.context.startsWith('stuck-detection'))).toHaveLength(0)
+    })
+
+    it('includes correct fields in nudge event', async () => {
+      const mockPublish = vi.fn()
+      const mockEventBus = { publish: mockPublish, subscribe: vi.fn(), close: vi.fn() }
+
+      const session = makeSession({
+        issueIdentifier: 'SUP-200',
+        workerId: 'wkr_xyz',
+      })
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker({ id: 'wkr_xyz' })])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'test nudge',
+        attemptNumber: 2,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop({}, {}, mockEventBus as any)
+      await loop.patrolOnce()
+
+      expect(mockPublish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'nudge-sent',
+          sessionId: 'sess-1',
+          issueId: 'issue-1',
+          issueIdentifier: 'SUP-200',
+          workerId: 'wkr_xyz',
+          attemptNumber: 2,
+          nudgeMessage: expect.any(String),
+          reason: 'test nudge',
+          timestamp: expect.any(String),
+          source: 'manual',
+        })
+      )
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Integration: Full nudge lifecycle (SUP-1265)
+  // -------------------------------------------------------------------------
+
+  describe('patrolOnce — nudge lifecycle integration', () => {
+    it('full flow: stuck → nudge → activity resumes → cleared', async () => {
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+
+      // Pass 1: Detect stuck, nudge
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: true,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'First detection: tool loop detected',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop()
+      const result1 = await loop.patrolOnce()
+
+      expect(result1.remediations).toHaveLength(1)
+      expect(result1.remediations[0]!.action).toBe('nudge')
+      expect(mockNudgeWorker).toHaveBeenCalled()
+
+      // Pass 2: Activity resumes, session no longer stuck
+      vi.clearAllMocks()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: false,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: false,
+        stuckDurationMs: 0,
+        isStuck: false,
+      })
+
+      const result2 = await loop.patrolOnce()
+
+      expect(result2.stuckSessions).toHaveLength(0)
+      expect(result2.remediations).toHaveLength(0)
+    })
+
+    it('full flow: stuck → nudge → no activity → restart', async () => {
+      const session = makeSession()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+
+      // Pass 1: Detect stuck, nudge
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: true,
+        stuckDurationMs: 60_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: '',
+        workerId: '',
+        action: 'nudge',
+        reason: 'First detection: tool loop detected',
+        attemptNumber: 1,
+        maxAttempts: 2,
+      })
+
+      const loop = new PatrolLoop()
+      const result1 = await loop.patrolOnce()
+
+      expect(result1.remediations[0]!.action).toBe('nudge')
+
+      // Pass 2: Still stuck, nudge failed → restart
+      vi.clearAllMocks()
+      mockGetSessionsByStatus.mockResolvedValue([session])
+      mockListWorkers.mockResolvedValue([makeWorker()])
+      mockDetectStuckSignals.mockReturnValue({
+        sessionRunningTooLong: true,
+        heartbeatStale: false,
+        claimStuck: false,
+        toolLoopStuck: true,
+        stuckDurationMs: 120_000,
+        isStuck: true,
+      })
+      mockDecideRemediation.mockReturnValue({
+        sessionId: 'sess-1',
+        workerId: '',
+        action: 'restart',
+        reason: 'Nudge failed: no activity within 3 minutes',
+        attemptNumber: 1,
+        maxAttempts: 3,
+      })
+      mockGetRemediationRecord.mockResolvedValue({
+        sessionId: 'sess-1',
+        issueId: 'issue-1',
+        issueIdentifier: 'SUP-100',
+        nudgeCount: 1,
+        nudgeTimestamps: [900_000],
+        restartCount: 0,
+        restartTimestamps: [],
+        reassignCount: 0,
+        reassignTimestamps: [],
+        escalated: false,
+        firstDetectedAt: 800_000,
+        lastActionAt: 900_000,
+        updatedAt: 900_000,
+      })
+
+      const result2 = await loop.patrolOnce()
+
+      expect(result2.remediations).toHaveLength(1)
+      expect(result2.remediations[0]!.action).toBe('restart')
+      expect(mockDeregisterWorker).toHaveBeenCalledWith('wkr_abc')
+      expect(mockDispatchWork).toHaveBeenCalled()
     })
   })
 })

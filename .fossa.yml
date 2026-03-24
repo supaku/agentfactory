@@ -1,0 +1,23 @@
+version: 3
+
+project:
+  id: agentfactory
+  name: AgentFactory
+  url: https://github.com/RenseiAI/agentfactory
+
+revision:
+  branch: main
+
+paths:
+  exclude:
+    - .worktrees/
+    - "**/test-fixtures/"
+    - "**/dist/"
+    - "**/coverage/"
+    - "**/node_modules/"
+
+targets:
+  exclude:
+    # Proprietary SDK — already reviewed and approved (SUP-1227 / THIRD-PARTY-LICENSES.md)
+    - type: npm
+      path: node_modules/@anthropic-ai/claude-agent-sdk

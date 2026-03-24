@@ -13,7 +13,7 @@ import {
   removeWorkerSession,
   dispatchWork,
   type QueuedWork,
-  storePendingPrompt,
+  publishUrgent,
   generateIdempotencyKey,
   isWebhookProcessed,
 } from '@renseiai/agentfactory-server'
@@ -179,29 +179,32 @@ export async function handleSessionPrompted(
     }
   }
 
-  // If session is running, store as pending prompt
+  // If session is running, publish as urgent directive to agent inbox
   if (existingSession?.status === 'running' || existingSession?.status === 'claimed') {
-    const userInfo = user ? {
-      id: user.id as string | undefined,
-      name: user.name as string | undefined,
-    } : undefined
-
-    const pendingPrompt = await storePendingPrompt(
-      sessionId,
-      issueId,
-      effectivePrompt,
-      userInfo
-    )
-
-    if (pendingPrompt) {
-      promptLog.info('Pending prompt stored for running session', {
-        promptId: pendingPrompt.id,
-        sessionId,
-        issueIdentifier,
-        workerId: existingSession.workerId,
-      })
+    const agentId = existingSession.agentId
+    if (!agentId) {
+      promptLog.error('Session has no agentId, cannot publish to inbox', { sessionId })
     } else {
-      promptLog.error('Failed to store pending prompt')
+      try {
+        const streamId = await publishUrgent(agentId, {
+          type: 'directive',
+          sessionId,
+          payload: effectivePrompt,
+          userId: user?.id as string | undefined,
+          userName: user?.name as string | undefined,
+          createdAt: Date.now(),
+        })
+
+        promptLog.info('Directive published to agent inbox', {
+          streamId,
+          sessionId,
+          issueIdentifier,
+          agentId,
+          workerId: existingSession.workerId,
+        })
+      } catch (err) {
+        promptLog.error('Failed to publish directive to inbox', { error: err })
+      }
     }
   } else {
     // Session not running — queue as work

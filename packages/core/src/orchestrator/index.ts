@@ -67,7 +67,12 @@ export type {
   RecoveryCheckResult,
   HeartbeatWriterConfig,
   ProgressLoggerConfig,
+  FileAction,
+  FileModification,
+  Decision,
+  StructuredSummary,
 } from './state-types.js'
+export { SUMMARY_SCHEMA_VERSION } from './state-types.js'
 
 // Log Config Types (for session logging)
 export type { LogAnalysisConfig } from './log-config.js'
@@ -130,9 +135,13 @@ export {
   writeTodos,
   createInitialState,
   buildRecoveryPrompt,
+  buildResumeContext,
   getHeartbeatTimeoutFromEnv,
   getMaxRecoveryAttemptsFromEnv,
   getTaskListId,
+  getSummaryPath,
+  readSummary,
+  writeSummary,
 } from './state-recovery.js'
 
 // Log Config
@@ -155,3 +164,20 @@ export { parseWorkResult } from './parse-work-result.js'
 
 // Log Analyzer
 export { LogAnalyzer, createLogAnalyzer } from './log-analyzer.js'
+
+// Artifact Tracker (for context window management)
+export {
+  ArtifactTracker,
+} from './artifact-tracker.js'
+export type {
+  TrackedFileAction,
+  TrackedFile,
+  ArtifactIndex,
+} from './artifact-tracker.js'
+
+// Summary Builder (for context window management)
+export { SummaryBuilder } from './summary-builder.js'
+
+// Context Manager (coordinates context window management)
+export { ContextManager } from './context-manager.js'
+export type { ContextManagerConfig } from './context-manager.js'

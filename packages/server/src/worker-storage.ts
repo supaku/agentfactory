@@ -63,6 +63,7 @@ export interface WorkerData {
   status: 'active' | 'draining' | 'offline'
   version?: string
   projects?: string[] // Project names this worker accepts (undefined = all)
+  providers?: string[] // Provider names this worker supports (undefined = all)
 }
 
 /**
@@ -393,21 +394,22 @@ export async function getTotalCapacity(prefetchedWorkers?: WorkerInfo[]): Promis
 }
 
 /**
- * Set a nudge flag for a worker.
- * The worker checks for this flag during its heartbeat cycle
- * and responds with an extended status report.
+ * Set a nudge for a worker, optionally carrying a message payload.
+ * The worker checks for this during its heartbeat cycle and, when a
+ * message is present, injects it into the agent conversation via
+ * AgentHandle.injectMessage().
  *
- * Redis key: work:worker:{workerId}:nudge (30s TTL)
+ * Redis key: work:worker:{workerId}:nudge (60s TTL)
  */
-export async function nudgeWorker(workerId: string): Promise<boolean> {
+export async function nudgeWorker(workerId: string, message?: string): Promise<boolean> {
   if (!isRedisConfigured()) {
     return false
   }
 
   try {
     const key = `${WORKER_PREFIX}${workerId}:nudge`
-    await redisSet(key, { nudgedAt: Date.now() }, 30)
-    log.info('Nudge set for worker', { workerId })
+    await redisSet(key, { nudgedAt: Date.now(), message: message ?? '' }, 60)
+    log.info('Nudge set for worker', { workerId, hasMessage: !!message })
     return true
   } catch (error) {
     log.error('Failed to nudge worker', { error, workerId })
@@ -416,27 +418,28 @@ export async function nudgeWorker(workerId: string): Promise<boolean> {
 }
 
 /**
- * Check and clear the nudge flag for a worker.
+ * Check and clear the nudge for a worker.
  * Called by the worker during heartbeat processing.
+ * Returns the nudge message payload (if any) or null when no nudge is pending.
  */
 export async function checkAndClearNudge(
   workerId: string
-): Promise<boolean> {
+): Promise<{ message: string } | null> {
   if (!isRedisConfigured()) {
-    return false
+    return null
   }
 
   try {
     const key = `${WORKER_PREFIX}${workerId}:nudge`
-    const nudge = await redisGet(key)
+    const nudge = await redisGet<{ nudgedAt: number; message: string }>(key)
     if (nudge) {
       await redisDel(key)
       log.info('Nudge cleared for worker', { workerId })
-      return true
+      return { message: nudge.message ?? '' }
     }
-    return false
+    return null
   } catch (error) {
     log.error('Failed to check nudge', { error, workerId })
-    return false
+    return null
   }
 }

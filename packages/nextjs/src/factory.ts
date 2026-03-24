@@ -32,6 +32,7 @@ import { createSessionClaimHandler } from './handlers/sessions/claim.js'
 import { createSessionStatusPostHandler, createSessionStatusGetHandler } from './handlers/sessions/status.js'
 import { createSessionLockRefreshHandler } from './handlers/sessions/lock-refresh.js'
 import { createSessionPromptsGetHandler, createSessionPromptsPostHandler } from './handlers/sessions/prompts.js'
+import { createSessionInboxAckHandler } from './handlers/sessions/inbox-ack.js'
 import { createSessionTransferOwnershipHandler } from './handlers/sessions/transfer-ownership.js'
 
 // Session handlers (Linear forwarding)
@@ -46,6 +47,7 @@ import { createPublicStatsHandler } from './handlers/public/stats.js'
 import { createPublicSessionsListHandler } from './handlers/public/sessions-list.js'
 import { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
 import { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
+import { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
 
 // Cleanup handler
 import { createCleanupHandler } from './handlers/cleanup.js'
@@ -62,6 +64,9 @@ import { createOAuthCallbackHandler, type OAuthConfig } from './handlers/oauth/c
 // Issue tracker proxy handler
 import { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
 
+// Workflow handlers
+import { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'
+
 export interface AllRoutes {
   workers: {
     register: { POST: RouteHandler }
@@ -77,6 +82,7 @@ export interface AllRoutes {
     status: { GET: RouteHandler; POST: RouteHandler }
     lockRefresh: { POST: RouteHandler }
     prompts: { GET: RouteHandler; POST: RouteHandler }
+    inboxAck: { POST: RouteHandler }
     transferOwnership: { POST: RouteHandler }
     activity: { POST: RouteHandler }
     completion: { POST: RouteHandler }
@@ -89,6 +95,7 @@ export interface AllRoutes {
     sessions: { GET: RouteHandler }
     sessionDetail: { GET: RouteHandler }
     routingMetrics: { GET: RouteHandler }
+    sessionActivities: { GET: RouteHandler }
   }
   config: { GET: RouteHandler }
   cleanup: { POST: RouteHandler; GET: RouteHandler }
@@ -97,6 +104,9 @@ export interface AllRoutes {
     callback: { GET: RouteHandler }
   }
   issueTrackerProxy: { POST: RouteHandler; GET: RouteHandler }
+  workflows: {
+    deploy: { POST: RouteHandler }
+  }
 }
 
 /**
@@ -172,6 +182,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       status: { GET: createSessionStatusGetHandler(), POST: createSessionStatusPostHandler(routeConfig) },
       lockRefresh: { POST: createSessionLockRefreshHandler() },
       prompts: { GET: createSessionPromptsGetHandler(), POST: createSessionPromptsPostHandler() },
+      inboxAck: { POST: createSessionInboxAckHandler() },
       transferOwnership: { POST: createSessionTransferOwnershipHandler() },
       activity: { POST: createSessionActivityHandler(routeConfig) },
       completion: { POST: createSessionCompletionHandler(routeConfig) },
@@ -184,6 +195,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       sessions: { GET: createPublicSessionsListHandler() },
       sessionDetail: { GET: createPublicSessionDetailHandler() },
       routingMetrics: { GET: createPublicRoutingMetricsHandler() },
+      sessionActivities: { GET: createPublicSessionActivitiesHandler() },
     },
     config: { GET: configHandler.GET },
     cleanup: { POST: cleanup.POST, GET: cleanup.GET },
@@ -192,5 +204,8 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       callback: { GET: oauth.GET },
     },
     issueTrackerProxy: { POST: issueTrackerProxy.POST, GET: issueTrackerProxy.GET },
+    workflows: {
+      deploy: { POST: createWorkflowDeployHandler() },
+    },
   }
 }
