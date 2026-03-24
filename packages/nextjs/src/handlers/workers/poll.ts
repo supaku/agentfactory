@@ -16,6 +16,7 @@ import {
   maybeCleanupOrphans,
   createLogger,
   getSchedulerMode,
+  filterByQuota,
 } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:workers:poll')
@@ -69,6 +70,20 @@ export function createWorkerPollHandler() {
             .slice(0, desiredCount)
         } else {
           work = allWork.slice(0, desiredCount)
+        }
+
+        // QuotaFilter: exclude work from over-quota projects
+        const quotaResult = await filterByQuota(work)
+        work = quotaResult.allowed
+        if (quotaResult.rejected.length > 0) {
+          log.info('Quota filter rejected work items', {
+            workerId,
+            rejected: quotaResult.rejected.map(r => ({
+              sessionId: r.work.sessionId,
+              project: r.work.projectName,
+              reason: r.reason,
+            })),
+          })
         }
       }
 

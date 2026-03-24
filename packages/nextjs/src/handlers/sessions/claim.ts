@@ -16,6 +16,7 @@ import {
   addWorkerSession,
   getWorker,
   createLogger,
+  onSessionClaimed,
 } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:sessions:claim')
@@ -123,6 +124,11 @@ export function createSessionClaimHandler() {
         claimSucceeded = true
 
         await addWorkerSession(workerId, sessionId)
+
+        // Fleet quota: track concurrent session for this project
+        onSessionClaimed(work.projectName, sessionId).catch((err) => {
+          log.error('Fleet quota onSessionClaimed failed', { sessionId, error: err })
+        })
 
         const session = await getSessionState(sessionId)
 

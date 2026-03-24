@@ -1,4 +1,5 @@
 import { isRedisConfigured, redisSet, redisGet, redisDel, redisKeys } from './redis.js'
+import { onCostUpdated } from './fleet-quota-hooks.js'
 import type { AgentWorkType } from './types.js'
 
 const log = {
@@ -294,6 +295,17 @@ export async function updateSessionCostData(
   }
 
   await redisSet(key, updated, SESSION_TTL_SECONDS)
+
+  // Fleet quota: track incremental cost delta
+  if (costData.totalCostUsd != null) {
+    onCostUpdated(
+      existing.projectName,
+      existing.totalCostUsd ?? 0,
+      costData.totalCostUsd
+    ).catch((err) => {
+      log.error('Fleet quota onCostUpdated failed', { linearSessionId, error: err })
+    })
+  }
 
   log.info('Updated session cost data', {
     linearSessionId,

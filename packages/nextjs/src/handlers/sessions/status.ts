@@ -23,6 +23,7 @@ import {
   recordSessionFailure,
   clearSessionFailures,
   archiveInbox,
+  onSessionTerminated,
 } from '@renseiai/agentfactory-server'
 import type { RouteConfig } from '../../types.js'
 
@@ -114,6 +115,11 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
             (err) => log.error('Failed to persist cost data', { sessionId, error: err })
           )
         }
+
+        // Fleet quota: decrement concurrent session count and record final cost
+        onSessionTerminated(session.projectName, sessionId, totalCostUsd).catch((err) => {
+          log.error('Fleet quota onSessionTerminated failed', { sessionId, error: err })
+        })
 
         // Track session failures for circuit breaker (exponential backoff)
         if (session.issueId) {
