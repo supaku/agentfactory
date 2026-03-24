@@ -27,6 +27,7 @@ import {
   releaseIssueLock,
 } from './issue-lock.js'
 import { cleanupOrphanedSessions } from './orphan-cleanup.js'
+import { runQueueMaintenance } from './scheduler/migration.js'
 import { evaluateWorkerHealth, detectStuckSignals } from './health-probes.js'
 import { decideRemediation } from './stuck-decision-tree.js'
 import {
@@ -133,6 +134,16 @@ export class PatrolLoop {
       // Step 3: Run orphan cleanup (existing logic)
       if (this.config.enableOrphanCleanup) {
         await this.runOrphanCleanup(result)
+      }
+
+      // Step 4: Queue maintenance (scheduling pipeline)
+      try {
+        const queueResult = await runQueueMaintenance()
+        if (!queueResult.skipped && queueResult.stats) {
+          // Just log — no need to add to PatrolResult for now
+        }
+      } catch (err) {
+        log.error('queue_maintenance_failed', { error: String(err) })
       }
 
       // Fire completion callback

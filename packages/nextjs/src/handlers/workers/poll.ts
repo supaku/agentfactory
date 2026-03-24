@@ -13,6 +13,7 @@ import {
   type PendingPrompt,
   maybeCleanupOrphans,
   createLogger,
+  getSchedulerMode,
 } from '@renseiai/agentfactory-server'
 
 const log = createLogger('api:workers:poll')
@@ -46,6 +47,8 @@ export function createWorkerPollHandler() {
       const availableCapacity = worker.capacity - worker.activeSessions.length
       let work: Awaited<ReturnType<typeof peekWork>> = []
 
+      // TODO(SUP-1292): When SCHEDULER_MODE=pipeline, use scheduler orchestrator here
+      // For now, legacy inline dispatch is used regardless of mode
       if (availableCapacity > 0) {
         const desiredCount = Math.min(availableCapacity, 5)
         const workerProjects = worker.projects

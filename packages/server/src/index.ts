@@ -13,6 +13,9 @@ export * from './session-storage.js'
 // Work queue
 export * from './work-queue.js'
 
+// Scheduling queue (three-tier: active, backoff, suspended)
+export * from './scheduling-queue.js'
+
 // Worker pool
 export * from './worker-storage.js'
 
@@ -79,3 +82,6 @@ export * from './supervisor-storage.js'
 export * from './health-probes.js'
 export * from './stuck-decision-tree.js'
 export * from './patrol-loop.js'
+
+// Scheduler (K8s-inspired filter/score pipeline)
+export * from './scheduler/index.js'

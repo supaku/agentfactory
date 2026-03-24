@@ -23,6 +23,9 @@ vi.mock('./session-storage.js', () => ({
 
 vi.mock('./work-queue.js', () => ({
   releaseClaim: vi.fn(),
+  WORK_QUEUE_KEY: 'work:queue',
+  WORK_ITEMS_KEY: 'work:items',
+  calculateScore: vi.fn((priority: number, queuedAt: number) => priority * 1e13 + queuedAt),
 }))
 
 vi.mock('./issue-lock.js', () => ({
@@ -68,6 +71,15 @@ vi.mock('./supervisor-storage.js', () => ({
   getRemediationRecord: vi.fn(() => null),
   recordRemediationAction: vi.fn(),
   setWorkerHealthSnapshot: vi.fn(),
+}))
+
+vi.mock('./scheduler/migration.js', () => ({
+  runQueueMaintenance: vi.fn(() => ({
+    promoted: 0,
+    reevaluated: 0,
+    stats: null,
+    skipped: true,
+  })),
 }))
 
 import { PatrolLoop } from './patrol-loop.js'
