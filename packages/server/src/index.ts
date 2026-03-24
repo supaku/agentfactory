@@ -76,6 +76,14 @@ export * from './a2a-types.js'
 // A2A Server (AgentCard + JSON-RPC handlers)
 export * from './a2a-server.js'
 
+// Fleet quotas (Kueue-inspired per-project budgets)
+export * from './fleet-quota-types.js'
+export * from './fleet-quota-storage.js'
+export * from './fleet-quota-tracker.js'
+export * from './fleet-quota-hooks.js'
+export * from './fleet-quota-filter.js'
+export * from './fleet-quota-cohort.js'
+
 // Fleet supervision (Erlang-inspired)
 export * from './fleet-supervisor-types.js'
 export * from './supervisor-storage.js'

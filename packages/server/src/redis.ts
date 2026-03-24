@@ -436,3 +436,21 @@ export async function redisHLen(key: string): Promise<number> {
   const redis = getRedisClient()
   return redis.hlen(key)
 }
+
+// ============================================
+// Numeric Operations
+// ============================================
+
+/**
+ * Increment a key by a floating-point value (INCRBYFLOAT)
+ * Creates the key with value 0 before incrementing if it doesn't exist.
+ * @returns the new value after increment
+ */
+export async function redisIncrByFloat(
+  key: string,
+  increment: number
+): Promise<number> {
+  const redis = getRedisClient()
+  const result = await redis.incrbyfloat(key, increment)
+  return parseFloat(result)
+}
