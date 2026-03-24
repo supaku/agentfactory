@@ -240,7 +240,7 @@ func (m *Model) renderHelp() string {
 		{"\u2191\u2193", "navigate"},
 		{"enter", "select"},
 		{"/", "filter"},
-		{"ctrl+k", "commands"},
+		{":", "commands"},
 		{"q", "quit"},
 	}
 

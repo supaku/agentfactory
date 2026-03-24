@@ -1,7 +1,10 @@
 package app
 
 import (
+	"fmt"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/RenseiAI/agentfactory/packages/tui/internal/api"
 	"github.com/RenseiAI/agentfactory/packages/tui/internal/views/dashboard"
 	"github.com/RenseiAI/agentfactory/packages/tui/internal/views/detail"
 	"github.com/RenseiAI/agentfactory/packages/tui/internal/views/palette"
@@ -59,10 +62,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "q":
 			return a, tea.Quit
-		case "ctrl+k":
+		case "ctrl+k", ":":
 			a.showPalette = true
 			a.palette.Focus()
 			return a, nil
+		case "/":
+			// In dashboard, "/" activates table filter (handled by dashboard.Update)
+			// In other views, "/" opens the command palette
+			if a.state != ViewDashboard {
+				a.showPalette = true
+				a.palette.Focus()
+				return a, nil
+			}
 		}
 
 	// Cross-view navigation messages
@@ -93,6 +104,26 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case palette.RefreshMsg:
 		return a, a.dashboard.Init()
+
+	// MCP actions — call the actual API
+	case palette.MCPListFleetMsg:
+		return a, a.mcpListFleet()
+
+	case palette.MCPCostReportMsg:
+		return a, a.mcpCostReport()
+
+	case palette.MCPSubmitTaskMsg:
+		return a, a.mcpSubmitTask(msg.IssueID)
+
+	case palette.MCPStopAgentMsg:
+		return a, a.mcpStopAgent(msg.TaskID)
+
+	case palette.MCPForwardPromptMsg:
+		return a, a.mcpForwardPrompt(msg.TaskID, msg.Message)
+
+	case MCPResultMsg:
+		// After an MCP action completes, refresh the dashboard
+		return a, a.dashboard.Init()
 	}
 
 	// Delegate to active view
@@ -105,6 +136,84 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return a, cmd
+}
+
+// MCP API command helpers
+
+func (a *App) mcpListFleet() tea.Cmd {
+	ds := a.ctx.DataSource
+	return func() tea.Msg {
+		resp, err := ds.ListFleet()
+		if err != nil {
+			return MCPResultMsg{Action: "list-fleet", Success: false, Message: err.Error()}
+		}
+		return MCPResultMsg{
+			Action:  "list-fleet",
+			Success: true,
+			Message: fmt.Sprintf("Fleet: %d sessions (%d returned)", resp.Total, resp.Returned),
+		}
+	}
+}
+
+func (a *App) mcpCostReport() tea.Cmd {
+	ds := a.ctx.DataSource
+	return func() tea.Msg {
+		resp, err := ds.GetCostReport()
+		if err != nil {
+			return MCPResultMsg{Action: "cost-report", Success: false, Message: err.Error()}
+		}
+		return MCPResultMsg{
+			Action:  "cost-report",
+			Success: true,
+			Message: fmt.Sprintf("Cost: $%.2f across %d sessions (%d with data)",
+				resp.TotalCostUsd, resp.TotalSessions, resp.SessionsWithCostData),
+		}
+	}
+}
+
+func (a *App) mcpSubmitTask(issueID string) tea.Cmd {
+	ds := a.ctx.DataSource
+	return func() tea.Msg {
+		resp, err := ds.SubmitTask(api.SubmitTaskRequest{IssueID: issueID})
+		if err != nil {
+			return MCPResultMsg{Action: "submit-task", Success: false, Message: err.Error()}
+		}
+		return MCPResultMsg{
+			Action:  "submit-task",
+			Success: resp.Submitted,
+			Message: fmt.Sprintf("Task %s submitted for %s (status: %s)", resp.TaskID, resp.IssueID, resp.Status),
+		}
+	}
+}
+
+func (a *App) mcpStopAgent(taskID string) tea.Cmd {
+	ds := a.ctx.DataSource
+	return func() tea.Msg {
+		resp, err := ds.StopAgent(api.StopAgentRequest{TaskID: taskID})
+		if err != nil {
+			return MCPResultMsg{Action: "stop-agent", Success: false, Message: err.Error()}
+		}
+		return MCPResultMsg{
+			Action:  "stop-agent",
+			Success: resp.Stopped,
+			Message: fmt.Sprintf("Agent %s stopped (%s → %s)", resp.TaskID, resp.PreviousStatus, resp.NewStatus),
+		}
+	}
+}
+
+func (a *App) mcpForwardPrompt(taskID, message string) tea.Cmd {
+	ds := a.ctx.DataSource
+	return func() tea.Msg {
+		resp, err := ds.ForwardPrompt(api.ForwardPromptRequest{TaskID: taskID, Message: message})
+		if err != nil {
+			return MCPResultMsg{Action: "forward-prompt", Success: false, Message: err.Error()}
+		}
+		return MCPResultMsg{
+			Action:  "forward-prompt",
+			Success: resp.Forwarded,
+			Message: fmt.Sprintf("Prompt %s forwarded to %s", resp.PromptID, resp.TaskID),
+		}
+	}
 }
 
 // View renders the active view (and optional palette overlay).

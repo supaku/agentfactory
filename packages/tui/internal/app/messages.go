@@ -7,3 +7,10 @@ const (
 	ViewDashboard ViewState = iota
 	ViewDetail
 )
+
+// MCPResultMsg carries the result of an MCP tool action.
+type MCPResultMsg struct {
+	Action  string
+	Success bool
+	Message string
+}
