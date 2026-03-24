@@ -3,6 +3,7 @@ import { tool, type SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk'
 import { SymbolExtractor } from '../parser/symbol-extractor.js'
 import { IncrementalIndexer } from '../indexing/incremental-indexer.js'
 import { SearchEngine } from '../search/search-engine.js'
+import { HybridSearchEngine } from '../search/hybrid-search.js'
 import { RepoMapGenerator } from '../repo-map/repo-map-generator.js'
 import { DedupPipeline } from '../memory/dedup-pipeline.js'
 import { InMemoryStore } from '../memory/memory-store.js'
@@ -34,6 +35,7 @@ export const codeIntelligencePlugin: ToolPlugin = {
     const extractor = new SymbolExtractor()
     const indexer = new IncrementalIndexer(extractor, { indexDir: '.agentfactory/code-index' })
     const searchEngine = new SearchEngine()
+    const hybridEngine = new HybridSearchEngine(searchEngine, null, null)
     const repoMapGen = new RepoMapGenerator()
     const dedupStore = new InMemoryStore()
     const dedupPipeline = new DedupPipeline(dedupStore)
@@ -92,7 +94,7 @@ export const codeIntelligencePlugin: ToolPlugin = {
 
       tool(
         'af_code_search_code',
-        'Search code using BM25 ranking with code-aware tokenization',
+        'Search code using hybrid BM25 + semantic ranking with code-aware tokenization',
         {
           query: z.string().describe('Code search query'),
           max_results: z.number().optional().describe('Maximum results (default 20)'),
@@ -100,7 +102,7 @@ export const codeIntelligencePlugin: ToolPlugin = {
         },
         async (args) => {
           try {
-            const results = searchEngine.search({
+            const results = await hybridEngine.search({
               query: args.query,
               maxResults: args.max_results ?? 20,
               language: args.language,

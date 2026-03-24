@@ -1,10 +1,11 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
-import type { FileIndex, IndexMetadata, CodeSymbol } from '../types.js'
+import type { FileIndex, IndexMetadata, CodeSymbol, FileAST } from '../types.js'
 import { MerkleTree } from './merkle-tree.js'
 import { ChangeDetector, type ChangeSet } from './change-detector.js'
 import { GitHashProvider } from './git-hash-provider.js'
 import { SymbolExtractor } from '../parser/symbol-extractor.js'
+import type { VectorIndexer } from './vector-indexer.js'
 
 export interface IndexerOptions {
   indexDir?: string
@@ -22,10 +23,16 @@ export class IncrementalIndexer {
   private indexDir: string
   private previousTree: MerkleTree | undefined
   private fileIndex: Map<string, FileIndex> = new Map()
+  private vectorIndexer: VectorIndexer | undefined
 
   constructor(extractor: SymbolExtractor, options: IndexerOptions = {}) {
     this.extractor = extractor
     this.indexDir = options.indexDir ?? '.agentfactory/code-index'
+  }
+
+  /** Set an optional VectorIndexer for dense vector indexing. */
+  setVectorIndexer(indexer: VectorIndexer): void {
+    this.vectorIndexer = indexer
   }
 
   /**
@@ -57,6 +64,11 @@ export class IncrementalIndexer {
 
     // Index added and modified files
     const indexed: FileIndex[] = []
+    const addedAsts: FileAST[] = []
+    const addedContents: Map<string, string> = new Map()
+    const modifiedAsts: FileAST[] = []
+    const modifiedContents: Map<string, string> = new Map()
+
     const toIndex = [...changes.added, ...changes.modified]
     for (const path of toIndex) {
       const content = files.get(path)
@@ -73,6 +85,28 @@ export class IncrementalIndexer {
       }
       this.fileIndex.set(path, fileIdx)
       indexed.push(fileIdx)
+
+      // Collect ASTs/contents for vector indexing
+      if (changes.added.includes(path)) {
+        addedAsts.push(ast)
+        addedContents.set(path, content)
+      } else {
+        modifiedAsts.push(ast)
+        modifiedContents.set(path, content)
+      }
+    }
+
+    // Vector indexing (optional)
+    if (this.vectorIndexer) {
+      if (changes.deleted.length > 0) {
+        await this.vectorIndexer.removeFiles(changes.deleted)
+      }
+      if (addedAsts.length > 0) {
+        await this.vectorIndexer.indexFiles(addedAsts, addedContents)
+      }
+      if (modifiedAsts.length > 0) {
+        await this.vectorIndexer.updateFiles(modifiedAsts, modifiedContents)
+      }
     }
 
     this.previousTree = newTree
@@ -109,6 +143,12 @@ export class IncrementalIndexer {
       rootHash: this.previousTree?.getRootHash() ?? '',
     }
     await writeFile(join(dir, 'index.json'), JSON.stringify(data, null, 2))
+
+    // Save vector store if available
+    if (this.vectorIndexer) {
+      const vectorDir = join(dir, 'vectors')
+      await this.vectorIndexer.getStore().save(vectorDir)
+    }
   }
 
   /** Load index from disk. */
@@ -125,6 +165,17 @@ export class IncrementalIndexer {
         fileHashes.set(path, (fi as FileIndex).gitHash)
       }
       this.previousTree = MerkleTree.fromHashes(fileHashes)
+
+      // Load vector store if available
+      if (this.vectorIndexer) {
+        const vectorDir = join(basePath, this.indexDir, 'vectors')
+        try {
+          await this.vectorIndexer.getStore().load(vectorDir)
+        } catch {
+          // Vector store may not exist yet — that's fine
+        }
+      }
+
       return true
     } catch {
       return false
