@@ -100,6 +100,12 @@ export const RepositoryConfigSchema = z.object({
    * Allows routing agents to different providers by work type or project.
    */
   providers: ProvidersConfigSchema.optional(),
+  /**
+   * Git merge driver to use in agent worktrees.
+   * 'mergiraf' enables syntax-aware merging for supported file types.
+   * Defaults to 'default' (standard git line-based merge).
+   */
+  mergeDriver: z.enum(['mergiraf', 'default']).optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },

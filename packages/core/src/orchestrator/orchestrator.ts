@@ -775,6 +775,14 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
 See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'merge':
+      basePrompt = `Handle merge queue operations for ${identifier}.
+Check PR merge readiness (CI status, approvals).
+Attempt rebase onto latest main.
+Resolve conflicts using mergiraf-enhanced git merge if available.
+Push updated branch and trigger merge via configured merge queue provider.${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries
@@ -805,6 +813,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'refinement-coordination': 'REF-COORD',
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
+  merge: 'MRG',
 }
 
 /**
@@ -1616,6 +1625,9 @@ export class AgentOrchestrator {
     // Write helper scripts into .agent/ for agent use
     this.writeWorktreeHelpers(worktreePath)
 
+    // Configure mergiraf merge driver if enabled
+    this.configureMergiraf(worktreePath)
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -1696,6 +1708,42 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Log but don't fail — the helper is optional
       console.warn(
         `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  /**
+   * Configure mergiraf as the git merge driver in a worktree.
+   * Falls back silently to default git merge if mergiraf is not installed.
+   */
+  private configureMergiraf(worktreePath: string): void {
+    // Check if mergiraf is disabled via config
+    if (this.repoConfig?.mergeDriver === 'default') {
+      return
+    }
+
+    try {
+      // Check if mergiraf binary is available
+      execSync('which mergiraf', { stdio: 'pipe', encoding: 'utf-8' })
+    } catch {
+      // mergiraf not installed — fall back to default merge silently
+      console.log('mergiraf not found on PATH, using default git merge driver')
+      return
+    }
+
+    try {
+      // Register mergiraf as the merge driver in this worktree
+      // This sets up .git/config merge driver entries and .gitattributes
+      execSync('mergiraf register', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+      console.log(`mergiraf registered as merge driver in ${worktreePath}`)
+    } catch (error) {
+      // Log warning but don't fail — merge driver is non-critical
+      console.warn(
+        `Failed to register mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   }
