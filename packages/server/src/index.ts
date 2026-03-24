@@ -79,3 +79,8 @@ export * from './supervisor-storage.js'
 export * from './health-probes.js'
 export * from './stuck-decision-tree.js'
 export * from './patrol-loop.js'
+
+// Routing stores
+export { RedisPosteriorStore } from './routing-posterior-store.js'
+export type { RedisObservationStoreOptions } from './routing-observation-store.js'
+export { createRedisObservationStore } from './routing-observation-store.js'

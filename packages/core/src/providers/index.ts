@@ -4,7 +4,7 @@
  * Creates provider instances based on name.
  * Supports provider selection via env vars, config, labels, and mentions.
  *
- * Resolution order (highest → lowest):
+ * Sync resolution order (highest → lowest):
  * 1. Issue label override (provider:codex)
  * 2. Mention context override ("use codex", "@codex")
  * 3. Config providers.byWorkType
@@ -14,6 +14,18 @@
  * 7. Config providers.default
  * 8. Env var AGENT_PROVIDER
  * 9. Hardcoded 'claude'
+ *
+ * Async resolution order (with MAB routing):
+ * 1. Issue label override (provider:codex)          — explicit human override
+ * 2. Mention context override ("use codex")         — explicit human override
+ * 3. Config providers.byWorkType                    — static config
+ * 4. Config providers.byProject                     — static config
+ * 5. MAB-based intelligent routing                  — learned routing (feature-flagged)
+ * 6. Env var AGENT_PROVIDER_{WORKTYPE}              — static fallback
+ * 7. Env var AGENT_PROVIDER_{PROJECT}               — static fallback
+ * 8. Config providers.default                       — static fallback
+ * 9. Env var AGENT_PROVIDER                         — static fallback
+ * 10. Hardcoded 'claude'                            — ultimate fallback
  */
 
 export type { AgentProviderName, AgentProvider, AgentSpawnConfig, AgentHandle, AgentEvent } from './types.js'
@@ -36,11 +48,14 @@ export { SpringAiProvider, createSpringAiProvider } from './spring-ai-provider.j
 export { A2aProvider, createA2aProvider } from './a2a-provider.js'
 
 import type { AgentProvider, AgentProviderName } from './types.js'
+import type { PosteriorStore } from '../routing/posterior-store.js'
+import type { RoutingConfig } from '../routing/types.js'
 import { ClaudeProvider } from './claude-provider.js'
 import { CodexProvider } from './codex-provider.js'
 import { AmpProvider } from './amp-provider.js'
 import { SpringAiProvider } from './spring-ai-provider.js'
 import { A2aProvider } from './a2a-provider.js'
+import { logger } from '../logger.js'
 
 // ---------------------------------------------------------------------------
 // Provider config types (used by .agentfactory/config.yaml)
@@ -74,6 +89,22 @@ export interface ProviderResolutionContext {
 export interface ProviderResolutionResult {
   name: AgentProviderName
   source: string
+}
+
+/** Context for MAB-based routing in async provider resolution */
+export interface RoutingContext {
+  /** Posterior store instance (from server) for reading MAB posteriors */
+  posteriorStore?: PosteriorStore
+  /** Routing configuration (from repo config) */
+  routingConfig?: RoutingConfig
+  /** Providers to consider for MAB selection (defaults to all valid providers) */
+  availableProviders?: AgentProviderName[]
+}
+
+/** Extended resolution context for async provider resolution with MAB routing */
+export interface AsyncProviderResolutionContext extends ProviderResolutionContext {
+  /** Optional routing context for MAB-based intelligent routing */
+  routingContext?: RoutingContext
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +302,147 @@ export function resolveProviderWithSource(context?: ProviderResolutionContext): 
  */
 export function resolveProviderName(options?: ProviderResolutionContext): AgentProviderName {
   return resolveProviderWithSource(options).name
+}
+
+// ---------------------------------------------------------------------------
+// Async provider resolution (with MAB routing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Async version of resolveProviderWithSource() that includes MAB-based
+ * intelligent routing as tier 5 in the cascade.
+ *
+ * Resolution order (highest → lowest):
+ * 1. Issue label override (provider:codex)          — explicit human override
+ * 2. Mention context override ("use codex")         — explicit human override
+ * 3. Config providers.byWorkType                    — static config
+ * 4. Config providers.byProject                     — static config
+ * 5. MAB-based intelligent routing                  — learned routing (feature-flagged)
+ * 6. Env var AGENT_PROVIDER_{WORKTYPE}              — static fallback
+ * 7. Env var AGENT_PROVIDER_{PROJECT}               — static fallback
+ * 8. Config providers.default                       — static fallback
+ * 9. Env var AGENT_PROVIDER                         — static fallback
+ * 10. Hardcoded 'claude'                            — ultimate fallback
+ *
+ * MAB routing (tier 5) only activates when:
+ * - routingContext.posteriorStore is provided
+ * - routingContext.routingConfig?.enabled is true
+ * - context.workType is defined
+ *
+ * If selectProvider() throws or returns low confidence, falls through silently.
+ *
+ * @param context - Full resolution context including optional routing context
+ * @returns The resolved provider name and its source
+ */
+export async function resolveProviderWithSourceAsync(
+  context?: AsyncProviderResolutionContext,
+): Promise<ProviderResolutionResult> {
+  // 1. Issue label override
+  if (context?.labels?.length) {
+    const fromLabel = extractProviderFromLabels(context.labels)
+    if (fromLabel) {
+      return { name: fromLabel, source: `label provider:${fromLabel}` }
+    }
+  }
+
+  // 2. Mention context override
+  if (context?.mentionContext) {
+    const fromMention = extractProviderFromMention(context.mentionContext)
+    if (fromMention) {
+      return { name: fromMention, source: `mention "${context.mentionContext.substring(0, 30)}"` }
+    }
+  }
+
+  // 3. Config byWorkType
+  if (context?.workType && context?.configProviders?.byWorkType) {
+    const configWorkType = context.configProviders.byWorkType[context.workType]
+    if (configWorkType && isValidProviderName(configWorkType)) {
+      return { name: configWorkType, source: `config providers.byWorkType.${context.workType}` }
+    }
+  }
+
+  // 4. Config byProject
+  if (context?.project && context?.configProviders?.byProject) {
+    const configProject = context.configProviders.byProject[context.project]
+    if (configProject && isValidProviderName(configProject)) {
+      return { name: configProject, source: `config providers.byProject.${context.project}` }
+    }
+  }
+
+  // 5. MAB-based intelligent routing (feature-flagged)
+  if (
+    context?.routingContext?.posteriorStore &&
+    context?.routingContext?.routingConfig?.enabled &&
+    context?.workType
+  ) {
+    try {
+      const { selectProvider } = await import('../routing/routing-engine.js')
+      const availableProviders = context.routingContext.availableProviders ?? VALID_PROVIDER_NAMES
+      const decision = await selectProvider(
+        context.routingContext.posteriorStore,
+        context.workType as import('../orchestrator/work-types.js').AgentWorkType,
+        availableProviders,
+        context.routingContext.routingConfig,
+      )
+
+      // Only use MAB decision if confidence exceeds a meaningful threshold
+      // and it's not purely exploratory due to uncertainty
+      if (decision.confidence > 0 && decision.explorationReason !== 'uncertainty') {
+        return { name: decision.selectedProvider, source: 'mab-routing' }
+      }
+      // Low confidence or uncertainty-driven exploration — fall through to static fallbacks
+    } catch (err) {
+      logger.warn('MAB routing failed, falling through to static fallbacks', {
+        error: err instanceof Error ? err.message : String(err),
+        workType: context.workType,
+      })
+    }
+  }
+
+  // 6. Env var AGENT_PROVIDER_{WORKTYPE}
+  if (context?.workType) {
+    const workTypeKey = `AGENT_PROVIDER_${context.workType.toUpperCase().replace(/-/g, '_')}`
+    const workTypeProvider = process.env[workTypeKey]
+    if (workTypeProvider && isValidProviderName(workTypeProvider)) {
+      return { name: workTypeProvider, source: `env ${workTypeKey}` }
+    }
+  }
+
+  // 7. Env var AGENT_PROVIDER_{PROJECT}
+  if (context?.project) {
+    const projectKey = `AGENT_PROVIDER_${context.project.toUpperCase()}`
+    const projectProvider = process.env[projectKey]
+    if (projectProvider && isValidProviderName(projectProvider)) {
+      return { name: projectProvider, source: `env ${projectKey}` }
+    }
+  }
+
+  // 8. Config providers.default
+  if (context?.configProviders?.default && isValidProviderName(context.configProviders.default)) {
+    return { name: context.configProviders.default, source: 'config providers.default' }
+  }
+
+  // 9. Env var AGENT_PROVIDER
+  const globalProvider = process.env.AGENT_PROVIDER
+  if (globalProvider && isValidProviderName(globalProvider)) {
+    return { name: globalProvider, source: 'env AGENT_PROVIDER' }
+  }
+
+  // 10. Hardcoded fallback
+  return { name: 'claude', source: 'default' }
+}
+
+/**
+ * Async version of resolveProviderName() that includes MAB-based
+ * intelligent routing.
+ *
+ * @param options - Resolution context including optional routing context
+ * @returns The resolved provider name
+ */
+export async function resolveProviderNameAsync(
+  options?: AsyncProviderResolutionContext,
+): Promise<AgentProviderName> {
+  return (await resolveProviderWithSourceAsync(options)).name
 }
 
 // ---------------------------------------------------------------------------

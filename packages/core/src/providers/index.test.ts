@@ -2,11 +2,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   resolveProviderName,
   resolveProviderWithSource,
+  resolveProviderWithSourceAsync,
+  resolveProviderNameAsync,
   extractProviderFromLabels,
   extractProviderFromMention,
   PROVIDER_ALIASES,
   isValidProviderName,
 } from './index.js'
+import type { AsyncProviderResolutionContext } from './index.js'
+import type { PosteriorStore } from '../routing/posterior-store.js'
+import type { RoutingConfig, RoutingDecision } from '../routing/types.js'
 
 describe('extractProviderFromLabels', () => {
   it('extracts provider from "provider:<name>" label', () => {
@@ -266,5 +271,393 @@ describe('isValidProviderName', () => {
     expect(isValidProviderName('invalid')).toBe(false)
     expect(isValidProviderName('')).toBe(false)
     expect(isValidProviderName('opus')).toBe(false) // alias, not a provider name
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Async provider resolution (with MAB routing)
+// ---------------------------------------------------------------------------
+
+// Mock the routing engine module
+vi.mock('../routing/routing-engine.js', () => ({
+  selectProvider: vi.fn(),
+}))
+
+// Mock the logger to suppress warnings in tests
+vi.mock('../logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  },
+}))
+
+function createMockPosteriorStore(): PosteriorStore {
+  return {
+    getPosterior: vi.fn(),
+    updatePosterior: vi.fn(),
+    getAllPosteriors: vi.fn(),
+    resetPosterior: vi.fn(),
+  }
+}
+
+function createMockRoutingConfig(overrides?: Partial<RoutingConfig>): RoutingConfig {
+  return {
+    enabled: true,
+    explorationRate: 0.1,
+    windowSize: 100,
+    discountFactor: 0.99,
+    minObservationsForExploit: 5,
+    changeDetectionThreshold: 0.2,
+    ...overrides,
+  }
+}
+
+function createHighConfidenceDecision(provider: 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a' = 'codex'): RoutingDecision {
+  return {
+    selectedProvider: provider,
+    confidence: 0.85,
+    expectedReward: 0.9,
+    source: 'mab-routing',
+    alternatives: [],
+  }
+}
+
+function createLowConfidenceDecision(): RoutingDecision {
+  return {
+    selectedProvider: 'codex',
+    confidence: 0.2,
+    expectedReward: 0.5,
+    explorationReason: 'uncertainty',
+    source: 'mab-routing',
+    alternatives: [],
+  }
+}
+
+describe('resolveProviderWithSourceAsync — full cascade with MAB routing', () => {
+  const envBackup: Record<string, string | undefined> = {}
+
+  beforeEach(async () => {
+    // Save and clear relevant env vars
+    for (const key of ['AGENT_PROVIDER', 'AGENT_PROVIDER_QA', 'AGENT_PROVIDER_DEVELOPMENT', 'AGENT_PROVIDER_SOCIAL', 'AGENT_PROVIDER_AGENT']) {
+      envBackup[key] = process.env[key]
+      delete process.env[key]
+    }
+    // Reset the routing engine mock
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockReset()
+  })
+
+  afterEach(() => {
+    // Restore env vars
+    for (const [key, value] of Object.entries(envBackup)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  })
+
+  it('10. defaults to claude when no context provided', async () => {
+    const result = await resolveProviderWithSourceAsync()
+    expect(result).toEqual({ name: 'claude', source: 'default' })
+  })
+
+  it('1. label overrides everything including MAB', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    process.env.AGENT_PROVIDER = 'amp'
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      labels: ['provider:codex'],
+      mentionContext: 'use amp',
+      workType: 'qa',
+      project: 'Social',
+      configProviders: {
+        default: 'amp',
+        byWorkType: { qa: 'amp' },
+        byProject: { Social: 'amp' },
+      },
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toContain('label')
+  })
+
+  it('2. mention overrides MAB, config, and env', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    process.env.AGENT_PROVIDER = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      mentionContext: 'use codex',
+      workType: 'qa',
+      configProviders: { byWorkType: { qa: 'amp' } },
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toContain('mention')
+  })
+
+  it('3. config byWorkType overrides MAB, env, and config defaults', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      configProviders: { byWorkType: { qa: 'codex' }, default: 'amp' },
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toContain('config providers.byWorkType.qa')
+  })
+
+  it('4. config byProject overrides MAB and env vars', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    process.env.AGENT_PROVIDER_SOCIAL = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      project: 'Social',
+      workType: 'qa',
+      configProviders: { byProject: { Social: 'codex' } },
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toContain('config providers.byProject.Social')
+  })
+
+  it('5. MAB routing selects provider when enabled with high confidence', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('codex'))
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    process.env.AGENT_PROVIDER = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toBe('mab-routing')
+  })
+
+  it('5. MAB routing passes available providers and config to selectProvider', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    const mockStore = createMockPosteriorStore()
+    const mockConfig = createMockRoutingConfig({ explorationRate: 0.05 })
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'development',
+      routingContext: {
+        posteriorStore: mockStore,
+        routingConfig: mockConfig,
+        availableProviders: ['claude', 'codex', 'amp'],
+      },
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('mab-routing')
+    expect(vi.mocked(selectProvider)).toHaveBeenCalledWith(
+      mockStore,
+      'development',
+      ['claude', 'codex', 'amp'],
+      mockConfig,
+    )
+  })
+
+  it('5. low-confidence MAB decisions fall through to env var', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createLowConfidenceDecision())
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+  })
+
+  it('5. MAB errors gracefully fall through to env var', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockRejectedValue(new Error('Redis connection failed'))
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+  })
+
+  it('5. MAB tier skipped when routing disabled (default)', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig({ enabled: false }),
+      },
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+    // selectProvider should NOT have been called
+    expect(vi.mocked(selectProvider)).not.toHaveBeenCalled()
+  })
+
+  it('5. MAB tier skipped when no posteriorStore provided', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      routingContext: {
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+    expect(vi.mocked(selectProvider)).not.toHaveBeenCalled()
+  })
+
+  it('5. MAB tier skipped when no workType provided', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+
+    const result = await resolveProviderWithSourceAsync({
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    // Should fall through to hardcoded default
+    expect(result.name).toBe('claude')
+    expect(result.source).toBe('default')
+    expect(vi.mocked(selectProvider)).not.toHaveBeenCalled()
+  })
+
+  it('5. MAB tier skipped when no routingContext provided', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+
+    process.env.AGENT_PROVIDER_QA = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+    })
+    expect(result.name).toBe('amp')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+    expect(vi.mocked(selectProvider)).not.toHaveBeenCalled()
+  })
+
+  it('6. env AGENT_PROVIDER_{WORKTYPE} overrides env project and defaults', async () => {
+    process.env.AGENT_PROVIDER_QA = 'codex'
+    process.env.AGENT_PROVIDER_SOCIAL = 'amp'
+    process.env.AGENT_PROVIDER = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      workType: 'qa',
+      project: 'Social',
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toBe('env AGENT_PROVIDER_QA')
+  })
+
+  it('7. env AGENT_PROVIDER_{PROJECT} overrides global default', async () => {
+    process.env.AGENT_PROVIDER_SOCIAL = 'codex'
+    process.env.AGENT_PROVIDER = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      project: 'Social',
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toBe('env AGENT_PROVIDER_SOCIAL')
+  })
+
+  it('8. config providers.default overrides env AGENT_PROVIDER', async () => {
+    process.env.AGENT_PROVIDER = 'amp'
+    const result = await resolveProviderWithSourceAsync({
+      configProviders: { default: 'codex' },
+    })
+    expect(result.name).toBe('codex')
+    expect(result.source).toBe('config providers.default')
+  })
+
+  it('9. env AGENT_PROVIDER overrides hardcoded default', async () => {
+    process.env.AGENT_PROVIDER = 'codex'
+    const result = await resolveProviderWithSourceAsync()
+    expect(result.name).toBe('codex')
+    expect(result.source).toBe('env AGENT_PROVIDER')
+  })
+})
+
+describe('resolveProviderNameAsync — backwards compatibility', () => {
+  const envBackup: Record<string, string | undefined> = {}
+
+  beforeEach(() => {
+    for (const key of ['AGENT_PROVIDER', 'AGENT_PROVIDER_QA', 'AGENT_PROVIDER_SOCIAL']) {
+      envBackup[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(envBackup)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  })
+
+  it('returns claude by default', async () => {
+    expect(await resolveProviderNameAsync()).toBe('claude')
+  })
+
+  it('respects { project, workType } shape', async () => {
+    process.env.AGENT_PROVIDER_QA = 'codex'
+    expect(await resolveProviderNameAsync({ workType: 'qa' })).toBe('codex')
+  })
+
+  it('accepts labels in context', async () => {
+    expect(await resolveProviderNameAsync({ labels: ['provider:codex'] })).toBe('codex')
+  })
+
+  it('uses MAB routing when configured', async () => {
+    const { selectProvider } = await import('../routing/routing-engine.js')
+    vi.mocked(selectProvider).mockResolvedValue(createHighConfidenceDecision('amp'))
+
+    const result = await resolveProviderNameAsync({
+      workType: 'qa',
+      routingContext: {
+        posteriorStore: createMockPosteriorStore(),
+        routingConfig: createMockRoutingConfig(),
+      },
+    })
+    expect(result).toBe('amp')
   })
 })

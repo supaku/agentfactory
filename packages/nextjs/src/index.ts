@@ -92,6 +92,8 @@ export { createPublicSessionsListHandler } from './handlers/public/sessions-list
 export type { PublicSessionResponse } from './handlers/public/sessions-list.js'
 export { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
 export type { PublicSessionDetailResponse } from './handlers/public/session-detail.js'
+export { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
+export type { PublicRoutingMetricsResponse } from './handlers/public/routing-metrics.js'
 
 // Cleanup handler
 export { createCleanupHandler } from './handlers/cleanup.js'

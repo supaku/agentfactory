@@ -12,6 +12,7 @@ export { SettingsPage } from './pages/settings-page'
 
 // Fleet components
 export { FleetOverview } from './components/fleet/fleet-overview'
+export { RoutingMetrics } from './components/fleet/routing-metrics'
 export { AgentCard } from './components/fleet/agent-card'
 export { StatCard } from './components/fleet/stat-card'
 export { StatusDot } from './components/fleet/status-dot'
@@ -59,6 +60,7 @@ export {
 export { useStats } from './hooks/use-stats'
 export { useSessions } from './hooks/use-sessions'
 export { useWorkers } from './hooks/use-workers'
+export { useRoutingMetrics } from './hooks/use-routing-metrics'
 
 // Utilities
 export { cn } from './lib/utils'
@@ -75,6 +77,10 @@ export type {
   WorkerResponse,
   WorkersListResponse,
   PipelineStatus,
+  PublicRoutingMetricsResponse,
+  RoutingPosteriorResponse,
+  RoutingDecisionResponse,
+  RoutingSummaryResponse,
 } from './types/api'
 export type { WorkTypeConfig } from './lib/work-type-config'
 export type { StatusConfig } from './lib/status-config'

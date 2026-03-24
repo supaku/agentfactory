@@ -46,3 +46,38 @@ export interface WorkersListResponse {
 }
 
 export type PipelineStatus = 'backlog' | 'started' | 'finished' | 'delivered' | 'accepted'
+
+export interface RoutingPosteriorResponse {
+  provider: string
+  workType: string
+  alpha: number
+  beta: number
+  expectedReward: number
+  confidence: number
+  totalObservations: number
+  avgCostUsd: number
+}
+
+export interface RoutingDecisionResponse {
+  timestamp: number
+  provider: string
+  workType: string
+  reward: number
+  taskCompleted: boolean
+  confidence: number
+  explorationReason?: string
+}
+
+export interface RoutingSummaryResponse {
+  totalObservations: number
+  routingEnabled: boolean
+  explorationRate: number
+  avgConfidence: number
+}
+
+export interface PublicRoutingMetricsResponse {
+  posteriors: RoutingPosteriorResponse[]
+  recentDecisions: RoutingDecisionResponse[]
+  summary: RoutingSummaryResponse
+  timestamp: string
+}
