@@ -705,3 +705,39 @@ describe('decideAction — escalation strategy effects', () => {
     expect(decideAction(ctx).action).toBe('trigger-acceptance')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Gate check
+// ---------------------------------------------------------------------------
+
+describe('decideAction — gate check', () => {
+  it('returns none when gates are unsatisfied', () => {
+    const ctx = makeContext({
+      gateEvaluation: {
+        allSatisfied: false,
+        activeGates: [{ issueId: 'issue-1', gateName: 'human-review', gateType: 'signal', status: 'active', activatedAt: Date.now() }],
+        newlySatisfied: [],
+        timeoutResolutions: [],
+        reason: 'Unsatisfied gates: human-review',
+      },
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('unsatisfied gates')
+  })
+
+  it('proceeds when all gates are satisfied', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Backlog' }),
+      gateEvaluation: {
+        allSatisfied: true,
+        activeGates: [],
+        newlySatisfied: [],
+        timeoutResolutions: [],
+        reason: 'All gates satisfied',
+      },
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('trigger-development')
+  })
+})
