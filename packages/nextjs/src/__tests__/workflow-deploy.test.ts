@@ -38,7 +38,7 @@ function inlineValidate(data: unknown): Record<string, unknown> {
 function makeValidationError(message: string): Error {
   const err = new Error(message)
   err.name = 'ZodError'
-  ;(err as Record<string, unknown>).errors = [{ message, path: [] }]
+  ;(err as unknown as Record<string, unknown>).errors = [{ message, path: [] }]
   return err
 }
 
@@ -105,6 +105,9 @@ function savedMetadata() {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Json = Record<string, any>
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -132,7 +135,7 @@ describe('POST /api/workflows/deploy', () => {
     const response = await handler(request)
 
     expect(response.status).toBe(401)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.error).toBe('Unauthorized')
   })
 
@@ -148,7 +151,7 @@ describe('POST /api/workflows/deploy', () => {
     const response = await handler(request)
 
     expect(response.status).toBe(400)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.error).toBe('Bad Request')
     expect(json.message).toMatch(/unable to parse/)
   })
@@ -168,7 +171,7 @@ describe('POST /api/workflows/deploy', () => {
     const response = await handler(request)
 
     expect(response.status).toBe(400)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.error).toBe('Bad Request')
     expect(json.message).toBe('Invalid workflow definition')
     expect(json.details).toBeDefined()
@@ -186,7 +189,7 @@ describe('POST /api/workflows/deploy', () => {
     const response = await handler(request)
 
     expect(response.status).toBe(400)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.error).toBe('Bad Request')
   })
 
@@ -197,7 +200,7 @@ describe('POST /api/workflows/deploy', () => {
     const response = await handler(request)
 
     expect(response.status).toBe(201)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.id).toBe('test-workflow')
     expect(json.name).toBe('test-workflow')
     expect(json.version).toBe(1)
@@ -244,7 +247,7 @@ transitions:
     const response = await handler(request)
 
     expect(response.status).toBe(201)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.id).toBe('yaml-workflow')
     expect(json.name).toBe('yaml-workflow')
 
@@ -283,7 +286,7 @@ transitions:
     const response = await handler(request)
 
     expect(response.status).toBe(201)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.id).toBe('yaml-workflow-2')
   })
 
@@ -296,7 +299,7 @@ transitions:
     const response = await handler(request)
 
     expect(response.status).toBe(500)
-    const json = await response.json()
+    const json = await response.json() as Json
     expect(json.error).toBe('Internal Server Error')
     expect(json.message).toBe('Failed to deploy workflow')
   })

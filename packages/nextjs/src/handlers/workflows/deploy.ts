@@ -19,7 +19,7 @@ function isZodError(err: unknown): boolean {
   return (
     err instanceof Error &&
     err.name === 'ZodError' &&
-    Array.isArray((err as Record<string, unknown>).errors)
+    Array.isArray((err as unknown as Record<string, unknown>).errors)
   )
 }
 
