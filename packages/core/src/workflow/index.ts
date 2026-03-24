@@ -39,7 +39,7 @@ export {
   getBuiltinWorkflowPath,
 } from './workflow-loader.js'
 
-export type { WorkflowRegistryConfig } from './workflow-registry.js'
+export type { WorkflowRegistryConfig, WorkflowStoreSource } from './workflow-registry.js'
 export { WorkflowRegistry } from './workflow-registry.js'
 
 export type { TransitionContext, TransitionResult } from './transition-engine.js'

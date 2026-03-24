@@ -242,6 +242,9 @@ importers:
       '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
     devDependencies:
       '@types/node':
         specifier: ^22.5.4

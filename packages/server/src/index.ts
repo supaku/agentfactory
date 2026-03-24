@@ -85,3 +85,9 @@ export * from './patrol-loop.js'
 
 // Scheduler (K8s-inspired filter/score pipeline)
 export * from './scheduler/index.js'
+
+// Workflow store (Redis-backed persistent workflow definitions)
+export * from './workflow-store.js'
+
+// Workflow registry watcher (hot-reload via Redis pub/sub)
+export * from './workflow-registry-watcher.js'

@@ -18,6 +18,15 @@ import { loadWorkflowDefinitionFile, getBuiltinWorkflowPath } from './workflow-l
 // Configuration
 // ---------------------------------------------------------------------------
 
+/**
+ * Interface for an external workflow store (e.g., Redis-backed).
+ * WorkflowRegistry can load definitions from this store as an additional layer.
+ */
+export interface WorkflowStoreSource {
+  get(workflowId: string): Promise<{ definition: Record<string, unknown> } | null>
+  list(): Promise<Array<{ id: string }>>
+}
+
 export interface WorkflowRegistryConfig {
   /** Path to a project-level workflow definition YAML override */
   workflowPath?: string
@@ -25,6 +34,10 @@ export interface WorkflowRegistryConfig {
   workflow?: WorkflowDefinition
   /** Whether to load the built-in default workflow (default: true) */
   useBuiltinDefault?: boolean
+  /** External store source (e.g., Redis). Loaded between filesystem and inline layers. */
+  store?: WorkflowStoreSource
+  /** Workflow ID to load from the store (default: 'default') */
+  storeWorkflowId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -41,11 +54,13 @@ const DEFAULT_MAX_SESSIONS_PER_PHASE = 3
 
 export class WorkflowRegistry {
   private workflow: WorkflowDefinition | null = null
+  private _onReload?: (workflow: WorkflowDefinition) => void
 
   constructor() {}
 
   /**
    * Create and initialize a registry from configuration.
+   * For synchronous initialization (no store). Use createAsync() when a store is configured.
    */
   static create(config: WorkflowRegistryConfig = {}): WorkflowRegistry {
     const registry = new WorkflowRegistry()
@@ -54,8 +69,18 @@ export class WorkflowRegistry {
   }
 
   /**
+   * Create and initialize a registry with async store support.
+   */
+  static async createAsync(config: WorkflowRegistryConfig = {}): Promise<WorkflowRegistry> {
+    const registry = new WorkflowRegistry()
+    await registry.initializeAsync(config)
+    return registry
+  }
+
+  /**
    * Initialize the registry by loading workflow definition from
    * configured sources. Later sources override earlier ones.
+   * Note: This method does NOT load from the store (use initializeAsync for that).
    */
   initialize(config: WorkflowRegistryConfig = {}): void {
     const { workflowPath, workflow, useBuiltinDefault = true } = config
@@ -77,6 +102,67 @@ export class WorkflowRegistry {
     if (workflow) {
       this.workflow = workflow
     }
+  }
+
+  /**
+   * Initialize with async store loading.
+   * Resolution order (later sources override earlier):
+   *   1. Built-in default (workflow/defaults/workflow.yaml)
+   *   2. Project-level override (e.g., .agentfactory/workflow.yaml)
+   *   3. Store override (Redis-backed, takes precedence over filesystem)
+   *   4. Inline config override (programmatic, highest priority)
+   */
+  async initializeAsync(config: WorkflowRegistryConfig = {}): Promise<void> {
+    const { workflowPath, workflow, useBuiltinDefault = true, store, storeWorkflowId } = config
+
+    // Layer 1: Built-in default
+    if (useBuiltinDefault) {
+      const builtinPath = getBuiltinWorkflowPath()
+      if (fs.existsSync(builtinPath)) {
+        this.workflow = loadWorkflowDefinitionFile(builtinPath)
+      }
+    }
+
+    // Layer 2: Project-level override
+    if (workflowPath && fs.existsSync(workflowPath)) {
+      this.workflow = loadWorkflowDefinitionFile(workflowPath)
+    }
+
+    // Layer 3: Store override (Redis-backed)
+    if (store) {
+      try {
+        const id = storeWorkflowId ?? 'default'
+        const stored = await store.get(id)
+        if (stored) {
+          const { validateWorkflowDefinition } = await import('./workflow-types.js')
+          this.workflow = validateWorkflowDefinition(stored.definition)
+        }
+      } catch (err) {
+        // Log but don't fail — fall back to filesystem layers
+        console.warn('[WorkflowRegistry] Failed to load from store, using filesystem layers:', err)
+      }
+    }
+
+    // Layer 4: Inline override (highest priority)
+    if (workflow) {
+      this.workflow = workflow
+    }
+  }
+
+  /**
+   * Replace the current workflow definition (used by hot-reload).
+   * Notifies the onReload callback if registered.
+   */
+  setWorkflow(workflow: WorkflowDefinition): void {
+    this.workflow = workflow
+    this._onReload?.(workflow)
+  }
+
+  /**
+   * Register a callback to be invoked when the workflow is hot-reloaded.
+   */
+  onReload(callback: (workflow: WorkflowDefinition) => void): void {
+    this._onReload = callback
   }
 
   /**
