@@ -156,6 +156,19 @@ export function evaluateTransitions(ctx: TransitionContext): TransitionResult {
     }
   }
 
+  // Check if the target phase belongs to a parallelism group.
+  // Only parent issues trigger parallel dispatch — sub-issues are dispatched
+  // individually by the ParallelismExecutor within the Governor.
+  if (isParentIssue) {
+    const group = registry.getParallelismGroup(match.to)
+    if (group) {
+      return {
+        action: 'trigger-parallel-group' as GovernorAction,
+        reason: `Issue ${issue.identifier} in '${issue.status}' → parallel group '${group.name}' (strategy: ${group.strategy})`,
+      }
+    }
+  }
+
   const parentSuffix = isParentIssue ? ' (parent — uses coordination template)' : ''
   return {
     action,

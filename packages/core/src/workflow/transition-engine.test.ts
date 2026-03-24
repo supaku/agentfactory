@@ -378,6 +378,109 @@ describe('evaluateTransitions', () => {
     })
   })
 
+  // --- Parallelism group detection ---
+
+  describe('parallelism group detection', () => {
+    it('parent issue with phase in parallelism group returns trigger-parallel-group', () => {
+      const workflow = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+        isParentIssue: true,
+      })
+      const result = evaluateTransitions(ctx)
+
+      expect(result.action).toBe('trigger-parallel-group')
+      expect(result.reason).toContain('parallel group')
+      expect(result.reason).toContain('dev-parallel')
+      expect(result.reason).toContain('fan-out')
+    })
+
+    it('non-parent issue with phase in parallelism group returns normal action', () => {
+      const workflow = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+        isParentIssue: false,
+      })
+      const result = evaluateTransitions(ctx)
+
+      expect(result.action).toBe('trigger-development')
+      expect(result.reason).not.toContain('parallel group')
+    })
+
+    it('issue with no parallelism groups returns normal action', () => {
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        isParentIssue: true,
+      })
+      const result = evaluateTransitions(ctx)
+
+      expect(result.action).toBe('trigger-development')
+      expect(result.reason).not.toContain('parallel group')
+    })
+
+    it('parent issue with phase NOT in any parallelism group returns normal action', () => {
+      const workflow = makeWorkflow({
+        parallelism: [
+          {
+            name: 'qa-parallel',
+            phases: ['qa'],
+            strategy: 'fan-in',
+          },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+        isParentIssue: true,
+      })
+      const result = evaluateTransitions(ctx)
+
+      // 'development' is not in the parallelism group, so normal action
+      expect(result.action).toBe('trigger-development')
+      expect(result.reason).toContain('coordination template')
+    })
+
+    it('escalation strategy overrides parallelism group detection', () => {
+      const workflow = makeWorkflow({
+        parallelism: [
+          {
+            name: 'dev-parallel',
+            phases: ['development'],
+            strategy: 'fan-out',
+          },
+        ],
+      })
+      const ctx = makeContext({
+        issue: makeIssue({ status: 'Backlog' }),
+        registry: registryWith(workflow),
+        isParentIssue: true,
+        workflowStrategy: 'escalate-human',
+      })
+      const result = evaluateTransitions(ctx)
+
+      // Escalation takes priority over parallelism
+      expect(result.action).toBe('escalate-human')
+    })
+  })
+
   // --- Phase-to-action mapping ---
 
   describe('phase-to-action mapping', () => {
