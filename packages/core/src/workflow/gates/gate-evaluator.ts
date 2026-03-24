@@ -19,7 +19,7 @@ import { evaluateSignalGate } from './signal-gate.js'
 import { getApplicableSignalGates } from './signal-gate.js'
 import { evaluateTimerGate } from './timer-gate.js'
 import { getApplicableTimerGates } from './timer-gate.js'
-import { evaluateWebhookGate } from './webhook-gate.js'
+import { evaluateWebhookGate, generateWebhookToken, buildCallbackUrl } from './webhook-gate.js'
 import { getApplicableWebhookGates } from './webhook-gate.js'
 import type { TimeoutResolution } from './timeout-engine.js'
 import { processGateTimeouts } from './timeout-engine.js'
@@ -259,10 +259,15 @@ export async function evaluateGatesForPhase(opts: GateEvaluationOptions): Promis
  * Gates that are already activated (i.e., have existing state) are
  * skipped to prevent re-activation on subsequent poll cycles.
  *
+ * For webhook gates, a cryptographic token is generated and stored in
+ * the gate state. The callback URL is stored in `signalSource` so
+ * external systems can discover it.
+ *
  * @param issueId - The issue identifier
  * @param phase - The phase being entered
  * @param workflow - The workflow definition containing gate configurations
  * @param storage - The gate storage adapter for persisting state
+ * @param baseUrl - Optional base URL for webhook callback URLs
  * @returns Array of newly activated gate states
  */
 export async function activateGatesForPhase(
@@ -270,6 +275,7 @@ export async function activateGatesForPhase(
   phase: string,
   workflow: WorkflowDefinition,
   storage: GateStorage,
+  baseUrl?: string,
 ): Promise<GateState[]> {
   const applicableGateDefs = getApplicableGates(workflow, phase)
 
@@ -289,6 +295,16 @@ export async function activateGatesForPhase(
     }
 
     const gateState = await activateGate(issueId, gateDef, storage)
+
+    // For webhook gates, generate and persist a token + callback URL
+    if (gateDef.type === 'webhook' && baseUrl) {
+      const token = generateWebhookToken()
+      const callbackUrl = buildCallbackUrl(baseUrl, issueId, gateDef.name, token)
+      gateState.webhookToken = token
+      gateState.signalSource = callbackUrl
+      await storage.setGateState(issueId, gateDef.name, gateState)
+    }
+
     activated.push(gateState)
 
     log.info('Gate activated for phase', {

@@ -44,6 +44,8 @@ export interface GateState {
   timeoutAction?: 'escalate' | 'skip' | 'fail'
   /** What satisfied the gate (comment ID, webhook payload hash, timer ID) */
   signalSource?: string
+  /** Authentication token for webhook gates (used to validate incoming callbacks) */
+  webhookToken?: string
   /** Duration string from gate definition (e.g., "4h") */
   timeoutDuration?: string
   /** Computed absolute timestamp for timeout deadline, epoch ms */
