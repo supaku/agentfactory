@@ -73,8 +73,11 @@ export type SearchQuery = z.infer<typeof SearchQuerySchema>
 
 export const SearchResultSchema = z.object({
   symbol: CodeSymbolSchema,
-  score: z.number().nonnegative(),
-  matchType: z.enum(['exact', 'fuzzy', 'bm25']),
+  score: z.number(),
+  matchType: z.enum(['exact', 'fuzzy', 'bm25', 'semantic', 'hybrid']),
+  bm25Score: z.number().optional(),
+  vectorScore: z.number().optional(),
+  rerankScore: z.number().optional(),
 })
 export type SearchResult = z.infer<typeof SearchResultSchema>
 
@@ -122,3 +125,45 @@ export const RepoMapEntrySchema = z.object({
   })),
 })
 export type RepoMapEntry = z.infer<typeof RepoMapEntrySchema>
+
+// ── Embedding ────────────────────────────────────────────────────────
+
+export const EmbeddingChunkSchema = z.object({
+  id: z.string().min(1),                    // filePath:symbolName:startLine
+  content: z.string(),                       // Text sent to embedding model
+  embedding: z.array(z.number()).optional(), // Dense vector
+  metadata: z.object({
+    filePath: z.string().min(1),
+    symbolName: z.string().optional(),
+    symbolKind: SymbolKindSchema.optional(),
+    startLine: z.number().int().nonnegative(),
+    endLine: z.number().int().nonnegative(),
+    language: z.string(),
+  }),
+})
+export type EmbeddingChunk = z.infer<typeof EmbeddingChunkSchema>
+
+export const EmbeddingProviderConfigSchema = z.object({
+  model: z.string().min(1),
+  dimensions: z.number().int().positive().optional(),
+  batchSize: z.number().int().positive().optional(),
+  maxRetries: z.number().int().nonnegative().optional(),
+})
+export type EmbeddingProviderConfig = z.infer<typeof EmbeddingProviderConfigSchema>
+
+// ── Vector Store ─────────────────────────────────────────────────────
+
+export const VectorSearchResultSchema = z.object({
+  chunk: EmbeddingChunkSchema,
+  score: z.number(),
+})
+export type VectorSearchResult = z.infer<typeof VectorSearchResultSchema>
+
+// ── Vector Indexing ──────────────────────────────────────────────────
+
+export const VectorIndexConfigSchema = z.object({
+  enabled: z.boolean(),
+  batchSize: z.number().int().positive().optional(),
+  maxConcurrentBatches: z.number().int().positive().optional(),
+})
+export type VectorIndexConfig = z.infer<typeof VectorIndexConfigSchema>
