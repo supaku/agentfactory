@@ -67,12 +67,11 @@ export class FanInStrategy implements ParallelismStrategy {
       }
     } else {
       // Wait for first success, then collect remaining
-      let firstSuccessResolve: ((result: ParallelTaskResult) => void) | null =
+      let firstSuccessResolve: ((result: ParallelTaskResult | null) => void) | null =
         null
       const firstSuccessPromise = new Promise<ParallelTaskResult | null>(
         (resolve) => {
-          firstSuccessResolve =
-            resolve as (result: ParallelTaskResult) => void
+          firstSuccessResolve = resolve
         },
       )
 

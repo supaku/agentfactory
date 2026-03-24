@@ -20,9 +20,11 @@ import { InMemoryAgentCancellation } from '../agent-cancellation.js'
  */
 export class RaceStrategy implements ParallelismStrategy {
   private readonly cancellation: InMemoryAgentCancellation
+  private readonly cancellationTimeoutMs: number
 
-  constructor(cancellation?: InMemoryAgentCancellation) {
+  constructor(cancellation?: InMemoryAgentCancellation, cancellationTimeoutMs?: number) {
     this.cancellation = cancellation ?? new InMemoryAgentCancellation()
+    this.cancellationTimeoutMs = cancellationTimeoutMs ?? 30_000
   }
 
   async execute(
@@ -102,8 +104,12 @@ export class RaceStrategy implements ParallelismStrategy {
 
     // Wait for the winner or all to fail
     await winnerPromise
-    // Wait for remaining tasks to settle
-    await Promise.allSettled(wrappedPromises)
+    // Wait for remaining tasks to settle, with a timeout to prevent hanging
+    // if agents never check isCancelled() and never complete
+    await Promise.race([
+      Promise.allSettled(wrappedPromises),
+      new Promise<void>((resolve) => setTimeout(resolve, this.cancellationTimeoutMs)),
+    ])
 
     // Build cancelled list (all tasks that were cancelled, excluding winner and failed)
     const cancelledIds = this.cancellation.getCancelledIds()

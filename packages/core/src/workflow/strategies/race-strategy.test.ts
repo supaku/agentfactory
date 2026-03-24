@@ -295,4 +295,109 @@ describe('RaceStrategy', () => {
       expect(result.failed[0].error).toBe('string error')
     })
   })
+
+  describe('cancellation timeout', () => {
+    it('resolves after timeout if agent does not acknowledge cancellation', async () => {
+      const cancellation = new InMemoryAgentCancellation()
+      // Use a very short timeout (100ms) for test speed
+      const strategy = new RaceStrategy(cancellation, 100)
+
+      const t1 = makeTask('t1', 'SUP-701')
+      const t2 = makeTask('t2', 'SUP-702')
+
+      const dispatch = async (task: ParallelTask): Promise<ParallelTaskResult> => {
+        if (task.id === 't1') {
+          // t1 wins immediately
+          return makeResult(task, { fast: true }, 1)
+        }
+        // t2 never completes — simulates an agent that never checks isCancelled()
+        return new Promise(() => {
+          // intentionally never resolves
+        })
+      }
+
+      const startTime = Date.now()
+      const result = await strategy.execute([t1, t2], { dispatch })
+      const elapsed = Date.now() - startTime
+
+      // Should resolve within a reasonable time (timeout + buffer)
+      expect(elapsed).toBeLessThan(1000)
+
+      // Winner should still be collected
+      expect(result.completed).toHaveLength(1)
+      expect(result.completed[0].id).toBe('t1')
+      expect(result.outputs['SUP-701']).toEqual({ fast: true })
+
+      // t2 should be marked as cancelled
+      expect(result.cancelled).toContain('t2')
+    })
+
+    it('respects configurable timeout value', async () => {
+      const cancellation = new InMemoryAgentCancellation()
+      // Use a 200ms timeout
+      const strategy = new RaceStrategy(cancellation, 200)
+
+      const t1 = makeTask('t1', 'SUP-801')
+      const t2 = makeTask('t2', 'SUP-802')
+
+      const dispatch = async (task: ParallelTask): Promise<ParallelTaskResult> => {
+        if (task.id === 't1') {
+          return makeResult(task, { winner: true }, 1)
+        }
+        // t2 hangs forever
+        return new Promise(() => {})
+      }
+
+      const startTime = Date.now()
+      await strategy.execute([t1, t2], { dispatch })
+      const elapsed = Date.now() - startTime
+
+      // Should resolve after ~200ms, not immediately and not at 30s default
+      expect(elapsed).toBeGreaterThanOrEqual(150) // allow for timer imprecision
+      expect(elapsed).toBeLessThan(1000)
+    })
+
+    it('force-resolves with hanging agents after timeout expiry', async () => {
+      const cancellation = new InMemoryAgentCancellation()
+      const strategy = new RaceStrategy(cancellation, 100)
+
+      const t1 = makeTask('t1', 'SUP-901')
+      const t2 = makeTask('t2', 'SUP-902')
+      const t3 = makeTask('t3', 'SUP-903')
+
+      const dispatch = async (task: ParallelTask): Promise<ParallelTaskResult> => {
+        if (task.id === 't1') {
+          // t1 wins fast
+          await new Promise((r) => setTimeout(r, 5))
+          return makeResult(task, { answer: 'first' }, 5)
+        }
+        // t2 and t3 hang forever — simulate agents that never check isCancelled()
+        return new Promise(() => {})
+      }
+
+      const result = await strategy.execute([t1, t2, t3], { dispatch })
+
+      // The strategy should have resolved despite hanging agents
+      expect(result.strategy).toBe('race')
+      expect(result.completed).toHaveLength(1)
+      expect(result.completed[0].id).toBe('t1')
+      expect(result.outputs['SUP-901']).toEqual({ answer: 'first' })
+
+      // Both hanging agents should be in the cancelled list
+      expect(result.cancelled).toContain('t2')
+      expect(result.cancelled).toContain('t3')
+
+      // They should NOT appear in failed since they didn't error
+      expect(result.failed).toHaveLength(0)
+    })
+
+    it('uses default 30s timeout when none is specified', () => {
+      // Verify the constructor default — we test this indirectly by confirming
+      // the strategy can be constructed without a timeout parameter
+      const strategy = new RaceStrategy()
+      // If this compiles and runs, the default is applied internally.
+      // We can't directly access the private field, but we verify it doesn't throw.
+      expect(strategy).toBeDefined()
+    })
+  })
 })

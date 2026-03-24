@@ -20,8 +20,9 @@ import { decideAction, type DecisionContext } from './decision-engine.js'
 import type { OverridePriority } from './override-parser.js'
 import { WorkflowRegistry, type WorkflowRegistryConfig } from '../workflow/workflow-registry.js'
 import { ParallelismExecutor } from '../workflow/parallelism-executor.js'
-import type { ParallelTask } from '../workflow/parallelism-types.js'
+import type { ParallelTask, ParallelismResult } from '../workflow/parallelism-types.js'
 import { FanOutStrategy, FanInStrategy, RaceStrategy } from '../workflow/strategies/index.js'
+import { evaluateTransitions } from '../workflow/transition-engine.js'
 
 // ---------------------------------------------------------------------------
 // Logging
@@ -463,5 +464,57 @@ export class WorkflowGovernor {
       failed: result.failed.length,
       cancelled: result.cancelled.length,
     })
+
+    // Propagate result to advance parent issue if group completed successfully
+    await this.handleParallelGroupCompletion(issue, result, group)
+  }
+
+  /**
+   * Handle post-parallel-group completion: if all tasks succeeded,
+   * evaluate transitions to advance the parent issue to the next phase.
+   */
+  private async handleParallelGroupCompletion(
+    parentIssue: GovernorIssue,
+    result: ParallelismResult,
+    group: { name: string; phases: string[] },
+  ): Promise<void> {
+    // Only advance if the group completed with no failures
+    const allSucceeded = result.failed.length === 0 && result.completed.length > 0
+      && result.completed.every(t => t.success)
+
+    if (!allSucceeded) {
+      log.info('Parallel group has failures, not advancing parent', {
+        group: group.name,
+        failedCount: result.failed.length,
+      })
+      return
+    }
+
+    // Evaluate the next transition for the parent issue.
+    // After a parallel development group completes, the parent
+    // should transition based on its next status mapping.
+    const nextPhaseResult = evaluateTransitions({
+      issue: { ...parentIssue, status: 'Finished' },
+      registry: this.workflowRegistry,
+      isParentIssue: true,
+    })
+
+    if (nextPhaseResult.action !== 'none') {
+      log.info('Advancing parent after parallel group completion', {
+        issueIdentifier: parentIssue.identifier,
+        nextAction: nextPhaseResult.action,
+        reason: nextPhaseResult.reason,
+      })
+
+      try {
+        await this.deps.dispatchWork(parentIssue, nextPhaseResult.action)
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        log.error('Failed to advance parent after parallel group', {
+          issueIdentifier: parentIssue.identifier,
+          error: errorMsg,
+        })
+      }
+    }
   }
 }

@@ -42,7 +42,7 @@ function makeMockDeps(overrides: Partial<GovernorDependencies> = {}): GovernorDe
   }
 }
 
-function makeConfig(overrides: Partial<GovernorConfig> = {}): Partial<GovernorConfig> {
+function makeConfig(overrides: Partial<GovernorConfig> & { workflow?: import('../workflow/workflow-registry.js').WorkflowRegistryConfig } = {}): Partial<GovernorConfig> & { workflow?: import('../workflow/workflow-registry.js').WorkflowRegistryConfig } {
   return {
     projects: ['TestProject'],
     scanIntervalMs: 60_000,
@@ -721,8 +721,9 @@ describe('WorkflowGovernor.scanOnce — parallel group dispatch', () => {
 
     expect(results[0]!.actionsDispatched).toBe(1)
     expect(getSubIssues).toHaveBeenCalledWith('parent-1')
-    // dispatchWork is called for each sub-issue via the ParallelismExecutor
-    expect(dispatchWork).toHaveBeenCalledTimes(2)
+    // dispatchWork is called for each sub-issue via the ParallelismExecutor,
+    // plus once more to advance the parent to the next phase (trigger-qa)
+    expect(dispatchWork).toHaveBeenCalledTimes(3)
     expect(dispatchWork).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sub-1' }),
       'trigger-development',
@@ -730,6 +731,11 @@ describe('WorkflowGovernor.scanOnce — parallel group dispatch', () => {
     expect(dispatchWork).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sub-2' }),
       'trigger-development',
+    )
+    // Parent advanced to QA after parallel group completion
+    expect(dispatchWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'parent-1' }),
+      'trigger-qa',
     )
   })
 
@@ -761,6 +767,84 @@ describe('WorkflowGovernor.scanOnce — parallel group dispatch', () => {
     // but dispatchWork is NOT called for sub-issues since getSubIssues is missing
     expect(results[0]!.actionsDispatched).toBe(1)
     expect(dispatchWork).not.toHaveBeenCalled()
+  })
+
+  it('fan-in group completing advances parent to next phase', async () => {
+    const fanInWorkflow: WorkflowDefinition = {
+      apiVersion: 'v1.1',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test-fan-in' },
+      phases: [
+        { name: 'development', template: 'development' },
+        { name: 'qa', template: 'qa' },
+      ],
+      transitions: [
+        { from: 'Backlog', to: 'development' },
+        { from: 'Finished', to: 'qa' },
+      ],
+      parallelism: [
+        {
+          name: 'dev-fan-in',
+          phases: ['development'],
+          strategy: 'fan-in',
+          waitForAll: true,
+        },
+      ],
+    }
+
+    const parentIssue = makeIssue({
+      id: 'parent-1',
+      identifier: 'SUP-200',
+      status: 'Backlog',
+    })
+    const subIssues = [
+      makeIssue({ id: 'sub-1', identifier: 'SUP-201', status: 'Backlog', parentId: 'parent-1' }),
+      makeIssue({ id: 'sub-2', identifier: 'SUP-202', status: 'Backlog', parentId: 'parent-1' }),
+      makeIssue({ id: 'sub-3', identifier: 'SUP-203', status: 'Backlog', parentId: 'parent-1' }),
+    ]
+
+    const dispatchWork = vi.fn().mockResolvedValue(undefined)
+    const getSubIssues = vi.fn().mockResolvedValue(subIssues)
+    const deps = makeMockDeps({
+      listIssues: vi.fn().mockResolvedValue([parentIssue]),
+      isParentIssue: vi.fn().mockResolvedValue(true),
+      dispatchWork,
+      getSubIssues,
+    })
+
+    const governor = new WorkflowGovernor(
+      makeConfig({
+        workflow: { workflow: fanInWorkflow, useBuiltinDefault: false },
+      }),
+      deps,
+    )
+
+    const results = await governor.scanOnce()
+
+    expect(results[0]!.actionsDispatched).toBe(1)
+
+    // All 3 sub-issues dispatched + 1 parent advancement to QA
+    expect(dispatchWork).toHaveBeenCalledTimes(4)
+
+    // Sub-issues dispatched for development
+    expect(dispatchWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sub-1' }),
+      'trigger-development',
+    )
+    expect(dispatchWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sub-2' }),
+      'trigger-development',
+    )
+    expect(dispatchWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sub-3' }),
+      'trigger-development',
+    )
+
+    // Parent advanced to QA after all fan-in tasks completed
+    expect(dispatchWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'parent-1' }),
+      'trigger-qa',
+    )
   })
 
   it('non-parent issues with parallelism groups dispatch normally', async () => {
