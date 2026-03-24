@@ -63,6 +63,7 @@ export interface WorkerData {
   status: 'active' | 'draining' | 'offline'
   version?: string
   projects?: string[] // Project names this worker accepts (undefined = all)
+  providers?: string[] // Provider names this worker supports (undefined = all)
 }
 
 /**
