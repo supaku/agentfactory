@@ -1217,6 +1217,14 @@ export class AgentOrchestrator {
     for (const issue of allIssues) {
       if (results.length >= maxIssues) break
 
+      // Skip sub-issues — coordinators manage their lifecycle, not the backlog scanner
+      if (issue.parentId) {
+        console.log(
+          `[orchestrator] Skipping sub-issue ${issue.identifier} — managed by parent coordinator`
+        )
+        continue
+      }
+
       // Filter by allowedProjects from .agentfactory/config.yaml
       if (this.allowedProjects && this.allowedProjects.length > 0) {
         if (!issue.projectName || !this.allowedProjects.includes(issue.projectName)) {
@@ -3382,6 +3390,27 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         `Issue ${identifier} is in terminal status '${currentStatus}' — skipping ${workType ?? 'auto'} work. ` +
         `The issue was likely accepted/canceled after being queued.`
       )
+    }
+
+    // Guard: skip sub-issues that should be managed by a coordinator, not spawned independently.
+    // Only applies when no explicit work type is provided (i.e., orchestrator auto-pickup).
+    // Coordinators spawning sub-agents always pass an explicit work type, so they bypass this check.
+    if (!workType) {
+      try {
+        const isChild = await this.client.isChildIssue(issueId)
+        if (isChild) {
+          throw new Error(
+            `Issue ${identifier} is a sub-issue managed by a parent coordinator — skipping independent pickup. ` +
+            `Sub-issues should only be processed by their parent's coordination agent.`
+          )
+        }
+      } catch (err) {
+        // Re-throw our own guard error; swallow API errors so we don't block on transient failures
+        if (err instanceof Error && err.message.includes('managed by a parent coordinator')) {
+          throw err
+        }
+        console.warn(`Failed to check child status for ${identifier}:`, err)
+      }
     }
 
     // Defense in depth: re-validate git remote before spawning (guards against long-running instances)

@@ -21,6 +21,8 @@ export interface IssueTrackerIssue {
   labels: string[]
   teamName?: string
   projectName?: string
+  /** Parent issue ID, if this issue is a sub-issue. Used to filter child issues from backlog scans. */
+  parentId?: string
 }
 
 /**
@@ -75,6 +77,9 @@ export interface IssueTrackerClient {
 
   /** Check whether an issue has sub-issues (is a parent) */
   isParentIssue(issueId: string): Promise<boolean>
+
+  /** Check whether an issue is a sub-issue (has a parent) */
+  isChildIssue(issueId: string): Promise<boolean>
 
   /** Create a comment on an issue */
   createComment(issueId: string, body: string): Promise<{ id: string }>

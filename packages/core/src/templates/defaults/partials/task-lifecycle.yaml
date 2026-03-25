@@ -46,3 +46,19 @@ content: |
   6. NEVER CHECK SUB-AGENT STATUS VIA LOG FILES:
      Do not use tail, cat, or any file-based approach to monitor sub-agents.
      The Agent/Task tool handles all communication — just wait for the result.
+
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  PRE-COMPLETION CHECKLIST — VERIFY BEFORE EMITTING WORK_RESULT  ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  Before writing your final message with the WORK_RESULT marker, verify ALL of these:
+
+  □ You spawned at least one Agent tool call for sub-issues. If you spawned zero, you
+    have NOT coordinated — something went wrong. Do NOT emit WORK_RESULT:passed.
+  □ Every Agent tool call you made has returned a result. If any are still pending or
+    you used run_in_background, you exited too early — go back and wait.
+  □ You processed the results: updated sub-issues to Finished or posted failure comments.
+  □ You ran: list-sub-issue-statuses to verify final states.
+  □ All sub-issues are Finished (or explicitly failed/skipped with comments).
+
+  If ANY check fails, you are NOT done. Continue working — do NOT emit WORK_RESULT.
