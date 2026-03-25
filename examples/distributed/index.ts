@@ -96,7 +96,7 @@ async function runWorker() {
   // Run the agent locally
   const orchestrator = createOrchestrator({
     maxConcurrent: 1,
-    worktreePath: '.worktrees',
+    // worktreePath defaults to '../{repoName}.wt/'
   })
 
   await orchestrator.spawnAgentForIssue(work.identifier)

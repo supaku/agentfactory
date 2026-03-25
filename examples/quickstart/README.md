@@ -22,7 +22,7 @@ npx tsx examples/quickstart/index.ts PROJ-123
 
 The agent will:
 
-1. Create a git worktree at `.worktrees/PROJ-123-DEV`
+1. Create a git worktree at `../myrepo.wt/PROJ-123-DEV`
 2. Fetch issue details and requirements from Linear
 3. Run a Claude coding agent (configurable via `AGENT_PROVIDER`)
 4. Implement the feature/fix

@@ -356,7 +356,7 @@ When using `projectPaths`, the `{{> partials/path-scoping}}` template partial re
 
 ### Worktree isolation
 
-Each agent runs in its own git worktree (e.g., `.worktrees/PROJ-123-DEV`). This prevents conflicts between concurrent agents. Workers handle worktree creation and cleanup — agents must never modify the worktree lifecycle.
+Each agent runs in its own git worktree (e.g., `../myrepo.wt/PROJ-123-DEV`). This prevents conflicts between concurrent agents. Workers handle worktree creation and cleanup — agents must never modify the worktree lifecycle.
 
 ## Troubleshooting
 

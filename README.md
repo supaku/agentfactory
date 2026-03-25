@@ -73,7 +73,7 @@ import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 3,
-  worktreePath: '.worktrees',
+  // Default: '../{repoName}.wt/' (sibling directory)
 })
 
 // Process a single issue
@@ -137,7 +137,8 @@ npx af-linear create-comment PROJ-123 --body "Work complete"
 │        │              │              │           │
 │  ┌─────┴─────┐  ┌─────┴─────┐  ┌─────┴─────┐   │
 │  │ Worktree   │  │ Worktree   │  │ Worktree   │   │
-│  │ .wt/#123   │  │ .wt/#120   │  │ .wt/#125   │   │
+│  │ repo.wt/   │  │ repo.wt/   │  │ repo.wt/   │   │
+│  │  #123      │  │  #120      │  │  #125      │   │
 │  └───────────┘  └───────────┘  └───────────┘   │
 └─────────────────────────────────────────────────┘
          │                    │
@@ -287,7 +288,7 @@ interface OrchestratorConfig {
   provider?: AgentProvider           // Agent provider instance
   maxConcurrent?: number             // Max concurrent agents (default: 3)
   project?: string                   // Project name filter
-  worktreePath?: string              // Git worktree base path (default: .worktrees)
+  worktreePath?: string              // Git worktree base path (default: '../{repoName}.wt/')
   linearApiKey?: string              // Linear API key
   autoTransition?: boolean           // Auto-update issue status (default: true)
   sandboxEnabled?: boolean           // Enable agent sandboxing (default: false)

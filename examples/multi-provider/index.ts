@@ -43,7 +43,7 @@ async function main() {
   const orchestrator = createOrchestrator({
     project,
     maxConcurrent: 3,
-    worktreePath: '.worktrees',
+    // worktreePath defaults to '../{repoName}.wt/'
     // Different timeouts per work type
     workTypeTimeouts: {
       development: { inactivityTimeoutMs: 300_000 },

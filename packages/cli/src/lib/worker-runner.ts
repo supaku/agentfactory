@@ -645,7 +645,7 @@ export async function runWorker(
       const orchestrator = createOrchestrator(
         {
           maxConcurrent: 1,
-          worktreePath: path.resolve(gitRoot, '.worktrees'),
+          worktreePath: path.resolve(gitRoot, '..', path.basename(gitRoot) + '.wt'),
           issueTrackerClient,
           statusMappings,
           toolPlugins: [linearPlugin, codeIntelligencePlugin],

@@ -17,7 +17,7 @@ import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 3,
-  worktreePath: '.worktrees',
+  // Default: '../{repoName}.wt/' (sibling directory)
 })
 
 // Process a single issue
@@ -67,7 +67,7 @@ const orchestrator = createOrchestrator({
   provider: myProvider,            // Agent provider instance
   maxConcurrent: 3,                // Max concurrent agents
   project: 'MyProject',           // Filter by project
-  worktreePath: '.worktrees',     // Git worktree base path
+  // worktreePath defaults to '../{repoName}.wt/' (sibling directory)
   inactivityTimeoutMs: 300_000,   // 5 min idle timeout
   maxSessionTimeoutMs: 7_200_000, // 2 hour hard cap
   workTypeTimeouts: {
