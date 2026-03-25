@@ -38,6 +38,7 @@
     "af-linear": "dist/src/linear.js",
     "af-governor": "dist/src/governor.js",
     "af-sync-routes": "dist/src/sync-routes.js",
+    "af-setup": "dist/src/setup.js",
     "af-status": "dist/src/status.js",
     "af-migrate-worktrees": "dist/src/migrate-worktrees.js"
   },
@@ -94,6 +95,11 @@
       "types": "./dist/src/lib/sync-routes-runner.d.ts",
       "import": "./dist/src/lib/sync-routes-runner.js",
       "default": "./dist/src/lib/sync-routes-runner.js"
+    },
+    "./setup": {
+      "types": "./dist/src/lib/setup-mergiraf-runner.d.ts",
+      "import": "./dist/src/lib/setup-mergiraf-runner.js",
+      "default": "./dist/src/lib/setup-mergiraf-runner.js"
     },
     "./status": {
       "types": "./dist/src/lib/status-runner.d.ts",

@@ -26,6 +26,7 @@ Commands:
   analyze-logs    Analyze agent session logs for errors
   linear          Linear issue tracker operations
   sync-routes     Generate missing route and page files from manifest
+  setup           Configure development tools (mergiraf, etc.)
   status          Show fleet status (inline one-line summary)
   help            Show this help message
 
@@ -65,6 +66,9 @@ switch (command) {
     break
   case 'sync-routes':
     import('./sync-routes')
+    break
+  case 'setup':
+    import('./setup')
     break
   case 'status':
     import('./status')
