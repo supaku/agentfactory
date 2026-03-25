@@ -2,7 +2,7 @@
 import path from 'path'
 import { config } from 'dotenv'
 
-config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
+config({ path: path.resolve(import.meta.dirname, '..', '.env.local'), quiet: true })
 
 import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
 

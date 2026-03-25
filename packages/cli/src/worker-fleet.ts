@@ -27,7 +27,7 @@ import os from 'os'
 import { config as loadEnv } from 'dotenv'
 
 // Load environment variables from .env.local in CWD
-loadEnv({ path: path.resolve(process.cwd(), '.env.local') })
+loadEnv({ path: path.resolve(process.cwd(), '.env.local'), quiet: true })
 
 import { runWorkerFleet } from './lib/worker-fleet-runner.js'
 

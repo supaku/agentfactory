@@ -490,7 +490,7 @@ function cliWorker(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
+config({ path: path.resolve(import.meta.dirname, '..', '.env.local'), quiet: true })
 
 import { runWorker } from '@renseiai/agentfactory-cli/worker'
 
@@ -562,7 +562,7 @@ function cliOrchestrator(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
+config({ path: path.resolve(import.meta.dirname, '..', '.env.local'), quiet: true })
 
 import { runOrchestrator } from '@renseiai/agentfactory-cli/orchestrator'
 
@@ -609,7 +609,7 @@ function cliWorkerFleet(): string {
 import path from 'path'
 import { config } from 'dotenv'
 
-config({ path: path.resolve(import.meta.dirname, '..', '.env.local') })
+config({ path: path.resolve(import.meta.dirname, '..', '.env.local'), quiet: true })
 
 import { runWorkerFleet } from '@renseiai/agentfactory-cli/worker-fleet'
 

@@ -19,7 +19,7 @@ import path from 'path'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local in CWD
-config({ path: path.resolve(process.cwd(), '.env.local') })
+config({ path: path.resolve(process.cwd(), '.env.local'), quiet: true })
 
 import { runStatus, C } from './lib/status-runner.js'
 

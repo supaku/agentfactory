@@ -27,7 +27,7 @@ import path from 'path'
 import { config } from 'dotenv'
 
 // Load environment variables from .env.local
-config({ path: path.resolve(process.cwd(), '.env.local') })
+config({ path: path.resolve(process.cwd(), '.env.local'), quiet: true })
 
 import {
   parseGovernorArgs,
