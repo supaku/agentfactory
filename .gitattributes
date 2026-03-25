@@ -13,6 +13,8 @@
 *.java merge=mergiraf
 *.css merge=mergiraf
 *.html merge=mergiraf
+
+# Lock files — keep ours and regenerate
 pnpm-lock.yaml merge=ours
 package-lock.json merge=ours
 yarn.lock merge=ours

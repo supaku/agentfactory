@@ -23,6 +23,7 @@ Commands:
   agent           Manage running agent sessions (stop, chat, status, reconnect)
   cleanup         Clean up orphaned git worktrees
   queue-admin     Manage Redis work queue and sessions
+  merge-queue     Manage the Refinery merge queue
   analyze-logs    Analyze agent session logs for errors
   linear          Linear issue tracker operations
   sync-routes     Generate missing route and page files from manifest
@@ -57,6 +58,9 @@ switch (command) {
     break
   case 'queue-admin':
     import('./queue-admin')
+    break
+  case 'merge-queue':
+    import('./merge-queue')
     break
   case 'analyze-logs':
     import('./analyze-logs')

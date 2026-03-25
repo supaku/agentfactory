@@ -394,6 +394,98 @@ describe('parseWorkResult', () => {
     })
   })
 
+  // Merge heuristic pattern tests
+  describe('merge heuristic patterns', () => {
+    it('detects WORK_RESULT:passed marker for merge work type', () => {
+      expect(
+        parseWorkResult('<!-- WORK_RESULT:passed -->', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects WORK_RESULT:failed marker for merge work type', () => {
+      expect(
+        parseWorkResult('<!-- WORK_RESULT:failed -->', 'merge')
+      ).toBe('failed')
+    })
+
+    it('detects "successfully merged" as pass', () => {
+      expect(
+        parseWorkResult('The PR was successfully merged to main.', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects "merge completed" as pass', () => {
+      expect(
+        parseWorkResult('Merge completed without issues.', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects "fast-forward merge" as pass', () => {
+      expect(
+        parseWorkResult('Applied fast-forward merge to the branch.', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects "merged to main" as pass', () => {
+      expect(
+        parseWorkResult('PR #42 merged to main successfully.', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects "merge queue completed" as pass', () => {
+      expect(
+        parseWorkResult('Merge queue completed for this PR.', 'merge')
+      ).toBe('passed')
+    })
+
+    it('detects "merge conflict" as fail', () => {
+      expect(
+        parseWorkResult('Encountered a merge conflict in src/index.ts.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('detects "merge failed" as fail', () => {
+      expect(
+        parseWorkResult('The merge failed due to CI check failures.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('detects "could not merge" as fail', () => {
+      expect(
+        parseWorkResult('Could not merge the PR — conflicts detected.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('detects "rebase failed" as fail', () => {
+      expect(
+        parseWorkResult('Rebase failed on commit abc123.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('detects "test failed after rebase" as fail', () => {
+      expect(
+        parseWorkResult('The test suite failed after rebase on main.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('checks fail patterns before pass patterns', () => {
+      expect(
+        parseWorkResult('Merge completed but then merge failed on retry.', 'merge')
+      ).toBe('failed')
+    })
+
+    it('does not match merge patterns for non-merge work types', () => {
+      expect(parseWorkResult('successfully merged', 'development')).toBe('unknown')
+      expect(parseWorkResult('merge conflict', 'qa')).toBe('unknown')
+    })
+
+    it('returns unknown for ambiguous merge messages', () => {
+      expect(
+        parseWorkResult('Working on the merge process.', 'merge')
+      ).toBe('unknown')
+    })
+  })
+
   // Unknown result tests
   describe('unknown results', () => {
     it('returns unknown for undefined message', () => {

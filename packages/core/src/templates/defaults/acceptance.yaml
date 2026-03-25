@@ -17,8 +17,19 @@ prompt: |
   Process acceptance for {{identifier}}.
   Validate development and QA work is complete.
   Verify PR is ready to merge (CI passing, no conflicts).
-  Merge the PR using: gh pr merge <PR_NUMBER> --squash
-  After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+
+  MERGE BEHAVIOR:
+  First, check if the repository has merge queue enabled by reading .agentfactory/config.yaml
+  and checking the mergeQueue.enabled field.
+
+  If merge queue is enabled (mergeQueue.enabled: true):
+  - Do NOT run gh pr merge. The merge worker handles the actual merge.
+  - Instead, add an "approved-for-merge" label to the PR: gh pr edit <PR_NUMBER> --add-label "approved-for-merge"
+  - Emit WORK_RESULT:passed to signal the PR is approved for the merge queue.
+
+  If merge queue is NOT enabled (default):
+  - Merge the PR using: gh pr merge <PR_NUMBER> --squash
+  - After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
 
   IMPORTANT CONSTRAINTS:
   - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.

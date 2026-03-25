@@ -47,6 +47,8 @@ export interface DecisionContext {
   workflowRegistry?: WorkflowRegistry
   /** Gate evaluation result from the gate system (Phase 4) */
   gateEvaluation?: GateEvaluationResult
+  /** Whether the merge queue is enabled for this repository */
+  mergeQueueEnabled?: boolean
 }
 
 /** Max agent sessions before the circuit breaker trips and the issue is held */
@@ -339,6 +341,14 @@ function decideFinished(ctx: DecisionContext): DecisionResult {
     return {
       action: 'decompose',
       reason: `Issue ${issue.identifier} is in Finished with decompose strategy — triggering decomposition`,
+    }
+  }
+
+  // When merge queue is enabled, enqueue to merge queue instead of QA
+  if (ctx.mergeQueueEnabled) {
+    return {
+      action: 'trigger-merge',
+      reason: `Issue ${issue.identifier} is in Finished — enqueuing to merge queue`,
     }
   }
 
