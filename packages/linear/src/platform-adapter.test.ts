@@ -636,6 +636,23 @@ describe('LinearPlatformAdapter', () => {
     })
   })
 
+  describe('isChildIssue', () => {
+    it('delegates to client.isChildIssue', async () => {
+      mocks.isChildIssue.mockResolvedValue(true)
+      const result = await adapter.isChildIssue('sub-issue-1')
+
+      expect(result).toBe(true)
+      expect(mocks.isChildIssue).toHaveBeenCalledWith('sub-issue-1')
+    })
+
+    it('returns false for top-level issues', async () => {
+      mocks.isChildIssue.mockResolvedValue(false)
+      const result = await adapter.isChildIssue('top-level-issue')
+
+      expect(result).toBe(false)
+    })
+  })
+
   // ========================================================================
   // Inherited methods still work
   // ========================================================================

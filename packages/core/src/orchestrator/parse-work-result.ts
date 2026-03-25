@@ -100,6 +100,12 @@ const COORDINATION_FAIL_PATTERNS = [
   // Explicit result labels
   /\bCoordination\s+(?:Result|Status|Verdict):\s*\*{0,2}Fail(?:ed)?\*{0,2}/i,
   /\bCoordination\s+Failed/i,
+  // Early-exit detection — agent reported progress instead of completing coordination
+  /\bI'll wait\b.*\bcomplete\b/i,
+  /\bagents?\s+(?:are|is)\s+(?:actively\s+)?(?:working|running|in\s+progress)\b/i,
+  /\bwork\s+is\s+in\s+progress\b/i,
+  /\bwait(?:ing)?\s+for\s+(?:them|sub-?\s*agents?|sub-?\s*issues?)\s+to\s+(?:complete|finish)\b/i,
+  /\bbefore\s+proceeding\s+to\s+(?:Layer|Wave|Phase)\s+\d/i,
 ]
 
 /**

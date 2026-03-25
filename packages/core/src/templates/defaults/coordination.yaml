@@ -29,6 +29,14 @@ prompt: |
   - When a sub-agent completes a sub-issue: {{linearCli}} update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
   - If a sub-agent fails on a sub-issue: {{linearCli}} create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
 
+  ICEBOX SUB-ISSUE HANDLING:
+  Sub-issues created by the backlog-writer start in Icebox status. These are NOT "future roadmap"
+  items — they are ready for work but awaiting coordination. Before spawning agents:
+  1. Move each Icebox sub-issue you intend to process to Backlog: {{linearCli}} update-sub-issue <id> --state Backlog
+  2. Then proceed with the normal wave-based execution (move to Started when spawning, Finished when done)
+  Only sub-issues explicitly labeled "post-GA", "deferred", or "future" should be treated as
+  intentionally frozen — detach these from the parent or skip them.
+
   POST-REFINEMENT HANDLING:
   If this parent issue was recently refined (came back to Backlog after rejection), some sub-issues
   may already be in Finished status while others are in Backlog with refinement comments. This is
@@ -43,8 +51,8 @@ prompt: |
   Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
     {{linearCli}} list-sub-issue-statuses {{identifier}}
   If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
-  Sub-issues intentionally in Icebox (e.g., post-GA / future roadmap items) should be detached
-  from the parent before marking coordination as complete, or coordination should fail.
+  Sub-issues intentionally deferred (labeled "post-GA", "deferred", or "future") should be
+  detached from the parent before marking coordination as complete, or coordination should fail.
 
   AUTONOMOUS OPERATION:
   You are running autonomously — NEVER ask the user a question or wait for input. If you encounter

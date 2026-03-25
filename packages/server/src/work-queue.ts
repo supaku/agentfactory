@@ -24,6 +24,7 @@ import {
   redisZRem,
   redisZRangeByScore,
   redisZCard,
+  redisZPopMin,
   redisHSet,
   redisHGet,
   redisHDel,
@@ -265,6 +266,62 @@ export async function claimWork(
       }
     }
     log.error('Failed to claim work', { error, sessionId, workerId })
+    return null
+  }
+}
+
+/**
+ * Atomically pop and claim a work item from the queue.
+ *
+ * Uses ZPOPMIN to atomically remove the highest-priority item, then sets
+ * the claim key. This eliminates the peek-then-claim race where multiple
+ * workers see and compete for the same item.
+ *
+ * @param workerId - Worker claiming the work
+ * @returns The work item if popped and claimed, null if queue is empty
+ */
+export async function popAndClaimWork(
+  workerId: string
+): Promise<QueuedWork | null> {
+  if (!isRedisConfigured()) {
+    log.warn('Redis not configured, cannot pop work')
+    return null
+  }
+
+  try {
+    // Atomically pop the highest-priority item (lowest score)
+    const popped = await redisZPopMin(WORK_QUEUE_KEY)
+    if (!popped) {
+      return null
+    }
+
+    const sessionId = popped.member
+
+    // Get work item from hash
+    const itemJson = await redisHGet(WORK_ITEMS_KEY, sessionId)
+    if (!itemJson) {
+      log.warn('Work item not found in hash after pop', { sessionId })
+      return null
+    }
+
+    // Remove from items hash
+    await redisHDel(WORK_ITEMS_KEY, sessionId)
+
+    // Set claim key (atomic, but won't race since we already popped)
+    const claimKey = `${WORK_CLAIM_PREFIX}${sessionId}`
+    await redisSetNX(claimKey, workerId, WORK_CLAIM_TTL)
+
+    const work = JSON.parse(itemJson) as QueuedWork
+
+    log.info('Work popped and claimed', {
+      sessionId,
+      workerId,
+      issueIdentifier: work.issueIdentifier,
+    })
+
+    return work
+  } catch (error) {
+    log.error('Failed to pop and claim work', { error, workerId })
     return null
   }
 }

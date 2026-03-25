@@ -38,6 +38,8 @@ export interface IssueTrackerIssue {
   labels: string[]
   teamName?: string
   projectName?: string
+  /** Parent issue ID, if this issue is a sub-issue. */
+  parentId?: string
 }
 
 /** Configuration for creating an issue tracker session. */
@@ -75,6 +77,7 @@ export interface CommentChunk {
 export interface IssueTrackerClient {
   getIssue(idOrIdentifier: string): Promise<IssueTrackerIssue>
   isParentIssue(issueId: string): Promise<boolean>
+  isChildIssue(issueId: string): Promise<boolean>
   createComment(issueId: string, body: string): Promise<{ id: string }>
   updateIssueStatus(issueId: string, status: string): Promise<void>
   unassignIssue(issueId: string): Promise<void>
@@ -185,6 +188,10 @@ export class LinearIssueTrackerClient implements IssueTrackerClient {
     return this.linearClient.isParentIssue(issueId)
   }
 
+  async isChildIssue(issueId: string): Promise<boolean> {
+    return this.linearClient.isChildIssue(issueId)
+  }
+
   async createComment(issueId: string, body: string): Promise<{ id: string }> {
     const comment = await this.linearClient.createComment(issueId, body)
     return { id: comment.id }
@@ -229,6 +236,7 @@ export class LinearIssueTrackerClient implements IssueTrackerClient {
       const team = await issue.team
       const project = await issue.project
       const labels = await issue.labels()
+      const parent = await issue.parent
 
       results.push({
         id: issue.id,
@@ -241,6 +249,7 @@ export class LinearIssueTrackerClient implements IssueTrackerClient {
         labels: labels.nodes.map((l: { name: string }) => l.name),
         teamName: team?.key,
         projectName: project?.name,
+        parentId: parent?.id,
       })
     }
 

@@ -319,6 +319,43 @@ describe('parseWorkResult', () => {
         parseWorkResult('All 8/8 sub-issues completed.\n### Must Fix Before Merge\n1. Bad code', 'coordination')
       ).toBe('failed')
     })
+
+    // Early-exit detection — agent reported progress instead of completing
+    it('detects "I\'ll wait for them to complete" as early-exit fail', () => {
+      expect(
+        parseWorkResult("Both agents are progressing well. I'll wait for them to complete before proceeding.", 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "agents are actively working" as early-exit fail', () => {
+      expect(
+        parseWorkResult('SUP-1552 agent has read the existing patterns. Agents are actively working on their sub-issues.', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "waiting for sub-agents to finish" as early-exit fail', () => {
+      expect(
+        parseWorkResult('Spawned 2 agents. Waiting for sub-agents to finish their work.', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "before proceeding to Layer 2" as early-exit fail', () => {
+      expect(
+        parseWorkResult('Wave 1 agents spawned. Will check results before proceeding to Layer 2.', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('detects "work is in progress" as early-exit fail', () => {
+      expect(
+        parseWorkResult('Work is in progress on 3 sub-issues. Status will be updated.', 'coordination')
+      ).toBe('failed')
+    })
+
+    it('early-exit patterns also apply to inflight-coordination', () => {
+      expect(
+        parseWorkResult("Agents are actively running. I'll wait for them to complete.", 'inflight-coordination')
+      ).toBe('failed')
+    })
   })
 
   // QA coordination with real agent output formats
