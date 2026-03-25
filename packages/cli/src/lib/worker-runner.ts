@@ -86,6 +86,9 @@ interface PollResult {
   work: WorkItem[]
   inboxMessages: Record<string, InboxMessage[]>
   hasInboxMessages: boolean
+  /** When true, work items are already claimed server-side — skip separate claim request */
+  preClaimed?: boolean
+  claimedSessionIds?: string[]
 }
 
 type ApiError =
@@ -398,7 +401,7 @@ export async function runWorker(
       consecutiveHeartbeatFailures = 0
 
       if (claimFailureCount > 0) {
-        log.info('Claim race summary since last heartbeat', { claimFailures: claimFailureCount })
+        log.debug('Claim race summary since last heartbeat', { claimFailures: claimFailureCount })
         claimFailureCount = 0
       }
 
@@ -962,11 +965,29 @@ export async function runWorker(
           log.info(`Found ${pollResult.work.length} work item(s)`, {
             activeCount,
             availableCapacity,
+            preClaimed: pollResult.preClaimed ?? false,
           })
 
           for (const item of pollResult.work.slice(0, availableCapacity)) {
             if (!running) break
 
+            // Server-side claiming: items are already claimed during poll
+            if (pollResult.preClaimed) {
+              log.status('claimed', item.issueIdentifier)
+
+              if (workerConfig.dryRun) {
+                log.info(`[DRY RUN] Would execute: ${item.issueIdentifier}`)
+              } else {
+                executeWork(item).catch((error) => {
+                  log.error('Background work execution failed', {
+                    error: error instanceof Error ? error.message : String(error),
+                  })
+                })
+              }
+              continue
+            }
+
+            // Legacy client-side claiming (fallback for older servers)
             const claimResult = await claimWork(item.sessionId)
 
             if (claimResult?.claimed) {
@@ -1102,8 +1123,9 @@ export async function runWorker(
         })
       }
 
-      // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, registration.pollInterval))
+      // Wait before next poll (with jitter to desynchronize workers)
+      const jitter = Math.floor(Math.random() * registration.pollInterval * 0.4)
+      await new Promise((resolve) => setTimeout(resolve, registration.pollInterval + jitter))
     }
   } finally {
     signal?.removeEventListener('abort', onAbort)
