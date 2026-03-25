@@ -30,6 +30,7 @@ import {
   peekWork,
   getQueueLength,
   claimWork,
+  popAndClaimWork,
   releaseClaim,
   getClaimOwner,
   isSessionInQueue,
@@ -46,6 +47,7 @@ import {
   redisZRem,
   redisZRangeByScore,
   redisZCard,
+  redisZPopMin,
   redisHSet,
   redisHGet,
   redisHDel,
@@ -60,6 +62,7 @@ const mockRedisZAdd = vi.mocked(redisZAdd)
 const mockRedisZRem = vi.mocked(redisZRem)
 const mockRedisZRangeByScore = vi.mocked(redisZRangeByScore)
 const mockRedisZCard = vi.mocked(redisZCard)
+const mockRedisZPopMin = vi.mocked(redisZPopMin)
 const mockRedisHSet = vi.mocked(redisHSet)
 const mockRedisHGet = vi.mocked(redisHGet)
 const mockRedisHDel = vi.mocked(redisHDel)
@@ -405,5 +408,62 @@ describe('removeFromQueue', () => {
     expect(result).toBe(true)
     expect(mockRedisZRem).toHaveBeenCalledWith('work:queue', 'session-1')
     expect(mockRedisHDel).toHaveBeenCalledWith('work:items', 'session-1')
+  })
+})
+
+describe('popAndClaimWork', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsRedisConfigured.mockReturnValue(true)
+  })
+
+  it('returns null when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+    const result = await popAndClaimWork('worker-1')
+    expect(result).toBeNull()
+  })
+
+  it('returns null when queue is empty', async () => {
+    mockRedisZPopMin.mockResolvedValue(null)
+    const result = await popAndClaimWork('worker-1')
+    expect(result).toBeNull()
+    expect(mockRedisHGet).not.toHaveBeenCalled()
+  })
+
+  it('pops highest-priority item and claims it', async () => {
+    const work = makeWork()
+    mockRedisZPopMin.mockResolvedValue({ member: 'session-1', score: 2e13 + 1000 })
+    mockRedisHGet.mockResolvedValue(JSON.stringify(work))
+    mockRedisHDel.mockResolvedValue(1)
+    mockRedisSetNX.mockResolvedValue(true)
+
+    const result = await popAndClaimWork('worker-1')
+
+    expect(result).toEqual(work)
+    // Verifies ZPOPMIN was called on the queue
+    expect(mockRedisZPopMin).toHaveBeenCalledWith('work:queue')
+    // Verifies item was removed from hash
+    expect(mockRedisHDel).toHaveBeenCalledWith('work:items', 'session-1')
+    // Verifies claim key was set
+    expect(mockRedisSetNX).toHaveBeenCalledWith('work:claim:session-1', 'worker-1', expect.any(Number))
+  })
+
+  it('returns null when item not in hash after pop', async () => {
+    mockRedisZPopMin.mockResolvedValue({ member: 'session-1', score: 2e13 })
+    mockRedisHGet.mockResolvedValue(null)
+
+    const result = await popAndClaimWork('worker-1')
+
+    expect(result).toBeNull()
+    // Should not try to set claim or delete hash entry
+    expect(mockRedisSetNX).not.toHaveBeenCalled()
+  })
+
+  it('returns null on error', async () => {
+    mockRedisZPopMin.mockRejectedValue(new Error('Redis down'))
+
+    const result = await popAndClaimWork('worker-1')
+
+    expect(result).toBeNull()
   })
 })

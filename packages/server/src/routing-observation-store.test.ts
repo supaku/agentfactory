@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockXadd = vi.fn()
-const mockXrange = vi.fn(() => [])
-const mockXrevrange = vi.fn(() => [])
+const mockXrange = vi.fn((): [string, string[]][] => [])
+const mockXrevrange = vi.fn((): [string, string[]][] => [])
 
 // Mock redis before importing module under test
 vi.mock('./redis.js', () => ({
@@ -129,8 +129,8 @@ describe('routing-observation-store', () => {
       const store = createRedisObservationStore()
       const obs = makeObservation()
       // Ensure no project or explorationReason
-      delete (obs as Record<string, unknown>).project
-      delete (obs as Record<string, unknown>).explorationReason
+      delete (obs as unknown as Record<string, unknown>).project
+      delete (obs as unknown as Record<string, unknown>).explorationReason
       await store.recordObservation(obs)
 
       const args = mockXadd.mock.calls[0]!
