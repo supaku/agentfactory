@@ -35,6 +35,8 @@ export interface SetupMergirafResult {
   worktreeMode: boolean
   repoConfigUpdated: boolean
   errors: string[]
+  /** Process exit code: 0 = success, 1 = error, 2 = mergiraf not found */
+  exitCode: number
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +272,7 @@ export function setupMergiraf(config?: SetupMergirafConfig): SetupMergirafResult
     worktreeMode: isWorktreeMode,
     repoConfigUpdated: false,
     errors: [],
+    exitCode: 0,
   }
 
   // Step 1: Detect mergiraf binary
@@ -282,6 +285,7 @@ export function setupMergiraf(config?: SetupMergirafConfig): SetupMergirafResult
       result.errors.push(
         'mergiraf binary not found on PATH. Install with: brew install mergiraf (macOS) or cargo install mergiraf',
       )
+      result.exitCode = 2
       return result
     }
   } else {

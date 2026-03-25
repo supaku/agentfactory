@@ -152,7 +152,7 @@ function main(): void {
       printSummary(result)
 
       if (result.errors.length > 0) {
-        process.exit(1)
+        process.exit(result.exitCode || 1)
       }
       break
     }

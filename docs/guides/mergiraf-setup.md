@@ -131,7 +131,7 @@ mergeDriver: mergiraf
 
 ### Orchestrator
 
-The orchestrator automatically runs `mergiraf register` in each new agent worktree when `mergeDriver` is set to `mergiraf` in the repository config. If mergiraf is not installed, it falls back silently to the default git merge driver.
+The orchestrator automatically configures mergiraf via worktree-local git config (`git config --worktree`) in each new agent worktree when `mergeDriver` is set to `mergiraf` in the repository config. If mergiraf is not installed, it falls back silently to the default git merge driver.
 
 ### Merge Workflow
 
