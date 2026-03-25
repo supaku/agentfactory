@@ -198,7 +198,7 @@ import { createOrchestrator } from '@renseiai/agentfactory'
 
 const orchestrator = createOrchestrator({
   maxConcurrent: 1,
-  worktreePath: '.worktrees',
+  // worktreePath defaults to '../{repoName}.wt/'
 })
 
 // Spawn agent for a specific issue
@@ -259,7 +259,7 @@ Run `pnpm af-linear help` for the full command list.
 
 ## What Happens When an Agent Runs
 
-1. **Worktree creation** — a git worktree is created at `.worktrees/PROJ-123-DEV`
+1. **Worktree creation** — a git worktree is created at `../myrepo.wt/PROJ-123-DEV`
 2. **Branch setup** — a feature branch `PROJ-123` is created from `main`
 3. **Issue fetch** — requirements are fetched from the Linear issue description
 4. **Agent execution** — the coding agent reads the codebase, implements the change

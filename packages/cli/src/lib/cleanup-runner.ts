@@ -21,7 +21,7 @@ export interface CleanupRunnerConfig {
   dryRun?: boolean
   /** Force removal even if worktree appears active (default: false) */
   force?: boolean
-  /** Custom worktrees directory (default: {gitRoot}/.worktrees) */
+  /** Custom worktrees directory (default: ../{repoName}.wt) */
   worktreePath?: string
   /** Git root for default worktree path (default: auto-detect) */
   gitRoot?: string
@@ -528,15 +528,38 @@ function cleanupBranches(options: CleanupOptions): BranchCleanupResult {
 export function runCleanup(config?: CleanupRunnerConfig): CleanupResult {
   const gitRoot = config?.gitRoot ?? getGitRoot()
 
+  const defaultWorktreePath = resolve(gitRoot, '..', basename(gitRoot) + '.wt')
   const options: CleanupOptions = {
     dryRun: config?.dryRun ?? false,
     force: config?.force ?? false,
-    worktreePath: config?.worktreePath ?? resolve(gitRoot, '.worktrees'),
+    worktreePath: config?.worktreePath ?? defaultWorktreePath,
   }
 
-  const worktreeResult = config?.skipWorktrees
-    ? { scanned: 0, orphaned: 0, cleaned: 0, skipped: 0, errors: [] as Array<{ path: string; error: string }> }
-    : cleanup(options)
+  // Also scan legacy .worktrees/ location during migration period
+  const legacyPath = resolve(gitRoot, '.worktrees')
+  const hasLegacyWorktrees = !config?.worktreePath && existsSync(legacyPath)
+  if (hasLegacyWorktrees) {
+    console.log(`\nNote: Found worktrees at legacy location ${legacyPath}`)
+    console.log('  Run "af-migrate-worktrees" to move them to the new default location.\n')
+  }
+
+  let worktreeResult: WorktreeCleanupResult
+  if (config?.skipWorktrees) {
+    worktreeResult = { scanned: 0, orphaned: 0, cleaned: 0, skipped: 0, errors: [] as Array<{ path: string; error: string }> }
+  } else {
+    worktreeResult = cleanup(options)
+
+    // Merge results from legacy .worktrees/ location if it exists
+    if (hasLegacyWorktrees) {
+      const legacyOptions: CleanupOptions = { ...options, worktreePath: legacyPath }
+      const legacyResult = cleanup(legacyOptions)
+      worktreeResult.scanned += legacyResult.scanned
+      worktreeResult.orphaned += legacyResult.orphaned
+      worktreeResult.cleaned += legacyResult.cleaned
+      worktreeResult.skipped += legacyResult.skipped
+      worktreeResult.errors.push(...legacyResult.errors)
+    }
+  }
 
   const branchResult = config?.skipBranches
     ? { scanned: 0, deleted: 0, errors: [] as Array<{ branch: string; error: string }> }

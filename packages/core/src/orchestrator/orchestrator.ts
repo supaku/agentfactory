@@ -7,7 +7,7 @@
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
-import { resolve, dirname } from 'path'
+import { resolve, dirname, basename } from 'path'
 import { parse as parseDotenv } from 'dotenv'
 import {
   type AgentProvider,
@@ -125,7 +125,7 @@ const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'projec
   maxSessionTimeoutMs?: number
 } = {
   maxConcurrent: 3,
-  worktreePath: '.worktrees',
+  worktreePath: '../{repoName}.wt',
   autoTransition: true,
   // Preserve worktree when PR creation fails to prevent data loss
   preserveWorkOnPrFailure: true,
@@ -220,6 +220,32 @@ function findRepoRoot(startDir: string): string | null {
 }
 
 /**
+ * Resolve a worktree path template into an absolute path.
+ *
+ * Supports template variables:
+ * - `{repoName}` → basename of the git repo root directory
+ * - `{branch}` → the worktree branch/identifier name
+ *
+ * Relative paths are resolved against the git repo root.
+ *
+ * Examples:
+ *   '../{repoName}.wt' + branch 'SUP-123' → '/path/to/repoName.wt/SUP-123'
+ *   '.worktrees' + branch 'SUP-123' → '/path/to/repo/.worktrees/SUP-123'
+ */
+export function resolveWorktreePath(
+  template: string,
+  gitRoot: string,
+  branch?: string,
+): string {
+  const repoName = basename(gitRoot)
+  let resolved = template.replace(/\{repoName\}/g, repoName)
+  if (branch !== undefined) {
+    resolved = resolved.replace(/\{branch\}/g, branch)
+  }
+  return resolve(gitRoot, resolved)
+}
+
+/**
  * Load environment variables from app .env files based on work type
  *
  * - Development work: loads .env.local from all apps
@@ -233,7 +259,7 @@ function loadAppEnvFiles(
   workType: AgentWorkType,
   log?: Logger
 ): Record<string, string> {
-  // Find the repo root (worktrees are inside .worktrees/ which is in the repo)
+  // Find the repo root (worktrees may be in a sibling directory or inside the repo)
   const repoRoot = findRepoRoot(workDir)
   if (!repoRoot) {
     log?.warn('Could not find repo root for env file loading', { startDir: workDir })
@@ -1009,8 +1035,8 @@ export class AgentOrchestrator {
       inactivityTimeoutMs: config.inactivityTimeoutMs ?? envInactivityTimeout ?? DEFAULT_CONFIG.inactivityTimeoutMs,
       maxSessionTimeoutMs: config.maxSessionTimeoutMs ?? envMaxSessionTimeout ?? DEFAULT_CONFIG.maxSessionTimeoutMs,
     }
-    // Resolve git root from worktreePath (which may point to a different repo than cwd)
-    this.gitRoot = findRepoRoot(resolve(this.config.worktreePath)) ?? findRepoRoot(process.cwd()) ?? process.cwd()
+    // Resolve git root from cwd (worktreePath may be a sibling directory outside the repo)
+    this.gitRoot = findRepoRoot(process.cwd()) ?? process.cwd()
 
     // Validate git remote matches configured repository (if set)
     if (this.config.repository) {
@@ -1092,6 +1118,10 @@ export class AgentOrchestrator {
           if (repoConfig.validateCommand) {
             this.validateCommand = repoConfig.validateCommand
           }
+          // Apply worktree.directory from repo config if worktreePath was not explicitly set
+          if (repoConfig.worktree?.directory && !config.worktreePath) {
+            this.config.worktreePath = repoConfig.worktree.directory
+          }
           // Store providers config for per-spawn resolution
           this.configProviders = getProvidersConfig(repoConfig)
 
@@ -1110,6 +1140,15 @@ export class AgentOrchestrator {
       }
     } catch (err) {
       console.warn('[orchestrator] Failed to load .agentfactory/config.yaml:', err instanceof Error ? err.message : err)
+    }
+
+    // Warn if legacy .worktrees/ directory exists inside the repo
+    const legacyWorktreePath = resolve(this.gitRoot, '.worktrees')
+    if (existsSync(legacyWorktreePath)) {
+      console.warn(
+        '[orchestrator] Legacy .worktrees/ directory detected inside the repo. ' +
+        'Run "af-migrate-worktrees" to move worktrees to the new sibling directory.'
+      )
     }
 
     // Accept merge queue adapter passed directly via config (takes precedence over repo config)
@@ -1363,16 +1402,16 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Check if a path is inside the configured .worktrees/ directory.
+   * Check if a path is inside the configured worktrees directory.
    *
    * Only paths within the worktrees directory should ever be candidates for
    * automated cleanup. This prevents the main repo or other directories from
    * being targeted.
    */
   private isInsideWorktreesDir(targetPath: string): boolean {
-    const worktreesDir = resolve(this.config.worktreePath)
+    const worktreesDir = resolveWorktreePath(this.config.worktreePath, this.gitRoot)
     const normalizedTarget = resolve(targetPath)
-    // Must be inside .worktrees/ (not equal to it)
+    // Must be inside the worktrees directory (not equal to it)
     return normalizedTarget.startsWith(worktreesDir + '/')
   }
 
@@ -1386,7 +1425,7 @@ export class AgentOrchestrator {
    * so the new work type can proceed.
    *
    * SAFETY: This method will NEVER clean up the main working tree. It only
-   * operates on paths inside the .worktrees/ directory. This prevents
+   * operates on paths inside the configured worktrees directory. This prevents
    * catastrophic data loss when a branch is checked out in the main tree
    * (e.g., by a user in their IDE).
    *
@@ -1403,11 +1442,11 @@ export class AgentOrchestrator {
       return false
     }
 
-    // SAFETY GUARD 2: Only clean up paths inside .worktrees/
+    // SAFETY GUARD 2: Only clean up paths inside worktrees directory
     if (!this.isInsideWorktreesDir(conflictPath)) {
       console.warn(
         `SAFETY: Refusing to clean up ${conflictPath} \u2014 it is not inside the worktrees directory. ` +
-        `Only paths inside '${resolve(this.config.worktreePath)}' can be auto-cleaned.`
+        `Only paths inside '${resolveWorktreePath(this.config.worktreePath, this.gitRoot)}' can be auto-cleaned.`
       )
       return false
     }
@@ -1441,7 +1480,7 @@ export class AgentOrchestrator {
     if (incompleteCheck.hasIncompleteWork) {
       // Save a patch before removing so work can be recovered
       try {
-        const patchDir = resolve(this.config.worktreePath, '.patches')
+        const patchDir = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), '.patches')
         if (!existsSync(patchDir)) {
           mkdirSync(patchDir, { recursive: true })
         }
@@ -1556,12 +1595,12 @@ export class AgentOrchestrator {
     workType: AgentWorkType
   ): { worktreePath: string; worktreeIdentifier: string } {
     const worktreeIdentifier = getWorktreeIdentifier(issueIdentifier, workType)
-    const worktreePath = resolve(this.config.worktreePath, worktreeIdentifier)
+    const worktreePath = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), worktreeIdentifier)
     // Use issue identifier for branch name (shared across work types)
     const branchName = issueIdentifier
 
     // Ensure parent directory exists
-    const parentDir = resolve(this.config.worktreePath)
+    const parentDir = resolveWorktreePath(this.config.worktreePath, this.gitRoot)
     if (!existsSync(parentDir)) {
       mkdirSync(parentDir, { recursive: true })
     }
@@ -1722,7 +1761,7 @@ export class AgentOrchestrator {
    * @param worktreeIdentifier - Worktree identifier with work type suffix (e.g., "SUP-294-QA")
    */
   removeWorktree(worktreeIdentifier: string): void {
-    const worktreePath = resolve(this.config.worktreePath, worktreeIdentifier)
+    const worktreePath = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), worktreeIdentifier)
 
     if (existsSync(worktreePath)) {
       try {

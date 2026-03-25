@@ -72,7 +72,7 @@ For a full webhook-driven setup, install `@renseiai/agentfactory-nextjs` (it pul
 The orchestrator (`packages/core/src/orchestrator/`) manages the full lifecycle of coding agents:
 
 1. **Issue selection** — queries Linear for backlog issues, filters by project, selects by priority
-2. **Worktree creation** — creates isolated git worktrees per agent (e.g., `.worktrees/PROJ-123-DEV`)
+2. **Worktree creation** — creates isolated git worktrees per agent (e.g., `../myrepo.wt/PROJ-123-DEV`)
 3. **Agent spawning** — delegates to the provider abstraction to start agents
 4. **Stream processing** — iterates `AgentEvent` from the provider, emitting activities to Linear
 5. **Completion handling** — detects PR URLs, posts completion comments, transitions status
@@ -214,7 +214,7 @@ AgentFactory includes built-in crash recovery:
 State file structure:
 
 ```
-.worktrees/PROJ-123-DEV/.agent/
+../myrepo.wt/PROJ-123-DEV/.agent/
   ├── state.json      # Session state (issue, work type, prompt, status)
   ├── heartbeat.json  # Last heartbeat timestamp + metrics
   ├── todos.json      # Task list state (survives restarts)

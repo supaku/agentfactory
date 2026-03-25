@@ -10,7 +10,7 @@
  * Options:
  *   --dry-run              Show what would be cleaned up without removing anything
  *   --force                Force removal / include branches with gone remotes
- *   --path <dir>           Custom worktrees directory (default: .worktrees)
+ *   --path <dir>           Custom worktrees directory (default: ../{repoName}.wt)
  *   --skip-worktrees       Skip worktree cleanup
  *   --skip-branches        Skip branch cleanup
  *   --help, -h             Show this help message
@@ -73,7 +73,7 @@ Usage:
 Options:
   --dry-run              Show what would be cleaned up without removing
   --force                Force worktree removal + delete branches with gone remotes
-  --path <dir>           Custom worktrees directory (default: .worktrees)
+  --path <dir>           Custom worktrees directory (default: ../{repoName}.wt)
   --skip-worktrees       Skip worktree cleanup
   --skip-branches        Skip branch cleanup
   --help, -h             Show this help message

@@ -224,7 +224,8 @@ const orchestrator = createOrchestrator({
   provider: myProvider,              // Agent provider instance
   maxConcurrent: 3,                  // Max concurrent agents
   project: 'MyProject',             // Project name filter
-  worktreePath: '.worktrees',       // Git worktree base path
+  // worktreePath defaults to '../{repoName}.wt/' (sibling directory)
+  // worktreePath: '../myrepo.wt/',  // Git worktree base path
   linearApiKey: 'lin_api_...',      // Linear API key
   autoTransition: true,             // Auto-update issue status
   sandboxEnabled: false,            // Enable agent sandboxing
@@ -236,6 +237,75 @@ const orchestrator = createOrchestrator({
   },
 })
 ```
+
+## Worktree Directory Configuration
+
+### Default layout
+
+By default, worktrees are created in a **sibling directory** next to the repository:
+
+```
+my-project/               # your repo
+my-project.wt/            # worktree root (sibling)
+  SUP-123/                # one worktree per branch
+  SUP-456/
+```
+
+This replaces the previous `.worktrees/` (in-repo) default, which caused VSCode and Cursor to crash due to filesystem watcher storms on large fleets.
+
+### `worktree.directory` config key
+
+Override the default in `.agentfactory/config.yaml`:
+
+```yaml
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/yourorg/yourrepo
+worktree:
+  directory: "../{repoName}.wt/"   # default — sibling directory
+```
+
+Template variables:
+
+| Variable | Description |
+|----------|-------------|
+| `{repoName}` | Name of the repository directory (e.g., `agentfactory`) |
+| `{branch}` | Branch name for the worktree (e.g., `SUP-123`) |
+
+Examples:
+
+```yaml
+# Sibling directory (default)
+worktree:
+  directory: "../{repoName}.wt/"
+
+# Custom absolute path
+worktree:
+  directory: "/tmp/worktrees/{repoName}/"
+
+# Legacy in-repo layout (not recommended)
+worktree:
+  directory: ".worktrees/"
+```
+
+### Migrating from `.worktrees/`
+
+If you have existing worktrees under `.worktrees/`, run the migration command:
+
+```bash
+pnpm af-migrate-worktrees
+```
+
+This moves active worktrees to the new sibling directory and updates git worktree references.
+
+### Worktrunk compatibility
+
+[Worktrunk](https://github.com/nicholasgasior/worktrunk) (`wt`, MIT, Rust, v0.31+) uses the same `../{repoName}.wt/` sibling directory pattern by default. The two tools complement each other:
+
+- **`wt`** -- manual worktree management (create, list, switch, clean up)
+- **AgentFactory** -- automated worktree management for orchestrated agent fleets
+
+They work side by side in the same directory without conflict. `wt` is recommended as a companion tool for manual worktree operations when developing alongside an agent fleet.
 
 ## CLI Runner Functions
 

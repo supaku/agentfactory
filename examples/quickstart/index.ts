@@ -24,7 +24,7 @@ async function main() {
   // Create an orchestrator with sensible defaults
   const orchestrator = createOrchestrator({
     maxConcurrent: 1,
-    worktreePath: '.worktrees',
+    // worktreePath defaults to '../{repoName}.wt/'
     inactivityTimeoutMs: 300_000, // 5 minutes
   })
 

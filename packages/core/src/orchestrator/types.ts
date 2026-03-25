@@ -30,7 +30,7 @@ export interface OrchestratorConfig {
   maxConcurrent?: number
   /** Project name to filter backlog issues */
   project?: string
-  /** Base path for git worktrees (default: .worktrees) */
+  /** Base path template for git worktrees. Supports {repoName} and {branch} variables (default: '../{repoName}.wt') */
   worktreePath?: string
   /**
    * Linear API key (defaults to LINEAR_API_KEY env var).

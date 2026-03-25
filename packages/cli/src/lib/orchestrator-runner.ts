@@ -149,7 +149,7 @@ export async function runOrchestrator(
   const orchestratorConfig: Record<string, unknown> = {
     project: config.project,
     maxConcurrent,
-    worktreePath: path.resolve(gitRoot, '.worktrees'),
+    worktreePath: path.resolve(gitRoot, '..', path.basename(gitRoot) + '.wt'),
     linearApiKey: config.linearApiKey,
     issueTrackerClient,
     statusMappings,

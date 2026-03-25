@@ -137,6 +137,19 @@ export const RepositoryConfigSchema = z.object({
     requiredChecks: z.array(z.string()).optional(),
   }).optional(),
   /**
+   * Worktree configuration.
+   * Controls where git worktrees are created and how paths are resolved.
+   */
+  worktree: z.object({
+    /**
+     * Base directory template for git worktrees.
+     * Supports template variables: {repoName} (repo directory basename), {branch} (worktree branch name).
+     * Default: '../{repoName}.wt' (sibling directory, outside repo to avoid VSCode file watcher crashes).
+     * Legacy: '.worktrees' (inside repo, causes VSCode crashes with many worktrees).
+     */
+    directory: z.string().default('../{repoName}.wt'),
+  }).optional(),
+  /**
    * Git merge driver to use in agent worktrees.
    * 'mergiraf' enables syntax-aware merging for supported file types.
    * Defaults to 'default' (standard git line-based merge).

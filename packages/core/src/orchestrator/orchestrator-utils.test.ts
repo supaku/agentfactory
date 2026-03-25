@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWorktreeIdentifier } from './orchestrator.js'
+import { getWorktreeIdentifier, resolveWorktreePath } from './orchestrator.js'
 
 describe('getWorktreeIdentifier', () => {
   it('returns identifier with DEV suffix for development', () => {
@@ -53,5 +53,42 @@ describe('getWorktreeIdentifier', () => {
   it('works with different issue identifier formats', () => {
     expect(getWorktreeIdentifier('PROJ-1', 'development')).toBe('PROJ-1-DEV')
     expect(getWorktreeIdentifier('AB-99999', 'qa')).toBe('AB-99999-QA')
+  })
+})
+
+describe('resolveWorktreePath', () => {
+  it('resolves {repoName} template variable', () => {
+    const result = resolveWorktreePath('../{repoName}.wt', '/home/user/my-project')
+    expect(result).toBe('/home/user/my-project.wt')
+  })
+
+  it('resolves {branch} template variable', () => {
+    const result = resolveWorktreePath('../{repoName}.wt/{branch}', '/home/user/my-project', 'SUP-123')
+    expect(result).toBe('/home/user/my-project.wt/SUP-123')
+  })
+
+  it('resolves relative paths against gitRoot', () => {
+    const result = resolveWorktreePath('.worktrees', '/home/user/my-project')
+    expect(result).toBe('/home/user/my-project/.worktrees')
+  })
+
+  it('handles absolute paths unchanged', () => {
+    const result = resolveWorktreePath('/custom/path', '/home/user/my-project')
+    expect(result).toBe('/custom/path')
+  })
+
+  it('resolves multiple {repoName} occurrences', () => {
+    const result = resolveWorktreePath('../{repoName}-worktrees/{repoName}', '/home/user/platform')
+    expect(result).toBe('/home/user/platform-worktrees/platform')
+  })
+
+  it('handles repo names with special characters', () => {
+    const result = resolveWorktreePath('../{repoName}.wt', '/home/user/my-cool.project')
+    expect(result).toBe('/home/user/my-cool.project.wt')
+  })
+
+  it('does not replace {branch} when branch is not provided', () => {
+    const result = resolveWorktreePath('../{repoName}.wt/{branch}', '/home/user/repo')
+    expect(result).toBe('/home/user/repo.wt/{branch}')
   })
 })

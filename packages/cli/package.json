@@ -38,7 +38,8 @@
     "af-linear": "dist/src/linear.js",
     "af-governor": "dist/src/governor.js",
     "af-sync-routes": "dist/src/sync-routes.js",
-    "af-status": "dist/src/status.js"
+    "af-status": "dist/src/status.js",
+    "af-migrate-worktrees": "dist/src/migrate-worktrees.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",

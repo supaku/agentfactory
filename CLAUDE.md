@@ -134,6 +134,18 @@ When you encounter "exceeds maximum allowed tokens" error when reading files:
 
 ## Worktree Lifecycle Rules
 
+### Worktree Directory
+
+By default, worktrees are created in a **sibling directory** next to the repository:
+
+```
+../agentfactory.wt/SUP-123/   # ../{repoName}.wt/{branch}
+```
+
+This avoids filesystem watcher storms in VSCode/Cursor that occurred with the previous `.worktrees/` (in-repo) layout. The path is configurable via `worktree.directory` in `.agentfactory/config.yaml` using `{repoName}` and `{branch}` template variables.
+
+**Migrating existing setups:** Run `pnpm af-migrate-worktrees` to move worktrees from `.worktrees/` to the new sibling directory layout.
+
 ### Never Delete Your Own Worktree
 
 The orchestrator manages worktree creation and cleanup. Agents must:
