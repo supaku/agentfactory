@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.8.9
+
+### Features
+
+- **Workflow parallelism** — Fan-out, fan-in, and race strategies for parallel workflow execution (SUP-1231).
+- **Fleet quotas** — Kueue-inspired per-project budgets with concurrent session limits, daily cost caps, and cohort-based capacity borrowing/lending (SUP-1235).
+- **Self-learning routing** — Thompson Sampling multi-armed bandit for provider selection with Redis-backed posterior store (SUP-1236).
+- **Code intelligence v1.1** — Dense vector embeddings with CCS hybrid fusion for improved code search (SUP-1241).
+- **FOSSA integration** — SBOM generation for dependency tracking (SUP-1243).
+- **Workflow gates** — Signal, timer, and webhook gate types with timeout support (SUP-1229).
+- **Webhook gate endpoint** — HTTP handler for external gate signals with token persistence (SUP-1296).
+
+### Fixes
+
+- **Eliminate worker claim races** — Replace peek-then-claim model with ZPOPMIN-based atomic pop-and-claim. The poll handler now assigns work server-side, eliminating thundering herd contention across workers.
+- **Add poll jitter** — Workers desynchronize with 0–40% random jitter on poll intervals, reducing simultaneous queue access.
+- **Prevent coordinator early-exit** — Coordinators no longer exit prematurely when sub-agents are still running (SUP-1544).
+- **Sub-issue race prevention** — Filter sub-issues from backlog queries and guard against independent pickup by workers (SUP-1544).
+- **Fix routing-observation-store test types** — Resolve pre-existing TypeScript errors in mock return types.
+
+### Tests
+
+- **popAndClaimWork** — 5 tests covering atomic pop, empty queue, missing items, and error handling.
+- **isChildIssue** — 2 tests for platform adapter delegation.
+- **Early-exit detection** — Tests for new coordinator early-exit patterns.
+
+### Chores
+
+- **Anthropic SDK license review** — Marked as approved (SUP-1227).
+
 ## v0.8.8
 
 ### Features
