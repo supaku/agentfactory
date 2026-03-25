@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.11
+
+### Features
+
+- **Mergiraf setup CLI** — `af-setup mergiraf` configures the AST-aware merge driver for syntax-aware conflict resolution across agent worktrees (SUP-1544).
+- **Mergiraf setup guide** — Documentation for installation, configuration, and AgentFactory integration.
+
+### Fixes
+
+- **Suppress dotenv v17 log spam** — Add `quiet: true` to all CLI entry points to silence ads/tips polluting agent-fleet output and log analysis.
+- **Mergiraf docs corrections** — Fix incorrect CLI command names, remove non-existent `mergiraf register` subcommand, fix disable mechanism, remove unsupported `.cjs` extension, add missing `.mjs`.
+
+### Chores
+
+- **Add `af-setup` root script** — Expose setup CLI via `pnpm af-setup` for local development.
+
 ## v0.8.10
 
 ### Features

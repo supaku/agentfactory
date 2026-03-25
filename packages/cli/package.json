@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-cli",
-  "version": "0.8.10",
+  "version": "0.8.11",
   "type": "module",
   "description": "CLI tools for AgentFactory — local orchestrator, remote worker, queue admin",
   "author": "Rensei AI (https://rensei.ai)",

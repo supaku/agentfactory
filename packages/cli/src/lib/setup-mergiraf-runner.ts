@@ -89,7 +89,7 @@ export function detectMergiraf(): { found: boolean; version: string } {
 
 /** File types that mergiraf supports for AST-aware merging. */
 const MERGIRAF_FILE_TYPES = [
-  '*.ts', '*.tsx', '*.js', '*.jsx', '*.json',
+  '*.ts', '*.tsx', '*.js', '*.jsx', '*.mjs', '*.json',
   '*.yaml', '*.yml', '*.py', '*.go', '*.rs',
   '*.java', '*.css', '*.html',
 ]

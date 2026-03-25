@@ -50,13 +50,13 @@ Use the AgentFactory CLI to configure mergiraf:
 
 ```bash
 # Configure for the entire repository
-af setup mergiraf
+af-setup mergiraf
 
 # Configure only for agent worktrees (recommended)
-af setup mergiraf --worktree-only
+af-setup mergiraf --worktree-only
 
 # Preview changes without modifying anything
-af setup mergiraf --dry-run
+af-setup mergiraf --dry-run
 ```
 
 ### Manual Configuration
@@ -73,6 +73,7 @@ Create or update `.gitattributes` in your repository root:
 *.tsx merge=mergiraf
 *.js merge=mergiraf
 *.jsx merge=mergiraf
+*.mjs merge=mergiraf
 *.json merge=mergiraf
 *.yaml merge=mergiraf
 *.yml merge=mergiraf
@@ -93,10 +94,10 @@ git config merge.mergiraf.name "mergiraf"
 git config merge.mergiraf.driver "mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P"
 ```
 
-Or use the built-in register command:
+Or equivalently as a one-liner:
 
 ```bash
-mergiraf register
+git config merge.mergiraf.driver "mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P"
 ```
 
 ## Lock File Strategy
@@ -157,8 +158,8 @@ The merge workflow template references mergiraf for conflict resolution during b
 To bypass mergiraf for edge cases:
 
 ```bash
-# Use standard git merge strategy for one operation
-git merge -s recursive <branch>
+# Override the merge driver to git's built-in default for one operation
+git -c merge.mergiraf.driver=true merge <branch>
 ```
 
 Or disable in the repository configuration:
