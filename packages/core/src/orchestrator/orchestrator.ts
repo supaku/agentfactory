@@ -1846,6 +1846,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
   /**
    * Configure mergiraf as the git merge driver in a worktree.
+   * Uses worktree-local git config so mergiraf only runs in agent worktrees.
    * Falls back silently to default git merge if mergiraf is not installed.
    */
   private configureMergiraf(worktreePath: string): void {
@@ -1864,18 +1865,57 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     try {
-      // Register mergiraf as the merge driver in this worktree
-      // This sets up .git/config merge driver entries and .gitattributes
-      execSync('mergiraf register', {
+      // Enable worktree-local config extension
+      execSync('git config extensions.worktreeConfig true', {
         stdio: 'pipe',
         encoding: 'utf-8',
         cwd: worktreePath,
       })
-      console.log(`mergiraf registered as merge driver in ${worktreePath}`)
+
+      // Register mergiraf merge driver in worktree-local config
+      execSync('git config --worktree merge.mergiraf.name "mergiraf"', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+      execSync(
+        'git config --worktree merge.mergiraf.driver "mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P"',
+        { stdio: 'pipe', encoding: 'utf-8', cwd: worktreePath },
+      )
+
+      // Write .gitattributes in worktree root (not repo root)
+      const gitattributesPath = resolve(worktreePath, '.gitattributes')
+      if (!existsSync(gitattributesPath)) {
+        const content = [
+          '# AST-aware merge driver (mergiraf) — worktree-local',
+          '*.ts merge=mergiraf',
+          '*.tsx merge=mergiraf',
+          '*.js merge=mergiraf',
+          '*.jsx merge=mergiraf',
+          '*.json merge=mergiraf',
+          '*.yaml merge=mergiraf',
+          '*.yml merge=mergiraf',
+          '*.py merge=mergiraf',
+          '*.go merge=mergiraf',
+          '*.rs merge=mergiraf',
+          '*.java merge=mergiraf',
+          '*.css merge=mergiraf',
+          '*.html merge=mergiraf',
+          '',
+          '# Lock files — keep ours and regenerate',
+          'pnpm-lock.yaml merge=ours',
+          'package-lock.json merge=ours',
+          'yarn.lock merge=ours',
+          '',
+        ].join('\n')
+        writeFileSync(gitattributesPath, content, 'utf-8')
+      }
+
+      console.log(`mergiraf configured as merge driver in ${worktreePath}`)
     } catch (error) {
       // Log warning but don't fail — merge driver is non-critical
       console.warn(
-        `Failed to register mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to configure mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
     }
   }
