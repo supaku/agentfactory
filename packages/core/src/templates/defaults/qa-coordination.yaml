@@ -46,7 +46,7 @@ prompt: |
 
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}
-  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

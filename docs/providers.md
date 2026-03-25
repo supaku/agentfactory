@@ -9,6 +9,8 @@ AgentFactory abstracts coding agents behind a unified `AgentProvider` interface.
 | `claude` | Production | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) via `@anthropic-ai/claude-agent-sdk` |
 | `codex` | Experimental | [OpenAI Codex](https://platform.openai.com/) |
 | `amp` | Experimental | [Amp](https://amp.dev/) |
+| `spring-ai` | Experimental | [Spring AI](https://spring.io/projects/spring-ai) agents via HTTP |
+| `a2a` | Experimental | Any [A2A protocol](https://a2a-protocol.org) compatible agent |
 
 ## Provider Interface
 
@@ -16,7 +18,7 @@ Every provider implements:
 
 ```typescript
 interface AgentProvider {
-  readonly name: 'claude' | 'codex' | 'amp'
+  readonly name: 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a'
 
   /** Spawn a new agent session */
   spawn(config: AgentSpawnConfig): AgentHandle

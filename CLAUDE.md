@@ -11,8 +11,31 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 | `@renseiai/agentfactory-server` | `packages/server` | Work queue server for webhook-driven execution |
 | `@renseiai/agentfactory-nextjs` | `packages/nextjs` | Next.js webhook handlers and middleware |
 | `@renseiai/agentfactory-dashboard` | `packages/dashboard` | Fleet management dashboard UI |
-| `@renseiai/create-agentfactory` | `packages/create-app` | Project scaffolding CLI |
+| `@renseiai/agentfactory-mcp-server` | `packages/mcp-server` | MCP server exposing fleet capabilities to external clients |
+| `@renseiai/agentfactory-code-intelligence` | `packages/code-intelligence` | Tree-sitter AST parsing, BM25 search, incremental indexing |
+| `@renseiai/create-agentfactory-app` | `packages/create-app` | Project scaffolding CLI |
 | `@renseiai/agentfactory-cli` | `packages/cli` | Orchestrator, worker, Linear CLI, and admin entry points |
+
+## Code Intelligence (Optional)
+
+`@renseiai/agentfactory-code-intelligence` is an **optional dependency** of the CLI. When installed, agents running via the Claude provider receive 4 in-process MCP tools:
+
+| Tool | Purpose |
+|------|---------|
+| `af_code_get_repo_map` | PageRank-ranked map of the most important files |
+| `af_code_search_symbols` | Find function/class/type definitions by name |
+| `af_code_search_code` | BM25 keyword search with code-aware tokenization |
+| `af_code_check_duplicate` | Exact + near-duplicate detection before writing code |
+
+**Graceful degradation:** If the package is not installed, the CLI starts normally — agents simply won't have `af_code_*` tools available. The `{{> partials/code-intelligence-instructions}}` partial is conditional on `useToolPlugins` and renders as empty when tools aren't registered.
+
+**Optional env vars for enhanced search:**
+- `VOYAGE_AI_API_KEY` — Enables semantic vector embeddings (hybrid BM25 + vector mode)
+- `COHERE_API_KEY` — Enables cross-encoder reranking for more precise result ordering
+
+Without these keys, agents still get full BM25 keyword search, symbol search, repo maps, and dedup.
+
+**Index cache:** The incremental indexer persists to `.agentfactory/code-index/` (add to `.gitignore`). First run builds the index; subsequent runs re-index only changed files via Merkle tree diffing.
 
 ## Linear CLI (CRITICAL)
 
@@ -313,13 +336,20 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{buildCommand}}` | Build command override for native projects (e.g., `cargo build`) |
 | `{{testCommand}}` | Test command override for native projects (e.g., `cargo test`) |
 | `{{validateCommand}}` | Validation command override — replaces typecheck (e.g., `cargo clippy`) |
+| `{{packageManager}}` | Package manager (e.g., `pnpm`, `npm`, `none`) |
+| `{{team}}` | Linear team name |
+| `{{attemptNumber}}` | Retry attempt number (retry templates only) |
+| `{{failureSummary}}` | Summary of previous failure (retry templates only) |
+| `{{cycleCount}}` | Refinement cycle count (refinement templates only) |
 
 ### Available Partials
 
 | Partial | Description |
 |---------|-------------|
 | `{{> partials/cli-instructions}}` | Linear CLI + human blocker instructions |
+| `{{> partials/commit-push-pr}}` | Commit, push, and PR creation instructions |
 | `{{> partials/dependency-instructions}}` | Dependency installation rules |
+| `{{> partials/human-blocker-instructions}}` | Instructions for creating human-needed blocker issues |
 | `{{> partials/large-file-instructions}}` | Token limit handling |
 | `{{> partials/work-result-marker}}` | QA/acceptance WORK_RESULT marker |
 | `{{> partials/shared-worktree-safety}}` | Shared worktree safety rules |
@@ -327,6 +357,8 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/repo-validation}}` | Pre-push git remote URL validation |
 | `{{> partials/path-scoping}}` | Monorepo directory scoping instructions |
 | `{{> partials/native-build-validation}}` | Build system detection and safety checks for native projects |
+| `{{> partials/ios-build-validation}}` | iOS/Xcode build validation for native mobile projects |
+| `{{> partials/code-intelligence-instructions}}` | Code intelligence tool instructions (af_code_* tools, conditional on useToolPlugins) |
 | `{{> partials/task-lifecycle}}` | Task spawning and waiting rules for coordination workflows |
 
 ### Tool Permissions

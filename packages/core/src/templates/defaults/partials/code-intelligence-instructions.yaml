@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: code-intelligence-instructions
+  description: Code intelligence tool instructions for codebase exploration and search
+content: |
+
+  {{#if useToolPlugins}}
+  CODE INTELLIGENCE TOOLS:
+  You have access to af_code_* tools for efficient codebase exploration. Use these BEFORE falling
+  back to raw Grep/Glob when exploring unfamiliar code or searching for symbols:
+
+  - af_code_get_repo_map — Start here. Returns a PageRank-ranked map of the most important files
+    in the repository. Use this to orient yourself before diving into code.
+    Params: max_files? (number), file_patterns? (string[])
+
+  - af_code_search_symbols — Find function, class, type, interface, and other symbol definitions.
+    More precise than Grep for finding where things are defined (not just referenced).
+    Params: query (string), max_results? (number), symbol_kinds? (string[]), file_pattern? (string)
+
+  - af_code_search_code — BM25 keyword search with code-aware tokenization. Understands camelCase,
+    snake_case, and import patterns. Use for broader code search when you need context beyond symbols.
+    Params: query (string), max_results? (number), language? (string)
+
+  - af_code_check_duplicate — Before writing significant code blocks, check for existing
+    implementations to avoid duplication. Uses exact (xxHash64) and near-duplicate (SimHash) detection.
+    Params: content (string)
+
+  WHEN TO USE THESE TOOLS:
+  - Starting a new task: af_code_get_repo_map first, then af_code_search_symbols for specific targets
+  - Looking for a function/class/type: af_code_search_symbols (faster and more precise than Grep)
+  - Understanding how something works: af_code_search_code with descriptive queries
+  - Before writing new utility code: af_code_check_duplicate to avoid reinventing existing helpers
+  - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
+  {{/if}}

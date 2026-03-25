@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.12
+
+### Features
+
+- **Code intelligence template integration** — New `code-intelligence-instructions` partial added to all 16 workflow templates. Agents now receive guidance to use `af_code_*` tools (repo map, symbol search, code search, duplicate check) when exploring codebases.
+- **Graceful degradation for code-intelligence** — `@renseiai/agentfactory-code-intelligence` is now an optional dependency of the CLI. If not installed, the orchestrator/worker start normally without `af_code_*` tools.
+
+### Chores
+
+- **Documentation updates** — Added code-intelligence package to project structure tables and package listings across CLAUDE.md, CONTRIBUTING.md, README.md, SECURITY.md, and architecture docs.
+
 ## v0.8.11
 
 ### Features

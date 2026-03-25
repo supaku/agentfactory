@@ -40,7 +40,7 @@ prompt: |
   A failing build is an automatic QA failure regardless of any other results.
 
   {{> partials/dependency-instructions}}
-  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

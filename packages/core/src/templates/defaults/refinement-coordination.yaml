@@ -48,7 +48,7 @@ prompt: |
   - Only use {{linearCli}} for: list-sub-issues, list-sub-issue-statuses, get-issue, list-comments,
     create-comment, update-sub-issue
 
-  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

@@ -70,7 +70,7 @@ prompt: |
   - [ ] Resource cleanup (file handles, memory, network connections)
   - [ ] Platform compatibility (if applicable)
 
-  {{> partials/large-file-instructions}}{{> partials/cli-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

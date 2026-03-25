@@ -36,6 +36,7 @@ prompt: |
 
   {{> partials/path-scoping}}
   {{> partials/dependency-instructions}}
+  {{> partials/code-intelligence-instructions}}
   {{> partials/cli-instructions}}
   {{> partials/commit-push-pr}}
 

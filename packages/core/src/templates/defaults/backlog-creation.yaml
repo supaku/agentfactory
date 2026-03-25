@@ -20,7 +20,7 @@ prompt: |
   - Independent issues (--type related): When items are unrelated work in different codebase areas with no shared context. Create in Icebox (--state "Icebox"). Source stays in Icebox.
   - Single issue rewrite: When scope is atomic (single concern, ≤3 files, no phases). Rewrite source in-place, keep in Icebox.
   IMPORTANT: When creating multiple issues (sub-issues or independent), always add "related" links between them AND blocking relations where one step depends on another. This informs sub-agents and the coordinator of execution order.
-  Do NOT wait for user approval - create issues automatically.{{> partials/cli-instructions}}
+  Do NOT wait for user approval - create issues automatically.{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

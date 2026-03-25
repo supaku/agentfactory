@@ -32,7 +32,7 @@ AgentFactory is a multi-agent orchestrator that turns issue backlogs into shippe
 
 ## Package Architecture
 
-AgentFactory is split into six packages:
+AgentFactory is split into nine packages:
 
 | Package | Responsibility |
 |---------|---------------|
@@ -41,6 +41,9 @@ AgentFactory is split into six packages:
 | `@renseiai/agentfactory-server` | Redis work queue, session storage, distributed workers |
 | `@renseiai/agentfactory-cli` | CLI tools for local and remote operation |
 | `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, OAuth, middleware |
+| `@renseiai/agentfactory-dashboard` | Fleet management dashboard UI |
+| `@renseiai/agentfactory-mcp-server` | MCP server exposing fleet capabilities to external clients |
+| `@renseiai/agentfactory-code-intelligence` | Tree-sitter AST parsing, BM25 search, incremental indexing |
 | `@renseiai/create-agentfactory-app` | Project scaffolding tool (`npx create-agentfactory-app`) |
 
 ### Dependency Graph

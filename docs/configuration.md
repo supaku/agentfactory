@@ -27,7 +27,7 @@ Complete reference for all AgentFactory configuration options.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AGENT_PROVIDER` | `claude` | Default provider: `claude`, `codex`, `amp` |
+| `AGENT_PROVIDER` | `claude` | Default provider: `claude`, `codex`, `amp`, `spring-ai`, `a2a` |
 | `AGENT_PROVIDER_{WORKTYPE}` | — | Per-work-type override (e.g., `AGENT_PROVIDER_QA=codex`) |
 | `AGENT_PROVIDER_{PROJECT}` | — | Per-project override (e.g., `AGENT_PROVIDER_SOCIAL=amp`) |
 

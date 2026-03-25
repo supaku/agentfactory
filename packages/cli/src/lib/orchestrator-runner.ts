@@ -13,13 +13,20 @@ import {
   type AgentProcess,
   type AgentWorkType,
   type OrchestratorIssue,
+  type ToolPlugin,
 } from '@renseiai/agentfactory'
 import {
   LinearIssueTrackerClient,
   createLinearStatusMappings,
   linearPlugin,
 } from '@renseiai/plugin-linear'
-import { codeIntelligencePlugin } from '@renseiai/agentfactory-code-intelligence'
+
+let codeIntelligencePlugin: ToolPlugin | undefined
+try {
+  ;({ codeIntelligencePlugin } = await import('@renseiai/agentfactory-code-intelligence'))
+} catch {
+  // code-intelligence is optional — agents run without af_code_* tools
+}
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -153,7 +160,7 @@ export async function runOrchestrator(
     linearApiKey: config.linearApiKey,
     issueTrackerClient,
     statusMappings,
-    toolPlugins: [linearPlugin, codeIntelligencePlugin],
+    toolPlugins: [linearPlugin, codeIntelligencePlugin].filter(Boolean) as ToolPlugin[],
   }
   if (config.templateDir) {
     orchestratorConfig.templateDir = config.templateDir

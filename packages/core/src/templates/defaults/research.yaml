@@ -22,7 +22,7 @@ prompt: |
   For long descriptions, write content to a temp file and use --description-file:
     1. Write description to /tmp/description.md using the Write tool
     2. Run: pnpm af-linear update-issue {{identifier}} --description-file /tmp/description.md
-  {{> partials/cli-instructions}}
+  {{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

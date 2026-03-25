@@ -8,7 +8,7 @@
 
 **The open-source software factory — multi-agent fleet management for coding agents.**
 
-AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Spring AI) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
+AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet of coding agents (Claude, Codex, Spring AI, or any A2A-compatible agent) through an automated pipeline: development, QA, and acceptance — like an assembly line for software.
 
 ## Packages
 
@@ -19,7 +19,9 @@ AgentFactory turns your issue backlog into shipped code. It orchestrates a fleet
 | **[@renseiai/agentfactory-server](./packages/server)** | `@renseiai/agentfactory-server` | Redis work queue, session storage, worker pool |
 | **[@renseiai/agentfactory-cli](./packages/cli)** | `@renseiai/agentfactory-cli` | CLI tools: orchestrator, workers, Linear CLI (`af-linear`) |
 | **[@renseiai/agentfactory-nextjs](./packages/nextjs)** | `@renseiai/agentfactory-nextjs` | Next.js route handlers, webhook processor, middleware |
-| **[@renseiai/agentfactory-mcp](./packages/mcp)** | `@renseiai/agentfactory-mcp` | MCP server exposing fleet capabilities to external clients |
+| **[@renseiai/agentfactory-dashboard](./packages/dashboard)** | `@renseiai/agentfactory-dashboard` | Fleet management dashboard UI |
+| **[@renseiai/agentfactory-mcp-server](./packages/mcp-server)** | `@renseiai/agentfactory-mcp-server` | MCP server exposing fleet capabilities to external clients |
+| **[@renseiai/agentfactory-code-intelligence](./packages/code-intelligence)** | `@renseiai/agentfactory-code-intelligence` | Tree-sitter AST parsing, BM25 search, incremental indexing |
 | **[@renseiai/create-agentfactory-app](./packages/create-app)** | `@renseiai/create-agentfactory-app` | Project scaffolding tool |
 
 ## Quick Start
@@ -154,7 +156,7 @@ AgentFactory supports multiple coding agent providers through a unified interfac
 
 ```typescript
 interface AgentProvider {
-  readonly name: 'claude' | 'codex' | 'spring-ai'
+  readonly name: 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a'
   spawn(config: AgentSpawnConfig): AgentHandle
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle
 }
@@ -275,7 +277,7 @@ This requires the `@renseiai/agentfactory-server` package and a Redis instance.
 |----------|----------|-------------|
 | `LINEAR_ACCESS_TOKEN` | Yes | Linear API key (used by Next.js webhook server) |
 | `LINEAR_API_KEY` | Yes | Linear API key (used by CLI tools) |
-| `AGENT_PROVIDER` | No | Default provider: `claude`, `codex`, `spring-ai` (default: `claude`) |
+| `AGENT_PROVIDER` | No | Default provider: `claude`, `codex`, `amp`, `spring-ai`, `a2a` (default: `claude`) |
 | `LINEAR_TEAM_ID` | No | Linear team UUID |
 | `REDIS_URL` | For distributed | Redis connection URL |
 

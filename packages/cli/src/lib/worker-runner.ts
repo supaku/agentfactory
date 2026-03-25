@@ -16,6 +16,7 @@ import {
   type OrchestratorIssue,
   type AgentOrchestrator,
   type Logger,
+  type ToolPlugin,
 } from '@renseiai/agentfactory'
 import {
   LinearIssueTrackerClient,
@@ -23,7 +24,13 @@ import {
   linearPlugin,
   type AgentWorkType,
 } from '@renseiai/plugin-linear'
-import { codeIntelligencePlugin } from '@renseiai/agentfactory-code-intelligence'
+
+let codeIntelligencePlugin: ToolPlugin | undefined
+try {
+  ;({ codeIntelligencePlugin } = await import('@renseiai/agentfactory-code-intelligence'))
+} catch {
+  // code-intelligence is optional — agents run without af_code_* tools
+}
 
 // ---------------------------------------------------------------------------
 // Public config interface
@@ -648,7 +655,7 @@ export async function runWorker(
           worktreePath: path.resolve(gitRoot, '..', path.basename(gitRoot) + '.wt'),
           issueTrackerClient,
           statusMappings,
-          toolPlugins: [linearPlugin, codeIntelligencePlugin],
+          toolPlugins: [linearPlugin, codeIntelligencePlugin].filter(Boolean) as ToolPlugin[],
           apiActivityConfig: {
             baseUrl: workerConfig.apiUrl,
             apiKey: workerConfig.apiKey,

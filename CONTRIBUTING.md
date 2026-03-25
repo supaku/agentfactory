@@ -28,12 +28,15 @@ pnpm test
 
 ```
 packages/
-  core/        @renseiai/agentfactory              — orchestrator, providers, crash recovery
-  linear/      @renseiai/plugin-linear        — Linear issue tracker integration
-  server/      @renseiai/agentfactory-server        — Redis queues, session storage, worker pool
-  cli/         @renseiai/agentfactory-cli           — CLI tools (orchestrator, worker, fleet)
-  nextjs/      @renseiai/agentfactory-nextjs        — Next.js route handlers, webhook, middleware
-  create-app/  @renseiai/create-agentfactory-app    — Project scaffolding tool
+  core/                @renseiai/agentfactory                       — orchestrator, providers, crash recovery
+  linear/              @renseiai/plugin-linear                      — Linear issue tracker integration
+  server/              @renseiai/agentfactory-server                — Redis queues, session storage, worker pool
+  cli/                 @renseiai/agentfactory-cli                   — CLI tools (orchestrator, worker, fleet)
+  nextjs/              @renseiai/agentfactory-nextjs                — Next.js route handlers, webhook, middleware
+  dashboard/           @renseiai/agentfactory-dashboard             — Fleet management dashboard UI
+  mcp-server/          @renseiai/agentfactory-mcp-server            — MCP server for external clients
+  code-intelligence/   @renseiai/agentfactory-code-intelligence     — Tree-sitter AST parsing, BM25 search
+  create-app/          @renseiai/create-agentfactory-app            — Project scaffolding tool
 
 docs/          Documentation
 examples/      Working code samples
