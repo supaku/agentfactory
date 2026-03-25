@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.10
+
+### Features
+
+- **Worktree sibling directory layout** — Worktrees are now created in a sibling directory (`../{repoName}.wt/{branch}`) instead of inside the repo (`.worktrees/`), preventing VSCode/Cursor filesystem watcher crashes (SUP-1543).
+- **Worktree migration CLI** — `pnpm af-migrate-worktrees` moves existing worktrees from `.worktrees/` to the new sibling layout and updates git references.
+
 ## v0.8.9
 
 ### Features

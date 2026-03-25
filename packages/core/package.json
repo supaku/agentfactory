@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory",
-  "version": "0.8.9",
+  "version": "0.8.10",
   "type": "module",
   "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
   "author": "Rensei AI (https://rensei.ai)",
