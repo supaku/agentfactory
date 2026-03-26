@@ -94,6 +94,10 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
 
 export class ClaudeProvider implements AgentProvider {
   readonly name = 'claude' as const
+  readonly capabilities = {
+    supportsMessageInjection: true,
+    supportsSessionResume: true,
+  } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
     return this.createHandle(config)

@@ -339,6 +339,10 @@ export function mapCodexItemEvent(event: CodexItemEvent): AgentEvent[] {
 
 export class CodexProvider implements AgentProvider {
   readonly name = 'codex' as const
+  readonly capabilities = {
+    supportsMessageInjection: false,
+    supportsSessionResume: true,
+  } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
     return this.createHandle(config)

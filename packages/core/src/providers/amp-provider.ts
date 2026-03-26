@@ -19,6 +19,10 @@ import type {
 
 export class AmpProvider implements AgentProvider {
   readonly name = 'amp' as const
+  readonly capabilities = {
+    supportsMessageInjection: false,
+    supportsSessionResume: false,
+  } as const
 
   spawn(_config: AgentSpawnConfig): AgentHandle {
     throw new Error(

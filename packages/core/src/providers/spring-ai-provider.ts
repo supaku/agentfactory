@@ -204,6 +204,10 @@ export function mapSpringAiEvent(
 
 export class SpringAiProvider implements AgentProvider {
   readonly name = 'spring-ai' as const
+  readonly capabilities = {
+    supportsMessageInjection: false,
+    supportsSessionResume: true,
+  } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
     return this.createHandle(config)

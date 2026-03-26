@@ -40,6 +40,7 @@ import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
 import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-client.js'
 import { parseWorkResult } from './parse-work-result.js'
+import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
@@ -978,6 +979,8 @@ export class AgentOrchestrator {
   // Session loggers per agent for verbose analysis logging
   private readonly sessionLoggers: Map<string, SessionLogger> = new Map()
   private readonly contextManagers: Map<string, ContextManager> = new Map()
+  // Session output flags for completion contract validation (keyed by issueId)
+  private readonly sessionOutputFlags: Map<string, { commentPosted: boolean; issueUpdated: boolean; subIssuesCreated: boolean }> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
@@ -2563,6 +2566,45 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         }
       }
 
+      // --- Session Backstop: Validate completion contract and recover missing outputs ---
+      if (agent.status === 'completed') {
+        const outputFlags = this.sessionOutputFlags.get(issueId)
+        const backstopCtx: SessionContext = {
+          agent,
+          commentPosted: outputFlags?.commentPosted ?? false,
+          issueUpdated: outputFlags?.issueUpdated ?? false,
+          subIssuesCreated: outputFlags?.subIssuesCreated ?? false,
+        }
+        const backstopResult = runBackstop(backstopCtx)
+
+        if (backstopResult.backstop.actions.length > 0) {
+          log?.info('Session backstop ran', {
+            actions: backstopResult.backstop.actions.map(a => `${a.field}:${a.success ? 'ok' : 'fail'}`),
+            fullyRecovered: backstopResult.backstop.fullyRecovered,
+            remainingGaps: backstopResult.backstop.remainingGaps,
+          })
+
+          // Post backstop diagnostic comment if there were actions taken or gaps remaining
+          const backstopComment = formatBackstopComment(backstopResult)
+          if (backstopComment) {
+            try {
+              await this.client.createComment(issueId, backstopComment)
+            } catch {
+              // Best-effort diagnostic comment
+            }
+          }
+        }
+
+        // If backstop recovered the PR URL, update the session
+        if (agent.pullRequestUrl && sessionId) {
+          try {
+            await this.updateSessionPullRequest(sessionId, agent.pullRequestUrl, agent)
+          } catch {
+            // Best-effort session update
+          }
+        }
+      }
+
       // Update Linear status based on work type if auto-transition is enabled
       if (agent.status === 'completed' && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
@@ -3055,6 +3097,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         progressLogger?.logTool(event.toolName, event.input)
         sessionLogger?.logToolUse(event.toolName, event.input)
 
+        // Track session output signals for completion contract validation
+        this.trackSessionOutputSignal(issueId, event.toolName, event.input)
+
         // Intercept TodoWrite tool calls to persist todos
         if (event.toolName === 'TodoWrite') {
           try {
@@ -3234,6 +3279,56 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
   /**
    * Extract GitHub PR URL from text (typically from gh pr create output)
    */
+  /**
+   * Track session output signals from tool calls for completion contract validation.
+   * Detects when agents call Linear CLI or MCP tools that produce required outputs.
+   */
+  private trackSessionOutputSignal(issueId: string, toolName: string, input: Record<string, unknown>): void {
+    let flags = this.sessionOutputFlags.get(issueId)
+    if (!flags) {
+      flags = { commentPosted: false, issueUpdated: false, subIssuesCreated: false }
+      this.sessionOutputFlags.set(issueId, flags)
+    }
+
+    // Detect comment creation (CLI via Bash or MCP tool)
+    if (
+      toolName === 'af_linear_create_comment' ||
+      toolName === 'mcp__af-linear__af_linear_create_comment'
+    ) {
+      flags.commentPosted = true
+    }
+
+    // Detect issue update (CLI via Bash or MCP tool)
+    if (
+      toolName === 'af_linear_update_issue' ||
+      toolName === 'mcp__af-linear__af_linear_update_issue'
+    ) {
+      flags.issueUpdated = true
+    }
+
+    // Detect issue creation (CLI via Bash or MCP tool)
+    if (
+      toolName === 'af_linear_create_issue' ||
+      toolName === 'mcp__af-linear__af_linear_create_issue'
+    ) {
+      flags.subIssuesCreated = true
+    }
+
+    // Detect Bash tool calls that invoke the Linear CLI
+    if (toolName === 'Bash') {
+      const command = typeof input?.command === 'string' ? input.command : ''
+      if (command.includes('af-linear create-comment') || command.includes('af-linear create_comment')) {
+        flags.commentPosted = true
+      }
+      if (command.includes('af-linear update-issue') || command.includes('af-linear update_issue')) {
+        flags.issueUpdated = true
+      }
+      if (command.includes('af-linear create-issue') || command.includes('af-linear create_issue')) {
+        flags.subIssuesCreated = true
+      }
+    }
+  }
+
   private extractPullRequestUrl(text: string): string | null {
     // GitHub PR URL pattern: https://github.com/owner/repo/pull/123
     const prUrlPattern = /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/g
@@ -3383,6 +3478,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       progressLogger.stop()
       this.progressLoggers.delete(issueId)
     }
+
+    // Cleanup session output flags
+    this.sessionOutputFlags.delete(issueId)
 
     // Persist and cleanup context manager
     const contextManager = this.contextManagers.get(issueId)

@@ -20,9 +20,28 @@ export type AgentProviderName = 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a'
  * Each provider implements spawn/resume to create an AgentHandle
  * that streams normalized AgentEvents.
  */
+/**
+ * Provider capability flags.
+ *
+ * The orchestrator uses these to choose the right exit-gate strategy
+ * without try-catching on unsupported operations:
+ * - Providers with `supportsMessageInjection` get mid-session stop hooks
+ * - All providers get the post-session backstop (provider-agnostic)
+ * - Providers with `supportsSessionResume` get stop → resume as fallback
+ */
+export interface AgentProviderCapabilities {
+  /** Whether injectMessage() works (stateful providers: Claude, A2A) */
+  supportsMessageInjection: boolean
+  /** Whether resume() can continue a prior session */
+  supportsSessionResume: boolean
+}
+
 export interface AgentProvider {
   /** Provider identifier */
   readonly name: AgentProviderName
+
+  /** Provider capability flags for orchestrator routing */
+  readonly capabilities: AgentProviderCapabilities
 
   /** Spawn a new agent session */
   spawn(config: AgentSpawnConfig): AgentHandle

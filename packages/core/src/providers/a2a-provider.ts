@@ -500,6 +500,10 @@ export function mapA2aTaskEvent(
 
 export class A2aProvider implements AgentProvider {
   readonly name = 'a2a' as const
+  readonly capabilities = {
+    supportsMessageInjection: true,
+    supportsSessionResume: true,
+  } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
     return this.createHandle(config)

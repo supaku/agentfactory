@@ -23,6 +23,10 @@ export function createMockProvider(name: AgentProviderName = 'claude'): AgentPro
   const handle = createMockAgentHandle()
   return {
     name,
+    capabilities: {
+      supportsMessageInjection: name === 'claude' || name === 'a2a',
+      supportsSessionResume: true,
+    },
     spawn: vi.fn().mockReturnValue(handle),
     resume: vi.fn().mockReturnValue(handle),
   }

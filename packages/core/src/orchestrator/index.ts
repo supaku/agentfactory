@@ -162,6 +162,32 @@ export {
 // Work Result Parser (for QA/acceptance pass/fail detection)
 export { parseWorkResult } from './parse-work-result.js'
 
+// Completion Contracts & Session Backstop
+export {
+  getCompletionContract,
+  validateCompletion,
+  formatMissingFields,
+} from './completion-contracts.js'
+export type {
+  CompletionContract,
+  CompletionField,
+  CompletionFieldType,
+  CompletionValidationResult,
+  SessionOutputs,
+  BackstopAction,
+  BackstopResult,
+} from './completion-contracts.js'
+export {
+  runBackstop,
+  collectSessionOutputs,
+  formatBackstopComment,
+} from './session-backstop.js'
+export type {
+  SessionContext,
+  BackstopOptions,
+  BackstopRunResult,
+} from './session-backstop.js'
+
 // Log Analyzer
 export { LogAnalyzer, createLogAnalyzer } from './log-analyzer.js'
 
