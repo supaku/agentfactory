@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.14
+
+### Features
+
+- **Session exit gate** — Deterministic post-session validation with typed completion contracts per work type, post-session backstop that auto-pushes branches and auto-creates PRs when agents forget, and provider capability flags (`supportsMessageInjection`, `supportsSessionResume`) for future mid-session steering.
+- **Agent bug backlog** — Refinement agents can now create improvement issues against the agent system itself when failures are caused by missing prompt instructions, tool gaps, or template deficiencies.
+
+### Fixes
+
+- **Auto-trigger env vars** — `ENABLE_AUTO_QA` and `ENABLE_AUTO_ACCEPTANCE` env vars now correctly wire up to governor auto-trigger configuration.
+- **Worktree preservation** — Prevent worktree cleanup from destroying preserved work when `.agent/preserved.json` marker exists; fix `checkForIncompleteWork()` to check `git ls-remote` output length instead of relying on exception handling.
+- **In-process MCP tool permissions** — Auto-allow in-process MCP tools (e.g., `af_linear_*`, `af_code_*`) for autonomous agents so they don't require interactive permission approval.
+
 ## v0.8.13
 
 ### Features
