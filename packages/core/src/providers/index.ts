@@ -41,6 +41,24 @@ export type {
   AgentCostData,
 } from './types.js'
 
+// Provider plugin type exports
+export type {
+  ActionDefinition,
+  ActionResult,
+  AuthResult,
+  ConditionContext,
+  ConditionDefinition,
+  CredentialDefinition,
+  CredentialField,
+  DynamicOptionField,
+  NormalizedEvent,
+  ProviderExecutionContext,
+  ProviderPlugin,
+  TriggerDefinition,
+  WebhookConfig,
+  WebhookRegistration,
+} from './plugin-types.js'
+
 export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'
 export { CodexProvider, createCodexProvider } from './codex-provider.js'
 export { AmpProvider, createAmpProvider } from './amp-provider.js'

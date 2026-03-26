@@ -456,6 +456,76 @@ describe('decideAction — Finished (QA)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Finished (merge queue)
+// ---------------------------------------------------------------------------
+
+describe('decideAction — Finished (merge queue)', () => {
+  it('triggers trigger-merge when mergeQueueEnabled is true', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+      mergeQueueEnabled: true,
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('trigger-merge')
+    expect(result.reason).toContain('merge queue')
+  })
+
+  it('triggers QA when mergeQueueEnabled is false', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+      mergeQueueEnabled: false,
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('trigger-qa')
+    expect(result.reason).toContain('triggering QA')
+  })
+
+  it('triggers QA when mergeQueueEnabled is not configured (undefined)', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('trigger-qa')
+    expect(result.reason).toContain('triggering QA')
+  })
+
+  it('escalation strategy takes precedence over merge queue', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+      mergeQueueEnabled: true,
+      workflowStrategy: 'escalate-human',
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('escalate-human')
+  })
+
+  it('decompose strategy takes precedence over merge queue', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+      mergeQueueEnabled: true,
+      workflowStrategy: 'decompose',
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('decompose')
+  })
+
+  it('auto-QA disabled takes precedence over merge queue', () => {
+    const ctx = makeContext({
+      issue: makeIssue({ status: 'Finished' }),
+      mergeQueueEnabled: true,
+      config: {
+        ...DEFAULT_GOVERNOR_CONFIG,
+        projects: ['TestProject'],
+        enableAutoQA: false,
+      },
+    })
+    const result = decideAction(ctx)
+    expect(result.action).toBe('none')
+    expect(result.reason).toContain('disabled')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Delivered (acceptance)
 // ---------------------------------------------------------------------------
 

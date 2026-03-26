@@ -21,6 +21,7 @@ import type { TopOfFunnelConfig } from './top-of-funnel.js'
  * - trigger-development: Dispatch a development agent (Backlog)
  * - trigger-qa: Dispatch a QA agent (Finished)
  * - trigger-acceptance: Dispatch an acceptance agent (Delivered)
+ * - trigger-merge: Dispatch a merge queue agent (Finished, merge queue enabled)
  * - trigger-refinement: Dispatch a refinement agent (Rejected)
  * - decompose: Trigger task decomposition (escalation strategy)
  * - escalate-human: Create a human escalation touchpoint
@@ -32,6 +33,7 @@ export type GovernorAction =
   | 'trigger-development'
   | 'trigger-qa'
   | 'trigger-acceptance'
+  | 'trigger-merge'
   | 'trigger-refinement'
   | 'trigger-parallel-group'
   | 'decompose'

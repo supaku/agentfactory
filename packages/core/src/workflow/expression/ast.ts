@@ -51,6 +51,7 @@ export type BinaryOperator =
   | 'lt'
   | 'gte'
   | 'lte'
+  | 'in'
 
 /** A unary operation, e.g. `not <expr>` */
 export interface UnaryOp {

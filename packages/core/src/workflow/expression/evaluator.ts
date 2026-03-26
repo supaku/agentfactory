@@ -67,7 +67,19 @@ export function evaluate(ast: ASTNode, context: EvaluationContext): unknown {
     // Variable reference — look up in context, default to false
     // -------------------------------------------------------------------
     case 'VariableRef': {
-      const value = context.variables[ast.name]
+      const name = ast.name
+      if (name.includes('.')) {
+        const parts = name.split('.')
+        let current: unknown = context.variables
+        for (const part of parts) {
+          if (current === null || current === undefined || typeof current !== 'object') {
+            return false
+          }
+          current = (current as Record<string, unknown>)[part]
+        }
+        return current === undefined ? false : current
+      }
+      const value = context.variables[name]
       // Undefined variables resolve to `false` (no crash)
       if (value === undefined) {
         return false
@@ -157,6 +169,20 @@ function evaluateBinaryOp(
       const leftVal = evaluate(left, context)
       const rightVal = evaluate(right, context)
       return evaluateOrdering(operator, leftVal, rightVal)
+    }
+
+    case 'in': {
+      const leftVal = evaluate(left, context)
+      const rightVal = evaluate(right, context)
+      if (Array.isArray(rightVal)) {
+        return rightVal.includes(leftVal)
+      }
+      if (typeof rightVal === 'string' && typeof leftVal === 'string') {
+        return rightVal.includes(leftVal)
+      }
+      throw new EvaluationError(
+        `'in' operator requires right operand to be an array or string, got ${typeLabel(rightVal)}.`,
+      )
     }
 
     default:

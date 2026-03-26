@@ -60,6 +60,7 @@ export class ParseError extends Error {
 const OPERATORS = new Set([
   'and', 'or', 'not',
   'eq', 'neq', 'gt', 'lt', 'gte', 'lte',
+  'in',
 ])
 
 const BOOLEAN_LITERALS = new Set(['true', 'false'])
@@ -177,6 +178,18 @@ export function tokenize(input: string): Token[] {
     if (isIdentStart(ch)) {
       const start = i
       while (i < inner.length && isIdentChar(inner[i])) i++
+
+      // Dotted variable paths: consume `.` followed by another identifier segment
+      while (
+        i < inner.length &&
+        inner[i] === '.' &&
+        i + 1 < inner.length &&
+        isIdentStart(inner[i + 1])
+      ) {
+        i++ // skip the dot
+        while (i < inner.length && isIdentChar(inner[i])) i++
+      }
+
       const word = inner.slice(start, i)
 
       if (BOOLEAN_LITERALS.has(word)) {
@@ -205,6 +218,38 @@ export function tokenize(input: string): Token[] {
     if (ch === ',') {
       tokens.push({ type: 'Comma', value: ',', position: pos(i) })
       i++
+      continue
+    }
+
+    // Symbolic comparison operators
+    if (ch === '=' && i + 1 < inner.length && inner[i + 1] === '=') {
+      tokens.push({ type: 'Operator', value: 'eq', position: pos(i) })
+      i += 2
+      continue
+    }
+    if (ch === '!' && i + 1 < inner.length && inner[i + 1] === '=') {
+      tokens.push({ type: 'Operator', value: 'neq', position: pos(i) })
+      i += 2
+      continue
+    }
+    if (ch === '>') {
+      if (i + 1 < inner.length && inner[i + 1] === '=') {
+        tokens.push({ type: 'Operator', value: 'gte', position: pos(i) })
+        i += 2
+      } else {
+        tokens.push({ type: 'Operator', value: 'gt', position: pos(i) })
+        i += 1
+      }
+      continue
+    }
+    if (ch === '<') {
+      if (i + 1 < inner.length && inner[i + 1] === '=') {
+        tokens.push({ type: 'Operator', value: 'lte', position: pos(i) })
+        i += 2
+      } else {
+        tokens.push({ type: 'Operator', value: 'lt', position: pos(i) })
+        i += 1
+      }
       continue
     }
 
