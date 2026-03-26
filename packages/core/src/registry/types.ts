@@ -3,14 +3,12 @@
  *
  * Interfaces for the node type metadata store that serves
  * canvas UI and execution engine with provider plugin information.
+ *
+ * Provider plugin types (ProviderPlugin, ActionDefinition) are imported
+ * from providers/plugin-types.ts (defined by SUP-1511).
  */
 
-/**
- * JSON Schema 7 type — a simplified representation for input/output schemas.
- * Uses Record<string, unknown> to avoid adding @types/json-schema dependency,
- * consistent with how the codebase handles schema objects elsewhere.
- */
-export type JSONSchema7 = Record<string, unknown>
+import type { JSONSchema7 } from 'json-schema'
 
 /** Provider category grouping (e.g., "Communication", "Project Management") */
 export interface ProviderCategory {
@@ -54,16 +52,6 @@ export interface NodeTypeQuery {
   providerId?: string
 }
 
-/** Definition of a field that supports dynamic options (e.g., dropdown population) */
-export interface DynamicOptionDefinition {
-  /** Path to the field in the input schema */
-  fieldPath: string
-  /** Provider method to call for fetching options */
-  providerMethod: string
-  /** Other field paths whose values are needed as dependencies */
-  dependencies?: string[]
-}
-
 /** A single option returned from dynamic option loading */
 export interface DynamicOption {
   /** Value to store when selected */
@@ -76,44 +64,12 @@ export interface DynamicOption {
 export type DynamicOptionResult = DynamicOption[]
 
 /**
- * Provider plugin interface — defines the shape of a provider plugin
- * that can be loaded into the registry.
- *
- * This is the minimal interface needed by the registry. The full
- * ProviderPlugin interface is defined in SUP-1511.
+ * Callback for fetching dynamic options at runtime.
+ * Registered per-provider to allow the registry to delegate dynamic option
+ * loading without coupling to a specific method on ActionDefinition.
  */
-export interface ProviderPlugin {
-  /** Unique provider identifier (e.g., "linear", "slack") */
-  id: string
-  /** Human-readable name */
-  displayName: string
-  /** Provider description */
-  description: string
-  /** Category metadata for this provider */
-  category: ProviderCategory
-  /** Action definitions provided by this plugin */
-  actions: ActionDefinition[]
-}
-
-/** Action definition within a provider plugin */
-export interface ActionDefinition {
-  /** Unique action identifier within the provider */
-  id: string
-  /** Human-readable name */
-  displayName: string
-  /** Description of what this action does */
-  description: string
-  /** JSON Schema for the action's input fields */
-  inputSchema: JSONSchema7
-  /** JSON Schema for the action's output */
-  outputSchema?: JSONSchema7
-  /** Fields that support dynamic option loading */
-  dynamicOptions?: DynamicOptionDefinition[]
-  /** Execute the action (optional — not needed for registry metadata) */
-  execute?: (input: Record<string, unknown>, context?: Record<string, unknown>) => Promise<unknown>
-  /** Fetch dynamic options for a field */
-  fetchDynamicOptions?: (
-    fieldPath: string,
-    context?: Record<string, unknown>,
-  ) => Promise<DynamicOptionResult>
-}
+export type DynamicOptionLoader = (
+  actionId: string,
+  fieldPath: string,
+  context?: Record<string, unknown>,
+) => Promise<DynamicOptionResult>

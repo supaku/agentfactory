@@ -4,10 +4,7 @@ export type {
   NodeTypeMetadata,
   ProviderCategory,
   NodeTypeQuery,
-  JSONSchema7,
-  DynamicOptionDefinition,
   DynamicOption,
   DynamicOptionResult,
-  ProviderPlugin,
-  ActionDefinition,
+  DynamicOptionLoader,
 } from './types.js'

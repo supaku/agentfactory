@@ -6,18 +6,19 @@
  * with a single async method for dynamic option loading.
  */
 
+import type { JSONSchema7 } from 'json-schema'
 import type {
   NodeTypeMetadata,
   ProviderCategory,
   DynamicOptionResult,
-  ProviderPlugin,
+  DynamicOptionLoader,
 } from './types.js'
 import { logger } from '../logger.js'
 
 export class NodeTypeRegistry {
   private nodeTypes = new Map<string, NodeTypeMetadata>()
   private categories = new Map<string, ProviderCategory>()
-  private plugins = new Map<string, ProviderPlugin>()
+  private dynamicOptionLoaders = new Map<string, DynamicOptionLoader>()
   private dynamicOptionsCache = new Map<string, { result: DynamicOptionResult; expiresAt: number }>()
   private cacheTtlMs: number
 
@@ -44,9 +45,9 @@ export class NodeTypeRegistry {
     this.categories.set(category.id, category)
   }
 
-  /** Store a provider plugin reference (used for dynamic option delegation) */
-  registerPlugin(plugin: ProviderPlugin): void {
-    this.plugins.set(plugin.id, plugin)
+  /** Register a dynamic option loader for a provider */
+  registerDynamicOptionLoader(providerId: string, loader: DynamicOptionLoader): void {
+    this.dynamicOptionLoaders.set(providerId, loader)
   }
 
   // ---------------------------------------------------------------------------
@@ -72,7 +73,7 @@ export class NodeTypeRegistry {
   }
 
   /** Get the input schema for a specific node type */
-  getInputSchema(providerId: string, actionId: string): Record<string, unknown> | undefined {
+  getInputSchema(providerId: string, actionId: string): JSONSchema7 | undefined {
     const nodeType = this.getNodeType(providerId, actionId)
     return nodeType?.inputSchema
   }
@@ -82,8 +83,8 @@ export class NodeTypeRegistry {
   // ---------------------------------------------------------------------------
 
   /**
-   * Load dynamic options for a dropdown field by delegating to the provider plugin.
-   * This is the only async method on the registry.
+   * Load dynamic options for a dropdown field by delegating to the provider's
+   * registered dynamic option loader. This is the only async method on the registry.
    *
    * @param providerId - The provider plugin ID
    * @param actionId - The action ID within the provider
@@ -103,15 +104,9 @@ export class NodeTypeRegistry {
       return cached.result
     }
 
-    const plugin = this.plugins.get(providerId)
-    if (!plugin) {
-      logger.warn('No plugin registered for dynamic options', { providerId, actionId, fieldPath })
-      return []
-    }
-
-    const action = plugin.actions.find((a) => a.id === actionId)
-    if (!action?.fetchDynamicOptions) {
-      logger.warn('Action does not support dynamic options', { providerId, actionId, fieldPath })
+    const loader = this.dynamicOptionLoaders.get(providerId)
+    if (!loader) {
+      logger.warn('No dynamic option loader registered', { providerId, actionId, fieldPath })
       return []
     }
 
@@ -120,7 +115,7 @@ export class NodeTypeRegistry {
       const timeout = setTimeout(() => controller.abort(), 10_000)
 
       const result = await Promise.race([
-        action.fetchDynamicOptions(fieldPath, context),
+        loader(actionId, fieldPath, context),
         new Promise<never>((_, reject) => {
           controller.signal.addEventListener('abort', () =>
             reject(new Error('Dynamic options request timed out')),
@@ -155,7 +150,7 @@ export class NodeTypeRegistry {
   clear(): void {
     this.nodeTypes.clear()
     this.categories.clear()
-    this.plugins.clear()
+    this.dynamicOptionLoaders.clear()
     this.dynamicOptionsCache.clear()
   }
 
