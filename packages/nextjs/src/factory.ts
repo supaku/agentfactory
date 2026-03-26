@@ -16,6 +16,7 @@ import {
   defaultGetPriority,
   defaultBuildParentQAContext,
   defaultBuildParentAcceptanceContext,
+  defaultParseAutoTriggerConfig,
 } from '@renseiai/plugin-linear'
 
 // Worker handlers
@@ -154,6 +155,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
     getPriority: config.getPriority ?? defaultGetPriority,
     buildParentQAContext: config.buildParentQAContext ?? defaultBuildParentQAContext,
     buildParentAcceptanceContext: config.buildParentAcceptanceContext ?? defaultBuildParentAcceptanceContext,
+    autoTrigger: config.autoTrigger ?? defaultParseAutoTriggerConfig(),
   }
 
   const routeConfig: RouteConfig = {
