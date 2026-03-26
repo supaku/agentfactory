@@ -8,6 +8,9 @@ tools:
   allow:
     - shell: "pnpm *"
     - shell: "git commit *"
+    - shell: "git push *"
+    - shell: "gh pr *"
+    - shell: "pnpm af-linear *"
     - shell: "git diff *"
     - shell: "git log *"
   disallow:

@@ -379,7 +379,7 @@ function extractToolNameFromError(error: string): string {
 /**
  * Result of checking for incomplete work in a worktree
  */
-interface IncompleteWorkCheck {
+export interface IncompleteWorkCheck {
   hasIncompleteWork: boolean
   reason?: 'uncommitted_changes' | 'unpushed_commits'
   details?: string
@@ -391,7 +391,7 @@ interface IncompleteWorkCheck {
  * @param worktreePath - Path to the git worktree
  * @returns Check result with reason if incomplete work is found
  */
-function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
+export function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
   try {
     // Check for uncommitted changes (staged or unstaged)
     const statusOutput = execSync('git status --porcelain', {
@@ -451,14 +451,13 @@ function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
             timeout: 10000,
           }).trim()
 
-          try {
-            execSync(`git ls-remote --heads origin ${currentBranch}`, {
-              cwd: worktreePath,
-              encoding: 'utf-8',
-              timeout: 10000,
-            })
-            // Remote branch exists, no issue
-          } catch {
+          const remoteRef = execSync(`git ls-remote --heads origin ${currentBranch}`, {
+            cwd: worktreePath,
+            encoding: 'utf-8',
+            timeout: 10000,
+          }).trim()
+
+          if (remoteRef.length === 0) {
             // Remote branch doesn't exist - branch never pushed
             return {
               hasIncompleteWork: true,
@@ -488,13 +487,13 @@ function checkForIncompleteWork(worktreePath: string): IncompleteWorkCheck {
  * but no PR was created. This catches the case where an agent pushes code and exits
  * before running `gh pr create`.
  */
-interface PushedWorkCheck {
+export interface PushedWorkCheck {
   hasPushedWork: boolean
   branch?: string
   details?: string
 }
 
-function checkForPushedWorkWithoutPR(worktreePath: string): PushedWorkCheck {
+export function checkForPushedWorkWithoutPR(worktreePath: string): PushedWorkCheck {
   try {
     const currentBranch = execSync('git branch --show-current', {
       cwd: worktreePath,
@@ -1468,6 +1467,20 @@ export class AgentOrchestrator {
       } catch {
         return false
       }
+    }
+
+    // SAFETY GUARD 4: Never destroy an explicitly preserved worktree
+    // Preserved worktrees contain work that the orchestrator decided to keep
+    // for manual recovery. The next agent should reuse the branch (which still
+    // exists after worktree removal) but NOT destroy the preserved directory.
+    const preservedMarker = resolve(conflictPath, '.agent', 'preserved.json')
+    if (existsSync(preservedMarker)) {
+      console.warn(
+        `SAFETY: Refusing to clean up ${conflictPath} — it is a preserved worktree ` +
+        `with incomplete work. The agent that ran here exited without creating a PR. ` +
+        `Recover manually: cd into the worktree, commit, push, and create a PR.`
+      )
+      return false
     }
 
     // Check if the agent in the conflicting worktree is still alive
@@ -2613,25 +2626,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
             if (incompleteCheck.hasIncompleteWork) {
               // Agent has uncommitted/unpushed changes — block promotion
+              // The diagnostic comment is posted in the cleanup section AFTER the
+              // worktree preservation is confirmed — not here, to avoid promising
+              // preservation before it actually happens.
               log?.error('Code-producing agent completed without PR and has incomplete work — blocking promotion', {
                 workType,
                 reason: incompleteCheck.reason,
                 details: incompleteCheck.details,
               })
-
-              // Post a diagnostic comment
-              try {
-                await this.client.createComment(
-                  issueId,
-                  `⚠️ **Agent completed but work was not persisted.**\n\n` +
-                  `The agent reported success but no PR was detected, and the worktree has ${incompleteCheck.details}.\n\n` +
-                  `**Issue status was NOT promoted** to prevent lost work from advancing through the pipeline.\n\n` +
-                  `The worktree has been preserved at \`${agent.worktreePath}\`. ` +
-                  `To recover: cd into the worktree, commit, push, and create a PR manually.`
-                )
-              } catch {
-                // Best-effort comment
-              }
 
               // Do NOT set targetStatus — leave issue in current state
             } else {
@@ -2761,6 +2763,40 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
               } catch {
                 // Best-effort - heartbeat will go stale naturally after timeout
               }
+
+              // Write a .preserved marker so branch conflict resolution knows not to
+              // destroy this worktree. The marker includes context for diagnostics.
+              try {
+                const agentDir = resolve(agent.worktreePath, '.agent')
+                if (!existsSync(agentDir)) {
+                  mkdirSync(agentDir, { recursive: true })
+                }
+                writeFileSync(
+                  resolve(agentDir, 'preserved.json'),
+                  JSON.stringify({
+                    preservedAt: new Date().toISOString(),
+                    issueId,
+                    reason: incompleteCheck.reason,
+                    details: incompleteCheck.details,
+                  }, null, 2)
+                )
+              } catch {
+                // Best-effort - the shouldCleanup=false flag is the primary guard
+              }
+
+              // Post diagnostic comment NOW that preservation is confirmed
+              try {
+                await this.client.createComment(
+                  issueId,
+                  `⚠️ **Agent completed but work was not persisted.**\n\n` +
+                  `The agent reported success but no PR was detected, and the worktree has ${incompleteCheck.details}.\n\n` +
+                  `**Issue status was NOT promoted** to prevent lost work from advancing through the pipeline.\n\n` +
+                  `The worktree has been preserved at \`${agent.worktreePath}\`. ` +
+                  `To recover: cd into the worktree, commit, push, and create a PR manually.`
+                )
+              } catch {
+                // Best-effort comment
+              }
             } else {
               // No PR but also no local changes - agent may not have made any changes
               log?.warn('No PR created but worktree is clean - proceeding with cleanup', {
@@ -2849,6 +2885,26 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
               }
             } catch {
               // Best-effort - heartbeat will go stale naturally after timeout
+            }
+
+            // Write a .preserved marker so branch conflict resolution knows not to
+            // destroy this worktree
+            try {
+              const agentDir = resolve(agent.worktreePath, '.agent')
+              if (!existsSync(agentDir)) {
+                mkdirSync(agentDir, { recursive: true })
+              }
+              writeFileSync(
+                resolve(agentDir, 'preserved.json'),
+                JSON.stringify({
+                  preservedAt: new Date().toISOString(),
+                  issueId,
+                  reason: incompleteCheck.reason,
+                  details: incompleteCheck.details,
+                }, null, 2)
+              )
+            } catch {
+              // Best-effort - the shouldCleanup=false flag is the primary guard
             }
           }
         }
