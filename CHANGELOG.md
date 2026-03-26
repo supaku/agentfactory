@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.15
+
+### Fixes
+
+- **Preserved worktree deadlock** — Preserved QA worktrees no longer permanently block branch reuse. Incomplete work is saved as a patch file before cleanup, preventing full work stoppages when development agents need the same branch.
+
 ## v0.8.14
 
 ### Features
