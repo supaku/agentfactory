@@ -6,8 +6,11 @@
  * escalation ladder, gates, and parallelism — in YAML rather than hard-coded
  * TypeScript.
  *
- * This is an additive v1.1 schema extension. Existing v1 WorkflowTemplate
- * and PartialTemplate documents remain valid and unchanged.
+ * Supports two schema versions:
+ * - **v1.1**: Phase-based workflow with template bindings, transitions, escalation
+ * - **v2**: Event-driven workflow with triggers, providers, config, and multi-step nodes
+ *
+ * Use {@link AnyWorkflowDefinition} for consumers that handle both versions.
  */
 
 import { z } from 'zod'
@@ -307,7 +310,159 @@ export interface BranchingDefinition {
 }
 
 // ---------------------------------------------------------------------------
-// Workflow Definition
+// v2 Trigger Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * Declares an event that can initiate workflow execution.
+ * Triggers define the source, event type, and optional payload filter.
+ */
+export interface TriggerDefinition {
+  /** Unique trigger name */
+  name: string
+  /** Trigger type: webhook (external event), schedule (cron), manual (user-initiated) */
+  type: 'webhook' | 'schedule' | 'manual'
+  /** Provider name (e.g., 'linear') — identifies the event source */
+  source?: string
+  /** Event type (e.g., 'issue.status_changed') */
+  event?: string
+  /** Event payload filter — only fire when payload matches */
+  filter?: Record<string, unknown>
+  /** Cron expression (for type: schedule) */
+  schedule?: string
+}
+
+// ---------------------------------------------------------------------------
+// v2 Provider Requirement
+// ---------------------------------------------------------------------------
+
+/**
+ * Declares an external service provider that nodes can reference.
+ * The name is used as a local reference in node.provider fields.
+ */
+export interface ProviderRequirement {
+  /** Local reference name (used in node.provider) */
+  name: string
+  /** Provider type (e.g., 'claude', 'linear', 'github') */
+  type: string
+  /** Provider-specific configuration */
+  config?: Record<string, unknown>
+}
+
+// ---------------------------------------------------------------------------
+// v2 Workflow Config
+// ---------------------------------------------------------------------------
+
+/**
+ * Workspace-level configuration for v2 workflows.
+ * Extensible with arbitrary keys beyond the known fields.
+ */
+export interface WorkflowConfig {
+  /** Maps project names to repository paths */
+  projectMapping?: Record<string, string>
+  /** Extensible configuration */
+  [key: string]: unknown
+}
+
+// ---------------------------------------------------------------------------
+// v2 Step Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * A single step within a v2 node's execution sequence.
+ * Steps execute in order and can reference outputs from earlier steps
+ * via {{ steps.<id>.output.<key> }} interpolation.
+ */
+export interface StepDefinition {
+  /** Unique step ID within the node */
+  id: string
+  /** Provider action (e.g., 'spawn-session', 'tracker.create-comment') */
+  action: string
+  /** Action parameters — supports {{ }} interpolation markers */
+  with?: Record<string, unknown>
+  /** Optional condition for this step */
+  when?: string
+  /** Declared outputs from this step */
+  output?: Record<string, PhaseOutputDeclaration>
+}
+
+// ---------------------------------------------------------------------------
+// v2 Node Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * An action-based node in a v2 workflow. Nodes reference a provider and
+ * contain ordered multi-step sequences with template expression interpolation.
+ */
+export interface NodeDefinition {
+  /** Unique node name */
+  name: string
+  /** Human-readable description */
+  description?: string
+  /** Provider reference (must match a name in the providers section) */
+  provider?: string
+  /** v1-style template reference (backwards compat) */
+  template?: string
+  /** Multi-step execution sequence */
+  steps?: StepDefinition[]
+  /** Condition expression — node only executes when this evaluates to true */
+  when?: string
+  /** Retry configuration */
+  retry?: TemplateRetryConfig
+  /** Timeout configuration */
+  timeout?: TemplateTimeoutConfig
+  /** Input dependencies on upstream outputs */
+  inputs?: Record<string, PhaseInputDeclaration>
+  /** Structured outputs this node produces */
+  outputs?: Record<string, PhaseOutputDeclaration>
+}
+
+// ---------------------------------------------------------------------------
+// v2 Workflow Definition
+// ---------------------------------------------------------------------------
+
+/**
+ * v2 workflow definition with event-driven triggers, provider declarations,
+ * workspace config, and multi-step action nodes. Supports v1.1 phases and
+ * transitions alongside v2 nodes for backwards compatibility.
+ */
+export interface WorkflowDefinitionV2 {
+  apiVersion: 'v2'
+  kind: 'WorkflowDefinition'
+  metadata: {
+    name: string
+    description?: string
+  }
+  /** Event triggers that initiate workflow execution */
+  triggers?: TriggerDefinition[]
+  /** External service providers that nodes can reference */
+  providers?: ProviderRequirement[]
+  /** Workspace-level configuration */
+  config?: WorkflowConfig
+  /** v2 action-based nodes with multi-step sequences */
+  nodes?: NodeDefinition[]
+  /** v1.1 phase definitions (backwards compat) */
+  phases?: PhaseDefinition[]
+  /** Workflow graph edges: status-to-phase transitions */
+  transitions?: TransitionDefinition[]
+  /** Escalation ladder and circuit breaker configuration */
+  escalation?: EscalationConfig
+  /** External gates that can pause workflow execution */
+  gates?: GateDefinition[]
+  /** Parallelism groups for concurrent phase execution */
+  parallelism?: ParallelismGroupDefinition[]
+  /** Branching blocks for conditional template selection */
+  branching?: BranchingDefinition[]
+}
+
+/**
+ * Union type for consumers that handle both v1.1 and v2 workflow definitions.
+ * Discriminated on the `apiVersion` field.
+ */
+export type AnyWorkflowDefinition = WorkflowDefinition | WorkflowDefinitionV2
+
+// ---------------------------------------------------------------------------
+// Workflow Definition (v1.1)
 // ---------------------------------------------------------------------------
 
 /**
@@ -444,11 +599,83 @@ export const WorkflowDefinitionSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// v2 Zod Schemas
+// ---------------------------------------------------------------------------
+
+export const TriggerDefinitionSchema = z.object({
+  name: z.string().min(1),
+  type: z.enum(['webhook', 'schedule', 'manual']),
+  source: z.string().optional(),
+  event: z.string().optional(),
+  filter: z.record(z.string(), z.unknown()).optional(),
+  schedule: z.string().optional(),
+})
+
+export const ProviderRequirementSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+  config: z.record(z.string(), z.unknown()).optional(),
+})
+
+export const WorkflowConfigSchema = z.object({
+  projectMapping: z.record(z.string(), z.string()).optional(),
+}).passthrough()
+
+export const StepDefinitionSchema = z.object({
+  id: z.string().min(1),
+  action: z.string().min(1),
+  with: z.record(z.string(), z.unknown()).optional(),
+  when: z.string().optional(),
+  output: z.record(z.string(), PhaseOutputDeclarationSchema).optional(),
+})
+
+export const NodeDefinitionSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  provider: z.string().optional(),
+  template: z.string().optional(),
+  steps: z.array(StepDefinitionSchema).optional(),
+  when: z.string().optional(),
+  retry: TemplateRetryConfigSchema.optional(),
+  timeout: TemplateTimeoutConfigSchema.optional(),
+  inputs: z.record(z.string(), PhaseInputDeclarationSchema).optional(),
+  outputs: z.record(z.string(), PhaseOutputDeclarationSchema).optional(),
+})
+
+export const WorkflowDefinitionV2Schema = z.object({
+  apiVersion: z.literal('v2'),
+  kind: z.literal('WorkflowDefinition'),
+  metadata: z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+  }),
+  triggers: z.array(TriggerDefinitionSchema).optional(),
+  providers: z.array(ProviderRequirementSchema).optional(),
+  config: WorkflowConfigSchema.optional(),
+  nodes: z.array(NodeDefinitionSchema).optional(),
+  phases: z.array(PhaseDefinitionSchema).optional(),
+  transitions: z.array(TransitionDefinitionSchema).optional(),
+  escalation: EscalationConfigSchema.optional(),
+  gates: z.array(GateDefinitionSchema).optional(),
+  parallelism: z.array(ParallelismGroupDefinitionSchema).optional(),
+  branching: z.array(BranchingDefinitionSchema).optional(),
+})
+
+/**
+ * Discriminated union schema that accepts both v1.1 and v2 workflow definitions.
+ * Dispatches to the correct schema based on the `apiVersion` field.
+ */
+export const AnyWorkflowDefinitionSchema = z.discriminatedUnion('apiVersion', [
+  WorkflowDefinitionSchema,
+  WorkflowDefinitionV2Schema,
+])
+
+// ---------------------------------------------------------------------------
 // Validation Helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Validate a parsed YAML object as a WorkflowDefinition.
+ * Validate a parsed YAML object as a WorkflowDefinition (v1.1).
  * Throws ZodError with detailed messages on failure.
  *
  * After Zod schema validation succeeds, performs cross-validation to ensure:
@@ -469,6 +696,212 @@ export function validateWorkflowDefinition(data: unknown, filePath?: string): Wo
       throw new Error(`Invalid workflow definition at ${filePath}: ${error.message}`, { cause: error })
     }
     throw error
+  }
+}
+
+/**
+ * Validate a parsed YAML object as either a v1.1 or v2 WorkflowDefinition.
+ * Uses the `apiVersion` field to dispatch to the correct schema.
+ * Throws on invalid schema or cross-validation failure.
+ */
+export function validateAnyWorkflowDefinition(data: unknown, filePath?: string): AnyWorkflowDefinition {
+  try {
+    const workflow = AnyWorkflowDefinitionSchema.parse(data)
+
+    if (workflow.apiVersion === 'v1.1') {
+      crossValidateWorkflow(workflow, filePath)
+    } else {
+      crossValidateWorkflowV2(workflow, filePath)
+    }
+
+    return workflow
+  } catch (error) {
+    if (filePath && error instanceof z.ZodError) {
+      throw new Error(`Invalid workflow definition at ${filePath}: ${error.message}`, { cause: error })
+    }
+    throw error
+  }
+}
+
+/**
+ * Perform cross-validation for v2 workflow definitions.
+ * Validates referential integrity for triggers, providers, nodes, and steps.
+ *
+ * Checks:
+ * - Node names must be unique
+ * - node.provider must reference a declared provider name
+ * - Step IDs must be unique within a node
+ * - {{ steps.<id>.output.<key> }} references must point to valid step IDs within the same node
+ * - {{ trigger.* }} references require at least one trigger to be declared
+ * - config.projectMapping values must be non-empty strings
+ * - when expressions must have balanced {{ }} brackets
+ */
+export function crossValidateWorkflowV2(workflow: WorkflowDefinitionV2, filePath?: string): void {
+  const loc = filePath ? ` in ${filePath}` : ''
+  const providerNames = new Set((workflow.providers ?? []).map(p => p.name))
+  const hasTriggers = (workflow.triggers ?? []).length > 0
+
+  // --- Node name uniqueness ---
+  const nodeNames = new Set<string>()
+  for (const node of workflow.nodes ?? []) {
+    if (nodeNames.has(node.name)) {
+      throw new Error(`Duplicate node name "${node.name}"${loc}`)
+    }
+    nodeNames.add(node.name)
+  }
+
+  // --- Per-node validation ---
+  for (const node of workflow.nodes ?? []) {
+    // Provider reference validation
+    if (node.provider && !providerNames.has(node.provider)) {
+      throw new Error(
+        `Node "${node.name}" references undefined provider "${node.provider}"${loc}`
+      )
+    }
+
+    // Step ID uniqueness within node
+    const stepIds = new Set<string>()
+    for (const step of node.steps ?? []) {
+      if (stepIds.has(step.id)) {
+        throw new Error(
+          `Node "${node.name}" has duplicate step ID "${step.id}"${loc}`
+        )
+      }
+      stepIds.add(step.id)
+    }
+
+    // Step output reference validation: {{ steps.<id>.output.<key> }} in with params
+    for (const step of node.steps ?? []) {
+      const refs = extractStepReferences(step.with)
+      for (const refId of refs) {
+        if (!stepIds.has(refId)) {
+          throw new Error(
+            `Node "${node.name}" step "${step.id}" references undefined step "${refId}"${loc}`
+          )
+        }
+      }
+      // Check when condition for step references too
+      if (step.when) {
+        const whenRefs = extractStepReferencesFromString(step.when)
+        for (const refId of whenRefs) {
+          if (!stepIds.has(refId)) {
+            throw new Error(
+              `Node "${node.name}" step "${step.id}" references undefined step "${refId}"${loc}`
+            )
+          }
+        }
+      }
+    }
+
+    // Trigger reference validation: {{ trigger.* }} requires at least one trigger
+    if (!hasTriggers) {
+      const usesTriggerRef = nodeUsesTriggerReferences(node)
+      if (usesTriggerRef) {
+        throw new Error(
+          `Node "${node.name}" uses trigger references but no triggers are declared${loc}`
+        )
+      }
+    }
+
+    // When condition syntax check (basic {{ }} bracket matching)
+    if (node.when) {
+      validateBracketSyntax(node.when, `Node "${node.name}" when condition`, loc)
+    }
+    for (const step of node.steps ?? []) {
+      if (step.when) {
+        validateBracketSyntax(step.when, `Node "${node.name}" step "${step.id}" when condition`, loc)
+      }
+    }
+  }
+
+  // --- Config validation ---
+  if (workflow.config?.projectMapping) {
+    for (const [key, value] of Object.entries(workflow.config.projectMapping)) {
+      if (!value || value.trim() === '') {
+        throw new Error(
+          `config.projectMapping["${key}"] has empty value${loc}`
+        )
+      }
+    }
+  }
+
+  // --- v1.1 compat: validate phases/parallelism if present ---
+  if (workflow.phases && workflow.parallelism) {
+    const phaseNames = new Set(workflow.phases.map(p => p.name))
+    for (const group of workflow.parallelism) {
+      for (const phaseName of group.phases) {
+        if (!phaseNames.has(phaseName)) {
+          throw new Error(
+            `Parallelism group "${group.name}" references undefined phase "${phaseName}"${loc}`
+          )
+        }
+      }
+      if (group.maxConcurrent && group.maxConcurrent > 10) {
+        console.warn(
+          `[workflow] Parallelism group "${group.name}" has maxConcurrent=${group.maxConcurrent} which may be excessive`
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Extract step ID references from {{ steps.<id>.output.<key> }} patterns
+ * in a record of parameters (the `with` block).
+ */
+function extractStepReferences(params: Record<string, unknown> | undefined): Set<string> {
+  const refs = new Set<string>()
+  if (!params) return refs
+  for (const value of Object.values(params)) {
+    if (typeof value === 'string') {
+      for (const ref of extractStepReferencesFromString(value)) {
+        refs.add(ref)
+      }
+    }
+  }
+  return refs
+}
+
+/**
+ * Extract step ID references from {{ steps.<id>.* }} patterns in a string.
+ */
+function extractStepReferencesFromString(str: string): Set<string> {
+  const refs = new Set<string>()
+  const pattern = /\{\{\s*steps\.([a-zA-Z0-9_-]+)\./g
+  let match
+  while ((match = pattern.exec(str)) !== null) {
+    refs.add(match[1])
+  }
+  return refs
+}
+
+/**
+ * Check if a node uses {{ trigger.* }} references in when conditions or step with params.
+ */
+function nodeUsesTriggerReferences(node: NodeDefinition): boolean {
+  const triggerPattern = /\{\{\s*trigger\./
+  if (node.when && triggerPattern.test(node.when)) return true
+  for (const step of node.steps ?? []) {
+    if (step.when && triggerPattern.test(step.when)) return true
+    if (step.with) {
+      for (const value of Object.values(step.with)) {
+        if (typeof value === 'string' && triggerPattern.test(value)) return true
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Validate that {{ }} brackets are balanced in an expression string.
+ */
+function validateBracketSyntax(expr: string, context: string, loc: string): void {
+  const opens = (expr.match(/\{\{/g) ?? []).length
+  const closes = (expr.match(/\}\}/g) ?? []).length
+  if (opens !== closes) {
+    throw new Error(
+      `${context} has unbalanced brackets: ${opens} opening vs ${closes} closing${loc}`
+    )
   }
 }
 
