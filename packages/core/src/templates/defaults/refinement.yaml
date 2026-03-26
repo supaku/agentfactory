@@ -46,6 +46,7 @@ prompt: |
     transitions. Manually changing status causes infinite loops.
 
   {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
+  {{> partials/agent-bug-backlog}}
   {{#if mentionContext}}
 
   Additional context from the user's mention:

@@ -2183,6 +2183,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         buildCommand: perProject?.buildCommand ?? this.buildCommand,
         testCommand: perProject?.testCommand ?? this.testCommand,
         validateCommand: perProject?.validateCommand ?? this.validateCommand,
+        agentBugBacklog: process.env.AGENT_BUG_BACKLOG || undefined,
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)

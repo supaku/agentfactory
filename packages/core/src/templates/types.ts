@@ -156,6 +156,10 @@ export interface TemplateContext {
   // Phase output data (parallel data passing)
   /** Collected outputs from upstream phases, keyed by phase name then output key */
   phaseOutputs?: Record<string, Record<string, unknown>>
+
+  // Agent improvement backlog
+  /** Linear project name for creating agent-improvement issues (from AGENT_BUG_BACKLOG env var) */
+  agentBugBacklog?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -284,6 +288,8 @@ export const TemplateContextSchema = z.object({
   validateCommand: z.string().optional(),
   // Phase output data (parallel data passing)
   phaseOutputs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  // Agent improvement backlog
+  agentBugBacklog: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------

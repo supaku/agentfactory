@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: agent-bug-backlog
+  description: Conditional step for refinement agents to create agent-improvement backlog issues
+content: |
+  {{#if agentBugBacklog}}
+
+  ## Agent Improvement Analysis
+
+  After completing your triage work above, perform one additional analysis:
+
+  Ask yourself: **"Could a change to the AGENT SYSTEM ITSELF have prevented this failure?"**
+
+  Examples of agent-level improvements (DO create issues for these):
+  - A prompt instruction that was missing, ambiguous, or misleading
+  - A tool the agent needed but did not have access to
+  - A validation step the agent should have performed but was not instructed to
+  - A pattern the agent followed that is wrong or outdated
+  - A template partial that gives incorrect or incomplete guidance
+  - Missing error handling or retry logic in agent workflows
+  - An agent that ignored existing code patterns and introduced inconsistency
+
+  Things that are NOT agent bugs (do NOT create issues for these):
+  - Normal application bugs (wrong business logic, missing feature, broken test)
+  - Flaky tests or infrastructure issues
+  - Requirements that were unclear in the human-written issue description
+  - One-off environmental problems (network timeout, OOM, rate limit)
+
+  IF you identify an actionable agent-system improvement, create a backlog issue:
+
+  {{#if useToolPlugins}}
+  Use the af_linear_create_issue tool:
+  - title: "Chore: [Verb] [what to improve in the agent system]"
+  - project: "{{agentBugBacklog}}"
+  - labels: "Chore"
+  - state: "Icebox"
+  - description: Use the format below
+
+  Then link it to the original issue with af_linear_add_relation:
+  - issueId: <new-issue-id>
+  - relatedIssueId: "{{identifier}}"
+  - type: "related"
+  {{else}}
+  Write the description to a temp file, then create the issue and link it:
+  ```
+  {{linearCli}} create-issue --title "Chore: [description]" --project "{{agentBugBacklog}}" --labels "Chore" --state "Icebox" --description-file /tmp/agent-bug-description.md
+  {{linearCli}} add-relation <new-issue-id> {{identifier}} --type related
+  ```
+  {{/if}}
+
+  Issue description format:
+  ```markdown
+  ## Objective
+  [What agent-system change is needed and why it would prevent this class of failure]
+
+  ## Context
+  - Originated from failure on {{identifier}}
+  - [What the agent did wrong or failed to do]
+  - [What the agent should have done instead]
+
+  ## Requirements
+  - [ ] [Specific change 1 — e.g., update template X to include instruction Y]
+  - [ ] [Specific change 2]
+
+  ## Implementation Hints
+  ### Key Files
+  - `path/to/template-or-code.ts` — [what needs to change]
+  ### Patterns to Follow
+  - Reference: `path/to/similar/implementation.ts`
+
+  ## Success Criteria
+  - [ ] Agent handles this failure class correctly in future runs
+  - [ ] No regression in existing agent behavior
+  ```
+
+  IMPORTANT:
+  - Only create ONE agent-improvement issue per refinement run
+  - If no agent-level improvement is warranted, skip this step entirely — not every failure is an agent bug
+  - The issue must be specific and actionable — a developer should be able to pick it up from Icebox and implement it
+  {{/if}}
