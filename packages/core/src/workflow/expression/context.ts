@@ -33,6 +33,10 @@ export interface EvaluationContext {
 export interface BuildContextOptions {
   /** Whether the issue has sub-issues (i.e., it is a parent issue) */
   hasSubIssues?: boolean
+  /** Whether the issue is assigned to a human user (vs unassigned or bot) */
+  isAssignedToHuman?: boolean
+  /** Whether the issue has incomplete blocking relations */
+  hasBlockingIncomplete?: boolean
 }
 
 /**
@@ -68,7 +72,11 @@ export function buildEvaluationContext(
     ...phaseState,
   }
 
-  const functions = createBuiltinHelpers(issue, { hasSubIssues })
+  const functions = createBuiltinHelpers(issue, {
+    hasSubIssues,
+    isAssignedToHuman: opts?.isAssignedToHuman ?? false,
+    hasBlockingIncomplete: opts?.hasBlockingIncomplete ?? false,
+  })
 
   return { variables, functions }
 }

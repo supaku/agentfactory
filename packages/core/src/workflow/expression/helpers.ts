@@ -15,6 +15,10 @@ import type { GovernorIssue } from '../../governor/governor-types.js'
 export interface BuiltinHelperOptions {
   /** Whether the issue has sub-issues (i.e., it is a parent issue) */
   hasSubIssues?: boolean
+  /** Whether the issue is assigned to a human user (vs unassigned or bot) */
+  isAssignedToHuman?: boolean
+  /** Whether the issue has incomplete blocking relations */
+  hasBlockingIncomplete?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,62 @@ export function createBuiltinHelpers(
      */
     isParentIssue(): boolean {
       return opts.hasSubIssues === true
+    },
+
+    /**
+     * Check whether the issue has sub-issues.
+     * Alias for `isParentIssue()`.
+     *
+     * Usage in expressions: `hasSubIssues()`
+     */
+    hasSubIssues(): boolean {
+      return opts.hasSubIssues === true
+    },
+
+    /**
+     * Check whether the issue is assigned to a human user (vs unassigned or bot).
+     *
+     * Usage in expressions: `isAssignedToHuman()`
+     */
+    isAssignedToHuman(): boolean {
+      return opts.isAssignedToHuman === true
+    },
+
+    /**
+     * Check whether the issue has incomplete blocking relations.
+     *
+     * Usage in expressions: `hasBlockingIncomplete()`
+     */
+    hasBlockingIncomplete(): boolean {
+      return opts.hasBlockingIncomplete === true
+    },
+
+    /**
+     * Check whether a string starts with a given prefix.
+     *
+     * Usage in expressions: `startsWith(title, 'fix')`
+     */
+    startsWith(...args: unknown[]): boolean {
+      const str = args[0]
+      const prefix = args[1]
+      if (typeof str !== 'string' || typeof prefix !== 'string') {
+        return false
+      }
+      return str.startsWith(prefix)
+    },
+
+    /**
+     * Check whether a string contains a given substring.
+     *
+     * Usage in expressions: `contains(title, 'hotfix')`
+     */
+    contains(...args: unknown[]): boolean {
+      const str = args[0]
+      const substring = args[1]
+      if (typeof str !== 'string' || typeof substring !== 'string') {
+        return false
+      }
+      return str.includes(substring)
     },
   }
 }
