@@ -14,7 +14,7 @@ import {
   WorkflowDefinitionSchema,
   validateWorkflowDefinition,
   // v2 schemas
-  TriggerDefinitionSchema,
+  WorkflowTriggerDefinitionSchema,
   ProviderRequirementSchema,
   WorkflowConfigSchema,
   StepDefinitionSchema,
@@ -830,9 +830,9 @@ describe('validateWorkflowDefinition cross-validation', () => {
 // v2 Schema Tests
 // ===========================================================================
 
-describe('TriggerDefinitionSchema', () => {
+describe('WorkflowTriggerDefinitionSchema', () => {
   it('validates a webhook trigger', () => {
-    const result = TriggerDefinitionSchema.parse({
+    const result = WorkflowTriggerDefinitionSchema.parse({
       name: 'issue-moved',
       type: 'webhook',
       source: 'linear',
@@ -847,7 +847,7 @@ describe('TriggerDefinitionSchema', () => {
   })
 
   it('validates a schedule trigger', () => {
-    const result = TriggerDefinitionSchema.parse({
+    const result = WorkflowTriggerDefinitionSchema.parse({
       name: 'nightly-sweep',
       type: 'schedule',
       schedule: '0 2 * * *',
@@ -857,7 +857,7 @@ describe('TriggerDefinitionSchema', () => {
   })
 
   it('validates a manual trigger', () => {
-    const result = TriggerDefinitionSchema.parse({
+    const result = WorkflowTriggerDefinitionSchema.parse({
       name: 'manual',
       type: 'manual',
     })
@@ -866,20 +866,20 @@ describe('TriggerDefinitionSchema', () => {
   })
 
   it('rejects missing name', () => {
-    expect(() => TriggerDefinitionSchema.parse({
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
       type: 'webhook',
     })).toThrow()
   })
 
   it('rejects empty name', () => {
-    expect(() => TriggerDefinitionSchema.parse({
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
       name: '',
       type: 'webhook',
     })).toThrow()
   })
 
   it('rejects invalid type', () => {
-    expect(() => TriggerDefinitionSchema.parse({
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
       name: 'test',
       type: 'invalid',
     })).toThrow()

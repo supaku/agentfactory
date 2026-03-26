@@ -317,7 +317,7 @@ export interface BranchingDefinition {
  * Declares an event that can initiate workflow execution.
  * Triggers define the source, event type, and optional payload filter.
  */
-export interface TriggerDefinition {
+export interface WorkflowTriggerDefinition {
   /** Unique trigger name */
   name: string
   /** Trigger type: webhook (external event), schedule (cron), manual (user-initiated) */
@@ -434,7 +434,7 @@ export interface WorkflowDefinitionV2 {
     description?: string
   }
   /** Event triggers that initiate workflow execution */
-  triggers?: TriggerDefinition[]
+  triggers?: WorkflowTriggerDefinition[]
   /** External service providers that nodes can reference */
   providers?: ProviderRequirement[]
   /** Workspace-level configuration */
@@ -602,7 +602,7 @@ export const WorkflowDefinitionSchema = z.object({
 // v2 Zod Schemas
 // ---------------------------------------------------------------------------
 
-export const TriggerDefinitionSchema = z.object({
+export const WorkflowTriggerDefinitionSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['webhook', 'schedule', 'manual']),
   source: z.string().optional(),
@@ -649,7 +649,7 @@ export const WorkflowDefinitionV2Schema = z.object({
     name: z.string().min(1),
     description: z.string().optional(),
   }),
-  triggers: z.array(TriggerDefinitionSchema).optional(),
+  triggers: z.array(WorkflowTriggerDefinitionSchema).optional(),
   providers: z.array(ProviderRequirementSchema).optional(),
   config: WorkflowConfigSchema.optional(),
   nodes: z.array(NodeDefinitionSchema).optional(),

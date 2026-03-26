@@ -20,7 +20,7 @@ export type {
   TemplateRetryConfig,
   TemplateTimeoutConfig,
   // v2 types
-  TriggerDefinition,
+  WorkflowTriggerDefinition,
   ProviderRequirement,
   WorkflowConfig,
   StepDefinition,
@@ -44,7 +44,7 @@ export {
   TemplateTimeoutConfigSchema,
   validateWorkflowDefinition,
   // v2 schemas & validation
-  TriggerDefinitionSchema,
+  WorkflowTriggerDefinitionSchema,
   ProviderRequirementSchema,
   WorkflowConfigSchema,
   StepDefinitionSchema,
