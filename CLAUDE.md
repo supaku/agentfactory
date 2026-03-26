@@ -158,6 +158,59 @@ const isAutonomous = !!process.env.LINEAR_SESSION_ID
 5. **Never delete your own worktree** — see Worktree Lifecycle Rules below.
 6. Spawn `Task` agents with `subagent_type=Explore` for research tasks
 
+## Session Exit Gate
+
+The orchestrator wraps every agent session with deterministic post-session validation. This ensures that paid token work actually lands — agents can't silently exit without producing expected outputs.
+
+### How It Works
+
+1. **Completion contracts** define what each work type must produce
+2. **Output tracking** monitors tool calls during the session (comments, issue updates, sub-issues)
+3. **Post-session backstop** validates the contract and auto-recovers missing outputs
+4. **Diagnostic comments** are posted when gaps remain
+
+### Completion Contracts by Work Type
+
+| Work Type | Required Outputs |
+|-----------|-----------------|
+| `development`, `inflight` | Commits on branch, branch pushed, PR created |
+| `qa`, `qa-coordination` | Work result (passed/failed), comment posted |
+| `acceptance`, `acceptance-coordination` | Work result (passed/failed) |
+| `coordination`, `inflight-coordination` | Commits, branch pushed, PR created, work result |
+| `refinement` | Comment posted |
+| `refinement-coordination` | Comment posted |
+| `research` | Issue description updated |
+| `backlog-creation` | Sub-issues created |
+| `merge` | PR merged |
+
+### Backstop Recovery
+
+When an agent exits without producing required outputs, the backstop can automatically:
+- **Push unpushed branches** to the remote
+- **Create PRs** from pushed branches that lack a PR
+- **Detect existing PRs** that were created but not captured in output
+
+Fields that require agent judgment (e.g., `work_result`, `comment_posted`) cannot be backstopped — the orchestrator posts a diagnostic comment and blocks status promotion.
+
+### Provider Capabilities
+
+The exit gate strategy adapts to provider capabilities:
+
+| Provider | Message Injection | Session Resume | Exit Gate Strategy |
+|----------|------------------|----------------|-------------------|
+| Claude | Yes | Yes | Mid-session steering (future) + backstop |
+| A2A | Yes | Yes | Mid-session steering (future) + backstop |
+| Codex | No | Yes | Backstop + stop/resume fallback |
+| Spring AI | No | Yes | Backstop + stop/resume fallback |
+
+The backstop is provider-agnostic (operates on git/GitHub). Mid-session steering via `injectMessage()` is planned for providers that support it.
+
+### Key Files
+
+- `packages/core/src/orchestrator/completion-contracts.ts` — Contract definitions and validation
+- `packages/core/src/orchestrator/session-backstop.ts` — Backstop execution and recovery
+- `packages/core/src/providers/types.ts` — `AgentProviderCapabilities` interface
+
 ## File Operations Best Practices
 
 ### Read Before Write Rule
