@@ -27,7 +27,28 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 | `af_code_search_code` | BM25 keyword search with code-aware tokenization |
 | `af_code_check_duplicate` | Exact + near-duplicate detection before writing code |
 
-**Graceful degradation:** If the package is not installed, the CLI starts normally — agents simply won't have `af_code_*` tools available. The `{{> partials/code-intelligence-instructions}}` partial is conditional on `useToolPlugins` and renders as empty when tools aren't registered.
+**Graceful degradation:** If the package is not installed, the CLI starts normally — agents simply won't have `af_code_*` tools available. The `{{> partials/code-intelligence-instructions}}` partial provides in-process tool instructions when `useToolPlugins` is true, and CLI fallback instructions otherwise.
+
+### Code Intelligence CLI
+
+The same functionality is also available as CLI commands via `pnpm af-code`, enabling Task sub-agents and non-MCP contexts to use code intelligence:
+
+```bash
+# Get PageRank-ranked repository map
+pnpm af-code get-repo-map [--max-files 50] [--file-patterns "*.ts,src/**"]
+
+# Search for symbol definitions (functions, classes, types)
+pnpm af-code search-symbols "<query>" [--max-results 20] [--kinds "function,class"] [--file-pattern "*.ts"]
+
+# BM25 keyword search with code-aware tokenization
+pnpm af-code search-code "<query>" [--max-results 20] [--language typescript]
+
+# Check for duplicate code before writing
+pnpm af-code check-duplicate --content "<code>"
+pnpm af-code check-duplicate --content-file /tmp/snippet.ts
+```
+
+All commands output JSON. First invocation builds the index (~5-10s); subsequent calls reuse the persisted index.
 
 **Optional env vars for enhanced search:**
 - `VOYAGE_AI_API_KEY` — Enables semantic vector embeddings (hybrid BM25 + vector mode)

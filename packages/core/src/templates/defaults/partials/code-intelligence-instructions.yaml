@@ -32,4 +32,30 @@ content: |
   - Understanding how something works: af_code_search_code with descriptive queries
   - Before writing new utility code: af_code_check_duplicate to avoid reinventing existing helpers
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
+  {{else}}
+  CODE INTELLIGENCE CLI:
+  You have access to code-intelligence commands via Bash for efficient codebase exploration.
+  Use these BEFORE falling back to raw Grep/Glob when exploring unfamiliar code or searching for symbols:
+
+  - pnpm af-code get-repo-map [--max-files 50] [--file-patterns "*.ts,src/**"]
+    Start here. Returns a PageRank-ranked map of the most important files.
+
+  - pnpm af-code search-symbols "<query>" [--max-results 20] [--kinds "function,class"] [--file-pattern "*.ts"]
+    Find function, class, type, and interface definitions. More precise than Grep.
+
+  - pnpm af-code search-code "<query>" [--max-results 20] [--language typescript]
+    BM25 keyword search with code-aware tokenization. Understands camelCase/snake_case.
+
+  - pnpm af-code check-duplicate --content "<code>" OR --content-file /tmp/snippet.ts
+    Before writing significant code, check for existing implementations to avoid duplication.
+
+  All commands output JSON to stdout. First invocation builds the index (~5-10s); subsequent
+  calls reuse the persisted index from .agentfactory/code-index/.
+
+  WHEN TO USE THESE COMMANDS:
+  - Starting a new task: get-repo-map first, then search-symbols for specific targets
+  - Looking for a function/class/type: search-symbols (faster and more precise than Grep)
+  - Understanding how something works: search-code with descriptive queries
+  - Before writing new utility code: check-duplicate to avoid reinventing existing helpers
+  - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
   {{/if}}

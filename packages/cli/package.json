@@ -41,7 +41,8 @@
     "af-setup": "dist/src/setup.js",
     "af-status": "dist/src/status.js",
     "af-migrate-worktrees": "dist/src/migrate-worktrees.js",
-    "af-merge-queue": "dist/src/merge-queue.js"
+    "af-merge-queue": "dist/src/merge-queue.js",
+    "af-code": "dist/src/code.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
@@ -111,6 +112,11 @@
       "types": "./dist/src/lib/merge-queue-runner.d.ts",
       "import": "./dist/src/lib/merge-queue-runner.js",
       "default": "./dist/src/lib/merge-queue-runner.js"
+    },
+    "./code-intelligence": {
+      "types": "./dist/src/lib/code-intelligence-runner.d.ts",
+      "import": "./dist/src/lib/code-intelligence-runner.js",
+      "default": "./dist/src/lib/code-intelligence-runner.js"
     }
   },
   "files": [

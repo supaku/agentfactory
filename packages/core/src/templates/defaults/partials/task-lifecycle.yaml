@@ -47,6 +47,12 @@ content: |
      Do not use tail, cat, or any file-based approach to monitor sub-agents.
      The Agent/Task tool handles all communication — just wait for the result.
 
+  7. SUB-AGENT CODE INTELLIGENCE:
+     Sub-agents have access to code-intelligence commands via `pnpm af-code`.
+     Include this instruction in every sub-agent prompt:
+     "Use `pnpm af-code` commands (search-symbols, get-repo-map, search-code, check-duplicate)
+     via Bash for codebase exploration before falling back to Grep/Glob."
+
   ╔══════════════════════════════════════════════════════════════════╗
   ║  PRE-COMPLETION CHECKLIST — VERIFY BEFORE EMITTING WORK_RESULT  ║
   ╚══════════════════════════════════════════════════════════════════╝

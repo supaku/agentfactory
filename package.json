@@ -38,6 +38,7 @@
     "af-status": "node --import tsx packages/cli/src/status.ts",
     "af-setup": "node --import tsx packages/cli/src/setup.ts",
     "af-migrate-worktrees": "node --import tsx packages/cli/src/migrate-worktrees.ts",
+    "af-code": "node --import tsx packages/cli/src/code.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
