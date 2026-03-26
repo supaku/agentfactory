@@ -1472,18 +1472,42 @@ export class AgentOrchestrator {
       }
     }
 
-    // SAFETY GUARD 4: Never destroy an explicitly preserved worktree
-    // Preserved worktrees contain work that the orchestrator decided to keep
-    // for manual recovery. The next agent should reuse the branch (which still
-    // exists after worktree removal) but NOT destroy the preserved directory.
+    // SAFETY GUARD 4: Preserved worktrees — save work as patch, then allow cleanup.
+    // Preserved worktrees contain uncommitted work from a previous agent session.
+    // A diagnostic comment was already posted to the issue when the worktree was
+    // preserved. Blocking all future agents on this branch indefinitely causes
+    // work stoppages, so we save a patch for manual recovery and allow cleanup.
     const preservedMarker = resolve(conflictPath, '.agent', 'preserved.json')
     if (existsSync(preservedMarker)) {
       console.warn(
-        `SAFETY: Refusing to clean up ${conflictPath} — it is a preserved worktree ` +
-        `with incomplete work. The agent that ran here exited without creating a PR. ` +
-        `Recover manually: cd into the worktree, commit, push, and create a PR.`
+        `Preserved worktree detected at ${conflictPath}. ` +
+        `Saving incomplete work as patch before cleanup to unblock branch '${branchName}'.`
       )
-      return false
+      try {
+        const patchDir = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), '.patches')
+        if (!existsSync(patchDir)) {
+          mkdirSync(patchDir, { recursive: true })
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const patchName = `${branchName}-preserved-${timestamp}.patch`
+        const patchPath = resolve(patchDir, patchName)
+
+        const diff = execSync('git diff HEAD', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+        if (diff.trim().length > 0) {
+          writeFileSync(patchPath, diff)
+          console.log(`Saved preserved worktree patch: ${patchPath}`)
+        }
+      } catch (patchError) {
+        console.warn(
+          'Failed to save preserved worktree patch:',
+          patchError instanceof Error ? patchError.message : String(patchError)
+        )
+      }
+      // Fall through to cleanup below (don't return false)
     }
 
     // Check if the agent in the conflicting worktree is still alive
