@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseExpression, tokenize, parse, ParseError } from './index.js'
+import { parseExpression, tokenize, parse, ParseError, interpolateTemplate } from './index.js'
 import type { ASTNode, Token } from './index.js'
 
 // ---------------------------------------------------------------------------
@@ -80,6 +80,46 @@ describe('tokenize', () => {
   it('always ends with EOF token', () => {
     const tokens = tokenize('{{ x }}')
     expect(tokens[tokens.length - 1].type).toBe('EOF')
+  })
+
+  it('tokenizes dotted variable path as single Identifier', () => {
+    const tokens = tokenize('{{ trigger.data.issueId }}')
+    const nonEof = tokens.filter((t: Token) => t.type !== 'EOF')
+    expect(nonEof).toHaveLength(1)
+    expect(nonEof[0].type).toBe('Identifier')
+    expect(nonEof[0].value).toBe('trigger.data.issueId')
+  })
+
+  it('tokenizes symbolic operators == != > < >= <=', () => {
+    const cases: Array<{ input: string; expected: string }> = [
+      { input: '{{ x == y }}', expected: 'eq' },
+      { input: '{{ x != y }}', expected: 'neq' },
+      { input: '{{ x > y }}', expected: 'gt' },
+      { input: '{{ x < y }}', expected: 'lt' },
+      { input: '{{ x >= y }}', expected: 'gte' },
+      { input: '{{ x <= y }}', expected: 'lte' },
+    ]
+    for (const { input, expected } of cases) {
+      const tokens = tokenize(input)
+      const ops = tokens.filter((t: Token) => t.type === 'Operator')
+      expect(ops).toHaveLength(1)
+      expect(ops[0].value).toBe(expected)
+    }
+  })
+
+  it('tokenizes mixed symbolic and keyword operators', () => {
+    const tokens = tokenize('{{ x == 5 and y > 3 }}')
+    const types = tokens.map((t: Token) => `${t.type}:${t.value}`)
+    expect(types).toEqual([
+      'Identifier:x',
+      'Operator:eq',
+      'NumberLiteral:5',
+      'Operator:and',
+      'Identifier:y',
+      'Operator:gt',
+      'NumberLiteral:3',
+      'EOF:',
+    ])
   })
 })
 
@@ -255,6 +295,66 @@ describe('parseExpression', () => {
         operator: 'lte',
         left: { type: 'VariableRef', name: 'age' },
         right: { type: 'NumberLiteral', value: 5 },
+      })
+    })
+
+    it('parses in', () => {
+      const ast = parseExpression("{{ 'bug' in labels }}")
+      expect(ast).toEqual({
+        type: 'BinaryOp',
+        operator: 'in',
+        left: { type: 'StringLiteral', value: 'bug' },
+        right: { type: 'VariableRef', name: 'labels' },
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Dotted variable paths
+  // -------------------------------------------------------------------------
+
+  describe('dotted variable paths', () => {
+    it('parses dotted variable reference', () => {
+      const ast = parseExpression('{{ trigger.data.issueId }}')
+      expect(ast).toEqual({
+        type: 'VariableRef',
+        name: 'trigger.data.issueId',
+      })
+    })
+
+    it('parses dotted path with symbolic comparison', () => {
+      const ast = parseExpression('{{ trigger.data.priority > 3 }}')
+      expect(ast).toEqual({
+        type: 'BinaryOp',
+        operator: 'gt',
+        left: { type: 'VariableRef', name: 'trigger.data.priority' },
+        right: { type: 'NumberLiteral', value: 3 },
+      })
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Symbolic operators
+  // -------------------------------------------------------------------------
+
+  describe('symbolic operators', () => {
+    it('parses expression with symbolic == operator', () => {
+      const ast = parseExpression("{{ status == 'active' }}")
+      expect(ast).toEqual({
+        type: 'BinaryOp',
+        operator: 'eq',
+        left: { type: 'VariableRef', name: 'status' },
+        right: { type: 'StringLiteral', value: 'active' },
+      })
+    })
+
+    it('parses expression with symbolic != operator', () => {
+      const ast = parseExpression("{{ status != 'closed' }}")
+      expect(ast).toEqual({
+        type: 'BinaryOp',
+        operator: 'neq',
+        left: { type: 'VariableRef', name: 'status' },
+        right: { type: 'StringLiteral', value: 'closed' },
       })
     })
   })
@@ -576,5 +676,90 @@ describe('parseExpression', () => {
       const ast = parse(tokens)
       expect(ast).toEqual({ type: 'VariableRef', name: 'x' })
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Template interpolation tests
+// ---------------------------------------------------------------------------
+
+describe('interpolateTemplate', () => {
+  /** Create a context with the given variables and optional functions. */
+  function ctx(
+    variables: Record<string, unknown>,
+    functions: Record<string, (...args: unknown[]) => unknown> = {},
+  ): import('./index.js').EvaluationContext {
+    return { variables, functions }
+  }
+
+  it('resolves a single expression', () => {
+    const result = interpolateTemplate(
+      'Issue {{ issueId }} is ready',
+      ctx({ issueId: 'SUP-123' }),
+    )
+    expect(result).toBe('Issue SUP-123 is ready')
+  })
+
+  it('resolves multiple expressions', () => {
+    const result = interpolateTemplate(
+      '{{ name }} has {{ count }} items',
+      ctx({ name: 'Alice', count: 5 }),
+    )
+    expect(result).toBe('Alice has 5 items')
+  })
+
+  it('resolves dotted path expressions', () => {
+    const result = interpolateTemplate(
+      'Issue {{ trigger.data.issueId }} is ready',
+      ctx({ trigger: { data: { issueId: 'SUP-123' } } }),
+    )
+    expect(result).toBe('Issue SUP-123 is ready')
+  })
+
+  it('coerces boolean to string', () => {
+    const result = interpolateTemplate(
+      'Result: {{ active }}',
+      ctx({ active: true }),
+    )
+    expect(result).toBe('Result: true')
+  })
+
+  it('coerces number to string', () => {
+    const result = interpolateTemplate(
+      'Count: {{ count }}',
+      ctx({ count: 42 }),
+    )
+    expect(result).toBe('Count: 42')
+  })
+
+  it('passes through static string without expressions', () => {
+    const result = interpolateTemplate('No expressions here', ctx({}))
+    expect(result).toBe('No expressions here')
+  })
+
+  it('resolves expression-only template', () => {
+    const result = interpolateTemplate('{{ status }}', ctx({ status: 'In Progress' }))
+    expect(result).toBe('In Progress')
+  })
+
+  it('resolves function calls in template', () => {
+    const result = interpolateTemplate(
+      'Has bug: {{ hasLabel(\'bug\') }}',
+      ctx({}, { hasLabel: (...args: unknown[]) => args[0] === 'bug' }),
+    )
+    expect(result).toBe('Has bug: true')
+  })
+
+  it('throws ParseError on empty expression', () => {
+    expect(() => interpolateTemplate('Hello {{  }}', ctx({}))).toThrow(ParseError)
+    expect(() => interpolateTemplate('Hello {{  }}', ctx({}))).toThrow(/Empty expression/)
+  })
+
+  it('resolves false for undefined variables', () => {
+    const result = interpolateTemplate(
+      'Value: {{ missing }}',
+      ctx({}),
+    )
+    expect(result).toBe('Value: false')
   })
 })

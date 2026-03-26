@@ -19,7 +19,7 @@ import { ParseError } from './lexer.js'
 // Operator sets
 // ---------------------------------------------------------------------------
 
-const COMPARISON_OPERATORS = new Set(['eq', 'neq', 'gt', 'lt', 'gte', 'lte'])
+const COMPARISON_OPERATORS = new Set(['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'in'])
 
 // ---------------------------------------------------------------------------
 // Parser state
@@ -101,7 +101,7 @@ function parseComparison(state: ParserState): ASTNode {
   let left = parseUnary(state)
   const token = peek(state)
   if (token.type === 'Operator' && COMPARISON_OPERATORS.has(token.value)) {
-    const operator = advance(state).value as ASTNode extends never ? never : 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte'
+    const operator = advance(state).value as ASTNode extends never ? never : 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'in'
     const right = parseUnary(state)
     left = { type: 'BinaryOp', operator, left, right }
   }

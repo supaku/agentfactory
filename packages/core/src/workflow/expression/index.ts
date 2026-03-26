@@ -20,7 +20,7 @@
 
 import type { ASTNode } from './ast.js'
 import type { EvaluationContext } from './context.js'
-import { tokenize } from './lexer.js'
+import { tokenize, ParseError } from './lexer.js'
 import { parse } from './parser.js'
 import { evaluate } from './evaluator.js'
 
@@ -114,4 +114,33 @@ export function evaluateCondition(condition: string, context: EvaluationContext)
   const ast = parseExpression(condition)
   const result = evaluate(ast, context)
   return Boolean(result)
+}
+
+/**
+ * Interpolate template expressions within a string.
+ *
+ * Finds all `{{ ... }}` expressions in the input string, evaluates each
+ * against the context, and replaces the placeholder with the string
+ * representation of the result.
+ *
+ * @param template - The template string containing `{{ }}` expressions.
+ * @param context  - The sandboxed evaluation context.
+ * @returns The fully resolved string.
+ * @throws {ParseError} on syntax errors in expressions.
+ * @throws {EvaluationError} on runtime errors in expressions.
+ */
+export function interpolateTemplate(template: string, context: EvaluationContext): string {
+  // Regex to match {{ ... }} expressions (non-greedy)
+  const EXPR_PATTERN = /\{\{(.*?)\}\}/g
+
+  return template.replace(EXPR_PATTERN, (_match, expr: string) => {
+    const trimmed = expr.trim()
+    if (trimmed.length === 0) {
+      throw new ParseError('Empty expression in template', { offset: 0, column: 1 })
+    }
+    const tokens = tokenize(trimmed)
+    const ast = parse(tokens)
+    const result = evaluate(ast, context)
+    return String(result)
+  })
 }

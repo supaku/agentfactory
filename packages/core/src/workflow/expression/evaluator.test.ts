@@ -113,6 +113,26 @@ describe('evaluate — variable lookup', () => {
     const ast: ASTNode = { type: 'VariableRef', name: 'data' }
     expect(evaluate(ast, ctx({ data: null }))).toBe(null)
   })
+
+  it('resolves dotted variable path from nested context', () => {
+    const ast: ASTNode = { type: 'VariableRef', name: 'trigger.data.issueId' }
+    expect(evaluate(ast, ctx({ trigger: { data: { issueId: 'SUP-123' } } }))).toBe('SUP-123')
+  })
+
+  it('resolves two-level dotted path', () => {
+    const ast: ASTNode = { type: 'VariableRef', name: 'steps.route.result' }
+    expect(evaluate(ast, ctx({ steps: { route: { result: 'development' } } }))).toBe('development')
+  })
+
+  it('returns false for dotted path when intermediate is missing', () => {
+    const ast: ASTNode = { type: 'VariableRef', name: 'trigger.data.issueId' }
+    expect(evaluate(ast, ctx({}))).toBe(false)
+  })
+
+  it('returns false for dotted path when intermediate is null', () => {
+    const ast: ASTNode = { type: 'VariableRef', name: 'trigger.data.issueId' }
+    expect(evaluate(ast, ctx({ trigger: null }))).toBe(false)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -498,6 +518,36 @@ describe('evaluate — comparisons', () => {
 })
 
 // ---------------------------------------------------------------------------
+// 4b. in operator
+// ---------------------------------------------------------------------------
+
+describe('evaluate — in operator', () => {
+  it('returns true when value is in array', () => {
+    const result = evaluateCondition("{{ 'bug' in labels }}", ctx({ labels: ['bug', 'enhancement'] }))
+    expect(result).toBe(true)
+  })
+
+  it('returns false when value is not in array', () => {
+    const result = evaluateCondition("{{ 'feature' in labels }}", ctx({ labels: ['bug', 'enhancement'] }))
+    expect(result).toBe(false)
+  })
+
+  it('returns true for substring in string', () => {
+    const result = evaluateCondition("{{ 'fix' in title }}", ctx({ title: 'Quick fix for bug' }))
+    expect(result).toBe(true)
+  })
+
+  it('returns false when substring not in string', () => {
+    const result = evaluateCondition("{{ 'hotfix' in title }}", ctx({ title: 'Quick fix for bug' }))
+    expect(result).toBe(false)
+  })
+
+  it('throws for invalid right operand type', () => {
+    expect(() => evaluateCondition("{{ 'x' in count }}", ctx({ count: 42 }))).toThrow(EvaluationError)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 5. Function calls
 // ---------------------------------------------------------------------------
 
@@ -639,6 +689,106 @@ describe('built-in helpers', () => {
       expect(helpers.isParentIssue()).toBe(false)
     })
   })
+
+  describe('hasSubIssues', () => {
+    it('returns true when hasSubIssues is true', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { hasSubIssues: true })
+      expect(helpers.hasSubIssues()).toBe(true)
+    })
+
+    it('returns false when hasSubIssues is false', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { hasSubIssues: false })
+      expect(helpers.hasSubIssues()).toBe(false)
+    })
+
+    it('returns false when hasSubIssues is not specified', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.hasSubIssues()).toBe(false)
+    })
+  })
+
+  describe('isAssignedToHuman', () => {
+    it('returns true when isAssignedToHuman is true', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { isAssignedToHuman: true })
+      expect(helpers.isAssignedToHuman()).toBe(true)
+    })
+
+    it('returns false when isAssignedToHuman is false', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { isAssignedToHuman: false })
+      expect(helpers.isAssignedToHuman()).toBe(false)
+    })
+
+    it('returns false when isAssignedToHuman is not specified', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.isAssignedToHuman()).toBe(false)
+    })
+  })
+
+  describe('hasBlockingIncomplete', () => {
+    it('returns true when hasBlockingIncomplete is true', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { hasBlockingIncomplete: true })
+      expect(helpers.hasBlockingIncomplete()).toBe(true)
+    })
+
+    it('returns false when hasBlockingIncomplete is false', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue, { hasBlockingIncomplete: false })
+      expect(helpers.hasBlockingIncomplete()).toBe(false)
+    })
+
+    it('returns false when hasBlockingIncomplete is not specified', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.hasBlockingIncomplete()).toBe(false)
+    })
+  })
+
+  describe('startsWith', () => {
+    it('returns true when string starts with prefix', () => {
+      const issue = makeIssue({ title: 'fix: resolve bug' })
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.startsWith('fix: resolve bug', 'fix')).toBe(true)
+    })
+
+    it('returns false when string does not start with prefix', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.startsWith('hello world', 'world')).toBe(false)
+    })
+
+    it('returns false for non-string arguments', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.startsWith(123, 'fix')).toBe(false)
+    })
+  })
+
+  describe('contains', () => {
+    it('returns true when string contains substring', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.contains('hello world', 'world')).toBe(true)
+    })
+
+    it('returns false when string does not contain substring', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.contains('hello world', 'foo')).toBe(false)
+    })
+
+    it('returns false for non-string arguments', () => {
+      const issue = makeIssue()
+      const helpers = createBuiltinHelpers(issue)
+      expect(helpers.contains(42, 'test')).toBe(false)
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -738,6 +888,50 @@ describe('evaluateCondition — end-to-end', () => {
     })
     const context = buildEvaluationContext(issue, { researchCompleted: true }, { hasSubIssues: false })
     expect(evaluateCondition("{{ hasLabel('bug') and researchCompleted }}", context)).toBe(true)
+  })
+
+  it('evaluates hasSubIssues() in condition', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { hasSubIssues: true })
+    expect(evaluateCondition('{{ hasSubIssues() }}', context)).toBe(true)
+  })
+
+  it('evaluates isAssignedToHuman() in condition', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { isAssignedToHuman: true })
+    expect(evaluateCondition('{{ isAssignedToHuman() }}', context)).toBe(true)
+  })
+
+  it('evaluates hasBlockingIncomplete() in condition', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { hasBlockingIncomplete: true })
+    expect(evaluateCondition('{{ hasBlockingIncomplete() }}', context)).toBe(true)
+  })
+
+  it('evaluates dotted path expression end-to-end', () => {
+    const context = ctx({ trigger: { data: { issueId: 'SUP-123' } } })
+    expect(evaluateCondition("{{ trigger.data.issueId == 'SUP-123' }}", context)).toBe(true)
+  })
+
+  it('evaluates symbolic operators end-to-end', () => {
+    const context = ctx({ priority: 5 })
+    expect(evaluateCondition('{{ priority > 3 }}', context)).toBe(true)
+  })
+
+  it('evaluates startsWith() function in condition', () => {
+    const context = ctx(
+      { title: 'fix: resolve memory leak' },
+      { startsWith: (...args: unknown[]) => typeof args[0] === 'string' && typeof args[1] === 'string' && (args[0] as string).startsWith(args[1] as string) },
+    )
+    expect(evaluateCondition("{{ startsWith(title, 'fix') }}", context)).toBe(true)
+  })
+
+  it('evaluates contains() function in condition', () => {
+    const context = ctx(
+      { description: 'This is a hotfix release' },
+      { contains: (...args: unknown[]) => typeof args[0] === 'string' && typeof args[1] === 'string' && (args[0] as string).includes(args[1] as string) },
+    )
+    expect(evaluateCondition("{{ contains(description, 'hotfix') }}", context)).toBe(true)
   })
 })
 
@@ -895,6 +1089,27 @@ describe('buildEvaluationContext', () => {
     const context = buildEvaluationContext(issue, undefined, { hasSubIssues: true })
     expect(context.functions.isParentIssue).toBeDefined()
     expect(context.functions.isParentIssue()).toBe(true)
+  })
+
+  it('registers hasSubIssues function', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { hasSubIssues: true })
+    expect(context.functions.hasSubIssues).toBeDefined()
+    expect(context.functions.hasSubIssues()).toBe(true)
+  })
+
+  it('registers isAssignedToHuman function', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { isAssignedToHuman: true })
+    expect(context.functions.isAssignedToHuman).toBeDefined()
+    expect(context.functions.isAssignedToHuman()).toBe(true)
+  })
+
+  it('registers hasBlockingIncomplete function', () => {
+    const issue = makeIssue()
+    const context = buildEvaluationContext(issue, undefined, { hasBlockingIncomplete: true })
+    expect(context.functions.hasBlockingIncomplete).toBeDefined()
+    expect(context.functions.hasBlockingIncomplete()).toBe(true)
   })
 
   it('works end-to-end with evaluateCondition', () => {
