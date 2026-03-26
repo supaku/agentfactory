@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.8.13
+
+### Features
+
+- **Code intelligence CLI (`af-code`)** — New CLI exposing code-intelligence tools (`search-symbols`, `get-repo-map`, `search-code`, `check-duplicate`) for Task sub-agents and non-MCP contexts. Coordinator sub-agents can now use `pnpm af-code` via Bash to explore codebases with BM25 search, PageRank repo maps, and duplicate detection.
+- **Sequential merge queue (The Refinery)** — `MergeQueue` module with Redis sorted-set storage, pluggable merge strategies (rebase/merge/squash), mergiraf conflict resolution, lock-file regeneration, and CLI (`af merge-queue status/retry/skip`). Single merge worker processes completed PRs sequentially against latest main (SUP-1545).
+- **Provider plugin type system** — `ProviderPlugin` interface with typed capabilities, trigger/action definitions, config schemas, and `NodeTypeRegistry` for plugin metadata storage (SUP-1511, SUP-1512).
+- **Workflow definition v2 schema** — Triggers, providers, nodes, and cross-validation with a complete expression evaluator supporting dotted paths, operators, helpers, and templates (SUP-1513, SUP-1514).
+
+### Fixes
+
+- **Template CLI fallback instructions** — `code-intelligence-instructions` partial now provides CLI usage guidance when `useToolPlugins` is false, instead of rendering empty.
+- **WorkflowTriggerDefinition rename** — Resolve export collision between workflow and provider plugin trigger types.
+- **NodeTypeRegistry alignment** — Fix registry to use canonical SUP-1511 provider plugin interfaces.
+
 ## v0.8.12
 
 ### Features
