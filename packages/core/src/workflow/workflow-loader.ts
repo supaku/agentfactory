@@ -8,11 +8,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import type { WorkflowDefinition } from './workflow-types.js'
-import { validateWorkflowDefinition } from './workflow-types.js'
+import type { WorkflowDefinition, AnyWorkflowDefinition } from './workflow-types.js'
+import { validateWorkflowDefinition, validateAnyWorkflowDefinition } from './workflow-types.js'
 
 /**
- * Load and validate a single WorkflowDefinition YAML file.
+ * Load and validate a single WorkflowDefinition YAML file (v1.1 only).
  * Throws on invalid YAML syntax or schema validation failure.
  */
 export function loadWorkflowDefinitionFile(filePath: string): WorkflowDefinition {
@@ -20,6 +20,25 @@ export function loadWorkflowDefinitionFile(filePath: string): WorkflowDefinition
     const content = fs.readFileSync(filePath, 'utf-8')
     const data = parseYaml(content)
     return validateWorkflowDefinition(data, filePath)
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Invalid workflow definition')) {
+      throw error
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to load workflow definition ${filePath}: ${message}`)
+  }
+}
+
+/**
+ * Load and validate a WorkflowDefinition YAML file (v1.1 or v2).
+ * Detects the apiVersion and dispatches to the correct schema.
+ * Throws on invalid YAML syntax or schema validation failure.
+ */
+export function loadAnyWorkflowDefinitionFile(filePath: string): AnyWorkflowDefinition {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8')
+    const data = parseYaml(content)
+    return validateAnyWorkflowDefinition(data, filePath)
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('Invalid workflow definition')) {
       throw error

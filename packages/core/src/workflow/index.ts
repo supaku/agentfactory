@@ -19,6 +19,14 @@ export type {
   BranchingDefinition,
   TemplateRetryConfig,
   TemplateTimeoutConfig,
+  // v2 types
+  WorkflowTriggerDefinition,
+  ProviderRequirement,
+  WorkflowConfig,
+  StepDefinition,
+  NodeDefinition,
+  WorkflowDefinitionV2,
+  AnyWorkflowDefinition,
 } from './workflow-types.js'
 
 export {
@@ -35,10 +43,21 @@ export {
   TemplateRetryConfigSchema,
   TemplateTimeoutConfigSchema,
   validateWorkflowDefinition,
+  // v2 schemas & validation
+  WorkflowTriggerDefinitionSchema,
+  ProviderRequirementSchema,
+  WorkflowConfigSchema,
+  StepDefinitionSchema,
+  NodeDefinitionSchema,
+  WorkflowDefinitionV2Schema,
+  AnyWorkflowDefinitionSchema,
+  validateAnyWorkflowDefinition,
+  crossValidateWorkflowV2,
 } from './workflow-types.js'
 
 export {
   loadWorkflowDefinitionFile,
+  loadAnyWorkflowDefinitionFile,
   getBuiltinWorkflowDir,
   getBuiltinWorkflowPath,
 } from './workflow-loader.js'

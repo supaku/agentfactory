@@ -13,6 +13,16 @@ import {
   ParallelismGroupDefinitionSchema,
   WorkflowDefinitionSchema,
   validateWorkflowDefinition,
+  // v2 schemas
+  WorkflowTriggerDefinitionSchema,
+  ProviderRequirementSchema,
+  WorkflowConfigSchema,
+  StepDefinitionSchema,
+  NodeDefinitionSchema,
+  WorkflowDefinitionV2Schema,
+  AnyWorkflowDefinitionSchema,
+  validateAnyWorkflowDefinition,
+  crossValidateWorkflowV2,
 } from './workflow-types.js'
 
 describe('PhaseDefinitionSchema', () => {
@@ -813,5 +823,717 @@ describe('validateWorkflowDefinition cross-validation', () => {
     }))
     expect(result.parallelism).toHaveLength(1)
     expect(result.phases.find(p => p.name === 'qa')?.inputs).toBeDefined()
+  })
+})
+
+// ===========================================================================
+// v2 Schema Tests
+// ===========================================================================
+
+describe('WorkflowTriggerDefinitionSchema', () => {
+  it('validates a webhook trigger', () => {
+    const result = WorkflowTriggerDefinitionSchema.parse({
+      name: 'issue-moved',
+      type: 'webhook',
+      source: 'linear',
+      event: 'issue.status_changed',
+      filter: { status: 'Backlog' },
+    })
+    expect(result.name).toBe('issue-moved')
+    expect(result.type).toBe('webhook')
+    expect(result.source).toBe('linear')
+    expect(result.event).toBe('issue.status_changed')
+    expect(result.filter).toEqual({ status: 'Backlog' })
+  })
+
+  it('validates a schedule trigger', () => {
+    const result = WorkflowTriggerDefinitionSchema.parse({
+      name: 'nightly-sweep',
+      type: 'schedule',
+      schedule: '0 2 * * *',
+    })
+    expect(result.type).toBe('schedule')
+    expect(result.schedule).toBe('0 2 * * *')
+  })
+
+  it('validates a manual trigger', () => {
+    const result = WorkflowTriggerDefinitionSchema.parse({
+      name: 'manual',
+      type: 'manual',
+    })
+    expect(result.type).toBe('manual')
+    expect(result.source).toBeUndefined()
+  })
+
+  it('rejects missing name', () => {
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
+      type: 'webhook',
+    })).toThrow()
+  })
+
+  it('rejects empty name', () => {
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
+      name: '',
+      type: 'webhook',
+    })).toThrow()
+  })
+
+  it('rejects invalid type', () => {
+    expect(() => WorkflowTriggerDefinitionSchema.parse({
+      name: 'test',
+      type: 'invalid',
+    })).toThrow()
+  })
+})
+
+describe('ProviderRequirementSchema', () => {
+  it('validates a provider with config', () => {
+    const result = ProviderRequirementSchema.parse({
+      name: 'coding-agent',
+      type: 'claude',
+      config: { model: 'claude-sonnet-4-5-20250929' },
+    })
+    expect(result.name).toBe('coding-agent')
+    expect(result.type).toBe('claude')
+    expect(result.config).toEqual({ model: 'claude-sonnet-4-5-20250929' })
+  })
+
+  it('validates a minimal provider', () => {
+    const result = ProviderRequirementSchema.parse({
+      name: 'tracker',
+      type: 'linear',
+    })
+    expect(result.config).toBeUndefined()
+  })
+
+  it('rejects missing name', () => {
+    expect(() => ProviderRequirementSchema.parse({ type: 'claude' })).toThrow()
+  })
+
+  it('rejects missing type', () => {
+    expect(() => ProviderRequirementSchema.parse({ name: 'agent' })).toThrow()
+  })
+
+  it('rejects empty type', () => {
+    expect(() => ProviderRequirementSchema.parse({ name: 'agent', type: '' })).toThrow()
+  })
+})
+
+describe('WorkflowConfigSchema', () => {
+  it('validates config with projectMapping', () => {
+    const result = WorkflowConfigSchema.parse({
+      projectMapping: { AgentFactory: './packages/core' },
+    })
+    expect(result.projectMapping).toEqual({ AgentFactory: './packages/core' })
+  })
+
+  it('validates empty config', () => {
+    const result = WorkflowConfigSchema.parse({})
+    expect(result.projectMapping).toBeUndefined()
+  })
+
+  it('allows extensible keys (passthrough)', () => {
+    const result = WorkflowConfigSchema.parse({
+      projectMapping: { AgentFactory: './packages/core' },
+      customSetting: true,
+    })
+    expect((result as Record<string, unknown>).customSetting).toBe(true)
+  })
+})
+
+describe('StepDefinitionSchema', () => {
+  it('validates a step with all fields', () => {
+    const result = StepDefinitionSchema.parse({
+      id: 'implement',
+      action: 'spawn-session',
+      with: {
+        template: 'development',
+        issue: '{{ trigger.issue.identifier }}',
+      },
+      when: '{{ trigger.event eq "issue.status_changed" }}',
+    })
+    expect(result.id).toBe('implement')
+    expect(result.action).toBe('spawn-session')
+    expect(result.with?.template).toBe('development')
+    expect(result.when).toContain('trigger.event')
+  })
+
+  it('validates a minimal step', () => {
+    const result = StepDefinitionSchema.parse({
+      id: 'run',
+      action: 'tracker.create-comment',
+    })
+    expect(result.with).toBeUndefined()
+    expect(result.when).toBeUndefined()
+  })
+
+  it('preserves {{ }} interpolation markers as strings', () => {
+    const result = StepDefinitionSchema.parse({
+      id: 'post-pr',
+      action: 'tracker.create-comment',
+      with: {
+        body: 'PR: {{ steps.implement.output.prUrl }}',
+      },
+    })
+    expect(result.with?.body).toBe('PR: {{ steps.implement.output.prUrl }}')
+  })
+
+  it('rejects missing id', () => {
+    expect(() => StepDefinitionSchema.parse({
+      action: 'spawn-session',
+    })).toThrow()
+  })
+
+  it('rejects empty id', () => {
+    expect(() => StepDefinitionSchema.parse({
+      id: '',
+      action: 'spawn-session',
+    })).toThrow()
+  })
+
+  it('rejects missing action', () => {
+    expect(() => StepDefinitionSchema.parse({
+      id: 'step1',
+    })).toThrow()
+  })
+
+  it('rejects empty action', () => {
+    expect(() => StepDefinitionSchema.parse({
+      id: 'step1',
+      action: '',
+    })).toThrow()
+  })
+})
+
+describe('NodeDefinitionSchema', () => {
+  it('validates a node with multi-step sequence', () => {
+    const result = NodeDefinitionSchema.parse({
+      name: 'develop',
+      description: 'Implement feature',
+      provider: 'coding-agent',
+      when: '{{ trigger.filter.status eq "Backlog" }}',
+      steps: [
+        { id: 'implement', action: 'spawn-session', with: { template: 'development' } },
+        { id: 'post-pr', action: 'tracker.create-comment', with: { body: '{{ steps.implement.output.prUrl }}' } },
+      ],
+      timeout: { duration: '2h', action: 'escalate' },
+      retry: { maxAttempts: 3 },
+    })
+    expect(result.name).toBe('develop')
+    expect(result.steps).toHaveLength(2)
+    expect(result.provider).toBe('coding-agent')
+    expect(result.when).toContain('trigger.filter.status')
+  })
+
+  it('validates a minimal node', () => {
+    const result = NodeDefinitionSchema.parse({
+      name: 'simple',
+    })
+    expect(result.steps).toBeUndefined()
+    expect(result.provider).toBeUndefined()
+    expect(result.when).toBeUndefined()
+  })
+
+  it('validates a node with template reference (v1 compat)', () => {
+    const result = NodeDefinitionSchema.parse({
+      name: 'legacy-node',
+      template: 'development',
+    })
+    expect(result.template).toBe('development')
+  })
+
+  it('validates a node with outputs', () => {
+    const result = NodeDefinitionSchema.parse({
+      name: 'develop',
+      outputs: {
+        prUrl: { type: 'url', required: true },
+        branch: { type: 'string' },
+      },
+    })
+    expect(result.outputs?.prUrl.type).toBe('url')
+    expect(result.outputs?.prUrl.required).toBe(true)
+  })
+
+  it('rejects missing name', () => {
+    expect(() => NodeDefinitionSchema.parse({
+      provider: 'coding-agent',
+    })).toThrow()
+  })
+
+  it('rejects empty name', () => {
+    expect(() => NodeDefinitionSchema.parse({
+      name: '',
+    })).toThrow()
+  })
+
+  it('preserves when conditions as strings', () => {
+    const result = NodeDefinitionSchema.parse({
+      name: 'test',
+      when: '{{ trigger.event eq "issue.status_changed" and trigger.filter.status eq "Backlog" }}',
+    })
+    expect(result.when).toContain('trigger.event')
+  })
+})
+
+describe('WorkflowDefinitionV2Schema', () => {
+  it('validates a minimal v2 definition', () => {
+    const result = WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'minimal-v2' },
+      triggers: [{ name: 'manual', type: 'manual' }],
+    })
+    expect(result.apiVersion).toBe('v2')
+    expect(result.triggers).toHaveLength(1)
+  })
+
+  it('validates v2 with all optional sections', () => {
+    const result = WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'full-v2', description: 'Full v2 workflow' },
+      triggers: [{ name: 'webhook', type: 'webhook', source: 'linear', event: 'issue.status_changed' }],
+      providers: [{ name: 'agent', type: 'claude' }],
+      config: { projectMapping: { MyProject: './src' } },
+      nodes: [{ name: 'develop', provider: 'agent', steps: [{ id: 'run', action: 'spawn-session' }] }],
+      phases: [{ name: 'dev', template: 'development' }],
+      transitions: [{ from: 'Backlog', to: 'dev' }],
+      escalation: {
+        ladder: [{ cycle: 1, strategy: 'normal' }],
+        circuitBreaker: { maxSessionsPerIssue: 8 },
+      },
+    })
+    expect(result.triggers).toHaveLength(1)
+    expect(result.providers).toHaveLength(1)
+    expect(result.config?.projectMapping).toBeDefined()
+    expect(result.nodes).toHaveLength(1)
+    expect(result.phases).toHaveLength(1)
+    expect(result.transitions).toHaveLength(1)
+    expect(result.escalation).toBeDefined()
+  })
+
+  it('validates nodes with multi-step sequences', () => {
+    const result = WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'multi-step' },
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [
+          { id: 'implement', action: 'spawn-session', with: { template: 'development' } },
+          { id: 'post-pr', action: 'tracker.create-comment', with: { body: '{{ steps.implement.output.prUrl }}' } },
+          { id: 'transition', action: 'tracker.update-issue', when: '{{ steps.implement.output.success }}' },
+        ],
+      }],
+    })
+    expect(result.nodes![0].steps).toHaveLength(3)
+  })
+
+  it('preserves {{ }} template expressions in with parameters', () => {
+    const result = WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'template-test' },
+      nodes: [{
+        name: 'test-node',
+        steps: [{
+          id: 'step1',
+          action: 'do-thing',
+          with: {
+            issue: '{{ trigger.issue.identifier }}',
+            projectPath: '{{ config.projectMapping[trigger.issue.project] }}',
+          },
+        }],
+      }],
+    })
+    const withParams = result.nodes![0].steps![0].with!
+    expect(withParams.issue).toBe('{{ trigger.issue.identifier }}')
+    expect(withParams.projectPath).toBe('{{ config.projectMapping[trigger.issue.project] }}')
+  })
+
+  it('preserves when conditions on nodes and steps', () => {
+    const result = WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'when-test' },
+      nodes: [{
+        name: 'conditional',
+        when: '{{ trigger.event eq "issue.status_changed" }}',
+        steps: [{
+          id: 'step1',
+          action: 'run',
+          when: '{{ steps.prev.output.success }}',
+        }],
+      }],
+    })
+    expect(result.nodes![0].when).toBe('{{ trigger.event eq "issue.status_changed" }}')
+    expect(result.nodes![0].steps![0].when).toBe('{{ steps.prev.output.success }}')
+  })
+
+  it('rejects invalid apiVersion', () => {
+    expect(() => WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v3',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test' },
+    })).toThrow()
+  })
+
+  it('rejects invalid kind', () => {
+    expect(() => WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowTemplate',
+      metadata: { name: 'test' },
+    })).toThrow()
+  })
+
+  it('rejects missing metadata.name', () => {
+    expect(() => WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: {},
+    })).toThrow()
+  })
+
+  it('rejects empty metadata.name', () => {
+    expect(() => WorkflowDefinitionV2Schema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: '' },
+    })).toThrow()
+  })
+})
+
+describe('AnyWorkflowDefinitionSchema', () => {
+  it('dispatches v1.1 to WorkflowDefinitionSchema', () => {
+    const result = AnyWorkflowDefinitionSchema.parse({
+      apiVersion: 'v1.1',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'v1-test' },
+      phases: [{ name: 'dev', template: 'development' }],
+      transitions: [{ from: 'Backlog', to: 'dev' }],
+    })
+    expect(result.apiVersion).toBe('v1.1')
+  })
+
+  it('dispatches v2 to WorkflowDefinitionV2Schema', () => {
+    const result = AnyWorkflowDefinitionSchema.parse({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'v2-test' },
+      triggers: [{ name: 'manual', type: 'manual' }],
+    })
+    expect(result.apiVersion).toBe('v2')
+  })
+
+  it('rejects missing apiVersion', () => {
+    expect(() => AnyWorkflowDefinitionSchema.parse({
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test' },
+    })).toThrow()
+  })
+
+  it('rejects unsupported apiVersion', () => {
+    expect(() => AnyWorkflowDefinitionSchema.parse({
+      apiVersion: 'v3',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test' },
+    })).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// v2 Cross-Validation Tests
+// ---------------------------------------------------------------------------
+
+describe('crossValidateWorkflowV2', () => {
+  /** Helper to build a minimal valid v2 workflow with overrides */
+  function makeV2Workflow(overrides: Record<string, unknown> = {}) {
+    return {
+      apiVersion: 'v2' as const,
+      kind: 'WorkflowDefinition' as const,
+      metadata: { name: 'test-v2-cross-validation' },
+      triggers: [{ name: 'manual', type: 'manual' as const }],
+      providers: [
+        { name: 'coding-agent', type: 'claude' },
+        { name: 'tracker', type: 'linear' },
+      ],
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [
+          { id: 'implement', action: 'spawn-session', with: { template: 'development' } },
+          { id: 'post-pr', action: 'tracker.create-comment', with: { body: '{{ steps.implement.output.prUrl }}' } },
+        ],
+      }],
+      ...overrides,
+    }
+  }
+
+  it('passes for valid v2 workflow', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow())
+    expect(() => crossValidateWorkflowV2(workflow)).not.toThrow()
+  })
+
+  it('rejects duplicate node names', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [
+        { name: 'develop', steps: [{ id: 's1', action: 'run' }] },
+        { name: 'develop', steps: [{ id: 's2', action: 'run' }] },
+      ],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow('Duplicate node name "develop"')
+  })
+
+  it('rejects node referencing undefined provider', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      providers: [{ name: 'tracker', type: 'linear' }],
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [{ id: 's1', action: 'run' }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'Node "develop" references undefined provider "coding-agent"'
+    )
+  })
+
+  it('rejects duplicate step IDs within a node', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [
+          { id: 'run', action: 'spawn-session' },
+          { id: 'run', action: 'tracker.create-comment' },
+        ],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'Node "develop" has duplicate step ID "run"'
+    )
+  })
+
+  it('rejects step referencing undefined step output', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [
+          { id: 'implement', action: 'spawn-session' },
+          { id: 'post-pr', action: 'tracker.create-comment', with: { body: '{{ steps.implment.output.prUrl }}' } },
+        ],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'Node "develop" step "post-pr" references undefined step "implment"'
+    )
+  })
+
+  it('rejects trigger references when no triggers declared', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      triggers: undefined,
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        when: '{{ trigger.event eq "issue.status_changed" }}',
+        steps: [{ id: 's1', action: 'run' }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'Node "develop" uses trigger references but no triggers are declared'
+    )
+  })
+
+  it('rejects trigger references in step with params when no triggers declared', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      triggers: undefined,
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [{
+          id: 's1',
+          action: 'spawn-session',
+          with: { issue: '{{ trigger.issue.identifier }}' },
+        }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'Node "develop" uses trigger references but no triggers are declared'
+    )
+  })
+
+  it('allows trigger references when triggers are declared', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      triggers: [{ name: 'webhook', type: 'webhook', source: 'linear', event: 'issue.status_changed' }],
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        when: '{{ trigger.event eq "issue.status_changed" }}',
+        steps: [{
+          id: 's1',
+          action: 'spawn-session',
+          with: { issue: '{{ trigger.issue.identifier }}' },
+        }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).not.toThrow()
+  })
+
+  it('rejects unbalanced brackets in when conditions', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        when: '{{ trigger.event eq "test"',
+        steps: [{ id: 's1', action: 'run' }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow('unbalanced brackets')
+  })
+
+  it('rejects unbalanced brackets in step when conditions', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [{
+        name: 'develop',
+        provider: 'coding-agent',
+        steps: [{
+          id: 's1',
+          action: 'run',
+          when: 'steps.implement.output.success }}',
+        }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow('unbalanced brackets')
+  })
+
+  it('rejects empty config.projectMapping values', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      config: { projectMapping: { AgentFactory: '' } },
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).toThrow(
+      'config.projectMapping["AgentFactory"] has empty value'
+    )
+  })
+
+  it('includes file path in error messages', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [
+        { name: 'a', steps: [{ id: 's1', action: 'run' }] },
+        { name: 'a', steps: [{ id: 's2', action: 'run' }] },
+      ],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow, '/path/to/workflow.yaml')).toThrow(
+      'in /path/to/workflow.yaml'
+    )
+  })
+
+  it('validates node without provider (allowed)', () => {
+    const workflow = WorkflowDefinitionV2Schema.parse(makeV2Workflow({
+      nodes: [{
+        name: 'utility',
+        steps: [{ id: 's1', action: 'log' }],
+      }],
+    }))
+    expect(() => crossValidateWorkflowV2(workflow)).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// validateAnyWorkflowDefinition integration tests
+// ---------------------------------------------------------------------------
+
+describe('validateAnyWorkflowDefinition', () => {
+  it('validates v1.1 workflows with cross-validation', () => {
+    const result = validateAnyWorkflowDefinition({
+      apiVersion: 'v1.1',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test-v1' },
+      phases: [{ name: 'dev', template: 'development' }],
+      transitions: [{ from: 'Backlog', to: 'dev' }],
+    })
+    expect(result.apiVersion).toBe('v1.1')
+  })
+
+  it('validates v2 workflows with cross-validation', () => {
+    const result = validateAnyWorkflowDefinition({
+      apiVersion: 'v2',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test-v2' },
+      triggers: [{ name: 'manual', type: 'manual' }],
+      providers: [{ name: 'agent', type: 'claude' }],
+      nodes: [{
+        name: 'develop',
+        provider: 'agent',
+        steps: [{ id: 'run', action: 'spawn-session' }],
+      }],
+    })
+    expect(result.apiVersion).toBe('v2')
+  })
+
+  it('includes file path in error messages', () => {
+    expect(() => validateAnyWorkflowDefinition(
+      { invalid: true },
+      '/path/to/workflow.yaml',
+    )).toThrow('/path/to/workflow.yaml')
+  })
+
+  it('loads existing v1.1 workflow.yaml and validates', () => {
+    const workflowPath = path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      'defaults',
+      'workflow.yaml',
+    )
+    const content = fs.readFileSync(workflowPath, 'utf-8')
+    const data = parseYaml(content)
+    const result = validateAnyWorkflowDefinition(data, workflowPath)
+    expect(result.apiVersion).toBe('v1.1')
+    expect((result as { phases: unknown[] }).phases.length).toBeGreaterThan(0)
+  })
+
+  it('loads v1.1 parallel-example.yaml and validates', () => {
+    const examplePath = path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      'defaults',
+      'workflow-parallel-example.yaml',
+    )
+    const content = fs.readFileSync(examplePath, 'utf-8')
+    const data = parseYaml(content)
+    const result = validateAnyWorkflowDefinition(data, examplePath)
+    expect(result.apiVersion).toBe('v1.1')
+  })
+
+  it('loads v2 sdlc-loop.yaml and validates', () => {
+    const sdlcPath = path.join(
+      path.dirname(new URL(import.meta.url).pathname),
+      'defaults',
+      'sdlc-loop.yaml',
+    )
+    const content = fs.readFileSync(sdlcPath, 'utf-8')
+    const data = parseYaml(content)
+    const result = validateAnyWorkflowDefinition(data, sdlcPath)
+    expect(result.apiVersion).toBe('v2')
+    if (result.apiVersion === 'v2') {
+      expect(result.triggers!.length).toBeGreaterThan(0)
+      expect(result.providers!.length).toBeGreaterThan(0)
+      expect(result.nodes!.length).toBeGreaterThan(0)
+      expect(result.config?.projectMapping).toBeDefined()
+      // v1.1 backwards compat sections
+      expect(result.phases!.length).toBeGreaterThan(0)
+      expect(result.transitions!.length).toBeGreaterThan(0)
+      expect(result.escalation).toBeDefined()
+    }
+  })
+
+  it('validateWorkflowDefinition still works for v1.1 only', () => {
+    const result = validateWorkflowDefinition({
+      apiVersion: 'v1.1',
+      kind: 'WorkflowDefinition',
+      metadata: { name: 'test' },
+      phases: [{ name: 'dev', template: 'development' }],
+      transitions: [{ from: 'Backlog', to: 'dev' }],
+    })
+    expect(result.apiVersion).toBe('v1.1')
   })
 })
