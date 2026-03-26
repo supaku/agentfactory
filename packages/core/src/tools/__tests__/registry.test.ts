@@ -36,11 +36,18 @@ describe('ToolRegistry', () => {
     registry.register(createMockPlugin('alpha', 2))
     registry.register(createMockPlugin('beta', 3))
 
-    const servers = registry.createServers(mockContext)
+    const { servers, toolNames } = registry.createServers(mockContext)
 
     expect(Object.keys(servers)).toEqual(['alpha', 'beta'])
     expect(servers['alpha'].type).toBe('sdk')
     expect(servers['alpha'].name).toBe('alpha')
+    expect(toolNames).toEqual([
+      'mcp__alpha__alpha_tool_0',
+      'mcp__alpha__alpha_tool_1',
+      'mcp__beta__beta_tool_0',
+      'mcp__beta__beta_tool_1',
+      'mcp__beta__beta_tool_2',
+    ])
   })
 
   it('skips plugins that return no tools', () => {
@@ -48,16 +55,18 @@ describe('ToolRegistry', () => {
     registry.register(createMockPlugin('empty', 0))
     registry.register(createMockPlugin('has-tools', 1))
 
-    const servers = registry.createServers(mockContext)
+    const { servers, toolNames } = registry.createServers(mockContext)
 
     expect(Object.keys(servers)).toEqual(['has-tools'])
+    expect(toolNames).toEqual(['mcp__has-tools__has-tools_tool_0'])
   })
 
   it('returns empty when no plugins registered', () => {
     const registry = new ToolRegistry()
-    const servers = registry.createServers(mockContext)
+    const { servers, toolNames } = registry.createServers(mockContext)
 
     expect(Object.keys(servers)).toEqual([])
+    expect(toolNames).toEqual([])
   })
 
   it('passes context to plugin createTools', () => {

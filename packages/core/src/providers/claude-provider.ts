@@ -172,6 +172,8 @@ export class ClaudeProvider implements AgentProvider {
           'Bash(bash:*)',
           'Bash(sh:*)',
           'Bash(./:*)',
+          // In-process MCP tools from registered plugins (code intelligence, etc.)
+          ...(config.mcpToolNames ?? []),
         ]
       : []
 

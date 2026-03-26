@@ -2394,7 +2394,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
     // Create in-process tool servers from registered plugins
-    const mcpServers = spawnProviderName === 'claude'
+    const toolServers = spawnProviderName === 'claude'
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
@@ -2412,7 +2412,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
-      mcpServers,
+      mcpServers: toolServers?.servers,
+      mcpToolNames: toolServers?.toolNames,
       maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid
@@ -4179,7 +4180,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     })
 
     // Create in-process tool servers from registered plugins
-    const mcpServers = spawnProviderName === 'claude'
+    const toolServers = spawnProviderName === 'claude'
       ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
       : undefined
 
@@ -4196,7 +4197,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
-      mcpServers,
+      mcpServers: toolServers?.servers,
+      mcpToolNames: toolServers?.toolNames,
       maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid

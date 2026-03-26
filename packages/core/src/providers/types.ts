@@ -66,6 +66,11 @@ export interface AgentSpawnConfig {
    */
   mcpServers?: Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
   /**
+   * Fully-qualified MCP tool names (e.g. 'mcp__af-code-intelligence__af_code_get_repo_map').
+   * Added to the allowedTools list so autonomous agents can use in-process MCP tools.
+   */
+  mcpToolNames?: string[]
+  /**
    * Maximum number of agentic turns (API round-trips) before stopping.
    * Coordinators need more turns than standard agents since they poll sub-agent status.
    * When omitted, the provider's default applies.
