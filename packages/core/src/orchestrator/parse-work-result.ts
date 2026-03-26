@@ -90,6 +90,22 @@ const COORDINATION_PASS_PATTERNS = [
   /\bParent\s+issue\s+marked\s+Finished/i,
 ]
 
+const MERGE_PASS_PATTERNS = [
+  /merge.*completed/i,
+  /successfully\s+merged/i,
+  /fast-forward\s+merge/i,
+  /merged\s+to\s+main/i,
+  /merge\s+queue.*completed/i,
+]
+
+const MERGE_FAIL_PATTERNS = [
+  /merge.*failed/i,
+  /merge\s+conflict/i,
+  /could\s+not\s+merge/i,
+  /rebase.*failed/i,
+  /test.*failed.*after.*rebase/i,
+]
+
 const COORDINATION_FAIL_PATTERNS = [
   // "Must Fix Before Merge" — agents use this heading for blocking issues
   /\bMust\s+Fix\s+Before\s+Merge\b/i,
@@ -158,6 +174,15 @@ export function parseWorkResult(
       return 'failed'
     }
     if (COORDINATION_PASS_PATTERNS.some((p) => p.test(resultMessage))) {
+      return 'passed'
+    }
+  }
+
+  if (workType === 'merge') {
+    if (MERGE_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
+      return 'failed'
+    }
+    if (MERGE_PASS_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'passed'
     }
   }

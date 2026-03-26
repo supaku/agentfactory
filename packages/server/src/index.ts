@@ -110,3 +110,6 @@ export * from './gate-storage.js'
 
 // Webhook gate endpoint handler (framework-agnostic)
 export * from './webhook-gate-handler.js'
+
+// Merge queue storage (Redis-backed sorted set + state tracking)
+export * from './merge-queue-storage.js'
