@@ -13,6 +13,8 @@
  *   get-repo-map             Get PageRank-ranked repository file map
  *   search-code <query>      BM25/hybrid code search
  *   check-duplicate          Check content for duplicates
+ *   find-type-usages <name>  Find all switch/case, mapping, and usage sites for a type
+ *   validate-cross-deps      Check cross-package imports have package.json entries
  *   help                     Show this help message
  *
  * Environment:
@@ -59,6 +61,12 @@ Options (check-duplicate):
   --content <string>          Content to check (inline)
   --content-file <path>       Path to file containing content to check
 
+Options (find-type-usages):
+  --max-results <N>           Maximum results (default: 50)
+
+Options (validate-cross-deps):
+  [path]                      Optional directory/file to scope the check
+
 Index:
   First invocation builds the index from source files (~5-10s).
   Subsequent calls reuse the persisted index from .agentfactory/code-index/.
@@ -70,6 +78,9 @@ Examples:
   af-code search-code "incremental indexer" --language typescript
   af-code check-duplicate --content "function hello() { return 'world' }"
   af-code check-duplicate --content-file /tmp/snippet.ts
+  af-code find-type-usages "AgentWorkType"
+  af-code validate-cross-deps
+  af-code validate-cross-deps packages/linear
 `)
 }
 

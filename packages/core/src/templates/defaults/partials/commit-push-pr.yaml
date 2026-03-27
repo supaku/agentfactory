@@ -5,8 +5,30 @@ metadata:
   description: Mandatory commit, push, and PR creation instructions for code-producing work types
 content: |
 
-  MANDATORY — PERSIST YOUR WORK (non-negotiable):
-  Your work is NOT done until all three steps are complete:
+  MANDATORY — VALIDATE THEN PERSIST YOUR WORK (non-negotiable):
+  Your work is NOT done until all four steps are complete:
+
+  0. VALIDATE (before committing):
+     Run ALL of the following and fix any failures before proceeding:
+     {{#if validateCommand}}
+     - `{{{validateCommand}}}`
+     {{else}}
+     - `{{packageManager}} typecheck` — must exit 0
+     {{/if}}
+     {{#if buildCommand}}
+     - `{{{buildCommand}}}`
+     {{else}}
+     - `{{packageManager}} build` — must exit 0
+     {{/if}}
+     {{#if testCommand}}
+     - `{{{testCommand}}}`
+     {{else}}
+     - `{{packageManager}} test` — must exit 0
+     {{/if}}
+     If any command fails, fix the issue and re-run until all pass.
+     Do NOT skip validation — pushing code that fails typecheck/build/test wastes
+     an entire QA cycle and delays delivery.
+
   1. COMMIT: git add <files> && git commit -m "descriptive message"
   2. PUSH: git push -u origin $(git branch --show-current)
      If your branch has diverged from origin (e.g., after splitting/rewriting commits),
