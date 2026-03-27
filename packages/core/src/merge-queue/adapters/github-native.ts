@@ -32,11 +32,6 @@ export class GitHubNativeMergeQueueAdapter implements MergeQueueAdapter {
               mergeable
               reviewDecision
               mergeQueueEntry { state }
-              baseRef {
-                branchProtectionRule {
-                  requiresStatusChecks
-                }
-              }
             }
           }
         }
@@ -47,9 +42,6 @@ export class GitHubNativeMergeQueueAdapter implements MergeQueueAdapter {
             mergeable: string
             reviewDecision: string | null
             mergeQueueEntry: { state: string } | null
-            baseRef: {
-              branchProtectionRule: { requiresStatusChecks: boolean } | null
-            }
           }
         }
       }>(query, { owner, repo, prNumber })
@@ -220,6 +212,18 @@ export class GitHubNativeMergeQueueAdapter implements MergeQueueAdapter {
   }
 
   async isEnabled(owner: string, repo: string): Promise<boolean> {
+    // Check rulesets first (modern path), then fall back to legacy branch protection.
+    // GitHub is deprecating legacy branch protection rules in favor of rulesets.
+
+    // 1. Check rulesets via REST API — look for merge_queue rule on the default branch
+    try {
+      const rulesEnabled = await this.checkRulesetsMergeQueue(owner, repo)
+      if (rulesEnabled) return true
+    } catch {
+      // Rulesets API may not be available (older GHES), fall through to legacy
+    }
+
+    // 2. Fall back to legacy branch protection GraphQL query
     try {
       const query = `
         query($owner: String!, $repo: String!) {
@@ -232,8 +236,6 @@ export class GitHubNativeMergeQueueAdapter implements MergeQueueAdapter {
           }
         }
       `
-      // Note: requiresMergeQueue might not be available in all GitHub API versions.
-      // Fallback: check if merge queue entries exist
       const result = await this.graphql<{
         repository: {
           defaultBranchRef: {
@@ -248,6 +250,33 @@ export class GitHubNativeMergeQueueAdapter implements MergeQueueAdapter {
     } catch {
       return false
     }
+  }
+
+  /**
+   * Check if merge queue is enabled via GitHub Rulesets (the modern replacement
+   * for legacy branch protection rules).
+   *
+   * Queries the REST API for active rules on the default branch and checks
+   * for a 'merge_queue' rule type.
+   */
+  private async checkRulesetsMergeQueue(owner: string, repo: string): Promise<boolean> {
+    const command = `gh api repos/${owner}/${repo}/rules/branches/main --jq '[.[] | select(.type == "merge_queue")] | length'`
+
+    let lastError: Error | null = null
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const { stdout } = await execAsync(command, { timeout: GH_API_TIMEOUT })
+        const count = parseInt(stdout.trim(), 10)
+        return count > 0
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        if (attempt < MAX_RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * (attempt + 1)))
+        }
+      }
+    }
+
+    throw lastError!
   }
 
   // ---------------------------------------------------------------------------

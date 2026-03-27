@@ -54,9 +54,6 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             mergeable: 'MERGEABLE',
             reviewDecision: 'APPROVED',
             mergeQueueEntry: null,
-            baseRef: {
-              branchProtectionRule: { requiresStatusChecks: true },
-            },
           },
         },
       })
@@ -72,9 +69,6 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             mergeable: 'MERGEABLE',
             reviewDecision: 'APPROVED',
             mergeQueueEntry: { state: 'QUEUED' },
-            baseRef: {
-              branchProtectionRule: { requiresStatusChecks: true },
-            },
           },
         },
       })
@@ -90,9 +84,6 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             mergeable: 'CONFLICTING',
             reviewDecision: 'APPROVED',
             mergeQueueEntry: null,
-            baseRef: {
-              branchProtectionRule: { requiresStatusChecks: true },
-            },
           },
         },
       })
@@ -108,9 +99,6 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             mergeable: 'MERGEABLE',
             reviewDecision: 'CHANGES_REQUESTED',
             mergeQueueEntry: null,
-            baseRef: {
-              branchProtectionRule: { requiresStatusChecks: true },
-            },
           },
         },
       })
@@ -126,9 +114,6 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             mergeable: 'MERGEABLE',
             reviewDecision: null,
             mergeQueueEntry: null,
-            baseRef: {
-              branchProtectionRule: null,
-            },
           },
         },
       })
@@ -336,55 +321,97 @@ describe('GitHubNativeMergeQueueAdapter', () => {
   })
 
   describe('isEnabled', () => {
-    it('returns true when merge queue is required', async () => {
-      mockGraphQLResponse({
-        repository: {
-          defaultBranchRef: {
-            branchProtectionRule: { requiresMergeQueue: true },
-          },
-        },
+    it('returns true when merge queue is enabled via rulesets', async () => {
+      // First call: rulesets REST API check (returns merge_queue rule count)
+      mockExec.mockImplementationOnce((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(null, { stdout: '1\n' })
+        return {} as ReturnType<typeof exec>
       })
 
       const result = await adapter.isEnabled('owner', 'repo')
       expect(result).toBe(true)
     })
 
-    it('returns false when merge queue is not required', async () => {
-      mockGraphQLResponse({
-        repository: {
-          defaultBranchRef: {
-            branchProtectionRule: { requiresMergeQueue: false },
-          },
-        },
+    it('falls back to legacy branch protection when rulesets API fails', async () => {
+      // First call: rulesets check fails
+      mockExec.mockImplementationOnce((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(new Error('Not found'), { stdout: '' })
+        return {} as ReturnType<typeof exec>
+      })
+      // Retry 1 for rulesets
+      mockExec.mockImplementationOnce((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(new Error('Not found'), { stdout: '' })
+        return {} as ReturnType<typeof exec>
+      })
+      // Retry 2 for rulesets
+      mockExec.mockImplementationOnce((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(new Error('Not found'), { stdout: '' })
+        return {} as ReturnType<typeof exec>
+      })
+      // Legacy GraphQL check succeeds
+      mockExec.mockImplementation((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(null, {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                defaultBranchRef: {
+                  branchProtectionRule: { requiresMergeQueue: true },
+                },
+              },
+            },
+          }),
+        })
+        return {} as ReturnType<typeof exec>
+      })
+
+      const result = await adapter.isEnabled('owner', 'repo')
+      expect(result).toBe(true)
+    })
+
+    it('returns false when no rulesets and no legacy branch protection', async () => {
+      // Rulesets check returns 0
+      mockExec.mockImplementationOnce((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(null, { stdout: '0\n' })
+        return {} as ReturnType<typeof exec>
+      })
+      // Legacy check returns no merge queue
+      mockExec.mockImplementation((_cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        cb?.(null, {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                defaultBranchRef: {
+                  branchProtectionRule: null,
+                },
+              },
+            },
+          }),
+        })
+        return {} as ReturnType<typeof exec>
       })
 
       const result = await adapter.isEnabled('owner', 'repo')
       expect(result).toBe(false)
     })
 
-    it('returns false when no branch protection', async () => {
-      mockGraphQLResponse({
-        repository: {
-          defaultBranchRef: {
-            branchProtectionRule: null,
-          },
-        },
-      })
-
-      const result = await adapter.isEnabled('owner', 'repo')
-      expect(result).toBe(false)
-    })
-
-    it('returns false on API error', async () => {
+    it('returns false on all API errors', async () => {
       mockGraphQLError('Not found')
 
       const result = await adapter.isEnabled('owner', 'repo')
       expect(result).toBe(false)
-    })
+    }, 15000)
   })
 
   describe('graphql retry logic', () => {
     it('retries on transient failure then succeeds', async () => {
+      // Test retry logic via canEnqueue (simpler path — no rulesets fallback)
       let callCount = 0
       mockExec.mockImplementation((_cmd: string, _opts: unknown, callback?: Function) => {
         const cb = typeof _opts === 'function' ? _opts : callback
@@ -396,8 +423,10 @@ describe('GitHubNativeMergeQueueAdapter', () => {
             stdout: JSON.stringify({
               data: {
                 repository: {
-                  defaultBranchRef: {
-                    branchProtectionRule: { requiresMergeQueue: true },
+                  pullRequest: {
+                    mergeable: 'MERGEABLE',
+                    reviewDecision: 'APPROVED',
+                    mergeQueueEntry: null,
                   },
                 },
               },
@@ -407,7 +436,7 @@ describe('GitHubNativeMergeQueueAdapter', () => {
         return {} as ReturnType<typeof exec>
       })
 
-      const result = await adapter.isEnabled('owner', 'repo')
+      const result = await adapter.canEnqueue('owner', 'repo', 1)
       expect(result).toBe(true)
       expect(callCount).toBe(2)
     })
