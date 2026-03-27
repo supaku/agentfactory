@@ -47,6 +47,7 @@ const ALWAYS_PRESENT_FILES = [
   'src/app/api/public/stats/route.ts',
   'src/app/api/public/sessions/route.ts',
   'src/app/api/public/sessions/[id]/route.ts',
+  'src/app/api/public/phase-metrics/route.ts',
   'src/app/api/config/route.ts',
   'src/app/api/cleanup/route.ts',
   'src/app/api/issue-tracker-proxy/route.ts',

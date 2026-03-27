@@ -50,6 +50,7 @@ import { createPublicSessionsListHandler } from './handlers/public/sessions-list
 import { createPublicSessionDetailHandler } from './handlers/public/session-detail.js'
 import { createPublicRoutingMetricsHandler } from './handlers/public/routing-metrics.js'
 import { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
+import { createPublicPhaseMetricsHandler } from './handlers/public/phase-metrics.js'
 
 // Cleanup handler
 import { createCleanupHandler } from './handlers/cleanup.js'
@@ -102,6 +103,7 @@ export interface AllRoutes {
     sessionDetail: { GET: RouteHandler }
     routingMetrics: { GET: RouteHandler }
     sessionActivities: { GET: RouteHandler }
+    phaseMetrics: { GET: RouteHandler }
   }
   config: { GET: RouteHandler }
   cleanup: { POST: RouteHandler; GET: RouteHandler }
@@ -207,6 +209,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       sessionDetail: { GET: createPublicSessionDetailHandler() },
       routingMetrics: { GET: createPublicRoutingMetricsHandler() },
       sessionActivities: { GET: createPublicSessionActivitiesHandler() },
+      phaseMetrics: { GET: createPublicPhaseMetricsHandler() },
     },
     config: { GET: configHandler.GET },
     cleanup: { POST: cleanup.POST, GET: cleanup.GET },

@@ -58,6 +58,7 @@ export function getTemplates(opts: TemplateOptions): Record<string, string> {
   files['src/app/api/public/stats/route.ts'] = routeReexport(null, 'routes.public.stats.GET')
   files['src/app/api/public/sessions/route.ts'] = routeReexport(null, 'routes.public.sessions.GET')
   files['src/app/api/public/sessions/[id]/route.ts'] = routeReexport(null, 'routes.public.sessionDetail.GET')
+  files['src/app/api/public/phase-metrics/route.ts'] = routeReexport(null, 'routes.public.phaseMetrics.GET')
 
   // Config route
   files['src/app/api/config/route.ts'] = routeReexport(null, 'routes.config.GET')
