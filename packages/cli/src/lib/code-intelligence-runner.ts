@@ -231,11 +231,269 @@ async function checkDuplicate(
   return result
 }
 
+// ── Type usage finder (P3a) ─────────────────────────────────────────────────
+
+interface TypeUsage {
+  filePath: string
+  line: number
+  context: string
+  kind: 'switch_case' | 'mapping_object' | 'import' | 'type_reference' | 'exhaustive_check'
+}
+
+async function findTypeUsages(
+  config: CodeIntelligenceRunnerConfig,
+): Promise<unknown> {
+  const typeName = config.positionalArgs[0]
+  if (!typeName) throw new Error('Usage: af-code find-type-usages <TypeName>')
+
+  const maxResults = config.args['max-results'] ? Number(config.args['max-results']) : 50
+  const files = await discoverSourceFiles(config.cwd)
+  const usages: TypeUsage[] = []
+
+  // Patterns that indicate exhaustive switch/case, mapping objects, or type references
+  const switchPattern = new RegExp(`switch\\s*\\(`, 'g')
+  const casePattern = new RegExp(`case\\s+['"]`, 'g')
+  const importPattern = new RegExp(`\\b${escapeRegex(typeName)}\\b`, 'g')
+  const mappingPattern = new RegExp(
+    `(?:Record<\\s*${escapeRegex(typeName)}|:\\s*\\{\\s*\\[\\w+\\s+in\\s+${escapeRegex(typeName)}\\]|satisfies\\s+Record<\\s*${escapeRegex(typeName)})`,
+    'g',
+  )
+
+  for (const [filePath, content] of files) {
+    if (!content.includes(typeName)) continue
+
+    const lines = content.split('\n')
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      // Check for import of the type
+      if (line.match(/\bimport\b/) && line.includes(typeName)) {
+        usages.push({ filePath, line: i + 1, context: line.trim(), kind: 'import' })
+        continue
+      }
+
+      // Check for switch statements — look for switch keyword near the type name usage
+      if (switchPattern.test(line)) {
+        // Scan surrounding lines for the type name
+        const windowStart = Math.max(0, i - 2)
+        const windowEnd = Math.min(lines.length - 1, i + 5)
+        const window = lines.slice(windowStart, windowEnd + 1).join('\n')
+        if (window.includes(typeName) || hasRelatedCases(lines, i, typeName)) {
+          usages.push({ filePath, line: i + 1, context: line.trim(), kind: 'switch_case' })
+        }
+        switchPattern.lastIndex = 0
+      }
+
+      // Check for Record<TypeName, ...> or mapping objects
+      if (mappingPattern.test(line)) {
+        usages.push({ filePath, line: i + 1, context: line.trim(), kind: 'mapping_object' })
+        mappingPattern.lastIndex = 0
+      }
+
+      // Check for exhaustive checks (assertNever, default: throw, etc.)
+      if (
+        (line.includes('assertNever') || line.includes('exhaustive')) &&
+        content.includes(typeName)
+      ) {
+        usages.push({ filePath, line: i + 1, context: line.trim(), kind: 'exhaustive_check' })
+      }
+
+      // Check for type definition/reference (union type definitions, extends, etc.)
+      if (
+        (line.includes(`type ${typeName}`) ||
+          line.includes(`interface ${typeName}`) ||
+          line.match(new RegExp(`:\\s*${escapeRegex(typeName)}\\b`))) &&
+        !line.match(/\bimport\b/)
+      ) {
+        usages.push({ filePath, line: i + 1, context: line.trim(), kind: 'type_reference' })
+      }
+    }
+  }
+
+  // Deduplicate and sort: switch_case and mapping_object first (most actionable)
+  const kindPriority: Record<string, number> = {
+    switch_case: 0,
+    mapping_object: 1,
+    exhaustive_check: 2,
+    type_reference: 3,
+    import: 4,
+  }
+
+  usages.sort((a, b) => (kindPriority[a.kind] ?? 5) - (kindPriority[b.kind] ?? 5))
+
+  return {
+    typeName,
+    totalUsages: usages.length,
+    usages: usages.slice(0, maxResults),
+    switchStatements: usages.filter(u => u.kind === 'switch_case').length,
+    mappingObjects: usages.filter(u => u.kind === 'mapping_object').length,
+  }
+}
+
+/** Check if a switch block's case statements relate to a union type */
+function hasRelatedCases(lines: string[], switchLine: number, _typeName: string): boolean {
+  // Scan forward from the switch line looking for string literal cases
+  for (let j = switchLine; j < Math.min(lines.length, switchLine + 50); j++) {
+    if (lines[j].includes('case \'') || lines[j].includes('case "')) {
+      return true // Has string literal cases, likely a discriminated union switch
+    }
+    if (lines[j].match(/^\s*\}/)) break // End of block
+  }
+  return false
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ── Cross-package dependency validator (P3b) ────────────────────────────────
+
+interface DepValidationResult {
+  valid: boolean
+  missingDeps: Array<{
+    importingFile: string
+    importedPackage: string
+    packageJsonPath: string
+    line: number
+  }>
+}
+
+async function validateCrossDeps(
+  config: CodeIntelligenceRunnerConfig,
+): Promise<unknown> {
+  const targetPath = config.positionalArgs[0] // Optional: specific file or directory
+  const files = await discoverSourceFiles(config.cwd)
+
+  // 1. Build a map of workspace packages by reading all package.json files
+  const workspacePackages = new Map<string, { name: string; dir: string; deps: Set<string> }>()
+  await discoverWorkspacePackages(config.cwd, workspacePackages)
+
+  // 2. Map file paths to their owning workspace package
+  function findOwningPackage(filePath: string): typeof workspacePackages extends Map<string, infer V> ? V : never {
+    let bestMatch: { key: string; pkg: (typeof workspacePackages extends Map<string, infer V> ? V : never) } | null = null
+    for (const [dir, pkg] of workspacePackages) {
+      if (filePath.startsWith(dir + '/') || filePath === dir) {
+        if (!bestMatch || dir.length > bestMatch.key.length) {
+          bestMatch = { key: dir, pkg }
+        }
+      }
+    }
+    return bestMatch?.pkg as any
+  }
+
+  const missingDeps: DepValidationResult['missingDeps'] = []
+
+  // 3. Check each file for cross-package imports
+  for (const [filePath, content] of files) {
+    if (targetPath && !filePath.startsWith(targetPath)) continue
+
+    const owningPkg = findOwningPackage(filePath)
+    if (!owningPkg) continue
+
+    const lines = content.split('\n')
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      // Match import/require of workspace packages
+      const importMatch = line.match(
+        /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"])(@[^'"\/]+\/[^'"\/]+|[^.'"\/@][^'"\/]*)/,
+      )
+      if (!importMatch) continue
+
+      const importedPkg = importMatch[1]
+      // Check if this is a workspace package
+      const isWorkspacePkg = [...workspacePackages.values()].some(wp => wp.name === importedPkg)
+      if (!isWorkspacePkg) continue
+
+      // Check if it's declared in package.json
+      if (!owningPkg.deps.has(importedPkg)) {
+        missingDeps.push({
+          importingFile: filePath,
+          importedPackage: importedPkg,
+          packageJsonPath: join(owningPkg.dir, 'package.json'),
+          line: i + 1,
+        })
+      }
+    }
+  }
+
+  // Deduplicate by (packageJsonPath, importedPackage)
+  const seen = new Set<string>()
+  const uniqueMissing = missingDeps.filter(d => {
+    const key = `${d.packageJsonPath}:${d.importedPackage}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  return {
+    valid: uniqueMissing.length === 0,
+    missingDeps: uniqueMissing,
+    packagesChecked: workspacePackages.size,
+    filesChecked: targetPath
+      ? [...files.keys()].filter(f => f.startsWith(targetPath)).length
+      : files.size,
+  }
+}
+
+async function discoverWorkspacePackages(
+  cwd: string,
+  result: Map<string, { name: string; dir: string; deps: Set<string> }>,
+): Promise<void> {
+  // Find all package.json files in the workspace (skip node_modules, dist)
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > 5) return
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      if (IGNORE_DIRS.has(entry.name)) continue
+
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(fullPath, depth + 1)
+      } else if (entry.name === 'package.json') {
+        try {
+          const content = JSON.parse(await readFile(fullPath, 'utf-8'))
+          if (content.name) {
+            const allDeps = new Set<string>([
+              ...Object.keys(content.dependencies ?? {}),
+              ...Object.keys(content.devDependencies ?? {}),
+              ...Object.keys(content.peerDependencies ?? {}),
+            ])
+            result.set(relative(cwd, dir), {
+              name: content.name,
+              dir: relative(cwd, dir),
+              deps: allDeps,
+            })
+          }
+        } catch {
+          // Skip malformed package.json
+        }
+      }
+    }
+  }
+
+  await walk(cwd, 0)
+}
+
 // ── Main runner ─────────────────────────────────────────────────────────────
 
 export async function runCodeIntelligence(
   config: CodeIntelligenceRunnerConfig,
 ): Promise<CodeIntelligenceRunnerResult> {
+  // Commands that don't need the full index
+  switch (config.command) {
+    case 'find-type-usages':
+      return { output: await findTypeUsages(config) }
+    case 'validate-cross-deps':
+      return { output: await validateCrossDeps(config) }
+  }
+
   const engines = await initializeIndex(config.cwd)
 
   switch (config.command) {
@@ -248,6 +506,6 @@ export async function runCodeIntelligence(
     case 'check-duplicate':
       return { output: await checkDuplicate(config, engines) }
     default:
-      throw new Error(`Unknown command: ${config.command}. Available: search-symbols, get-repo-map, search-code, check-duplicate`)
+      throw new Error(`Unknown command: ${config.command}. Available: search-symbols, get-repo-map, search-code, check-duplicate, find-type-usages, validate-cross-deps`)
   }
 }

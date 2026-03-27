@@ -18,6 +18,7 @@
  */
 
 import type { SecurityScanEvent } from './security-scan-event.js'
+import { classifyTool, type ToolCategory } from '../tools/tool-category.js'
 
 /** Configuration for the API activity emitter */
 export interface ApiActivityEmitterConfig {
@@ -67,6 +68,7 @@ interface QueuedActivity {
   toolName?: string
   toolInput?: Record<string, unknown>
   toolOutput?: string
+  toolCategory?: ToolCategory
 }
 
 const DEFAULT_MIN_INTERVAL = 500
@@ -159,12 +161,14 @@ export class ApiActivityEmitter {
     ephemeral = true
   ): Promise<void> {
     const inputSummary = this.summarizeToolInput(tool, input)
+    const category = classifyTool(tool)
     await this.queueActivity({
       type: 'action',
       content: `${tool}: ${inputSummary}`,
       ephemeral,
       toolName: tool,
       toolInput: input,
+      toolCategory: category,
     })
   }
 
@@ -478,6 +482,7 @@ export class ApiActivityEmitter {
               content,
               toolName: activity.toolName,
               toolInput: activity.toolInput,
+              toolCategory: activity.toolCategory,
             },
           }),
         }

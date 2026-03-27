@@ -159,6 +159,7 @@ export interface AgentToolUseEvent {
   toolName: string
   toolUseId?: string
   input: Record<string, unknown>
+  toolCategory?: import('../tools/tool-category.js').ToolCategory
   raw: unknown
 }
 

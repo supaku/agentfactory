@@ -1,4 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
+import type { ToolCategory } from '@renseiai/agentfactory'
 
 /**
  * AgentSession states as defined by Linear Agent SDK
@@ -43,6 +44,7 @@ export interface ActionActivityContent {
   action: string
   parameter: string
   result?: string
+  toolCategory?: ToolCategory
 }
 
 /**
@@ -178,6 +180,7 @@ export interface AgentSignals {
   toolName?: string
   toolInput?: Record<string, unknown>
   toolOutput?: unknown
+  toolCategory?: ToolCategory
   error?: {
     message: string
     code?: string
