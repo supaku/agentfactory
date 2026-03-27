@@ -162,6 +162,15 @@ export {
 // Work Result Parser (for QA/acceptance pass/fail detection)
 export { parseWorkResult } from './parse-work-result.js'
 
+// Security Scan Event (structured vulnerability data from security station)
+export type { SecurityScanEvent } from './security-scan-event.js'
+export {
+  SecurityScanEventSchema,
+  parseSecurityScanOutput,
+  parseSemgrepOutput,
+  parseNpmAuditOutput,
+} from './security-scan-event.js'
+
 // Completion Contracts & Session Backstop
 export {
   getCompletionContract,

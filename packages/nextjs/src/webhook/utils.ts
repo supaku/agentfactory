@@ -214,4 +214,5 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   'acceptance-coordination': 'Acceptance coordination queued. Agent will verify sub-issues and merge PR...',
   'refinement-coordination': 'Refinement coordination queued. Agent will triage QA/acceptance failures to sub-issues...',
   merge: 'Merge work queued. Agent will handle PR merge queue operations...',
+  security: 'Security scan queued. Agent will run SAST and dependency audit...',
 }

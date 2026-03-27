@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: security
+  description: Run security scanning (SAST, dependency audit) and output structured results
+  workType: security
+
+tools:
+  allow:
+    - shell: "pnpm *"
+    - shell: "npx *"
+    - shell: "semgrep *"
+    - shell: "pip-audit *"
+    - shell: "pnpm af-linear *"
+  disallow:
+    - user-input
+
+prompt: |
+  Security scan {{identifier}}.
+  Run security scanning tools (SAST, dependency audit) against the codebase and output structured results.
+
+  WORKFLOW:
+  1. Identify the project type (Node.js, Python, etc.) by inspecting package.json, requirements.txt, pyproject.toml, etc.
+  2. Run appropriate scanners:
+     - **SAST**: Run `semgrep --config auto --json .` if semgrep is available, otherwise skip with a note.
+     - **Dependency audit**: Run `npm audit --json` or `pnpm audit --json` for Node.js projects, `pip-audit --format json` for Python projects.
+  3. Parse scanner outputs and produce a structured JSON summary.
+  4. Output the structured results in the following JSON format (wrapped in a fenced code block tagged `security-scan-result`):
+
+  ```security-scan-result
+  {
+    "scanner": "<scanner-name>",
+    "severityCounts": { "critical": 0, "high": 0, "medium": 0, "low": 0 },
+    "totalFindings": 0,
+    "target": "<what-was-scanned>",
+    "scanDurationMs": 0
+  }
+  ```
+
+  Output one `security-scan-result` block per scanner run. If multiple scanners are executed, output multiple blocks.
+
+  IMPORTANT CONSTRAINTS:
+  - This is READ-ONLY scanning — do NOT make code changes, git commits, or fix vulnerabilities yourself.
+  - If scanners find critical or high severity issues, emit <!-- WORK_RESULT:failed -->.
+  - If scanners find only medium/low severity issues or no issues, emit <!-- WORK_RESULT:passed -->.
+  - If a scanner is not available, skip it and note this in your output. Do not fail just because a scanner is missing.
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: get-issue, list-comments, create-comment
+
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
+  {{> partials/work-result-marker}}
