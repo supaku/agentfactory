@@ -107,7 +107,7 @@ describe('validateCompletion', () => {
     expect(result.backstopRecoverable).toContain('branch_pushed')
   })
 
-  it('marks commits_present as not backstop-capable', () => {
+  it('marks commits_present as backstop-capable', () => {
     const contract = getCompletionContract('development')!
     const outputs: SessionOutputs = {
       prUrl: 'https://github.com/org/repo/pull/1',
@@ -116,8 +116,8 @@ describe('validateCompletion', () => {
     }
     const result = validateCompletion(contract, outputs)
     expect(result.satisfied).toBe(false)
-    expect(result.manualRequired).toContain('commits_present')
-    expect(result.backstopRecoverable).not.toContain('commits_present')
+    expect(result.backstopRecoverable).toContain('commits_present')
+    expect(result.manualRequired).not.toContain('commits_present')
   })
 
   it('marks satisfied for QA with work result passed', () => {

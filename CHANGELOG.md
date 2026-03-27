@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.17
+
+### Fixes
+
+- **Backstop auto-commit for code-producing agents** — The session backstop now auto-commits uncommitted changes when agents exit without committing (model behavioral regression causing agents to post summary comments then exit before `git commit`). Scoped to code-producing work types only (development, inflight, coordination, inflight-coordination). Non-code work types (QA, refinement, research, acceptance, backlog-creation) are unaffected. The auto-commit enables the existing push + PR recovery to succeed end-to-end.
+
 ## v0.8.16
 
 ### Fixes

@@ -213,6 +213,79 @@ describe('runBackstop', () => {
     expect(result.backstop.remainingGaps).toContain('comment_posted')
   })
 
+  it('auto-commits uncommitted changes for development work type', () => {
+    // collectSessionOutputs: no commits ahead of main, branch not pushed
+    mockExecSync
+      // --- collectSessionOutputs ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // hasCommits: git branch
+      .mockReturnValueOnce('0\n' as any)             // hasCommits: rev-list (no commits)
+      .mockReturnValueOnce('SUP-123\n' as any)     // isBranchPushed: git branch
+      .mockReturnValueOnce('' as any)                 // isBranchPushed: ls-remote (not pushed)
+      // --- backstopCommitChanges ---
+      .mockReturnValueOnce(' M src/foo.ts\n?? src/bar.ts\n' as any) // git status --porcelain
+      .mockReturnValueOnce('' as any)                 // git add -A
+      .mockReturnValueOnce('' as any)                 // git commit
+      // --- backstopPushBranch ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
+      .mockReturnValueOnce('' as any)                 // git push
+      // --- backstopCreatePR ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
+      .mockReturnValueOnce('[]' as any)               // gh pr list
+      .mockReturnValueOnce('https://github.com/org/repo/pull/99\n' as any) // gh pr create
+
+    const ctx = createSessionContext({
+      agent: createMockAgent({
+        workType: 'development',
+        worktreePath: '/tmp/worktree',
+      }),
+    })
+    const result = runBackstop(ctx)
+
+    const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
+    expect(commitAction).toBeDefined()
+    expect(commitAction!.success).toBe(true)
+    expect(commitAction!.action).toContain('auto-committed')
+
+    const pushAction = result.backstop.actions.find(a => a.field === 'branch_pushed')
+    expect(pushAction).toBeDefined()
+    expect(pushAction!.success).toBe(true)
+
+    const prAction = result.backstop.actions.find(a => a.field === 'pr_url')
+    expect(prAction).toBeDefined()
+    expect(prAction!.success).toBe(true)
+  })
+
+  it('does not auto-commit for non-code-producing work types', () => {
+    // QA work type has no commits_present requirement — backstop should not commit
+    const ctx = createSessionContext({
+      agent: createMockAgent({ workType: 'qa', worktreePath: '/tmp/worktree' }),
+      commentPosted: true,
+    })
+    const result = runBackstop(ctx)
+    const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
+    expect(commitAction).toBeUndefined()
+  })
+
+  it('skips auto-commit in dry-run mode', () => {
+    mockExecSync
+      .mockReturnValueOnce('SUP-123\n' as any)     // hasCommits: git branch
+      .mockReturnValueOnce('0\n' as any)             // hasCommits: rev-list
+      .mockReturnValueOnce('SUP-123\n' as any)     // isBranchPushed: git branch
+      .mockReturnValueOnce('' as any)                 // isBranchPushed: ls-remote
+
+    const ctx = createSessionContext({
+      agent: createMockAgent({
+        workType: 'development',
+        worktreePath: '/tmp/worktree',
+      }),
+    })
+    const result = runBackstop(ctx, { dryRun: true })
+    const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
+    expect(commitAction).toBeDefined()
+    expect(commitAction!.success).toBe(false)
+    expect(commitAction!.detail).toBe('dry-run')
+  })
+
   it('reports satisfied for backlog-creation with sub-issues', () => {
     const ctx = createSessionContext({
       agent: createMockAgent({ workType: 'backlog-creation' }),

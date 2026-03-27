@@ -128,7 +128,7 @@ const FIELD = {
   commitsPresent: {
     type: 'commits_present' as const,
     label: 'Commits on branch',
-    backstopCapable: false,
+    backstopCapable: true,
   },
   workResult: {
     type: 'work_result' as const,

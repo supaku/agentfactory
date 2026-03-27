@@ -145,6 +145,28 @@ export function runBackstop(
 
   for (const fieldType of validation.backstopRecoverable) {
     switch (fieldType) {
+      case 'commits_present': {
+        // Auto-commit uncommitted changes for code-producing work types only
+        if (!ctx.agent.worktreePath) {
+          actions.push({
+            field: 'commits_present',
+            action: 'skipped — no worktree path',
+            success: false,
+          })
+          break
+        }
+        if (options?.dryRun) {
+          actions.push({ field: 'commits_present', action: 'would auto-commit uncommitted changes', success: false, detail: 'dry-run' })
+          break
+        }
+        const commitResult = backstopCommitChanges(ctx.agent.worktreePath, ctx.agent.identifier)
+        actions.push(commitResult)
+        if (commitResult.success) {
+          outputs.commitsPresent = true
+        }
+        break
+      }
+
       case 'branch_pushed': {
         if (options?.dryRun) {
           actions.push({ field: 'branch_pushed', action: 'would push branch', success: false, detail: 'dry-run' })
@@ -394,6 +416,65 @@ function backstopPushBranch(worktreePath: string): BackstopAction {
       action: 'failed to push branch',
       success: false,
       detail: errorMsg,
+    }
+  }
+}
+
+function backstopCommitChanges(worktreePath: string, identifier: string): BackstopAction {
+  try {
+    // Check if there are actually uncommitted changes
+    const status = execSync('git status --porcelain', {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+
+    if (status.length === 0) {
+      return {
+        field: 'commits_present',
+        action: 'skipped — no uncommitted changes to commit',
+        success: false,
+        detail: 'Worktree is clean',
+      }
+    }
+
+    // Stage all changes and commit
+    execSync('git add -A', {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 30000,
+    })
+
+    execSync(
+      `git commit -m "feat: ${identifier} (auto-committed by session backstop)"`,
+      {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 30000,
+        env: {
+          ...process.env,
+          // Ensure commit succeeds even without global git config
+          GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME ?? 'AgentFactory Backstop',
+          GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL ?? 'backstop@agentfactory.dev',
+          GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? 'AgentFactory Backstop',
+          GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? 'backstop@agentfactory.dev',
+        },
+      },
+    )
+
+    const changedFiles = status.split('\n').length
+    return {
+      field: 'commits_present',
+      action: `auto-committed ${changedFiles} file(s)`,
+      success: true,
+      detail: `${changedFiles} file(s) committed for ${identifier}`,
+    }
+  } catch (error) {
+    return {
+      field: 'commits_present',
+      action: 'failed to auto-commit changes',
+      success: false,
+      detail: error instanceof Error ? error.message : String(error),
     }
   }
 }
