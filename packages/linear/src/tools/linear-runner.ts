@@ -114,6 +114,7 @@ interface UpdateIssueOptions {
   description?: string
   state?: string
   labels?: string[]
+  parentId?: string | null
 }
 
 interface CreateBlockerOptions {
@@ -266,6 +267,16 @@ async function updateIssue(
       }
     }
     updateData.labelIds = labelIds
+  }
+
+  if (options.parentId !== undefined) {
+    if (options.parentId === null) {
+      updateData.parentId = null
+    } else {
+      // Resolve identifier (e.g., "SUP-123") to UUID
+      const parentIssue = await client.getIssue(options.parentId)
+      updateData.parentId = parentIssue.id
+    }
   }
 
   const updatedIssue = await client.updateIssue(issue.id, updateData)
@@ -919,11 +930,17 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
         opts.description as string | undefined,
         opts['description-file'] as string | undefined
       )
+      // Resolve parentId: "null" string means clear parent, otherwise pass as-is
+      const parentIdArg = opts.parentId as string | undefined
+      const resolvedParentId: string | null | undefined =
+        parentIdArg === 'null' ? null : parentIdArg
+
       output = await updateIssue(client(), issueId, {
         title: opts.title as string | undefined,
         description: updateDescription,
         state: opts.state as string | undefined,
         labels: opts.labels as string[] | undefined,
+        parentId: resolvedParentId,
       })
       break
     }
