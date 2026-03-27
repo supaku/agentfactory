@@ -6,6 +6,8 @@
  * decoupling core from any specific issue tracker SDK.
  */
 
+import type { ToolCategory } from '../tools/tool-category.js'
+
 /**
  * Platform-agnostic issue representation.
  * All async relations (team, labels, project) are pre-resolved.
@@ -40,7 +42,7 @@ export interface SessionConfig {
  */
 export interface IssueTrackerSession {
   emitThought(content: string, ephemeral?: boolean): Promise<void>
-  emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean, toolCategory?: string): Promise<void>
+  emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean, toolCategory?: ToolCategory): Promise<void>
   emitToolResult(tool: string, output: string, ephemeral?: boolean): Promise<void>
   emitResponse(content: string): Promise<void>
   emitError(error: Error): Promise<void>

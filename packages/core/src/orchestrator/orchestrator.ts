@@ -40,6 +40,7 @@ import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
 import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-client.js'
 import { parseWorkResult } from './parse-work-result.js'
+import { parseSecurityScanOutput } from './security-scan-event.js'
 import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
@@ -874,6 +875,28 @@ Attempt rebase onto latest main.
 Resolve conflicts using mergiraf-enhanced git merge if available.
 Push updated branch and trigger merge via configured merge queue provider.${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'security':
+      basePrompt = `Security scan ${identifier}.
+Run security scanning tools (SAST, dependency audit) against the codebase and output structured results.
+
+WORKFLOW:
+1. Identify the project type (Node.js, Python, etc.) by inspecting package.json, requirements.txt, etc.
+2. Run appropriate scanners (semgrep for SAST, npm-audit/pip-audit for dependencies)
+3. Parse scanner outputs and produce structured JSON summaries
+4. Output results in fenced code blocks tagged \`security-scan-result\`
+
+IMPORTANT CONSTRAINTS:
+- This is READ-ONLY scanning — do NOT make code changes, git commits, or fix vulnerabilities yourself.
+- If critical or high severity issues found, emit <!-- WORK_RESULT:failed -->.
+- If only medium/low or no issues found, emit <!-- WORK_RESULT:passed -->.
+- If a scanner is not available, skip it and note this in your output.
+
+STRUCTURED RESULT MARKER (REQUIRED):
+You MUST include a structured result marker in your final output message.
+- On pass: Include <!-- WORK_RESULT:passed --> in your final message
+- On fail: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries
@@ -905,6 +928,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
   merge: 'MRG',
+  security: 'SEC',
 }
 
 /**
@@ -2537,6 +2561,25 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           })
         } catch {
           // Ignore state update errors
+        }
+      }
+
+      // Emit structured security scan events for security work type agents
+      if (emitter && agent.status === 'completed' && agent.workType === 'security') {
+        const fullOutput = assistantTextChunks.join('\n')
+        const scanEvents = parseSecurityScanOutput(fullOutput)
+        for (const scanEvent of scanEvents) {
+          try {
+            await emitter.emitSecurityScan(scanEvent)
+            log?.info('Security scan event emitted', {
+              scanner: scanEvent.scanner,
+              findings: scanEvent.totalFindings,
+            })
+          } catch (scanError) {
+            log?.warn('Failed to emit security scan event', {
+              error: scanError instanceof Error ? scanError.message : String(scanError),
+            })
+          }
         }
       }
 

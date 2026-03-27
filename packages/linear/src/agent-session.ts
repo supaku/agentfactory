@@ -18,6 +18,7 @@ import type {
   IssueRelationInfo,
   ActionActivityContent,
 } from './types.js'
+import type { ToolCategory } from '@renseiai/agentfactory'
 import {
   WORK_TYPE_START_STATUS,
   WORK_TYPE_COMPLETE_STATUS,
@@ -429,7 +430,7 @@ export class AgentSession {
     toolName: string,
     input: Record<string, unknown>,
     ephemeral = true,
-    toolCategory?: string
+    toolCategory?: ToolCategory
   ): Promise<void> {
     if (this.sessionId) {
       await this.createActivity(

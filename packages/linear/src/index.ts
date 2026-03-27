@@ -49,8 +49,8 @@ export type {
   LinearApiQuota,
 } from './types.js'
 
-// Re-export ToolCategory from core for consumers that import from @agentfactory/linear
-export type { ToolCategory } from '@agentfactory/core'
+// Re-export ToolCategory from core for consumers that import from @renseiai/plugin-linear
+export type { ToolCategory } from '@renseiai/agentfactory'
 
 // Work type mappings for status-based routing
 export {

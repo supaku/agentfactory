@@ -171,6 +171,7 @@ export class LinearAgentClient {
       assigneeId?: string | null
       priority?: number
       labelIds?: string[]
+      parentId?: string | null
     }
   ): Promise<Issue> {
     return this.withRetry(async () => {

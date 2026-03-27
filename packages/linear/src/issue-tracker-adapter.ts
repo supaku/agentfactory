@@ -116,7 +116,7 @@ class LinearIssueTrackerSession implements IssueTrackerSession {
   }
 
   async emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean, toolCategory?: string): Promise<void> {
-    await this.session.emitAction(tool, input, ephemeral, toolCategory)
+    await this.session.emitAction(tool, input, ephemeral, toolCategory as import('@renseiai/agentfactory').ToolCategory | undefined)
   }
 
   async emitToolResult(tool: string, output: string, ephemeral?: boolean): Promise<void> {

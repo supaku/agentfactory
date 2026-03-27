@@ -24,6 +24,7 @@ export type AgentWorkType =
   | 'qa-coordination'
   | 'acceptance-coordination'
   | 'merge'                 // Merge queue: handle PR merge operations
+  | 'security'              // Security scanning: SAST, dependency audit
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').

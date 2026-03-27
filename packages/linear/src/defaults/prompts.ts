@@ -296,6 +296,19 @@ WORKFLOW:
 5. Add PR to merge queue via configured provider (gh pr merge --merge-queue)
 6. Monitor queue status until merged or failed`
       break
+    case 'security':
+      basePrompt = `Security scan ${identifier}. Run security scanning tools (SAST, dependency audit) against the codebase and output structured results.
+${READ_ONLY_CONSTRAINT}
+${WORK_RESULT_MARKER_INSTRUCTION}
+
+Security Scan Steps:
+1. Identify the project type (Node.js, Python, etc.) by inspecting package.json, requirements.txt, etc.
+2. Run appropriate scanners (semgrep for SAST, npm-audit/pip-audit for dependencies)
+3. Parse scanner outputs and produce structured JSON summaries
+4. Output results in fenced code blocks tagged \`security-scan-result\`
+5. If critical or high severity issues found, emit WORK_RESULT:failed
+6. If only medium/low or no issues found, emit WORK_RESULT:passed`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION

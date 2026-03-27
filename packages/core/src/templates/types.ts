@@ -219,6 +219,7 @@ const WORK_TYPES = [
   'qa-coordination',
   'acceptance-coordination',
   'merge',
+  'security',
 ] as const
 
 export const AgentWorkTypeSchema = z.enum(WORK_TYPES)
