@@ -127,6 +127,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Add approved PRs to the merge queue for automated merging',
     tags: ['merge', 'automation'],
   },
+  security: {
+    id: 'security-scan',
+    name: 'Security Scan',
+    description: 'Run SAST and dependency audit scans, output structured vulnerability data',
+    tags: ['security', 'scanning'],
+  },
 }
 
 /**

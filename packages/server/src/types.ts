@@ -22,3 +22,4 @@ export type AgentWorkType =
   | 'qa-coordination'
   | 'acceptance-coordination'
   | 'merge'
+  | 'security'
