@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.8.18
+
+### Features
+
+- **Pre-push validation gate** — Development and coordination agents now run typecheck, build, and test before committing. Prevents pushing code that fails CI and wasting QA cycles.
+- **Pre-push rebase step** — Agents rebase onto latest main before pushing to prevent merge conflict waste cycles where QA passes but acceptance fails on conflicts.
+- **QA hard-fail on merge conflicts** — QA agents must check PR mergeability and fail immediately if conflicts exist, rather than passing with a caveat that predictably wastes an acceptance session.
+- **Scope fencing in backlog writer** — Sub-issue descriptions now include explicit "DO NOT modify" constraints, cross-package dependency awareness, and exhaustive type coverage requirements to prevent out-of-scope breaking changes.
+- **Blast radius analysis in research** — Research agents now trace type/union change impact, cross-package imports, API endpoint inventory, and existing patterns before writing issue descriptions.
+- **Integration validation in coordination** — Coordinators run typecheck/build/test after all sub-agents finish but before creating the PR, catching integration failures between combined changes.
+- **Code intelligence: type usage finder** — New `af_code_find_type_usages` tool (MCP + CLI) finds all switch/case statements, mapping objects, and usage sites for a union type. Prevents missed exhaustive checks when adding type members.
+- **Code intelligence: cross-dep validator** — New `af_code_validate_cross_deps` tool (MCP + CLI) checks that cross-package imports have corresponding package.json dependency declarations.
+- **GitHub Rulesets support** — Merge queue adapter detects merge queue via Branch Protection Rulesets (modern API) before falling back to legacy branch protection rules.
+- **Emit structured security scan events** — New `agent.security-scan` event emitted from security station with severity breakdown, consumed via `GET /api/factory/events`.
+- **Tool category classification** — Tool summary payloads include `toolCategory` field (security, testing, build, deploy, research, general) for dashboard section auto-population.
+
+### Fixes
+
+- **Auto-QA/acceptance race condition** — `markAgentWorked` now called when session transitions to `running` (not just `completed`), fixing a race where the orchestrator transitioned issue status before the worker recorded the tracking key, causing webhook handlers to skip QA/acceptance with `not_agent_worked`.
+- **`af-linear update-issue --parentId`** — The `--parentId` flag is no longer silently ignored.
+- **Security work type exhaustive coverage** — Added missing `case 'security':` to all switch statements across prompts.ts, orchestrator.ts, a2a-server.ts, and server types.
+
 ## v0.8.17
 
 ### Fixes
