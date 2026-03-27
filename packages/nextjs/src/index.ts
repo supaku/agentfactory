@@ -85,6 +85,7 @@ export { createSessionCompletionHandler } from './handlers/sessions/completion.j
 export { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls.js'
 export { createSessionProgressHandler } from './handlers/sessions/progress.js'
 export { createSessionToolErrorHandler } from './handlers/sessions/tool-error.js'
+export { createSessionSecurityScanHandler } from './handlers/sessions/security-scan.js'
 
 // Public handlers
 export { createPublicStatsHandler } from './handlers/public/stats.js'
@@ -107,6 +108,9 @@ export { createConfigHandler } from './handlers/config.js'
 // Issue tracker proxy handler (centralized API gateway for agents/governors)
 export { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
 export type { ProxyHandlerConfig } from './handlers/issue-tracker-proxy/types.js'
+
+// Factory handlers
+export { createFactoryEventsHandler } from './handlers/factory/events.js'
 
 // Workflow handlers
 export { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'

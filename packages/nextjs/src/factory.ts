@@ -42,6 +42,7 @@ import { createSessionCompletionHandler } from './handlers/sessions/completion.j
 import { createSessionExternalUrlsHandler } from './handlers/sessions/external-urls.js'
 import { createSessionProgressHandler } from './handlers/sessions/progress.js'
 import { createSessionToolErrorHandler } from './handlers/sessions/tool-error.js'
+import { createSessionSecurityScanHandler } from './handlers/sessions/security-scan.js'
 
 // Public handlers
 import { createPublicStatsHandler } from './handlers/public/stats.js'
@@ -64,6 +65,9 @@ import { createOAuthCallbackHandler, type OAuthConfig } from './handlers/oauth/c
 
 // Issue tracker proxy handler
 import { createIssueTrackerProxyHandler } from './handlers/issue-tracker-proxy/index.js'
+
+// Factory handlers
+import { createFactoryEventsHandler } from './handlers/factory/events.js'
 
 // Workflow handlers
 import { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'
@@ -90,6 +94,7 @@ export interface AllRoutes {
     externalUrls: { POST: RouteHandler }
     progress: { POST: RouteHandler }
     toolError: { POST: RouteHandler }
+    securityScan: { POST: RouteHandler }
   }
   public: {
     stats: { GET: RouteHandler }
@@ -105,6 +110,9 @@ export interface AllRoutes {
     callback: { GET: RouteHandler }
   }
   issueTrackerProxy: { POST: RouteHandler; GET: RouteHandler }
+  factory: {
+    events: { GET: RouteHandler }
+  }
   workflows: {
     deploy: { POST: RouteHandler }
   }
@@ -191,6 +199,7 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       externalUrls: { POST: createSessionExternalUrlsHandler(routeConfig) },
       progress: { POST: createSessionProgressHandler(routeConfig) },
       toolError: { POST: createSessionToolErrorHandler(routeConfig) },
+      securityScan: { POST: createSessionSecurityScanHandler() },
     },
     public: {
       stats: { GET: createPublicStatsHandler() },
@@ -206,6 +215,9 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
       callback: { GET: oauth.GET },
     },
     issueTrackerProxy: { POST: issueTrackerProxy.POST, GET: issueTrackerProxy.GET },
+    factory: {
+      events: { GET: createFactoryEventsHandler() },
+    },
     workflows: {
       deploy: { POST: createWorkflowDeployHandler() },
     },

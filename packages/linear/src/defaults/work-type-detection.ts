@@ -60,6 +60,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
   'merge': [
     'merge queue', 'add to merge queue', 'enqueue merge', 'merge this',
   ],
+  'security': [
+    'security scan', 'security audit', 'vulnerability scan', 'sast',
+    'dependency audit', 'run security', 'scan for vulnerabilities',
+  ],
 }
 
 /**

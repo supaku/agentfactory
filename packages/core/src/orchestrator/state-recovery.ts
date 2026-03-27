@@ -287,6 +287,7 @@ export function getTaskListId(
     'qa-coordination': 'QA-COORD',
     'acceptance-coordination': 'AC-COORD',
     merge: 'MRG',
+    security: 'SEC',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

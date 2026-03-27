@@ -331,6 +331,7 @@ export type AgentWorkType =
   | 'qa-coordination'       // Finished: Coordinate QA across sub-issues for parent issues
   | 'acceptance-coordination' // Delivered: Coordinate acceptance across sub-issues for parent issues
   | 'merge'                 // Merge queue: handle PR merge operations
+  | 'security'              // Security scanning: SAST, dependency audit
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -369,6 +370,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'qa-coordination': null,   // Already Finished
   'acceptance-coordination': null, // Already Delivered
   'merge': null,            // Merge is triggered programmatically, no status transition
+  'security': null,         // Security scanning: no status transition on start
 }
 
 /**
@@ -389,6 +391,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'qa-coordination': 'Delivered', // Finished -> Delivered when QA coordination passes
   'acceptance-coordination': 'Accepted', // Delivered -> Accepted when acceptance coordination passes
   'merge': null,            // Merge completion is handled by the merge queue adapter
+  'security': 'Finished',   // Security scan complete
 }
 
 /**
@@ -409,6 +412,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'qa-coordination': 'Rejected',    // QA coordination failure -> Rejected (refinement-coordination reads QA feedback and dispatches targeted fixes to failing sub-issues)
   'acceptance-coordination': 'Rejected', // Acceptance coordination failure -> Rejected
   'merge': null,            // Merge failure is handled by the merge queue adapter
+  'security': null,         // Security scan failure: no status transition
 }
 
 /**
@@ -430,6 +434,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'refinement',
   'refinement-coordination',
   'merge',
+  'security',
 ])
 
 /**
@@ -450,6 +455,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'qa-coordination': ['Finished'],
   'acceptance-coordination': ['Delivered'],
   'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
+  'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
 }
 
 /**

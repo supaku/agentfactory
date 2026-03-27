@@ -40,6 +40,7 @@ import type { WorktreeState, TodosState, TodoItem } from './state-types.js'
 import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
 import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-client.js'
 import { parseWorkResult } from './parse-work-result.js'
+import { parseSecurityScanOutput } from './security-scan-event.js'
 import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
@@ -905,6 +906,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'qa-coordination': 'QA-COORD',
   'acceptance-coordination': 'AC-COORD',
   merge: 'MRG',
+  security: 'SEC',
 }
 
 /**
@@ -2537,6 +2539,25 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           })
         } catch {
           // Ignore state update errors
+        }
+      }
+
+      // Emit structured security scan events for security work type agents
+      if (emitter && agent.status === 'completed' && agent.workType === 'security') {
+        const fullOutput = assistantTextChunks.join('\n')
+        const scanEvents = parseSecurityScanOutput(fullOutput)
+        for (const scanEvent of scanEvents) {
+          try {
+            await emitter.emitSecurityScan(scanEvent)
+            log?.info('Security scan event emitted', {
+              scanner: scanEvent.scanner,
+              findings: scanEvent.totalFindings,
+            })
+          } catch (scanError) {
+            log?.warn('Failed to emit security scan event', {
+              error: scanError instanceof Error ? scanError.message : String(scanError),
+            })
+          }
         }
       }
 

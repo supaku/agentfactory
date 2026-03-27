@@ -17,6 +17,8 @@
  * - error → error (persisted)
  */
 
+import type { SecurityScanEvent } from './security-scan-event.js'
+
 /** Configuration for the API activity emitter */
 export interface ApiActivityEmitterConfig {
   /** Linear session ID */
@@ -187,6 +189,42 @@ export class ApiActivityEmitter {
       content: message,
       ephemeral: false,
     })
+  }
+
+  /**
+   * Emit a security scan event to the API for storage and downstream consumption.
+   * Posts to `/api/sessions/[id]/security-scan`.
+   */
+  async emitSecurityScan(event: SecurityScanEvent): Promise<void> {
+    if (this.ownershipRevoked) return
+
+    try {
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/sessions/${this.sessionId}/security-scan`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            workerId: this.workerId,
+            event,
+          }),
+        }
+      )
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`API error ${response.status}: ${errorText}`)
+      }
+
+      this.onActivityEmitted?.('security-scan', event.scanner)
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error))
+      console.error('[ApiActivityEmitter] Failed to emit security scan event:', err)
+      this.onActivityError?.('security-scan', err)
+    }
   }
 
   /**

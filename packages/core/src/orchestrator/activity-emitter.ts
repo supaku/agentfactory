@@ -14,6 +14,7 @@
  */
 
 import type { IssueTrackerSession } from './issue-tracker-client.js'
+import type { SecurityScanEvent } from './security-scan-event.js'
 import { ENVIRONMENT_ISSUE_TYPES } from './work-types.js'
 
 /** Configuration for the activity emitter */
@@ -121,6 +122,22 @@ export class ActivityEmitter {
     await this.queueActivity({
       type: 'error',
       content: message,
+      ephemeral: false,
+    })
+  }
+
+  /**
+   * Emit a security scan event.
+   * For direct-to-Linear emitters, this emits as a persistent thought activity
+   * containing the structured scan data.
+   */
+  async emitSecurityScan(event: SecurityScanEvent): Promise<void> {
+    const summary = `Security scan (${event.scanner}): ${event.totalFindings} findings — ` +
+      `critical: ${event.severityCounts.critical}, high: ${event.severityCounts.high}, ` +
+      `medium: ${event.severityCounts.medium}, low: ${event.severityCounts.low}`
+    await this.queueActivity({
+      type: 'response',
+      content: summary,
       ephemeral: false,
     })
   }
