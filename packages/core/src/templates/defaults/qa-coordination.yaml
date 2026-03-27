@@ -44,6 +44,14 @@ prompt: |
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 
+  HARD FAIL RULE — MERGE CONFLICTS:
+  Check PR mergeability: `gh pr view <PR_NUMBER> --json mergeable,mergeStateStatus`
+  If the PR has merge conflicts (mergeable=CONFLICTING or mergeStateStatus=DIRTY), you MUST
+  report <!-- WORK_RESULT:failed --> immediately with a clear message listing the conflicting files.
+  Do NOT pass QA with a "caveat" about merge conflicts. A non-mergeable PR cannot be delivered —
+  passing it wastes an entire acceptance session that will predictably fail on the same conflicts.
+  Merge conflicts are an automatic QA failure regardless of implementation correctness.
+
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}

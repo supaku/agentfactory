@@ -30,8 +30,18 @@ content: |
      an entire QA cycle and delays delivery.
 
   1. COMMIT: git add <files> && git commit -m "descriptive message"
+
+  1.5. REBASE ONTO MAIN (prevent merge conflicts from blocking QA/acceptance):
+     After committing, rebase your branch onto the latest main to ensure your PR
+     is mergeable:
+       git fetch origin main && git rebase origin/main
+     If rebase produces conflicts, resolve them (mergiraf may auto-resolve structural
+     conflicts). Then re-run validation (step 0) to confirm the rebased code still passes.
+     If rebase fails and conflicts cannot be resolved, push as-is — the merge queue
+     or QA will catch it. But attempt the rebase first.
+
   2. PUSH: git push -u origin $(git branch --show-current)
-     If your branch has diverged from origin (e.g., after splitting/rewriting commits),
+     If your branch has diverged from origin (e.g., after rebase or splitting commits),
      use: git push --force-with-lease -u origin $(git branch --show-current)
   3. PR: gh pr create --title "..." --body "..."
   If you skip any step, your work will be LOST when the session ends.
