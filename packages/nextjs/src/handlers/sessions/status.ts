@@ -105,6 +105,25 @@ export function createSessionStatusPostHandler(config?: RouteConfig) {
         if (providerSessionId) {
           await updateProviderSessionId(sessionId, providerSessionId)
         }
+
+        // Mark agent-worked EARLY (on running, not just completed) to prevent
+        // a race condition: the orchestrator transitions issue status to Finished
+        // before the worker reports completion, so the webhook handler's
+        // wasAgentWorked check would fail if we only set it on completed.
+        if (session.issueId) {
+          try {
+            await markAgentWorked(session.issueId, {
+              issueIdentifier: session.issueIdentifier || 'unknown',
+              sessionId: sessionId,
+            })
+            log.info('Issue pre-marked as agent-worked (running)', {
+              issueId: session.issueId,
+              sessionId,
+            })
+          } catch (err) {
+            log.warn('Failed to pre-mark agent-worked', { sessionId, error: err })
+          }
+        }
       } else if (status === 'finalizing') {
         await updateSessionStatus(sessionId, 'finalizing')
       } else if (TERMINAL_STATUSES.includes(status)) {
