@@ -2,9 +2,13 @@
  * GET /api/public/routing-metrics
  *
  * Returns routing performance data (posteriors, recent decisions, summary).
+ * Supports optional query params for pagination and time-range filtering:
+ *   - from/to: ISO-8601 date strings for time-range
+ *   - limit: number of decisions per page (default 50, max 200)
+ *   - cursor: opaque pagination cursor from previous response
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import {
   RedisPosteriorStore,
   createRedisObservationStore,
@@ -13,6 +17,9 @@ import {
 import { betaMean, betaVariance } from '@renseiai/agentfactory'
 
 const log = createLogger('api/public/routing-metrics')
+
+const DEFAULT_LIMIT = 50
+const MAX_LIMIT = 200
 
 export interface PublicRoutingMetricsResponse {
   posteriors: Array<{
@@ -34,6 +41,7 @@ export interface PublicRoutingMetricsResponse {
     confidence: number
     explorationReason?: string
   }>
+  nextCursor?: string
   summary: {
     totalObservations: number
     routingEnabled: boolean
@@ -47,12 +55,60 @@ export function createPublicRoutingMetricsHandler() {
   const posteriorStore = new RedisPosteriorStore()
   const observationStore = createRedisObservationStore()
 
-  return async function GET() {
+  return async function GET(request: NextRequest) {
     try {
-      const [allPosteriors, recentObservations] = await Promise.all([
+      const searchParams = request.nextUrl.searchParams
+
+      // Parse and validate query params
+      const fromParam = searchParams.get('from')
+      const toParam = searchParams.get('to')
+      const limitParam = searchParams.get('limit')
+      const cursorParam = searchParams.get('cursor')
+
+      let from: number | undefined
+      let to: number | undefined
+
+      if (fromParam) {
+        const parsed = Date.parse(fromParam)
+        if (isNaN(parsed)) {
+          return NextResponse.json(
+            { error: 'Invalid "from" parameter: must be a valid ISO-8601 date' },
+            { status: 400 },
+          )
+        }
+        from = parsed
+      }
+
+      if (toParam) {
+        const parsed = Date.parse(toParam)
+        if (isNaN(parsed)) {
+          return NextResponse.json(
+            { error: 'Invalid "to" parameter: must be a valid ISO-8601 date' },
+            { status: 400 },
+          )
+        }
+        to = parsed
+      }
+
+      let limit = DEFAULT_LIMIT
+      if (limitParam) {
+        const parsed = Number(limitParam)
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          return NextResponse.json(
+            { error: 'Invalid "limit" parameter: must be a positive integer' },
+            { status: 400 },
+          )
+        }
+        limit = Math.min(parsed, MAX_LIMIT)
+      }
+
+      const cursor = cursorParam ?? undefined
+
+      const [allPosteriors, observationResult] = await Promise.all([
         posteriorStore.getAllPosteriors(),
-        observationStore.getObservations({ limit: 50 }),
+        observationStore.getObservations({ limit, from, to, cursor }),
       ])
+      const recentObservations = observationResult.observations
 
       const posteriors = allPosteriors.map((p) => {
         const expectedReward = betaMean(p.alpha, p.beta)
@@ -105,6 +161,7 @@ export function createPublicRoutingMetricsHandler() {
       const response: PublicRoutingMetricsResponse = {
         posteriors,
         recentDecisions,
+        ...(observationResult.nextCursor ? { nextCursor: observationResult.nextCursor } : {}),
         summary: {
           totalObservations,
           routingEnabled,

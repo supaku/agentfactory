@@ -7,7 +7,7 @@
  */
 
 import { getRedisClient, isRedisConfigured } from './redis.js'
-import type { ObservationStore } from '@renseiai/agentfactory'
+import type { ObservationStore, ObservationQueryResult } from '@renseiai/agentfactory'
 import { ROUTING_KEYS } from '@renseiai/agentfactory'
 import type { RoutingObservation } from '@renseiai/agentfactory'
 import type { AgentProviderName } from '@renseiai/agentfactory'
@@ -79,18 +79,37 @@ function deserializeObservation(fields: Record<string, string>): RoutingObservat
   }
 }
 
+interface ParsedEntry {
+  streamId: string
+  observation: RoutingObservation
+}
+
 /**
  * Parse Redis Stream entries (returned as [id, [field, value, ...]][])
- * into RoutingObservation objects.
+ * into observation objects with their stream IDs preserved for cursor pagination.
  */
-function parseStreamEntries(entries: [string, string[]][]): RoutingObservation[] {
-  return entries.map(([_streamId, flatFields]) => {
+function parseStreamEntries(entries: [string, string[]][]): ParsedEntry[] {
+  return entries.map(([streamId, flatFields]) => {
     const fields: Record<string, string> = {}
     for (let i = 0; i < flatFields.length; i += 2) {
       fields[flatFields[i]!] = flatFields[i + 1]!
     }
-    return deserializeObservation(fields)
+    return { streamId, observation: deserializeObservation(fields) }
   })
+}
+
+/**
+ * Decrement a Redis Stream ID by one sequence number for exclusive cursor bounds.
+ * Stream IDs have format "{ms}-{seq}". We decrement the sequence.
+ */
+function decrementStreamId(id: string): string {
+  const [ms, seq] = id.split('-')
+  const seqNum = Number(seq)
+  if (seqNum > 0) {
+    return `${ms}-${seqNum - 1}`
+  }
+  // If seq is 0, move to previous millisecond with max sequence
+  return `${Number(ms) - 1}-18446744073709551615`
 }
 
 export interface RedisObservationStoreOptions {
@@ -141,45 +160,74 @@ export function createRedisObservationStore(
       workType?: AgentWorkType
       limit?: number
       since?: number
-    }): Promise<RoutingObservation[]> {
+      from?: number
+      to?: number
+      cursor?: string
+    }): Promise<ObservationQueryResult> {
       if (!isRedisConfigured()) {
         log.debug('Redis not configured, returning empty observations')
-        return []
+        return { observations: [] }
       }
 
       try {
         const client = getRedisClient()
+        const limit = opts.limit ?? 50
 
-        // XRANGE returns entries in chronological order
-        // Use '-' and '+' for full range, or a timestamp-based ID for since
-        const start = opts.since ? `${opts.since}-0` : '-'
-        const end = '+'
+        // XREVRANGE returns entries newest-first (descending).
+        // Range is (end, start) in XREVRANGE: high bound first, low bound second.
+        let highBound = '+'
+        let lowBound = '-'
 
-        // Fetch more than limit to account for filtering
-        const fetchCount = opts.limit
-          ? Math.min(opts.limit * 3, maxLen)
-          : maxLen
+        // Time-range: from/to narrow the window
+        if (opts.to) {
+          highBound = `${opts.to}-18446744073709551615`
+        }
+        if (opts.from) {
+          lowBound = `${opts.from}-0`
+        }
 
-        const raw = await client.xrange(streamKey, start, end, 'COUNT', fetchCount)
-        let observations = parseStreamEntries(raw as [string, string[]][])
+        // Legacy since support (maps to lowBound)
+        if (opts.since && !opts.from) {
+          lowBound = `${opts.since}-0`
+        }
+
+        // Cursor: start just before the last-seen entry (exclusive)
+        if (opts.cursor) {
+          highBound = decrementStreamId(opts.cursor)
+        }
+
+        // Fetch more than limit to account for application-level filtering
+        const fetchCount = Math.min(limit * 3 + 1, maxLen)
+
+        const raw = await client.xrevrange(streamKey, highBound, lowBound, 'COUNT', fetchCount)
+        let entries = parseStreamEntries(raw as [string, string[]][])
 
         // Apply application-level filters (Redis Streams don't support field filtering)
         if (opts.provider) {
-          observations = observations.filter((o) => o.provider === opts.provider)
+          entries = entries.filter((e) => e.observation.provider === opts.provider)
         }
         if (opts.workType) {
-          observations = observations.filter((o) => o.workType === opts.workType)
-        }
-        if (opts.limit) {
-          observations = observations.slice(0, opts.limit)
+          entries = entries.filter((e) => e.observation.workType === opts.workType)
         }
 
-        return observations
+        // Take limit+1 to detect if there are more results
+        const hasMore = entries.length > limit
+        const page = entries.slice(0, limit)
+
+        const result: ObservationQueryResult = {
+          observations: page.map((e) => e.observation),
+        }
+
+        if (hasMore && page.length > 0) {
+          result.nextCursor = page[page.length - 1]!.streamId
+        }
+
+        return result
       } catch (err) {
         log.error('Failed to get observations', {
           error: err instanceof Error ? err.message : String(err),
         })
-        return []
+        return { observations: [] }
       }
     },
 
@@ -201,11 +249,12 @@ export function createRedisObservationStore(
         const fetchCount = Math.min(windowSize * 5, maxLen)
 
         const raw = await client.xrevrange(streamKey, '+', '-', 'COUNT', fetchCount)
-        const observations = parseStreamEntries(raw as [string, string[]][])
+        const entries = parseStreamEntries(raw as [string, string[]][])
 
         // Filter by provider + workType, then take windowSize entries
-        const filtered = observations
-          .filter((o) => o.provider === provider && o.workType === workType)
+        const filtered = entries
+          .filter((e) => e.observation.provider === provider && e.observation.workType === workType)
+          .map((e) => e.observation)
           .slice(0, windowSize)
 
         return filtered

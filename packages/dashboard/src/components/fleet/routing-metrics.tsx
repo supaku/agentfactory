@@ -1,14 +1,38 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { cn } from '../../lib/utils'
 import { useRoutingMetrics } from '../../hooks/use-routing-metrics'
 import { EmptyState } from '../../components/shared/empty-state'
 import { Skeleton } from '../../components/ui/skeleton'
+import { Button } from '../../components/ui/button'
 import { formatCost } from '../../lib/format'
-import { Router, Activity, TrendingUp, CheckCircle2, XCircle, HelpCircle } from 'lucide-react'
+import { Router, Activity, TrendingUp, CheckCircle2, XCircle, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface RoutingMetricsProps {
   className?: string
+}
+
+const TIME_RANGES = [
+  { label: 'All', value: '' },
+  { label: '1h', value: '1h' },
+  { label: '6h', value: '6h' },
+  { label: '24h', value: '24h' },
+  { label: '7d', value: '7d' },
+] as const
+
+type TimeRangeValue = (typeof TIME_RANGES)[number]['value']
+
+function getTimeRangeFrom(value: TimeRangeValue): string | undefined {
+  if (!value) return undefined
+  const now = Date.now()
+  const ms: Record<string, number> = {
+    '1h': 60 * 60 * 1000,
+    '6h': 6 * 60 * 60 * 1000,
+    '24h': 24 * 60 * 60 * 1000,
+    '7d': 7 * 24 * 60 * 60 * 1000,
+  }
+  return new Date(now - ms[value]!).toISOString()
 }
 
 function confidenceColor(confidence: number): string {
@@ -24,7 +48,34 @@ function confidenceBg(confidence: number): string {
 }
 
 export function RoutingMetrics({ className }: RoutingMetricsProps) {
-  const { data, isLoading } = useRoutingMetrics()
+  const [timeRange, setTimeRange] = useState<TimeRangeValue>('')
+  const [cursor, setCursor] = useState<string | undefined>(undefined)
+  const [cursorStack, setCursorStack] = useState<string[]>([])
+
+  const from = getTimeRangeFrom(timeRange)
+  const { data, isLoading } = useRoutingMetrics({ from, cursor })
+
+  const handleTimeRangeChange = useCallback((value: TimeRangeValue) => {
+    setTimeRange(value)
+    setCursor(undefined)
+    setCursorStack([])
+  }, [])
+
+  const handleNextPage = useCallback(() => {
+    if (data?.nextCursor) {
+      setCursorStack((prev) => [...prev, cursor ?? ''])
+      setCursor(data.nextCursor)
+    }
+  }, [data?.nextCursor, cursor])
+
+  const handlePrevPage = useCallback(() => {
+    setCursorStack((prev) => {
+      const next = [...prev]
+      const prevCursor = next.pop()
+      setCursor(prevCursor || undefined)
+      return next
+    })
+  }, [])
 
   const routingDisabled = !isLoading && (!data || !data.summary.routingEnabled)
 
@@ -162,16 +213,58 @@ export function RoutingMetrics({ className }: RoutingMetricsProps) {
 
       {/* Section: Recent Routing Decisions */}
       <div>
-        <div className="mb-4 flex items-center gap-3">
-          <Activity className="h-4 w-4 text-af-text-tertiary" />
-          <h2 className="font-display text-lg font-bold text-af-text-primary tracking-tight">
-            Recent Decisions
-          </h2>
-          {!isLoading && data && (
-            <span className="text-2xs font-body text-af-text-tertiary tabular-nums">
-              last {data.recentDecisions.length}
-            </span>
-          )}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Activity className="h-4 w-4 text-af-text-tertiary" />
+            <h2 className="font-display text-lg font-bold text-af-text-primary tracking-tight">
+              Recent Decisions
+            </h2>
+            {!isLoading && data && (
+              <span className="text-2xs font-body text-af-text-tertiary tabular-nums">
+                showing {data.recentDecisions.length}{timeRange ? ` from last ${timeRange}` : ''}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Time-range selector */}
+            <div className="flex items-center rounded-lg border border-af-surface-border/50 bg-af-surface/20 p-0.5">
+              {TIME_RANGES.map((range) => (
+                <button
+                  key={range.value}
+                  onClick={() => handleTimeRangeChange(range.value)}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-2xs font-body transition-colors',
+                    timeRange === range.value
+                      ? 'bg-af-surface/60 text-af-text-primary font-medium'
+                      : 'text-af-text-tertiary hover:text-af-text-secondary',
+                  )}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
+            {/* Pagination controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handlePrevPage}
+                disabled={cursorStack.length === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleNextPage}
+                disabled={!data?.nextCursor}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
         {isLoading ? (

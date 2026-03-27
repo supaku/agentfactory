@@ -78,6 +78,7 @@ export interface RoutingSummaryResponse {
 export interface PublicRoutingMetricsResponse {
   posteriors: RoutingPosteriorResponse[]
   recentDecisions: RoutingDecisionResponse[]
+  nextCursor?: string
   summary: RoutingSummaryResponse
   timestamp: string
 }
