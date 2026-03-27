@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.16
+
+### Fixes
+
+- **QA failure loop prevention** — QA failures now route to Rejected (not Backlog), leveraging the existing refinement handler and cycle escalation infrastructure instead of creating unescalatable dev→QA loops.
+- **Force-push on feature branches** — Agents can now use `git push --force-with-lease` on feature branches when commit history has been rewritten (e.g., splitting commits per QA feedback). Bare `--force` and force-push to main/master remain blocked.
+- **Backstop diverged history recovery** — The session backstop now detects non-fast-forward push failures and retries with `--force-with-lease` on feature branches, recovering from commit rewrites that previously left branches stuck.
+- **False "work not persisted" warnings** — Non-code-producing work types (research, backlog-creation, QA, refinement, etc.) no longer trigger spurious "Agent completed but work was not persisted" warnings from bootstrapped `.agent/` files in their worktrees.
+- **Stale worktree directory cleanup** — `removeWorktree()` now cleans up leftover directory shells containing only `.agent/` after git worktree removal.
+
 ## v0.8.15
 
 ### Fixes

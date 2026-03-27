@@ -9,6 +9,8 @@ content: |
   Your work is NOT done until all three steps are complete:
   1. COMMIT: git add <files> && git commit -m "descriptive message"
   2. PUSH: git push -u origin $(git branch --show-current)
+     If your branch has diverged from origin (e.g., after splitting/rewriting commits),
+     use: git push --force-with-lease -u origin $(git branch --show-current)
   3. PR: gh pr create --title "..." --body "..."
   If you skip any step, your work will be LOST when the session ends.
   The orchestrator will mark your work as FAILED if no PR is detected.

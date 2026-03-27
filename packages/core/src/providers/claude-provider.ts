@@ -64,7 +64,14 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
       return { behavior: 'deny', message: 'reset --hard blocked' }
     }
     if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
-      return { behavior: 'deny', message: 'force push blocked' }
+      // Allow --force-with-lease on feature branches (safe: won't overwrite others' work)
+      if (/--force-with-lease/.test(cmd)) {
+        if (/\b(main|master)\b/.test(cmd)) {
+          return { behavior: 'deny', message: 'force push to main/master blocked' }
+        }
+        return { behavior: 'allow', updatedInput: input }
+      }
+      return { behavior: 'deny', message: 'force push blocked — use --force-with-lease for safety' }
     }
     if (/git\s+(checkout|switch)\b/.test(cmd)) {
       return { behavior: 'deny', message: 'git checkout/switch blocked — agents must not change the checked-out branch' }

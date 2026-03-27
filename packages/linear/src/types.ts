@@ -401,7 +401,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'development': null,
   'inflight': null,
   'inflight-coordination': null,
-  'qa': 'Backlog',              // QA failure -> Backlog (developer/coordinator picks up with failure context)
+  'qa': 'Rejected',             // QA failure -> Rejected (refinement handler analyzes failure context and dispatches targeted fixes)
   'acceptance': 'Rejected',    // Acceptance failure -> Rejected (rejection handler diagnoses next steps)
   'refinement': null,
   'refinement-coordination': null,

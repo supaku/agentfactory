@@ -346,11 +346,54 @@ function backstopPushBranch(worktreePath: string): BackstopAction {
       detail: currentBranch,
     }
   } catch (error) {
+    // If push failed due to diverged history (e.g., agent rewrote commits),
+    // retry with --force-with-lease on feature branches. This is safe because
+    // force-with-lease won't overwrite commits pushed by others.
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    if (/non-fast-forward|rejected/.test(errorMsg)) {
+      try {
+        const currentBranch = execSync('git branch --show-current', {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        }).trim()
+
+        // Verify we have local commits ahead of main (genuine rewrite, not empty branch)
+        const aheadCount = execSync('git rev-list --count main..HEAD', {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        }).trim()
+
+        if (parseInt(aheadCount, 10) > 0 && currentBranch !== 'main' && currentBranch !== 'master') {
+          execSync(`git push --force-with-lease -u origin ${currentBranch}`, {
+            cwd: worktreePath,
+            encoding: 'utf-8',
+            timeout: 60000,
+          })
+
+          return {
+            field: 'branch_pushed',
+            action: 'force-pushed branch (diverged history recovered via --force-with-lease)',
+            success: true,
+            detail: currentBranch,
+          }
+        }
+      } catch (retryError) {
+        return {
+          field: 'branch_pushed',
+          action: 'failed to push branch (force-with-lease retry also failed)',
+          success: false,
+          detail: retryError instanceof Error ? retryError.message : String(retryError),
+        }
+      }
+    }
+
     return {
       field: 'branch_pushed',
       action: 'failed to push branch',
       success: false,
-      detail: error instanceof Error ? error.message : String(error),
+      detail: errorMsg,
     }
   }
 }

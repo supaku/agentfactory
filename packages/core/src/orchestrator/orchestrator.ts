@@ -1835,6 +1835,19 @@ export class AgentOrchestrator {
         // Ignore
       }
     }
+
+    // Clean up leftover directory shells (e.g., dirs with only .agent/ remaining
+    // after git worktree remove succeeded but the directory wasn't fully deleted)
+    if (existsSync(worktreePath)) {
+      try {
+        const entries = readdirSync(worktreePath).filter(e => e !== '.agent')
+        if (entries.length === 0) {
+          rmSync(worktreePath, { recursive: true, force: true })
+        }
+      } catch {
+        // Best-effort cleanup
+      }
+    }
   }
 
   /**
@@ -2802,8 +2815,16 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         const shouldPreserve = this.config.preserveWorkOnPrFailure ?? DEFAULT_CONFIG.preserveWorkOnPrFailure
         let shouldCleanup = true
 
+        // Only check for incomplete work on code-producing work types.
+        // Non-code work types (research, backlog-creation, QA, refinement, etc.) use
+        // worktrees for codebase exploration but don't produce commits/PRs. Checking
+        // them triggers false "work not persisted" warnings from bootstrapped .agent/ files.
+        const codeProducingWorkTypes = new Set(['development', 'inflight', 'coordination', 'inflight-coordination'])
+        const agentWorkType = agent.workType ?? 'development'
+        const isCodeProducingAgent = codeProducingWorkTypes.has(agentWorkType)
+
         // Validate that PR was created or work was fully pushed before cleanup
-        if (shouldPreserve) {
+        if (shouldPreserve && isCodeProducingAgent) {
           if (!agent.pullRequestUrl) {
             // No PR detected - check for uncommitted/unpushed work
             const incompleteCheck = checkForIncompleteWork(agent.worktreePath)
