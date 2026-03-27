@@ -347,6 +347,100 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// ── Import line classification ──────────────────────────────────────────────
+
+/**
+ * Parsing state tracked across lines for import classification.
+ */
+interface ImportParseState {
+  inBlockComment: boolean
+  inTemplateLiteral: boolean
+}
+
+/**
+ * Determine whether a line contains a real import statement (not one inside
+ * a comment, string literal, template literal, or test assertion).
+ *
+ * The caller must maintain the parse state across lines.
+ */
+function isRealImportLine(
+  line: string,
+  state: ImportParseState,
+): { real: boolean; state: ImportParseState } {
+  const trimmed = line.trim()
+
+  // Track block comment boundaries
+  if (state.inBlockComment) {
+    if (trimmed.includes('*/')) {
+      return { real: false, state: { ...state, inBlockComment: false } }
+    }
+    return { real: false, state }
+  }
+  if (trimmed.startsWith('/*')) {
+    const closesOnSameLine = trimmed.includes('*/')
+    return { real: false, state: { ...state, inBlockComment: !closesOnSameLine } }
+  }
+
+  // Track template literal boundaries (backtick strings spanning multiple lines)
+  // Count unescaped backticks to toggle state
+  if (state.inTemplateLiteral) {
+    const backtickCount = countUnescapedBackticks(line)
+    if (backtickCount % 2 === 1) {
+      // Odd number of backticks — template literal ends on this line
+      return { real: false, state: { ...state, inTemplateLiteral: false } }
+    }
+    return { real: false, state }
+  }
+
+  // Single-line comments and JSDoc continuation lines
+  if (trimmed.startsWith('//') || trimmed.startsWith('*')) return { real: false, state }
+
+  // Check if this line opens a template literal that doesn't close on the same line
+  const backticks = countUnescapedBackticks(line)
+  if (backticks % 2 === 1) {
+    // Odd backticks — a template literal opens and doesn't close on this line.
+    // The import on this line (if any) could be before or after the backtick.
+    // If the import keyword appears after a backtick, it's template content.
+    const importIdx = line.search(/\b(import|export)\s/)
+    const firstBacktick = line.indexOf('`')
+    if (importIdx >= 0 && firstBacktick >= 0 && importIdx > firstBacktick) {
+      // Import appears inside the template literal
+      return { real: false, state: { ...state, inTemplateLiteral: true } }
+    }
+    // Import appears before the backtick — real import, but template opens
+    if (importIdx >= 0 && (firstBacktick < 0 || importIdx < firstBacktick)) {
+      return { real: true, state: { ...state, inTemplateLiteral: true } }
+    }
+    return { real: false, state: { ...state, inTemplateLiteral: true } }
+  }
+
+  // Real import/export/require statements start at the beginning of the line
+  if (/^\s*(import|export)\s/.test(line)) return { real: true, state }
+
+  // Dynamic require: `const x = require('pkg')`
+  if (/\brequire\s*\(/.test(line)) {
+    const reqIdx = line.indexOf('require')
+    const beforeReq = line.slice(0, reqIdx)
+    if (beforeReq.includes('`') || beforeReq.includes("'require") || beforeReq.includes('"require')) {
+      return { real: false, state }
+    }
+    return { real: true, state }
+  }
+
+  return { real: false, state }
+}
+
+/** Count unescaped backticks in a line */
+function countUnescapedBackticks(line: string): number {
+  let count = 0
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '`' && (i === 0 || line[i - 1] !== '\\')) {
+      count++
+    }
+  }
+  return count
+}
+
 // ── Cross-package dependency validator (P3b) ────────────────────────────────
 
 interface DepValidationResult {
@@ -392,8 +486,15 @@ async function validateCrossDeps(
     if (!owningPkg) continue
 
     const lines = content.split('\n')
+    let parseState: ImportParseState = { inBlockComment: false, inTemplateLiteral: false }
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
+
+      // Skip comments, string literals, and template content
+      const classification = isRealImportLine(line, parseState)
+      parseState = classification.state
+      if (!classification.real) continue
+
       // Match import/require of workspace packages
       const importMatch = line.match(
         /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"])(@[^'"\/]+\/[^'"\/]+|[^.'"\/@][^'"\/]*)/,

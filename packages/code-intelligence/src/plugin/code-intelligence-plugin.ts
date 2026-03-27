@@ -155,6 +155,75 @@ async function findTypeUsagesInProcess(
   }
 }
 
+// ── Import line classification ──────────────────────────────────────────────
+
+interface ImportParseState {
+  inBlockComment: boolean
+  inTemplateLiteral: boolean
+}
+
+function isRealImportLine(
+  line: string,
+  state: ImportParseState,
+): { real: boolean; state: ImportParseState } {
+  const trimmed = line.trim()
+
+  if (state.inBlockComment) {
+    if (trimmed.includes('*/')) {
+      return { real: false, state: { ...state, inBlockComment: false } }
+    }
+    return { real: false, state }
+  }
+  if (trimmed.startsWith('/*')) {
+    const closesOnSameLine = trimmed.includes('*/')
+    return { real: false, state: { ...state, inBlockComment: !closesOnSameLine } }
+  }
+
+  if (state.inTemplateLiteral) {
+    const backtickCount = countUnescapedBackticks(line)
+    if (backtickCount % 2 === 1) {
+      return { real: false, state: { ...state, inTemplateLiteral: false } }
+    }
+    return { real: false, state }
+  }
+
+  if (trimmed.startsWith('//') || trimmed.startsWith('*')) return { real: false, state }
+
+  const backticks = countUnescapedBackticks(line)
+  if (backticks % 2 === 1) {
+    const importIdx = line.search(/\b(import|export)\s/)
+    const firstBacktick = line.indexOf('`')
+    if (importIdx >= 0 && firstBacktick >= 0 && importIdx > firstBacktick) {
+      return { real: false, state: { ...state, inTemplateLiteral: true } }
+    }
+    if (importIdx >= 0 && (firstBacktick < 0 || importIdx < firstBacktick)) {
+      return { real: true, state: { ...state, inTemplateLiteral: true } }
+    }
+    return { real: false, state: { ...state, inTemplateLiteral: true } }
+  }
+
+  if (/^\s*(import|export)\s/.test(line)) return { real: true, state }
+
+  if (/\brequire\s*\(/.test(line)) {
+    const reqIdx = line.indexOf('require')
+    const beforeReq = line.slice(0, reqIdx)
+    if (beforeReq.includes('`') || beforeReq.includes("'require") || beforeReq.includes('"require')) {
+      return { real: false, state }
+    }
+    return { real: true, state }
+  }
+
+  return { real: false, state }
+}
+
+function countUnescapedBackticks(line: string): number {
+  let count = 0
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '`' && (i === 0 || line[i - 1] !== '\\')) count++
+  }
+  return count
+}
+
 // ── In-process cross-package dep validator ──────────────────────────────────
 
 async function validateCrossDepsInProcess(
@@ -221,7 +290,12 @@ async function validateCrossDepsInProcess(
     if (!owningPkg) continue
 
     const lines = content.split('\n')
+    let parseState: ImportParseState = { inBlockComment: false, inTemplateLiteral: false }
     for (let i = 0; i < lines.length; i++) {
+      const classification = isRealImportLine(lines[i], parseState)
+      parseState = classification.state
+      if (!classification.real) continue
+
       const importMatch = lines[i].match(
         /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"])(@[^'"\/]+\/[^'"\/]+|[^.'"\/@][^'"\/]*)/,
       )
