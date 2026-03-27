@@ -17,6 +17,35 @@ prompt: |
   and update the story description with detailed acceptance criteria.
   Do NOT implement code. Focus on story refinement only.
 
+  BLAST RADIUS ANALYSIS (critical for preventing refinement cycles):
+  Before finalizing the issue description, perform these checks:
+
+  1. TYPE/UNION CHANGE IMPACT: If the feature involves adding, modifying, or extending a union type,
+     enum, or discriminated union:
+     - Search for ALL usages of that type across the codebase (grep for the type name)
+     - Identify every switch/case statement, mapping object, and exhaustive check
+     - Document the complete list of files that need updating in a "## Affected Files" section
+     - Example: Adding a value to `AgentWorkType` requires updating switch statements in
+       prompts.ts, orchestrator.ts, a2a-server.ts, and registry.test.ts
+
+  2. CROSS-PACKAGE IMPORTS: If the feature requires importing types or functions across workspace
+     packages:
+     - Check which packages currently depend on which (read relevant package.json files)
+     - Document any NEW cross-package dependencies that will be needed
+     - Add these to the issue description so the backlog writer includes them in acceptance criteria
+
+  3. API ENDPOINT INVENTORY: If the feature involves wiring into existing API routes or endpoints:
+     - Identify all relevant endpoints that already exist (grep for route patterns)
+     - Document which endpoint returns what data and which is correct to use
+     - Note any enriched vs. raw variants (e.g., `/api/sessions/` vs `/api/public/sessions/`)
+
+  4. EXISTING PATTERNS: Search for similar features already implemented in the codebase.
+     Document the patterns they follow so development agents match them.
+
+  Include all findings in the updated issue description under a "## Technical Context" section.
+  This prevents development agents from guessing at API endpoints, missing exhaustive checks,
+  or forgetting cross-package dependencies — each of which causes a full refinement cycle.
+
   IMPORTANT: To update the issue, you MUST use the Linear CLI (`pnpm af-linear`).
   Do NOT use ToolSearch to find or load Linear MCP tools — they are blocked.
   For long descriptions, write content to a temp file and use --description-file:

@@ -7,9 +7,9 @@ describe('codeIntelligencePlugin', () => {
     expect(codeIntelligencePlugin.description).toBeTruthy()
   })
 
-  it('creates 4 tools', () => {
+  it('creates 6 tools', () => {
     const tools = codeIntelligencePlugin.createTools({ env: {}, cwd: '/tmp' })
-    expect(tools).toHaveLength(4)
+    expect(tools).toHaveLength(6)
   })
 
   it('creates tools with correct names', () => {
@@ -19,6 +19,8 @@ describe('codeIntelligencePlugin', () => {
     expect(names).toContain('af_code_get_repo_map')
     expect(names).toContain('af_code_search_code')
     expect(names).toContain('af_code_check_duplicate')
+    expect(names).toContain('af_code_find_type_usages')
+    expect(names).toContain('af_code_validate_cross_deps')
   })
 
   it('tools have descriptions', () => {

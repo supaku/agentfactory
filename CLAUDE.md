@@ -18,7 +18,7 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 
 ## Code Intelligence (Optional)
 
-`@renseiai/agentfactory-code-intelligence` is an **optional dependency** of the CLI. When installed, agents running via the Claude provider receive 4 in-process MCP tools:
+`@renseiai/agentfactory-code-intelligence` is an **optional dependency** of the CLI. When installed, agents running via the Claude provider receive 6 in-process MCP tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -26,6 +26,8 @@ Multi-agent fleet management for coding agents. This is a pnpm monorepo using Tu
 | `af_code_search_symbols` | Find function/class/type definitions by name |
 | `af_code_search_code` | BM25 keyword search with code-aware tokenization |
 | `af_code_check_duplicate` | Exact + near-duplicate detection before writing code |
+| `af_code_find_type_usages` | Find all switch/case, mapping objects, and usage sites for a type |
+| `af_code_validate_cross_deps` | Check cross-package imports have package.json dependency entries |
 
 **Graceful degradation:** If the package is not installed, the CLI starts normally — agents simply won't have `af_code_*` tools available. The `{{> partials/code-intelligence-instructions}}` partial provides in-process tool instructions when `useToolPlugins` is true, and CLI fallback instructions otherwise.
 
@@ -46,6 +48,13 @@ pnpm af-code search-code "<query>" [--max-results 20] [--language typescript]
 # Check for duplicate code before writing
 pnpm af-code check-duplicate --content "<code>"
 pnpm af-code check-duplicate --content-file /tmp/snippet.ts
+
+# Find all switch/case, mapping objects, and usage sites for a type
+# Use before adding new members to a union type to identify all files needing updates
+pnpm af-code find-type-usages "AgentWorkType" [--max-results 50]
+
+# Validate cross-package imports have package.json dependency declarations
+pnpm af-code validate-cross-deps [packages/linear]
 ```
 
 All commands output JSON. First invocation builds the index (~5-10s); subsequent calls reuse the persisted index.

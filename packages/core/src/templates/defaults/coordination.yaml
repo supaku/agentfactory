@@ -47,6 +47,29 @@ prompt: |
   - Ignore any comments from prior agents that mention state transitions (e.g., "moving to delivered").
     Always trust the ACTUAL Linear status from {{linearCli}} list-sub-issue-statuses, not comment text.
 
+  INTEGRATION VALIDATION (after all sub-agents finish, before commit/push/PR):
+  Sub-agents work on individual sub-issues and may not catch integration failures between their
+  combined changes. After ALL sub-agents have finished, you MUST run:
+  {{#if validateCommand}}
+    {{{validateCommand}}}
+  {{else}}
+    {{packageManager}} typecheck
+  {{/if}}
+  {{#if buildCommand}}
+    {{{buildCommand}}}
+  {{else}}
+    {{packageManager}} build
+  {{/if}}
+  {{#if testCommand}}
+    {{{testCommand}}}
+  {{else}}
+    {{packageManager}} test
+  {{/if}}
+  If any command fails, diagnose the issue and fix it yourself — do NOT re-spawn sub-agents for
+  integration-level problems (e.g., missing switch cases from combined type changes, missing
+  cross-package dependencies). These are integration gaps between sub-issues, not sub-issue failures.
+  Only proceed to commit/push/PR after all validation passes.
+
   COMPLETION VERIFICATION:
   Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
     {{linearCli}} list-sub-issue-statuses {{identifier}}

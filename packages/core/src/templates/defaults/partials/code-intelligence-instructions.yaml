@@ -26,11 +26,23 @@ content: |
     implementations to avoid duplication. Uses exact (xxHash64) and near-duplicate (SimHash) detection.
     Params: content (string)
 
+  - af_code_find_type_usages — Find ALL switch/case statements, mapping objects, and usage sites
+    for a union type or enum. CRITICAL: Use this before adding new members to a type to identify
+    every file that needs updating. Prevents missed switch statements that cause TS2454 errors.
+    Params: type_name (string), max_results? (number)
+
+  - af_code_validate_cross_deps — Check that cross-package imports in the monorepo have
+    corresponding package.json dependency declarations. Run after adding imports from other
+    workspace packages to catch missing dependencies before they cause CI failures.
+    Params: path? (string — optional directory to scope the check)
+
   WHEN TO USE THESE TOOLS:
   - Starting a new task: af_code_get_repo_map first, then af_code_search_symbols for specific targets
   - Looking for a function/class/type: af_code_search_symbols (faster and more precise than Grep)
   - Understanding how something works: af_code_search_code with descriptive queries
   - Before writing new utility code: af_code_check_duplicate to avoid reinventing existing helpers
+  - Adding a member to a union type or enum: af_code_find_type_usages to find all switch/case/mapping sites
+  - Importing across workspace packages: af_code_validate_cross_deps to verify dependency declarations
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
   {{else}}
   CODE INTELLIGENCE CLI:
@@ -49,6 +61,14 @@ content: |
   - pnpm af-code check-duplicate --content "<code>" OR --content-file /tmp/snippet.ts
     Before writing significant code, check for existing implementations to avoid duplication.
 
+  - pnpm af-code find-type-usages "<TypeName>" [--max-results 50]
+    Find ALL switch/case statements, mapping objects, and usage sites for a union type or enum.
+    CRITICAL: Use before adding new members to a type to identify every file needing updates.
+
+  - pnpm af-code validate-cross-deps [path]
+    Check cross-package imports have package.json dependency declarations.
+    Run after adding imports from other workspace packages.
+
   All commands output JSON to stdout. First invocation builds the index (~5-10s); subsequent
   calls reuse the persisted index from .agentfactory/code-index/.
 
@@ -57,5 +77,7 @@ content: |
   - Looking for a function/class/type: search-symbols (faster and more precise than Grep)
   - Understanding how something works: search-code with descriptive queries
   - Before writing new utility code: check-duplicate to avoid reinventing existing helpers
+  - Adding a member to a union type or enum: find-type-usages to find all switch/case/mapping sites
+  - Importing across workspace packages: validate-cross-deps to verify dependency declarations
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
   {{/if}}
