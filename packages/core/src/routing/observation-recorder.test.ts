@@ -20,7 +20,7 @@ function makeProcess(overrides: Partial<AgentProcess> = {}): AgentProcess {
 function makeMockStores() {
   const observationStore: ObservationStore = {
     recordObservation: vi.fn<(obs: RoutingObservation) => Promise<void>>().mockResolvedValue(undefined),
-    getObservations: vi.fn().mockResolvedValue([]),
+    getObservations: vi.fn().mockResolvedValue({ observations: [] }),
     getRecentObservations: vi.fn().mockResolvedValue([]),
   }
 

@@ -153,27 +153,54 @@ describe('routing-observation-store', () => {
   })
 
   describe('getObservations', () => {
-    it('calls XRANGE with full range when no since filter', async () => {
+    it('calls XREVRANGE with full range when no filters', async () => {
       const store = createRedisObservationStore()
       await store.getObservations({})
 
-      expect(mockXrange).toHaveBeenCalledWith(
+      expect(mockXrevrange).toHaveBeenCalledWith(
         'routing:observations',
-        '-',
         '+',
+        '-',
         'COUNT',
-        10000,
+        expect.any(Number),
       )
     })
 
-    it('uses since-based start ID when since filter is provided', async () => {
+    it('uses since-based low bound when since filter is provided', async () => {
       const store = createRedisObservationStore()
       await store.getObservations({ since: 1700000000 })
 
-      expect(mockXrange).toHaveBeenCalledWith(
+      expect(mockXrevrange).toHaveBeenCalledWith(
         'routing:observations',
-        '1700000000-0',
         '+',
+        '1700000000-0',
+        'COUNT',
+        expect.any(Number),
+      )
+    })
+
+    it('uses from/to for time-range bounds', async () => {
+      const store = createRedisObservationStore()
+      await store.getObservations({ from: 1000, to: 2000 })
+
+      expect(mockXrevrange).toHaveBeenCalledWith(
+        'routing:observations',
+        '2000-18446744073709551615',
+        '1000-0',
+        'COUNT',
+        expect.any(Number),
+      )
+    })
+
+    it('uses cursor to set high bound (exclusive)', async () => {
+      const store = createRedisObservationStore()
+      await store.getObservations({ cursor: '1700000000000-5' })
+
+      // cursor 1700000000000-5 decremented -> 1700000000000-4
+      expect(mockXrevrange).toHaveBeenCalledWith(
+        'routing:observations',
+        '1700000000000-4',
+        '-',
         'COUNT',
         expect.any(Number),
       )
@@ -181,81 +208,108 @@ describe('routing-observation-store', () => {
 
     it('returns parsed observations from stream entries', async () => {
       const obs = makeObservation()
-      mockXrange.mockResolvedValue([makeStreamEntry(obs)])
+      mockXrevrange.mockResolvedValue([makeStreamEntry(obs)])
 
       const store = createRedisObservationStore()
       const result = await store.getObservations({})
 
-      expect(result).toHaveLength(1)
-      expect(result[0]).toEqual(obs)
+      expect(result.observations).toHaveLength(1)
+      expect(result.observations[0]).toEqual(obs)
     })
 
     it('parses optional fields correctly', async () => {
       const obs = makeObservation({ project: 'MyProject', explorationReason: 'uncertainty' })
-      mockXrange.mockResolvedValue([makeStreamEntry(obs)])
+      mockXrevrange.mockResolvedValue([makeStreamEntry(obs)])
 
       const store = createRedisObservationStore()
       const result = await store.getObservations({})
 
-      expect(result[0]!.project).toBe('MyProject')
-      expect(result[0]!.explorationReason).toBe('uncertainty')
+      expect(result.observations[0]!.project).toBe('MyProject')
+      expect(result.observations[0]!.explorationReason).toBe('uncertainty')
     })
 
     it('filters by provider in application code', async () => {
       const claudeObs = makeObservation({ provider: 'claude' })
       const codexObs = makeObservation({ provider: 'codex' })
-      mockXrange.mockResolvedValue([
-        makeStreamEntry(claudeObs, '1-0'),
-        makeStreamEntry(codexObs, '2-0'),
+      mockXrevrange.mockResolvedValue([
+        makeStreamEntry(claudeObs, '2-0'),
+        makeStreamEntry(codexObs, '1-0'),
       ])
 
       const store = createRedisObservationStore()
       const result = await store.getObservations({ provider: 'claude' })
 
-      expect(result).toHaveLength(1)
-      expect(result[0]!.provider).toBe('claude')
+      expect(result.observations).toHaveLength(1)
+      expect(result.observations[0]!.provider).toBe('claude')
     })
 
     it('filters by workType in application code', async () => {
       const devObs = makeObservation({ workType: 'development' })
       const qaObs = makeObservation({ workType: 'qa' })
-      mockXrange.mockResolvedValue([
-        makeStreamEntry(devObs, '1-0'),
-        makeStreamEntry(qaObs, '2-0'),
+      mockXrevrange.mockResolvedValue([
+        makeStreamEntry(devObs, '2-0'),
+        makeStreamEntry(qaObs, '1-0'),
       ])
 
       const store = createRedisObservationStore()
       const result = await store.getObservations({ workType: 'qa' })
 
-      expect(result).toHaveLength(1)
-      expect(result[0]!.workType).toBe('qa')
+      expect(result.observations).toHaveLength(1)
+      expect(result.observations[0]!.workType).toBe('qa')
     })
 
     it('respects limit after filtering', async () => {
       const entries = Array.from({ length: 5 }, (_, i) =>
-        makeStreamEntry(makeObservation({ timestamp: i }), `${i}-0`),
+        makeStreamEntry(makeObservation({ timestamp: 5 - i }), `${5 - i}-0`),
       )
-      mockXrange.mockResolvedValue(entries)
+      mockXrevrange.mockResolvedValue(entries)
 
       const store = createRedisObservationStore()
       const result = await store.getObservations({ limit: 2 })
 
-      expect(result).toHaveLength(2)
+      expect(result.observations).toHaveLength(2)
     })
 
-    it('returns empty array when Redis is not configured', async () => {
+    it('returns nextCursor when more results exist', async () => {
+      // Create enough entries to exceed the limit
+      const entries = Array.from({ length: 4 }, (_, i) =>
+        makeStreamEntry(makeObservation({ timestamp: 4 - i }), `${4 - i}-0`),
+      )
+      mockXrevrange.mockResolvedValue(entries)
+
+      const store = createRedisObservationStore()
+      const result = await store.getObservations({ limit: 3 })
+
+      expect(result.observations).toHaveLength(3)
+      expect(result.nextCursor).toBe('2-0')
+    })
+
+    it('does not return nextCursor when all results fit', async () => {
+      const entries = Array.from({ length: 2 }, (_, i) =>
+        makeStreamEntry(makeObservation({ timestamp: 2 - i }), `${2 - i}-0`),
+      )
+      mockXrevrange.mockResolvedValue(entries)
+
+      const store = createRedisObservationStore()
+      const result = await store.getObservations({ limit: 5 })
+
+      expect(result.observations).toHaveLength(2)
+      expect(result.nextCursor).toBeUndefined()
+    })
+
+    it('returns empty result when Redis is not configured', async () => {
       mockIsRedisConfigured.mockReturnValue(false)
       const store = createRedisObservationStore()
       const result = await store.getObservations({})
-      expect(result).toEqual([])
-      expect(mockXrange).not.toHaveBeenCalled()
+      expect(result).toEqual({ observations: [] })
+      expect(mockXrevrange).not.toHaveBeenCalled()
     })
 
-    it('returns empty array on error', async () => {
-      mockXrange.mockRejectedValue(new Error('Redis timeout'))
+    it('returns empty result on error', async () => {
+      mockXrevrange.mockRejectedValue(new Error('Redis timeout'))
       const store = createRedisObservationStore()
       const result = await store.getObservations({})
-      expect(result).toEqual([])
+      expect(result).toEqual({ observations: [] })
     })
   })
 

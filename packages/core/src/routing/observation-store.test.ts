@@ -47,10 +47,16 @@ function createInMemoryStore(): ObservationStore {
       if (opts.since) {
         result = result.filter((o) => o.timestamp >= opts.since!)
       }
+      if (opts.from) {
+        result = result.filter((o) => o.timestamp >= opts.from!)
+      }
+      if (opts.to) {
+        result = result.filter((o) => o.timestamp <= opts.to!)
+      }
       if (opts.limit) {
         result = result.slice(0, opts.limit)
       }
-      return result
+      return { observations: result }
     },
     async getRecentObservations(provider, workType, windowSize) {
       return observations
@@ -76,8 +82,8 @@ describe('ObservationStore interface', () => {
     await store.recordObservation(obs)
 
     const all = await store.getObservations({})
-    expect(all).toHaveLength(1)
-    expect(all[0]).toEqual(obs)
+    expect(all.observations).toHaveLength(1)
+    expect(all.observations[0]).toEqual(obs)
   })
 
   it('getObservations filters by provider', async () => {
@@ -87,8 +93,8 @@ describe('ObservationStore interface', () => {
     await store.recordObservation(makeObservation({ provider: 'claude' }))
 
     const result = await store.getObservations({ provider: 'claude' })
-    expect(result).toHaveLength(2)
-    expect(result.every((o) => o.provider === 'claude')).toBe(true)
+    expect(result.observations).toHaveLength(2)
+    expect(result.observations.every((o) => o.provider === 'claude')).toBe(true)
   })
 
   it('getObservations filters by workType', async () => {
@@ -97,8 +103,8 @@ describe('ObservationStore interface', () => {
     await store.recordObservation(makeObservation({ workType: 'qa' }))
 
     const result = await store.getObservations({ workType: 'qa' })
-    expect(result).toHaveLength(1)
-    expect(result[0]!.workType).toBe('qa')
+    expect(result.observations).toHaveLength(1)
+    expect(result.observations[0]!.workType).toBe('qa')
   })
 
   it('getObservations filters by since', async () => {
@@ -108,8 +114,8 @@ describe('ObservationStore interface', () => {
     await store.recordObservation(makeObservation({ timestamp: 3000 }))
 
     const result = await store.getObservations({ since: 2000 })
-    expect(result).toHaveLength(2)
-    expect(result.every((o) => o.timestamp >= 2000)).toBe(true)
+    expect(result.observations).toHaveLength(2)
+    expect(result.observations.every((o) => o.timestamp >= 2000)).toBe(true)
   })
 
   it('getObservations respects limit', async () => {
@@ -119,7 +125,7 @@ describe('ObservationStore interface', () => {
     }
 
     const result = await store.getObservations({ limit: 3 })
-    expect(result).toHaveLength(3)
+    expect(result.observations).toHaveLength(3)
   })
 
   it('getRecentObservations returns newest-first for a provider+workType pair', async () => {
@@ -151,7 +157,7 @@ describe('ObservationStore interface', () => {
     await store.recordObservation(makeObservation({ provider: 'claude' }))
 
     const result = await store.getObservations({ provider: 'codex' })
-    expect(result).toEqual([])
+    expect(result.observations).toEqual([])
   })
 
   it('getRecentObservations returns empty array when no observations match', async () => {
