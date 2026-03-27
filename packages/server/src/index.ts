@@ -25,6 +25,9 @@ export * from './issue-lock.js'
 // Agent tracking
 export * from './agent-tracking.js'
 
+// Phase metrics aggregation
+export * from './phase-metrics.js'
+
 // Webhook idempotency
 export * from './webhook-idempotency.js'
 

@@ -97,6 +97,7 @@ export { createPublicRoutingMetricsHandler } from './handlers/public/routing-met
 export type { PublicRoutingMetricsResponse } from './handlers/public/routing-metrics.js'
 export { createPublicSessionActivitiesHandler } from './handlers/public/session-activities.js'
 export type { PublicActivityResponse } from './handlers/public/session-activities.js'
+export { createPublicPhaseMetricsHandler } from './handlers/public/phase-metrics.js'
 
 // Cleanup handler
 export { createCleanupHandler } from './handlers/cleanup.js'

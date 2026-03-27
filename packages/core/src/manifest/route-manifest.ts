@@ -133,6 +133,10 @@ export const ROUTE_MANIFEST: RouteManifest = {
       path: 'src/app/api/public/sessions/[id]/route.ts',
       methods: { GET: 'routes.public.sessionDetail.GET' },
     },
+    {
+      path: 'src/app/api/public/phase-metrics/route.ts',
+      methods: { GET: 'routes.public.phaseMetrics.GET' },
+    },
 
     // Config route
     {

@@ -81,3 +81,22 @@ export interface PublicRoutingMetricsResponse {
   summary: RoutingSummaryResponse
   timestamp: string
 }
+
+export type WorkflowPhase = 'development' | 'qa' | 'refinement' | 'acceptance'
+export type EscalationStrategy = 'normal' | 'context-enriched' | 'decompose' | 'escalate-human'
+
+export interface PhaseMetricsDetail {
+  avgCycleTimeMs: number
+  avgCostUsd: number
+  avgAttempts: number
+  totalRecords: number
+}
+
+export interface PhaseMetricsResponse {
+  timeRange: '7d' | '30d' | '90d'
+  phases: Record<WorkflowPhase, PhaseMetricsDetail>
+  reworkRate: number
+  escalationDistribution: Record<EscalationStrategy, number>
+  issueCount: number
+  timestamp: string
+}
