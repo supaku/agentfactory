@@ -89,6 +89,7 @@ function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>
         description: z.string().optional().describe('New description (markdown)'),
         state: z.string().optional().describe('New state (e.g. "In Progress", "Done")'),
         labels: z.array(z.string()).optional().describe('Label names to set'),
+        parent_id: z.string().optional().describe('Parent issue ID or identifier to reparent under. Pass "null" to remove parent.'),
       },
       async (args) => {
         const cliArgs: Record<string, string | string[] | boolean> = {}
@@ -96,6 +97,7 @@ function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>
         if (args.description) cliArgs.description = args.description
         if (args.state) cliArgs.state = args.state
         if (args.labels) cliArgs.labels = args.labels
+        if (args.parent_id !== undefined) cliArgs.parentId = args.parent_id
         return run('update-issue', cliArgs, [args.issue_id])
       }
     ),
