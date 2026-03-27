@@ -49,6 +49,9 @@ export type {
   LinearApiQuota,
 } from './types.js'
 
+// Re-export ToolCategory from core for consumers that import from @agentfactory/linear
+export type { ToolCategory } from '@agentfactory/core'
+
 // Work type mappings for status-based routing
 export {
   STATUS_WORK_TYPE_MAP,

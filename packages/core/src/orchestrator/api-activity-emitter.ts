@@ -65,7 +65,10 @@ interface QueuedActivity {
   toolName?: string
   toolInput?: Record<string, unknown>
   toolOutput?: string
+  toolCategory?: string
 }
+
+import { classifyTool } from '../tools/tool-category.js'
 
 const DEFAULT_MIN_INTERVAL = 500
 const DEFAULT_MAX_OUTPUT_LENGTH = 2000
@@ -157,12 +160,14 @@ export class ApiActivityEmitter {
     ephemeral = true
   ): Promise<void> {
     const inputSummary = this.summarizeToolInput(tool, input)
+    const category = classifyTool(tool)
     await this.queueActivity({
       type: 'action',
       content: `${tool}: ${inputSummary}`,
       ephemeral,
       toolName: tool,
       toolInput: input,
+      toolCategory: category,
     })
   }
 
@@ -440,6 +445,7 @@ export class ApiActivityEmitter {
               content,
               toolName: activity.toolName,
               toolInput: activity.toolInput,
+              toolCategory: activity.toolCategory,
             },
           }),
         }

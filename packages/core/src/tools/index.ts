@@ -1,3 +1,5 @@
 export { ToolRegistry } from './registry.js'
 export type { CreateServersResult } from './registry.js'
 export type { ToolPlugin, ToolPluginContext } from './types.js'
+export { classifyTool } from './tool-category.js'
+export type { ToolCategory } from './tool-category.js'

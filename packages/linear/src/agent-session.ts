@@ -16,6 +16,7 @@ import type {
   LinearPlanStatus,
   IssueRelationResult,
   IssueRelationInfo,
+  ActionActivityContent,
 } from './types.js'
 import {
   WORK_TYPE_START_STATUS,
@@ -427,7 +428,8 @@ export class AgentSession {
   async emitAction(
     toolName: string,
     input: Record<string, unknown>,
-    ephemeral = true
+    ephemeral = true,
+    toolCategory?: string
   ): Promise<void> {
     if (this.sessionId) {
       await this.createActivity(
@@ -435,7 +437,8 @@ export class AgentSession {
           type: 'action',
           action: toolName,
           parameter: JSON.stringify(input),
-        },
+          ...(toolCategory ? { toolCategory } : {}),
+        } as ActionActivityContent,
         ephemeral
       )
     } else {
@@ -446,7 +449,7 @@ export class AgentSession {
           metadata: { toolName, input },
         },
         ephemeral,
-        signals: { toolName, toolInput: input },
+        signals: { toolName, toolInput: input, ...(toolCategory ? { toolCategory } : {}) },
       })
     }
   }

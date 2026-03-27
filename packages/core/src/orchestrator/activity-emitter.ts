@@ -15,6 +15,7 @@
 
 import type { IssueTrackerSession } from './issue-tracker-client.js'
 import { ENVIRONMENT_ISSUE_TYPES } from './work-types.js'
+import { classifyTool } from '../tools/tool-category.js'
 
 /** Configuration for the activity emitter */
 export interface ActivityEmitterConfig {
@@ -39,6 +40,7 @@ interface QueuedActivity {
   toolName?: string
   toolInput?: Record<string, unknown>
   toolOutput?: string
+  toolCategory?: string
 }
 
 const DEFAULT_MIN_INTERVAL = 500
@@ -93,12 +95,14 @@ export class ActivityEmitter {
     ephemeral = true
   ): Promise<void> {
     const inputSummary = this.summarizeToolInput(tool, input)
+    const category = classifyTool(tool)
     await this.queueActivity({
       type: 'action',
       content: `${tool}: ${inputSummary}`,
       ephemeral,
       toolName: tool,
       toolInput: input,
+      toolCategory: category,
     })
   }
 
@@ -291,7 +295,8 @@ export class ActivityEmitter {
             await this.session.emitAction(
               activity.toolName,
               activity.toolInput,
-              activity.ephemeral
+              activity.ephemeral,
+              activity.toolCategory
             )
           } else if (activity.toolName && activity.toolOutput) {
             await this.session.emitToolResult(

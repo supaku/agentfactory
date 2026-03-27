@@ -40,7 +40,7 @@ export interface SessionConfig {
  */
 export interface IssueTrackerSession {
   emitThought(content: string, ephemeral?: boolean): Promise<void>
-  emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean): Promise<void>
+  emitAction(tool: string, input: Record<string, unknown>, ephemeral?: boolean, toolCategory?: string): Promise<void>
   emitToolResult(tool: string, output: string, ephemeral?: boolean): Promise<void>
   emitResponse(content: string): Promise<void>
   emitError(error: Error): Promise<void>
