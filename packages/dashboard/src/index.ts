@@ -7,6 +7,7 @@ export { BottomBar } from './components/layout/bottom-bar'
 // Pages
 export { DashboardPage } from './pages/dashboard-page'
 export { PipelinePage } from './pages/pipeline-page'
+export type { PipelinePageProps } from './pages/pipeline-page'
 export { SessionPage } from './pages/session-page'
 export { SettingsPage } from './pages/settings-page'
 
@@ -22,6 +23,7 @@ export { ProviderIcon } from './components/fleet/provider-icon'
 export { PipelineView } from './components/pipeline/pipeline-view'
 export { PipelineColumn } from './components/pipeline/pipeline-column'
 export { PipelineCard } from './components/pipeline/pipeline-card'
+export { DeprecationBanner } from './components/pipeline/deprecation-banner'
 
 // Session components
 export { SessionList } from './components/sessions/session-list'

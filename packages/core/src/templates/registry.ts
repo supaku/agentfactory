@@ -7,6 +7,7 @@
  */
 
 import Handlebars from 'handlebars'
+import type { JSONSchema7 } from 'json-schema'
 import type { AgentWorkType } from '../orchestrator/work-types.js'
 import type {
   WorkflowTemplate,
@@ -21,6 +22,7 @@ import {
   getBuiltinDefaultsDir,
   getBuiltinPartialsDir,
 } from './loader.js'
+import { generateTemplateSchema, type TemplateSchemaOptions } from './schema.js'
 
 /**
  * Template Registry manages workflow templates and renders prompts.
@@ -210,4 +212,107 @@ export class TemplateRegistry {
   registerPartial(name: string, content: string): void {
     this.handlebars.registerPartial(name, content)
   }
+
+  /**
+   * Get JSON Schema 7 for a template's parameters.
+   *
+   * The schema is derived from the template's prompt by extracting
+   * Handlebars expression references and mapping them to the known
+   * TemplateContext fields. Returns null if no template is registered.
+   */
+  getSchema(templateName: string, options?: TemplateSchemaOptions): JSONSchema7 | null {
+    const template = this.templates.get(templateName)
+    if (!template) return null
+    return generateTemplateSchema(template, options)
+  }
+
+  /**
+   * Validate a config object against a template's JSON Schema.
+   *
+   * Template expressions ({{ }}) in string values are treated as valid
+   * placeholders and are not validated against the schema type.
+   *
+   * Returns a validation result with `valid` boolean and any `errors`.
+   */
+  validateConfig(
+    templateName: string,
+    config: Record<string, unknown>,
+  ): TemplateValidationResult {
+    const template = this.templates.get(templateName)
+    if (!template) {
+      return { valid: false, errors: [`Template "${templateName}" not found`] }
+    }
+
+    const schema = generateTemplateSchema(template)
+    return validateConfigAgainstSchema(config, schema)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Validation types and helpers
+// ---------------------------------------------------------------------------
+
+export interface TemplateValidationResult {
+  valid: boolean
+  errors: string[]
+}
+
+/** Handlebars expression pattern: {{ ... }} */
+const TEMPLATE_EXPRESSION_RE = /^\{\{.*\}\}$/s
+
+/**
+ * Validate a config object against a JSON Schema 7.
+ * Template expressions ({{ }}) are treated as valid for any field.
+ */
+function validateConfigAgainstSchema(
+  config: Record<string, unknown>,
+  schema: JSONSchema7,
+): TemplateValidationResult {
+  const errors: string[] = []
+  const properties = schema.properties ?? {}
+  const required = schema.required ?? []
+
+  // Check required fields
+  for (const field of required) {
+    if (!(field in config)) {
+      errors.push(`Missing required field: "${field}"`)
+    }
+  }
+
+  // Type-check provided fields
+  for (const [key, value] of Object.entries(config)) {
+    const fieldSchema = properties[key]
+    if (!fieldSchema || typeof fieldSchema === 'boolean') continue
+
+    // Template expressions are always valid
+    if (typeof value === 'string' && TEMPLATE_EXPRESSION_RE.test(value.trim())) {
+      continue
+    }
+
+    const typeError = checkType(key, value, fieldSchema)
+    if (typeError) errors.push(typeError)
+  }
+
+  return { valid: errors.length === 0, errors }
+}
+
+function checkType(key: string, value: unknown, schema: JSONSchema7): string | null {
+  const schemaType = schema.type
+  if (!schemaType) return null
+
+  // Normalize to array of type strings
+  const types: string[] = Array.isArray(schemaType) ? schemaType : [schemaType]
+
+  const valueType = Array.isArray(value) ? 'array' : typeof value
+  // null is a valid JSON Schema type
+  if (value === null && types.includes('null')) return null
+  if (value === null) return `Field "${key}" is null but expected ${types.join(' | ')}`
+
+  // 'integer' matches typeof 'number' in JS
+  const effectiveTypes = types.map(t => t === 'integer' ? 'number' : t)
+  if (!effectiveTypes.includes(valueType)) {
+    return `Field "${key}" has type "${valueType}" but expected ${types.join(' | ')}`
+  }
+
+  return null
 }

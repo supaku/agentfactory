@@ -10,19 +10,23 @@ interface PipelineCardProps {
   session: PublicSessionResponse
   className?: string
   onSelect?: (sessionId: string) => void
+  readOnly?: boolean
 }
 
-export function PipelineCard({ session, className, onSelect }: PipelineCardProps) {
+export function PipelineCard({ session, className, onSelect, readOnly }: PipelineCardProps) {
   const workTypeConfig = getWorkTypeConfig(session.workType)
+  const isInteractive = onSelect && !readOnly
 
   return (
     <div
       className={cn(
-        'rounded-lg border border-af-surface-border/40 bg-af-surface/50 p-3 transition-all duration-200 hover-glow',
-        onSelect && 'cursor-pointer',
+        'rounded-lg border border-af-surface-border/40 bg-af-surface/50 p-3 transition-all duration-200',
+        !readOnly && 'hover-glow',
+        isInteractive && 'cursor-pointer',
+        readOnly && 'pointer-events-none',
         className
       )}
-      {...(onSelect && {
+      {...(isInteractive && {
         role: 'button',
         tabIndex: 0,
         onClick: () => onSelect(session.id),

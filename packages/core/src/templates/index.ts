@@ -23,7 +23,9 @@ export {
   validatePartialTemplate,
 } from './types.js'
 
-export { TemplateRegistry } from './registry.js'
+export { TemplateRegistry, type TemplateValidationResult } from './registry.js'
+
+export { generateTemplateSchema, extractTemplateVariables, type TemplateSchemaOptions } from './schema.js'
 
 export {
   loadTemplatesFromDir,
