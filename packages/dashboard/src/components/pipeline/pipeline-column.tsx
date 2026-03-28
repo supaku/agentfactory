@@ -10,9 +10,10 @@ interface PipelineColumnProps {
   accentClass?: string
   className?: string
   onSessionSelect?: (sessionId: string) => void
+  readOnly?: boolean
 }
 
-export function PipelineColumn({ title, sessions, count, accentClass, className, onSessionSelect }: PipelineColumnProps) {
+export function PipelineColumn({ title, sessions, count, accentClass, className, onSessionSelect, readOnly }: PipelineColumnProps) {
   return (
     <div
       className={cn(
@@ -35,7 +36,7 @@ export function PipelineColumn({ title, sessions, count, accentClass, className,
       <ScrollArea className="flex-1 px-2 pb-2">
         <div className="space-y-2">
           {sessions.map((session) => (
-            <PipelineCard key={session.id} session={session} onSelect={onSessionSelect} />
+            <PipelineCard key={session.id} session={session} onSelect={onSessionSelect} readOnly={readOnly} />
           ))}
         </div>
       </ScrollArea>

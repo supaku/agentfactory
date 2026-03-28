@@ -31,9 +31,11 @@ function groupByColumn(sessions: PublicSessionResponse[]) {
 interface PipelineViewProps {
   className?: string
   onSessionSelect?: (sessionId: string) => void
+  /** When true, renders pipeline in a muted, non-interactive state */
+  readOnly?: boolean
 }
 
-export function PipelineView({ className, onSessionSelect }: PipelineViewProps) {
+export function PipelineView({ className, onSessionSelect, readOnly }: PipelineViewProps) {
   const { data, isLoading } = useSessions()
   const sessions = data?.sessions ?? []
 
@@ -62,7 +64,7 @@ export function PipelineView({ className, onSessionSelect }: PipelineViewProps) 
           description="Sessions will populate the pipeline as agents work on issues."
         />
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className={cn('flex gap-3 overflow-x-auto pb-2', readOnly && 'opacity-60')}>
           {groupByColumn(sessions).map((col, i) => (
             <div
               key={col.title}
@@ -74,7 +76,8 @@ export function PipelineView({ className, onSessionSelect }: PipelineViewProps) 
                 sessions={col.sessions}
                 count={col.sessions.length}
                 accentClass={col.accentClass}
-                onSessionSelect={onSessionSelect}
+                onSessionSelect={readOnly ? undefined : onSessionSelect}
+                readOnly={readOnly}
               />
             </div>
           ))}
