@@ -6,7 +6,7 @@
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
 import { resolve, dirname, basename } from 'path'
 import { parse as parseDotenv } from 'dotenv'
 import {
@@ -2053,12 +2053,42 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         }
       }
 
+      // Fix 5: Also scan worktree for workspaces that exist on the branch
+      // but not in the main repo's directory listing (e.g., newly added workspaces)
+      for (const subdir of ['apps', 'packages']) {
+        const wtSubdir = resolve(worktreePath, subdir)
+        if (!existsSync(wtSubdir)) continue
+
+        for (const entry of readdirSync(wtSubdir)) {
+          const src = resolve(repoRoot, subdir, entry, 'node_modules')
+          const dest = resolve(wtSubdir, entry, 'node_modules')
+
+          if (!existsSync(src)) continue  // No source deps to link
+          if (existsSync(dest)) continue  // Already linked above
+
+          this.linkNodeModulesContents(src, dest, identifier)
+        }
+      }
+
       if (skipped > 0) {
         console.log(
           `[${identifier}] Dependencies linked successfully (${skipped} workspace(s) skipped — not on this branch)`
         )
       } else {
         console.log(`[${identifier}] Dependencies linked successfully`)
+      }
+
+      // Verify critical symlinks are intact; if not, remove and retry once
+      if (!this.verifyDependencyLinks(worktreePath, identifier)) {
+        console.warn(`[${identifier}] Dependency verification failed — removing and re-linking`)
+        this.removeWorktreeNodeModules(worktreePath)
+        const retryDest = resolve(worktreePath, 'node_modules')
+        this.linkNodeModulesContents(mainNodeModules, retryDest, identifier)
+
+        if (!this.verifyDependencyLinks(worktreePath, identifier)) {
+          console.warn(`[${identifier}] Verification failed after retry — falling back to install`)
+          this.installDependencies(worktreePath, identifier)
+        }
       }
     } catch (error) {
       console.warn(
@@ -2070,69 +2100,55 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
   }
 
   /**
-   * Create a real node_modules directory and symlink each entry from the source.
-   *
-   * Instead of symlinking the entire node_modules directory (which lets pnpm
-   * resolve through the symlink and corrupt the original), we create a real
-   * directory and symlink each entry individually. If pnpm "recreates" this
-   * directory, it only destroys the worktree's symlinks — not the originals.
+   * Verify that critical dependency symlinks are intact and resolvable.
+   * Returns true if verification passes, false if re-linking is needed.
    */
-  private linkNodeModulesContents(
-    srcNodeModules: string,
-    destNodeModules: string,
-    identifier: string
-  ): void {
-    if (existsSync(destNodeModules)) return
+  private verifyDependencyLinks(worktreePath: string, identifier: string): boolean {
+    const destRoot = resolve(worktreePath, 'node_modules')
+    if (!existsSync(destRoot)) return false
 
-    mkdirSync(destNodeModules, { recursive: true })
+    // Sentinel packages that should always be present in a Node.js project
+    const sentinels = ['typescript']
 
-    for (const entry of readdirSync(srcNodeModules)) {
-      const srcEntry = resolve(srcNodeModules, entry)
-      const destEntry = resolve(destNodeModules, entry)
-
-      // For scoped packages (@org/), create the scope dir and symlink contents
-      if (entry.startsWith('@')) {
-        const stat = lstatSync(srcEntry)
-        if (stat.isDirectory()) {
-          mkdirSync(destEntry, { recursive: true })
-          for (const scopedEntry of readdirSync(srcEntry)) {
-            const srcScoped = resolve(srcEntry, scopedEntry)
-            const destScoped = resolve(destEntry, scopedEntry)
-            if (!existsSync(destScoped)) {
-              symlinkSync(srcScoped, destScoped)
-            }
-          }
-          continue
-        }
-      }
-
-      if (!existsSync(destEntry)) {
-        symlinkSync(srcEntry, destEntry)
+    // Also check for .modules.yaml (pnpm store metadata) if it exists in main
+    const repoRoot = findRepoRoot(worktreePath)
+    if (repoRoot) {
+      const pnpmMeta = resolve(repoRoot, 'node_modules', '.modules.yaml')
+      if (existsSync(pnpmMeta)) {
+        sentinels.push('.modules.yaml')
       }
     }
+
+    for (const pkg of sentinels) {
+      const pkgPath = resolve(destRoot, pkg)
+      if (!existsSync(pkgPath)) {
+        console.warn(`[${identifier}] Verification: missing ${pkg}`)
+        return false
+      }
+      // Follow the symlink — throws if target was deleted from main repo
+      try {
+        statSync(pkgPath)
+      } catch {
+        console.warn(`[${identifier}] Verification: broken symlink for ${pkg}`)
+        return false
+      }
+    }
+    return true
   }
 
   /**
-   * Fallback: install dependencies via pnpm install.
-   * Only called when symlinking fails.
+   * Remove all node_modules directories from a worktree (root + per-workspace).
    */
-  private installDependencies(worktreePath: string, identifier: string): void {
-    console.log(`[${identifier}] Installing dependencies via pnpm...`)
-
-    // Remove any node_modules from a partial linkDependencies attempt.
-    // Handles both old format (directory-level symlink) and new format
-    // (real directory with symlinked contents).
+  private removeWorktreeNodeModules(worktreePath: string): void {
     const destRoot = resolve(worktreePath, 'node_modules')
     try {
       if (existsSync(destRoot)) {
         rmSync(destRoot, { recursive: true, force: true })
-        console.log(`[${identifier}] Removed partial node_modules before install`)
       }
     } catch {
-      // Ignore cleanup errors — pnpm install may still work
+      // Ignore cleanup errors
     }
 
-    // Also remove any per-workspace node_modules that were partially created
     for (const subdir of ['apps', 'packages']) {
       const subPath = resolve(worktreePath, subdir)
       if (!existsSync(subPath)) continue
@@ -2147,6 +2163,83 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         // Ignore cleanup errors
       }
     }
+  }
+
+  /**
+   * Create or update a symlink atomically, handling EEXIST races.
+   *
+   * If the destination already exists and points to the correct target, this is a no-op.
+   * If it points elsewhere or isn't a symlink, it's replaced.
+   */
+  private safeSymlink(src: string, dest: string): void {
+    try {
+      symlinkSync(src, dest)
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        // Verify existing symlink points to correct target
+        try {
+          const existing = readlinkSync(dest)
+          if (resolve(existing) === resolve(src)) return // Already correct
+        } catch {
+          // Not a symlink or can't read — remove and retry
+        }
+        unlinkSync(dest)
+        symlinkSync(src, dest)
+      } else {
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Create a real node_modules directory and symlink each entry from the source.
+   *
+   * Instead of symlinking the entire node_modules directory (which lets pnpm
+   * resolve through the symlink and corrupt the original), we create a real
+   * directory and symlink each entry individually. If pnpm "recreates" this
+   * directory, it only destroys the worktree's symlinks — not the originals.
+   *
+   * Supports incremental sync: if the destination already exists, only missing
+   * or stale entries are updated (safe for concurrent agents and phase reuse).
+   */
+  private linkNodeModulesContents(
+    srcNodeModules: string,
+    destNodeModules: string,
+    identifier: string
+  ): void {
+    mkdirSync(destNodeModules, { recursive: true })
+
+    for (const entry of readdirSync(srcNodeModules)) {
+      const srcEntry = resolve(srcNodeModules, entry)
+      const destEntry = resolve(destNodeModules, entry)
+
+      // For scoped packages (@org/), create the scope dir and symlink contents
+      if (entry.startsWith('@')) {
+        const stat = lstatSync(srcEntry)
+        if (stat.isDirectory()) {
+          mkdirSync(destEntry, { recursive: true })
+          for (const scopedEntry of readdirSync(srcEntry)) {
+            const srcScoped = resolve(srcEntry, scopedEntry)
+            const destScoped = resolve(destEntry, scopedEntry)
+            this.safeSymlink(srcScoped, destScoped)
+          }
+          continue
+        }
+      }
+
+      this.safeSymlink(srcEntry, destEntry)
+    }
+  }
+
+  /**
+   * Fallback: install dependencies via pnpm install.
+   * Only called when symlinking fails.
+   */
+  private installDependencies(worktreePath: string, identifier: string): void {
+    console.log(`[${identifier}] Installing dependencies via pnpm...`)
+
+    // Remove any node_modules from a partial linkDependencies attempt
+    this.removeWorktreeNodeModules(worktreePath)
 
     // Set ORCHESTRATOR_INSTALL=1 to bypass the preinstall guard script
     // that blocks pnpm install in worktrees (to prevent symlink corruption).
@@ -2178,6 +2271,90 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         )
       }
     }
+  }
+
+  /**
+   * Sync dependencies between worktree and main repo before linking.
+   *
+   * When a development agent adds new packages on a branch, the lockfile in the
+   * worktree diverges from the main repo. This method detects lockfile drift,
+   * updates the main repo's node_modules, then re-links into the worktree.
+   */
+  syncDependencies(worktreePath: string, identifier: string): void {
+    const repoRoot = findRepoRoot(worktreePath)
+    if (!repoRoot) {
+      this.linkDependencies(worktreePath, identifier)
+      return
+    }
+
+    const worktreeLock = resolve(worktreePath, 'pnpm-lock.yaml')
+    const mainLock = resolve(repoRoot, 'pnpm-lock.yaml')
+
+    // Detect lockfile drift: if the worktree has a lockfile that differs from main,
+    // a dev agent added/changed dependencies on the branch
+    let lockfileDrifted = false
+    if (existsSync(worktreeLock) && existsSync(mainLock)) {
+      try {
+        const wtContent = readFileSync(worktreeLock, 'utf-8')
+        const mainContent = readFileSync(mainLock, 'utf-8')
+        lockfileDrifted = wtContent !== mainContent
+      } catch {
+        // If we can't read either file, proceed without sync
+      }
+    }
+
+    if (lockfileDrifted) {
+      console.log(`[${identifier}] Lockfile drift detected — syncing main repo dependencies`)
+      try {
+        // Copy the worktree's lockfile to the main repo so install picks up new deps
+        copyFileSync(worktreeLock, mainLock)
+
+        // Also copy any changed package.json files from worktree workspaces to main
+        for (const subdir of ['', 'apps', 'packages']) {
+          const wtDir = subdir ? resolve(worktreePath, subdir) : worktreePath
+          const mainDir = subdir ? resolve(repoRoot, subdir) : repoRoot
+
+          if (subdir && !existsSync(wtDir)) continue
+
+          const entries = subdir ? readdirSync(wtDir) : ['']
+          for (const entry of entries) {
+            const wtPkg = resolve(wtDir, entry, 'package.json')
+            const mainPkg = resolve(mainDir, entry, 'package.json')
+            if (!existsSync(wtPkg)) continue
+            try {
+              const wtPkgContent = readFileSync(wtPkg, 'utf-8')
+              const mainPkgContent = existsSync(mainPkg) ? readFileSync(mainPkg, 'utf-8') : ''
+              if (wtPkgContent !== mainPkgContent) {
+                copyFileSync(wtPkg, mainPkg)
+              }
+            } catch {
+              // Skip files we can't read
+            }
+          }
+        }
+
+        // Install in the main repo (not the worktree) to update node_modules
+        const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
+        execSync('pnpm install --frozen-lockfile 2>&1', {
+          cwd: repoRoot,
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          timeout: 120_000,
+          env: installEnv,
+        })
+        console.log(`[${identifier}] Main repo dependencies synced`)
+
+        // Remove stale worktree node_modules so linkDependencies creates fresh symlinks
+        this.removeWorktreeNodeModules(worktreePath)
+      } catch (error) {
+        console.warn(
+          `[${identifier}] Dependency sync failed, proceeding with existing state:`,
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+
+    this.linkDependencies(worktreePath, identifier)
   }
 
   /**
@@ -3633,8 +3810,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         // Create worktree with work type suffix
         const { worktreePath, worktreeIdentifier } = this.createWorktree(issue.identifier, workType)
 
-        // Link dependencies from main repo into worktree
-        this.linkDependencies(worktreePath, issue.identifier)
+        // Sync and link dependencies from main repo into worktree
+        this.syncDependencies(worktreePath, issue.identifier)
 
         const startStatus = this.statusMappings.workTypeStartStatus[workType]
 
@@ -3773,8 +3950,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       worktreePath = wt.worktreePath
       worktreeIdentifier = wt.worktreeIdentifier
 
-      // Link dependencies from main repo into worktree
-      this.linkDependencies(worktreePath, identifier)
+      // Sync and link dependencies from main repo into worktree
+      this.syncDependencies(worktreePath, identifier)
 
       // Check for existing state and potential recovery
       const recoveryCheck = checkRecovery(worktreePath, {
@@ -4076,8 +4253,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
           worktreePath = result.worktreePath
           worktreeIdentifier = result.worktreeIdentifier
 
-          // Link dependencies from main repo into worktree
-          this.linkDependencies(worktreePath, identifier)
+          // Sync and link dependencies from main repo into worktree
+          this.syncDependencies(worktreePath, identifier)
         }
       } catch (error) {
         return {
@@ -4097,8 +4274,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         worktreePath = result.worktreePath
         worktreeIdentifier = result.worktreeIdentifier
 
-        // Link dependencies from main repo into worktree
-        this.linkDependencies(worktreePath, identifier)
+        // Sync and link dependencies from main repo into worktree
+        this.syncDependencies(worktreePath, identifier)
       } catch (error) {
         return {
           forwarded: false,
