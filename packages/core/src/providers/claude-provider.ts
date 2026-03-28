@@ -42,6 +42,18 @@ const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
     return { behavior: 'allow', updatedInput: input }
   }
 
+  // Agent tool: always force foreground execution.
+  // Coordinators that spawn sub-agents with run_in_background=true exit
+  // before sub-agents finish, orphaning work. Strip the flag so the Agent
+  // tool blocks until the sub-agent completes.
+  if (toolName === 'Agent') {
+    if (input.run_in_background) {
+      const { run_in_background: _, ...rest } = input
+      return { behavior: 'allow', updatedInput: rest }
+    }
+    return { behavior: 'allow', updatedInput: input }
+  }
+
   // Task management and planning
   if (['Task', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
        'EnterPlanMode', 'ExitPlanMode', 'Skill'].includes(toolName)) {

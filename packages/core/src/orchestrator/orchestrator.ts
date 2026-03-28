@@ -68,6 +68,12 @@ import type {
 
 // Default inactivity timeout: 5 minutes
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
+// Coordination inactivity timeout: 30 minutes.
+// Coordinators spawn foreground sub-agents via the Agent tool. During sub-agent
+// execution the parent event stream is silent (no tool_progress events), so the
+// standard 5-minute inactivity timeout kills coordinators prematurely. 30 minutes
+// gives sub-agents ample time to complete complex work.
+const COORDINATION_INACTIVITY_TIMEOUT_MS = 1800000
 // Default max session timeout: unlimited (undefined)
 const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
@@ -1221,6 +1227,21 @@ export class AgentOrchestrator {
       return {
         inactivityTimeoutMs: override?.inactivityTimeoutMs ?? baseConfig.inactivityTimeoutMs,
         maxSessionTimeoutMs: override?.maxSessionTimeoutMs ?? baseConfig.maxSessionTimeoutMs,
+      }
+    }
+
+    // Coordination work types spawn foreground sub-agents via the Agent tool.
+    // During sub-agent execution the parent event stream is silent (no
+    // tool_progress events flow from Agent tool execution), so the standard
+    // inactivity timeout would kill coordinators prematurely. Use a longer
+    // default unless the user has configured a per-work-type override above.
+    const isCoordination = workType === 'coordination' || workType === 'inflight-coordination'
+      || workType === 'qa-coordination' || workType === 'acceptance-coordination'
+      || workType === 'refinement-coordination'
+    if (isCoordination) {
+      return {
+        inactivityTimeoutMs: Math.max(baseConfig.inactivityTimeoutMs, COORDINATION_INACTIVITY_TIMEOUT_MS),
+        maxSessionTimeoutMs: baseConfig.maxSessionTimeoutMs,
       }
     }
 
