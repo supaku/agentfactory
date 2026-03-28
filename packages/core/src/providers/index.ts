@@ -61,6 +61,7 @@ export type {
 
 export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'
 export { CodexProvider, createCodexProvider } from './codex-provider.js'
+export { CodexAppServerProvider, createCodexAppServerProvider } from './codex-app-server-provider.js'
 export { AmpProvider, createAmpProvider } from './amp-provider.js'
 export { SpringAiProvider, createSpringAiProvider } from './spring-ai-provider.js'
 export { A2aProvider, createA2aProvider } from './a2a-provider.js'
