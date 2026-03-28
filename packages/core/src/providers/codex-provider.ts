@@ -1,10 +1,22 @@
 /**
  * OpenAI Codex Agent Provider
  *
- * Spawns the `codex` CLI (from @openai/codex) as a child process and parses
- * its JSONL event stream into normalized AgentEvents.
+ * Unified Codex provider with two execution modes:
  *
- * CLI invocation patterns:
+ * 1. **App Server mode** (default when CODEX_USE_APP_SERVER=1):
+ *    Uses a long-lived `codex app-server` process communicating via JSON-RPC 2.0
+ *    over stdio. Supports multiple concurrent threads on a single process.
+ *
+ * 2. **Exec fallback mode** (backward compatibility):
+ *    Spawns the `codex` CLI as a child process and parses its JSONL event stream.
+ *    Used for CI/CD or when app-server is unavailable.
+ *
+ * Mode selection:
+ *   - CODEX_USE_APP_SERVER=1  → App Server mode (JSON-RPC 2.0)
+ *   - CODEX_USE_APP_SERVER=0  → Exec fallback mode (CLI JSONL)
+ *   - Not set                 → Exec fallback mode (default, backward compatible)
+ *
+ * Exec CLI invocation patterns:
  *   New session:  codex exec --json --full-auto -C <cwd> "<prompt>"
  *   Resume:       codex exec resume --json --full-auto <session_id> "<prompt>"
  *
@@ -25,6 +37,7 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
+import { CodexAppServerProvider } from './codex-app-server-provider.js'
 
 // ---------------------------------------------------------------------------
 // Codex JSONL event types (subset we care about)
@@ -337,6 +350,19 @@ export function mapCodexItemEvent(event: CodexItemEvent): AgentEvent[] {
 // Provider
 // ---------------------------------------------------------------------------
 
+/**
+ * Check whether App Server mode is enabled.
+ *
+ * Returns true when CODEX_USE_APP_SERVER=1 (or 'true').
+ * The env var can be set globally or per-spawn via config.env.
+ */
+function isAppServerEnabled(config?: AgentSpawnConfig): boolean {
+  const envVal = config?.env?.CODEX_USE_APP_SERVER
+    ?? process.env.CODEX_USE_APP_SERVER
+    ?? ''
+  return envVal === '1' || envVal.toLowerCase() === 'true'
+}
+
 export class CodexProvider implements AgentProvider {
   readonly name = 'codex' as const
   readonly capabilities = {
@@ -344,15 +370,46 @@ export class CodexProvider implements AgentProvider {
     supportsSessionResume: true,
   } as const
 
+  /** App Server delegate — created lazily when App Server mode is enabled */
+  private appServerProvider: CodexAppServerProvider | null = null
+
   spawn(config: AgentSpawnConfig): AgentHandle {
-    return this.createHandle(config)
+    if (isAppServerEnabled(config)) {
+      return this.getAppServerProvider().spawn(config)
+    }
+    return this.createExecHandle(config)
   }
 
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle {
-    return this.createHandle(config, sessionId)
+    if (isAppServerEnabled(config)) {
+      return this.getAppServerProvider().resume(sessionId, config)
+    }
+    return this.createExecHandle(config, sessionId)
   }
 
-  private createHandle(config: AgentSpawnConfig, resumeSessionId?: string): AgentHandle {
+  /**
+   * Shut down the App Server process if running.
+   * No-op if in exec fallback mode.
+   */
+  async shutdown(): Promise<void> {
+    if (this.appServerProvider) {
+      await this.appServerProvider.shutdown()
+      this.appServerProvider = null
+    }
+  }
+
+  private getAppServerProvider(): CodexAppServerProvider {
+    if (!this.appServerProvider) {
+      this.appServerProvider = new CodexAppServerProvider()
+    }
+    return this.appServerProvider
+  }
+
+  // -------------------------------------------------------------------------
+  // Exec fallback mode (backward compatibility — SUP-1739)
+  // -------------------------------------------------------------------------
+
+  private createExecHandle(config: AgentSpawnConfig, resumeSessionId?: string): AgentHandle {
     const abortController = config.abortController
 
     // Resolve the codex binary — prefer CODEX_BIN env var, then fall back to 'codex'
