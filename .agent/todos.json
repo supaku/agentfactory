@@ -1,0 +1,30 @@
+{
+  "updatedAt": 1774738975534,
+  "items": [
+    {
+      "content": "Explore codebase for Codex App Server provider implementation",
+      "status": "completed",
+      "activeForm": "Exploring codebase for Codex App Server provider"
+    },
+    {
+      "content": "SUP-1740: turn/steer mid-turn message injection (unblocked)",
+      "status": "in_progress",
+      "activeForm": "Implementing turn/steer mid-turn message injection"
+    },
+    {
+      "content": "SUP-1741: turn/start between-turn injection (unblocked)",
+      "status": "in_progress",
+      "activeForm": "Implementing turn/start between-turn injection"
+    },
+    {
+      "content": "SUP-1742: Provider capabilities update & forwardPrompt integration (blocked by SUP-1740, SUP-1741)",
+      "status": "pending",
+      "activeForm": "Implementing provider capabilities update & forwardPrompt integration"
+    },
+    {
+      "content": "Verify all sub-issues are Finished and create PR",
+      "status": "pending",
+      "activeForm": "Verifying completion and creating PR"
+    }
+  ]
+}

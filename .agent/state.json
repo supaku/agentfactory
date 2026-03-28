@@ -1,0 +1,16 @@
+{
+  "issueId": "eb8709eb-478a-4f03-9c65-df489db9919e",
+  "issueIdentifier": "SUP-1732",
+  "linearSessionId": "e4f96e97-1e33-408d-b627-659e0f69bf23",
+  "providerSessionId": "663687b8-4444-4899-a3e5-9c76b56adb3e",
+  "workType": "coordination",
+  "prompt": "Coordinate sub-issue execution for parent issue SUP-1732. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.\n\nSUB-ISSUE STATUS MANAGEMENT:\nUpdate sub-issue statuses in Linear as work progresses:\n- When starting work on a sub-issue: update status to Started\n- When a sub-agent completes a sub-issue: update status to Finished\n- If a sub-agent fails: add a comment explaining the failure\n\nCOMPLETION VERIFICATION:\nBefore marking the parent issue as complete, verify ALL sub-issues are in Finished status.\nIf any sub-issue is not Finished, report the failure and do not mark the parent as complete.\n\nHUMAN-NEEDED BLOCKERS:\nIf you encounter work that requires human action and cannot be resolved autonomously\n(e.g., missing API keys/credentials, infrastructure not provisioned, third-party onboarding,\nmanual setup steps, policy decisions, access permissions), create a blocker issue:\n  pnpm af-linear create-blocker <SOURCE-ISSUE-ID> --title \"What human needs to do\" --description \"Detailed steps\"\nThis creates a tracked issue in Icebox with 'Needs Human' label, linked as blocking the source issue.\nDo NOT silently skip human-needed work or bury it in comments.\nOnly create blockers for things that genuinely require a human — not for things you can retry or work around.",
+  "startedAt": 1774738502072,
+  "status": "completed",
+  "currentPhase": "Finalizing work",
+  "lastUpdatedAt": 1774739052007,
+  "recoveryAttempts": 0,
+  "workerId": "wkr_4afed3ddce2b4ade",
+  "pid": 14192,
+  "taskListId": "SUP-1732-COORD"
+}

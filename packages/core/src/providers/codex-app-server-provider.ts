@@ -726,6 +726,7 @@ class AppServerAgentHandle implements AgentHandle {
     totalOutputTokens: 0,
     turnCount: 0,
   }
+  private activeTurnId: string | null = null
   private notificationQueue: JsonRpcNotification[] = []
   private notificationResolve: (() => void) | null = null
   private streamEnded = false
@@ -776,6 +777,21 @@ class AppServerAgentHandle implements AgentHandle {
 
     this.streamEnded = true
     this.notificationResolve?.()
+  }
+
+  /**
+   * Steer an active turn with additional user input (SUP-1740).
+   * Sends a `turn/steer` JSON-RPC request to inject a message mid-turn.
+   */
+  async steerTurn(text: string): Promise<void> {
+    if (!this.sessionId || !this.activeTurnId) {
+      throw new Error('No active turn to steer')
+    }
+    await this.processManager.request('turn/steer', {
+      threadId: this.sessionId,
+      turnId: this.activeTurnId,
+      input: [{ type: 'text', text }],
+    })
   }
 
   private async *createEventStream(): AsyncGenerator<AgentEvent> {
@@ -878,6 +894,17 @@ class AppServerAgentHandle implements AgentHandle {
         // Drain the queue
         while (this.notificationQueue.length > 0) {
           const notification = this.notificationQueue.shift()!
+
+          // Track active turn ID for mid-turn steering (SUP-1740)
+          if (notification.method === 'turn/started') {
+            const turn = notification.params?.turn as AppServerTurn | undefined
+            if (turn?.id) {
+              this.activeTurnId = turn.id
+            }
+          } else if (notification.method === 'turn/completed') {
+            this.activeTurnId = null
+          }
+
           const events = mapAppServerNotification(notification, this.mapperState)
 
           for (const event of events) {
