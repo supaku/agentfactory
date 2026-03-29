@@ -95,6 +95,18 @@ export interface AgentSpawnConfig {
    * When omitted, the provider's default applies.
    */
   maxTurns?: number
+  /**
+   * Stdio MCP server configurations for Codex provider (SUP-1744).
+   * Created by ToolRegistry.createStdioServerConfigs() from registered plugins.
+   * Passed to Codex app-server via config/batchWrite so it can spawn and
+   * connect to these tool servers.
+   */
+  mcpStdioServers?: Array<{
+    name: string
+    command: string
+    args: string[]
+    env?: Record<string, string>
+  }>
 }
 
 /**

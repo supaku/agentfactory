@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   mapAppServerNotification,
   mapAppServerItemEvent,
+  normalizeMcpToolName,
   type AppServerEventMapperState,
   type JsonRpcNotification,
 } from './codex-app-server-provider.js'
@@ -471,13 +472,15 @@ describe('mapAppServerItemEvent', () => {
     })
   })
 
-  it('maps mcpToolCall item.started to tool_use', () => {
+  // --- MCP tool call mapping (SUP-1745) ---
+
+  it('maps mcpToolCall item.started to tool_use with normalized name', () => {
     const result = mapAppServerItemEvent('item/started', {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: { title: 'Test' },
         status: 'in_progress',
       },
@@ -485,19 +488,20 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_use',
-      toolName: 'mcp:linear/create_issue',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       toolUseId: 'mcp-1',
       input: { title: 'Test' },
+      toolCategory: 'general',
     })
   })
 
-  it('maps mcpToolCall item.completed to tool_result (success)', () => {
+  it('maps mcpToolCall item.completed to tool_result with normalized name (success)', () => {
     const result = mapAppServerItemEvent('item/completed', {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: {},
         result: { content: [{ text: 'Created' }] },
         status: 'completed',
@@ -506,7 +510,7 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_result',
-      toolName: 'mcp:linear/create_issue',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       content: '[{"text":"Created"}]',
       isError: false,
     })
@@ -517,8 +521,8 @@ describe('mapAppServerItemEvent', () => {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: {},
         error: { message: 'Auth failed' },
         status: 'failed',
@@ -527,8 +531,28 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_result',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       isError: true,
       content: 'Auth failed',
+    })
+  })
+
+  it('maps mcpToolCall with code-intelligence server to searchable category', () => {
+    const result = mapAppServerItemEvent('item/started', {
+      item: {
+        id: 'mcp-2',
+        type: 'mcpToolCall',
+        server: 'af-code-intelligence',
+        tool: 'af_code_search_symbols',
+        arguments: { query: 'ToolRegistry' },
+        status: 'in_progress',
+      },
+    })
+
+    expect(result[0]).toMatchObject({
+      type: 'tool_use',
+      toolName: 'mcp__af-code-intelligence__af_code_search_symbols',
+      toolCategory: 'research', // search matches research category
     })
   })
 
@@ -615,5 +639,55 @@ describe('AppServerProcessManager', () => {
     const manager = new AppServerProcessManager({ cwd: '/tmp' })
     expect(manager.isHealthy()).toBe(false)
     expect(manager.pid).toBeUndefined()
+  })
+
+  it('configureMcpServers is a no-op when not initialized', async () => {
+    const { AppServerProcessManager } = await import('./codex-app-server-provider.js')
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+
+    // Should not throw when not initialized
+    await manager.configureMcpServers([
+      { name: 'af-linear', command: 'node', args: ['server.js'] },
+    ])
+    // No error means it silently skipped (not initialized)
+  })
+
+  it('getMcpServerStatus returns empty when not initialized', async () => {
+    const { AppServerProcessManager } = await import('./codex-app-server-provider.js')
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+
+    const result = await manager.getMcpServerStatus()
+    expect(result).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// normalizeMcpToolName (SUP-1745)
+// ---------------------------------------------------------------------------
+
+describe('normalizeMcpToolName', () => {
+  it('normalizes server and tool to mcp__ format', () => {
+    expect(normalizeMcpToolName('af-linear', 'af_linear_get_issue'))
+      .toBe('mcp__af-linear__af_linear_get_issue')
+  })
+
+  it('normalizes code-intelligence tools', () => {
+    expect(normalizeMcpToolName('af-code-intelligence', 'af_code_search_symbols'))
+      .toBe('mcp__af-code-intelligence__af_code_search_symbols')
+  })
+
+  it('falls back to mcp:server/tool format for missing server', () => {
+    expect(normalizeMcpToolName(undefined, 'some_tool'))
+      .toBe('mcp:unknown/some_tool')
+  })
+
+  it('falls back to mcp:server/tool format for missing tool', () => {
+    expect(normalizeMcpToolName('server', undefined))
+      .toBe('mcp:server/unknown')
+  })
+
+  it('handles both missing server and tool', () => {
+    expect(normalizeMcpToolName(undefined, undefined))
+      .toBe('mcp:unknown/unknown')
   })
 })

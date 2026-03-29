@@ -2668,9 +2668,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
-    // Create in-process tool servers from registered plugins
+    // Create tool servers from registered plugins
+    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
     const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      ? this.toolRegistry.createServers(toolPluginContext)
+      : undefined
+
+    // Create stdio MCP server configs for Codex provider (SUP-1744)
+    const stdioServers = spawnProviderName === 'codex'
+      ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
     // Coordinators need significantly more turns than standard agents
@@ -2689,6 +2695,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers: toolServers?.servers,
       mcpToolNames: toolServers?.toolNames,
+      mcpStdioServers: stdioServers?.servers,
       maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid
@@ -4645,9 +4652,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       workType: workType ?? 'development',
     })
 
-    // Create in-process tool servers from registered plugins
+    // Create tool servers from registered plugins
+    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
     const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      ? this.toolRegistry.createServers(toolPluginContext)
+      : undefined
+
+    // Create stdio MCP server configs for Codex provider (SUP-1744)
+    const stdioServers = spawnProviderName === 'codex'
+      ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
     // Coordinators need significantly more turns than standard agents
@@ -4665,6 +4678,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers: toolServers?.servers,
       mcpToolNames: toolServers?.toolNames,
+      mcpStdioServers: stdioServers?.servers,
       maxTurns,
       onProcessSpawned: (pid) => {
         agent.pid = pid
