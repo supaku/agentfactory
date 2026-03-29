@@ -4016,11 +4016,21 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         // Build recovery prompt
         const recoveryPrompt = prompt ?? buildRecoveryPrompt(recoveryCheck.state, recoveryCheck.todos)
 
-        // Use existing provider session ID for resume if available
-        const providerSessionId = recoveryCheck.state.providerSessionId ?? undefined
-
         // Inherit work type from previous state if not provided
         const recoveryWorkType = workType ?? recoveryCheck.state.workType ?? effectiveWorkType
+
+        // Use existing provider session ID for resume if available,
+        // but clear it when the work type has changed (e.g., dev → QA).
+        // A session from a different work type cannot be resumed — attempting
+        // it produces "No conversation found" and wastes the recovery attempt.
+        const workTypeChanged = recoveryWorkType !== recoveryCheck.state.workType
+        const providerSessionId = workTypeChanged
+          ? undefined
+          : (recoveryCheck.state.providerSessionId ?? undefined)
+        if (workTypeChanged && recoveryCheck.state.providerSessionId) {
+          console.log(`Clearing stale providerSessionId — work type changed from ${recoveryCheck.state.workType} to ${recoveryWorkType}`)
+          updateState(worktreePath, { providerSessionId: null })
+        }
         const effectiveSessionId = sessionId ?? recoveryCheck.state.linearSessionId ?? randomUUID()
 
         console.log(`Resuming work on ${identifier} (recovery attempt ${updatedState?.recoveryAttempts ?? 1})`)
