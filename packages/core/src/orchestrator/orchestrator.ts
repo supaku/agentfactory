@@ -3292,7 +3292,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         this.updateLastActivity(issueId, 'init')
 
         // Update state with provider session ID (only for worktree-based agents)
-        if (agent.worktreePath) {
+        // Skip if agent already failed — a late init event after an error would
+        // re-persist a stale session ID, preventing fresh recovery on next attempt
+        if (agent.worktreePath && agent.status !== 'failed') {
           try {
             updateState(agent.worktreePath, {
               providerSessionId: event.sessionId,
@@ -3488,10 +3490,17 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             : `Agent error: ${event.errorSubtype}`
           if (agent.worktreePath) {
             try {
+              // If the error is a stale session (resume failed), clear providerSessionId
+              // so the next recovery attempt starts fresh instead of hitting the same error
+              const isStaleSession = errorMessage.includes('No conversation found with session ID')
               updateState(agent.worktreePath, {
                 status: 'failed',
                 errorMessage,
+                ...(isStaleSession && { providerSessionId: null }),
               })
+              if (isStaleSession) {
+                log?.info('Cleared stale providerSessionId from state — next recovery will start fresh')
+              }
             } catch {
               // Ignore state update errors
             }
