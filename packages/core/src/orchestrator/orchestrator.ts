@@ -2884,59 +2884,66 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       }
 
       // Update Linear status based on work type if auto-transition is enabled
-      if (agent.status === 'completed' && this.config.autoTransition) {
+      if ((agent.status === 'completed' || agent.status === 'failed') && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
         const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
 
         let targetStatus: string | null = null
 
         if (isResultSensitive) {
-          // For QA/acceptance: parse result to decide promote vs reject.
-          // Try the final result message first, then fall back to scanning
-          // all accumulated assistant text (the marker may be in an earlier turn).
-          let workResult = parseWorkResult(agent.resultMessage, workType)
-          if (workResult === 'unknown' && assistantTextChunks.length > 0) {
-            const fullText = assistantTextChunks.join('\n')
-            workResult = parseWorkResult(fullText, workType)
-            if (workResult !== 'unknown') {
-              log?.info('Work result found in accumulated text (not in final message)', { workResult })
-            }
-          }
-          agent.workResult = workResult
-
-          if (workResult === 'passed') {
-            targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
-            log?.info('Work result: passed, promoting', { workType, targetStatus })
-          } else if (workResult === 'failed') {
+          if (agent.status === 'failed') {
+            // Agent crashed/errored — treat as QA/acceptance failure
+            agent.workResult = 'failed'
             targetStatus = this.statusMappings.workTypeFailStatus[workType]
-            log?.info('Work result: failed, transitioning to fail status', { workType, targetStatus })
+            log?.info('Agent failed (crash/error), transitioning to fail status', { workType, targetStatus })
           } else {
-            // unknown — safe default: don't transition
-            log?.warn('Work result: unknown, skipping auto-transition', {
-              workType,
-              hasResultMessage: !!agent.resultMessage,
-            })
+            // For QA/acceptance: parse result to decide promote vs reject.
+            // Try the final result message first, then fall back to scanning
+            // all accumulated assistant text (the marker may be in an earlier turn).
+            let workResult = parseWorkResult(agent.resultMessage, workType)
+            if (workResult === 'unknown' && assistantTextChunks.length > 0) {
+              const fullText = assistantTextChunks.join('\n')
+              workResult = parseWorkResult(fullText, workType)
+              if (workResult !== 'unknown') {
+                log?.info('Work result found in accumulated text (not in final message)', { workResult })
+              }
+            }
+            agent.workResult = workResult
 
-            // Post a diagnostic comment so the issue doesn't silently stall
-            try {
-              await this.client.createComment(
-                issueId,
-                `⚠️ Agent completed but no structured result marker was detected in the output.\n\n` +
-                `**Issue status was NOT updated automatically.**\n\n` +
-                `The orchestrator expected one of:\n` +
-                `- \`<!-- WORK_RESULT:passed -->\` to promote the issue\n` +
-                `- \`<!-- WORK_RESULT:failed -->\` to record a failure\n\n` +
-                `This usually means the agent exited early (timeout, error, or missing logic). ` +
-                `Check the agent logs for details, then manually update the issue status or re-trigger the agent.`
-              )
-              log?.info('Posted diagnostic comment for unknown work result')
-            } catch (error) {
-              log?.warn('Failed to post diagnostic comment for unknown work result', {
-                error: error instanceof Error ? error.message : String(error),
+            if (workResult === 'passed') {
+              targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+              log?.info('Work result: passed, promoting', { workType, targetStatus })
+            } else if (workResult === 'failed') {
+              targetStatus = this.statusMappings.workTypeFailStatus[workType]
+              log?.info('Work result: failed, transitioning to fail status', { workType, targetStatus })
+            } else {
+              // unknown — safe default: don't transition
+              log?.warn('Work result: unknown, skipping auto-transition', {
+                workType,
+                hasResultMessage: !!agent.resultMessage,
               })
+
+              // Post a diagnostic comment so the issue doesn't silently stall
+              try {
+                await this.client.createComment(
+                  issueId,
+                  `⚠️ Agent completed but no structured result marker was detected in the output.\n\n` +
+                  `**Issue status was NOT updated automatically.**\n\n` +
+                  `The orchestrator expected one of:\n` +
+                  `- \`<!-- WORK_RESULT:passed -->\` to promote the issue\n` +
+                  `- \`<!-- WORK_RESULT:failed -->\` to record a failure\n\n` +
+                  `This usually means the agent exited early (timeout, error, or missing logic). ` +
+                  `Check the agent logs for details, then manually update the issue status or re-trigger the agent.`
+                )
+                log?.info('Posted diagnostic comment for unknown work result')
+              } catch (error) {
+                log?.warn('Failed to post diagnostic comment for unknown work result', {
+                  error: error instanceof Error ? error.message : String(error),
+                })
+              }
             }
           }
-        } else {
+        } else if (agent.status === 'completed') {
           // Non-QA/acceptance: promote on completion, but validate code-producing work types first
           const isCodeProducing = workType === 'development' || workType === 'inflight'
 
