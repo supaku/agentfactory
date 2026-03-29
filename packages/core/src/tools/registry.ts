@@ -1,5 +1,6 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import type { ToolPlugin, ToolPluginContext } from './types.js'
+import { createStdioServerConfigs, type CreateStdioServersResult } from './stdio-server.js'
 
 export interface CreateServersResult {
   servers: Record<string, McpSdkServerConfigWithInstance>
@@ -14,7 +15,12 @@ export class ToolRegistry {
     this.plugins.push(plugin)
   }
 
-  /** Create MCP servers for all registered plugins */
+  /** Get all registered plugins */
+  getPlugins(): ToolPlugin[] {
+    return [...this.plugins]
+  }
+
+  /** Create in-process MCP servers for Claude provider */
   createServers(context: ToolPluginContext): CreateServersResult {
     const servers: Record<string, McpSdkServerConfigWithInstance> = {}
     const toolNames: string[] = []
@@ -28,5 +34,13 @@ export class ToolRegistry {
       }
     }
     return { servers, toolNames }
+  }
+
+  /**
+   * Create stdio MCP server configurations for Codex provider (SUP-1743).
+   * Returns server configs that can be passed to Codex app-server via config/batchWrite.
+   */
+  createStdioServerConfigs(context: ToolPluginContext): CreateStdioServersResult {
+    return createStdioServerConfigs(this.plugins, context)
   }
 }

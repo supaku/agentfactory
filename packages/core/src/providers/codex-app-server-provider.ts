@@ -30,6 +30,7 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
+import { classifyTool } from '../tools/tool-category.js'
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 types
@@ -60,6 +61,18 @@ function isResponse(msg: JsonRpcMessage): msg is JsonRpcResponse {
 
 function isNotification(msg: JsonRpcMessage): msg is JsonRpcNotification {
   return 'method' in msg && !('id' in msg)
+}
+
+// ---------------------------------------------------------------------------
+// MCP Server Status (SUP-1744)
+// ---------------------------------------------------------------------------
+
+/** Status of a registered MCP server as reported by mcpServerStatus/list */
+export interface McpServerStatusResult {
+  name: string
+  status: 'connected' | 'connecting' | 'disconnected' | 'error'
+  toolCount?: number
+  error?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +337,66 @@ export class AppServerProcessManager {
    */
   isHealthy(): boolean {
     return this.initialized && !!this.process && !this.process.killed
+  }
+
+  // ─── MCP Server Configuration (SUP-1744) ──────────────────────────
+
+  /** Whether MCP servers have been configured on this process */
+  private mcpConfigured = false
+
+  /**
+   * Register MCP servers with the app-server via config/batchWrite.
+   * Called once after initialization to tell Codex about the stdio
+   * MCP tool servers (af-linear, af-code-intelligence, etc.).
+   *
+   * Uses the Codex app-server `config/batchWrite` JSON-RPC method
+   * to register multiple MCP server configurations in a single call.
+   */
+  async configureMcpServers(
+    servers: Array<{ name: string; command: string; args: string[]; env?: Record<string, string> }>,
+  ): Promise<void> {
+    if (!this.initialized || this.mcpConfigured) return
+    if (servers.length === 0) return
+
+    const mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {}
+    for (const server of servers) {
+      mcpServers[server.name] = {
+        command: server.command,
+        args: server.args,
+        env: server.env,
+      }
+    }
+
+    try {
+      await this.request('config/batchWrite', {
+        entries: [
+          { key: 'mcpServers', value: mcpServers },
+        ],
+      })
+      this.mcpConfigured = true
+      console.error(`[CodexAppServer] Configured ${servers.length} MCP servers: ${servers.map(s => s.name).join(', ')}`)
+    } catch (err) {
+      // config/batchWrite may not be supported in all Codex versions
+      console.error(`[CodexAppServer] Failed to configure MCP servers: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /**
+   * Query MCP server health via mcpServerStatus/list.
+   * Returns the status of all registered MCP servers.
+   */
+  async getMcpServerStatus(): Promise<McpServerStatusResult[]> {
+    if (!this.initialized) return []
+
+    try {
+      const result = await this.request('mcpServerStatus/list') as {
+        servers?: McpServerStatusResult[]
+      }
+      return result?.servers ?? []
+    } catch {
+      // mcpServerStatus/list may not be supported
+      return []
+    }
   }
 
   /**
@@ -635,13 +708,19 @@ export function mapAppServerItemEvent(
       }
       return []
 
-    case 'mcpToolCall':
+    case 'mcpToolCall': {
+      // Normalize tool name to mcp__{server}__{tool} format (SUP-1745)
+      // This matches the convention used by the Claude provider for
+      // in-process MCP tools, enabling consistent tool tracking.
+      const mcpToolName = normalizeMcpToolName(item.server, item.tool)
+
       if (isStarted) {
         return [{
           type: 'tool_use',
-          toolName: `mcp:${item.server}/${item.tool}`,
+          toolName: mcpToolName,
           toolUseId: item.id,
           input: (item.arguments ?? {}) as Record<string, unknown>,
+          toolCategory: classifyTool(mcpToolName),
           raw: { method, params },
         }]
       }
@@ -651,7 +730,7 @@ export function mapAppServerItemEvent(
           ?? (item.result?.content ? JSON.stringify(item.result.content) : '')
         return [{
           type: 'tool_result',
-          toolName: `mcp:${item.server}/${item.tool}`,
+          toolName: mcpToolName,
           toolUseId: item.id,
           content,
           isError,
@@ -659,6 +738,7 @@ export function mapAppServerItemEvent(
         }]
       }
       return []
+    }
 
     case 'plan':
       return [{
@@ -692,6 +772,25 @@ export function mapAppServerItemEvent(
         raw: { method, params },
       }]
   }
+}
+
+// ---------------------------------------------------------------------------
+// MCP tool name normalization (SUP-1745)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize Codex MCP tool names to the `mcp__{server}__{tool}` format
+ * used by the orchestrator and Claude provider for consistent tool tracking.
+ *
+ * Codex reports MCP tools as `server` + `tool` (e.g., server='af-linear',
+ * tool='af_linear_get_issue'). We normalize to 'mcp__af-linear__af_linear_get_issue'.
+ */
+export function normalizeMcpToolName(server?: string, tool?: string): string {
+  if (server && tool) {
+    return `mcp__${server}__${tool}`
+  }
+  // Fallback for missing server/tool
+  return `mcp:${server ?? 'unknown'}/${tool ?? 'unknown'}`
 }
 
 // ---------------------------------------------------------------------------
@@ -838,6 +937,13 @@ class AppServerAgentHandle implements AgentHandle {
     try {
       // Ensure the app-server is running
       await this.processManager.start()
+
+      // Configure MCP servers if provided (SUP-1744)
+      // This registers stdio MCP tool servers (af-linear, af-code-intelligence)
+      // with the Codex app-server so it can discover and invoke them.
+      if (this.config.mcpStdioServers && this.config.mcpStdioServers.length > 0) {
+        await this.processManager.configureMcpServers(this.config.mcpStdioServers)
+      }
 
       // Start or resume the thread
       let threadId: string
