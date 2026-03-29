@@ -600,7 +600,7 @@ describe('CodexAppServerProvider', () => {
     const { createCodexAppServerProvider } = await import('./codex-app-server-provider.js')
     const provider = createCodexAppServerProvider()
     expect(provider.name).toBe('codex')
-    expect(provider.capabilities.supportsMessageInjection).toBe(false)
+    expect(provider.capabilities.supportsMessageInjection).toBe(true)
     expect(provider.capabilities.supportsSessionResume).toBe(true)
   })
 })
