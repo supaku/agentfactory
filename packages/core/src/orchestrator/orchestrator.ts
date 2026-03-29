@@ -2886,7 +2886,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       // Update Linear status based on work type if auto-transition is enabled
       if ((agent.status === 'completed' || agent.status === 'failed') && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
-        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
+        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'inflight-coordination' || workType === 'merge'
 
         let targetStatus: string | null = null
 

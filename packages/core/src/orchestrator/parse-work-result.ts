@@ -79,8 +79,10 @@ const ACCEPTANCE_FAIL_PATTERNS = [
  * These apply to the 'coordination' work type (development coordination).
  */
 const COORDINATION_PASS_PATTERNS = [
-  // "all 8/8 sub-issues completed" or "all sub-issues completed"
+  // "all 8/8 sub-issues completed" or "all sub-issues completed/finished"
   /\ball\s+(?:\d+\/\d+\s+)?sub-issues?\s+(?:completed|finished)/i,
+  // "All N sub-issues: Finished" / "All 6 sub-issues: Finished" (colon-separated format)
+  /\ball\s+\d+\s+sub-issues?[:\s—–-]+\s*finished/i,
   // "8/8 sub-issues completed/finished" (without leading "all")
   /\b(\d+)\/\1\b.*\bsub-issues?\s+(?:completed|finished)/i,
   // Explicit result labels

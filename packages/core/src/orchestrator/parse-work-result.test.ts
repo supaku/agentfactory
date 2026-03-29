@@ -309,6 +309,21 @@ describe('parseWorkResult', () => {
       ).toBe('passed')
     })
 
+    it('detects "All 6 sub-issues: Finished" (colon format)', () => {
+      expect(
+        parseWorkResult(
+          '### All 6 sub-issues: Finished\n\n| SUP-1607 | SubscriptionProvider | Finished |',
+          'coordination'
+        )
+      ).toBe('passed')
+    })
+
+    it('detects "All 3 sub-issues — Finished" (dash format)', () => {
+      expect(
+        parseWorkResult('All 3 sub-issues — Finished. PR created.', 'coordination')
+      ).toBe('passed')
+    })
+
     it('does not match coordination patterns for non-coordination work types', () => {
       expect(parseWorkResult('All sub-issues completed.', 'development')).toBe('unknown')
       expect(parseWorkResult('All sub-issues completed.', 'qa')).toBe('unknown')
