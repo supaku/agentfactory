@@ -726,9 +726,12 @@ class AppServerAgentHandle implements AgentHandle {
     totalOutputTokens: 0,
     turnCount: 0,
   }
+  private activeTurnId: string | null = null
   private notificationQueue: JsonRpcNotification[] = []
   private notificationResolve: (() => void) | null = null
   private streamEnded = false
+  /** True while we're waiting for a possible injected turn between turns */
+  private awaitingInjection = false
 
   constructor(
     processManager: AppServerProcessManager,
@@ -744,14 +747,18 @@ class AppServerAgentHandle implements AgentHandle {
     return this.createEventStream()
   }
 
-  async injectMessage(_text: string): Promise<void> {
-    // App Server supports turn/steer for mid-turn injection, but the
-    // orchestrator's contract expects injectMessage to add a new user message.
-    // For now, throw like the CLI provider — the orchestrator uses stop+resume.
-    throw new Error(
-      'Codex App Server provider does not support mid-session message injection. ' +
-      'Stop and resume with a new prompt instead.'
-    )
+  async injectMessage(text: string): Promise<void> {
+    if (!this.sessionId) {
+      throw new Error('No active session for message injection')
+    }
+
+    if (this.activeTurnId) {
+      // Mid-turn injection: steer the active turn (SUP-1740)
+      await this.steerTurn(text)
+    } else {
+      // Between-turn injection: start a new turn on the existing thread (SUP-1741)
+      await this.startNewTurn(text)
+    }
   }
 
   async stop(): Promise<void> {
@@ -775,6 +782,55 @@ class AppServerAgentHandle implements AgentHandle {
     }
 
     this.streamEnded = true
+    this.notificationResolve?.()
+  }
+
+  /**
+   * Steer an active turn with additional user input (SUP-1740).
+   * Sends a `turn/steer` JSON-RPC request to inject a message mid-turn.
+   */
+  private async steerTurn(text: string): Promise<void> {
+    if (!this.sessionId || !this.activeTurnId) {
+      throw new Error('No active turn to steer')
+    }
+    await this.processManager.request('turn/steer', {
+      threadId: this.sessionId,
+      turnId: this.activeTurnId,
+      input: [{ type: 'text', text }],
+    })
+  }
+
+  /**
+   * Start a new turn on the existing thread with additional user input (SUP-1741).
+   * Used for between-turn injection when no turn is currently active.
+   */
+  private async startNewTurn(text: string): Promise<void> {
+    if (!this.sessionId) {
+      throw new Error('No active session to start new turn')
+    }
+
+    const turnParams: Record<string, unknown> = {
+      threadId: this.sessionId,
+      input: [{ type: 'text', text }],
+      cwd: this.config.cwd,
+      approvalPolicy: resolveApprovalPolicy(this.config),
+    }
+
+    if (this.config.maxTurns) {
+      turnParams.maxTurns = this.config.maxTurns
+    }
+
+    const sandboxPolicy = resolveSandboxPolicy(this.config)
+    if (sandboxPolicy) {
+      turnParams.sandboxPolicy = sandboxPolicy
+    }
+
+    // Mark that we're no longer waiting between turns
+    this.awaitingInjection = false
+
+    await this.processManager.request('turn/start', turnParams)
+
+    // Wake up the notification loop so it processes the new turn's events
     this.notificationResolve?.()
   }
 
@@ -861,8 +917,16 @@ class AppServerAgentHandle implements AgentHandle {
 
       await this.processManager.request('turn/start', turnParams)
 
-      // Stream notifications until turn completes
-      let hasResult = false
+      // Stream notifications until explicitly stopped.
+      // After a turn completes, we enter "awaiting injection" mode — the stream
+      // stays alive to allow injectMessage() to start a new turn. The stream
+      // only terminates when stop() is called or the process dies.
+      //
+      // turn/completed `result` events are intercepted and re-emitted as `system`
+      // events so the orchestrator doesn't interpret them as the agent finishing.
+      // A single `result` event is emitted when the stream actually ends.
+      let lastTurnSuccess = true
+      let lastTurnErrors: string[] | undefined
 
       while (!this.streamEnded) {
         // Wait for notifications
@@ -878,19 +942,38 @@ class AppServerAgentHandle implements AgentHandle {
         // Drain the queue
         while (this.notificationQueue.length > 0) {
           const notification = this.notificationQueue.shift()!
+
+          // Track active turn ID for mid-turn steering (SUP-1740)
+          if (notification.method === 'turn/started') {
+            const turn = notification.params?.turn as AppServerTurn | undefined
+            if (turn?.id) {
+              this.activeTurnId = turn.id
+            }
+            this.awaitingInjection = false
+          } else if (notification.method === 'turn/completed') {
+            this.activeTurnId = null
+            // Enter awaiting-injection mode — the stream stays alive
+            this.awaitingInjection = true
+          }
+
           const events = mapAppServerNotification(notification, this.mapperState)
 
           for (const event of events) {
+            // Intercept turn/completed result events — convert to system events
+            // so the orchestrator doesn't think the agent is done. Track the last
+            // turn's outcome so we can emit a proper result when the stream ends.
             if (event.type === 'result') {
-              hasResult = true
+              lastTurnSuccess = event.success
+              lastTurnErrors = event.errors
+              yield {
+                type: 'system',
+                subtype: 'turn_result',
+                message: `Turn ${event.success ? 'succeeded' : 'failed'}${event.errors?.length ? ': ' + event.errors[0] : ''}`,
+                raw: event.raw,
+              }
+            } else {
+              yield event
             }
-            yield event
-          }
-
-          // If we got a result, we're done
-          if (hasResult) {
-            this.streamEnded = true
-            break
           }
         }
       }
@@ -903,20 +986,17 @@ class AppServerAgentHandle implements AgentHandle {
         // Best effort
       }
 
-      // If we never got a result, synthesize one
-      if (!hasResult) {
-        yield {
-          type: 'result',
-          success: false,
-          errors: ['Stream ended without a result event'],
-          errorSubtype: 'stream_ended',
-          cost: {
-            inputTokens: this.mapperState.totalInputTokens || undefined,
-            outputTokens: this.mapperState.totalOutputTokens || undefined,
-            numTurns: this.mapperState.turnCount || undefined,
-          },
-          raw: null,
-        }
+      // Emit the final result event when the stream ends
+      yield {
+        type: 'result',
+        success: lastTurnSuccess,
+        errors: lastTurnErrors,
+        cost: {
+          inputTokens: this.mapperState.totalInputTokens || undefined,
+          outputTokens: this.mapperState.totalOutputTokens || undefined,
+          numTurns: this.mapperState.turnCount || undefined,
+        },
+        raw: null,
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -950,7 +1030,7 @@ class AppServerAgentHandle implements AgentHandle {
 export class CodexAppServerProvider implements AgentProvider {
   readonly name = 'codex' as const
   readonly capabilities = {
-    supportsMessageInjection: false,
+    supportsMessageInjection: true,
     supportsSessionResume: true,
   } as const
 

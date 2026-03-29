@@ -1,0 +1,10 @@
+{
+  "timestamp": 1774739042119,
+  "pid": 77932,
+  "memoryUsageMB": 50,
+  "uptime": 540,
+  "lastActivityType": "tool_use",
+  "lastActivityTimestamp": 1774739005212,
+  "toolCallsCount": 45,
+  "currentOperation": "Task"
+}
