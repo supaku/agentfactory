@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.19
+
+### Features
+
+- **Decision Engine → Workflow Engine migration** — Full rename across UI, API routes, database collections, and types (SUP-1756).
+- **Codex App Server provider core** — New provider implementation for Codex via App Server JSON-RPC (SUP-1731).
+- **Pagination and time-range filtering** — Routing decisions endpoint now supports cursor pagination and date range filters.
+- **Phase-level cost aggregation endpoint** — New API endpoint for aggregating costs by workflow phase.
+
+### Fixes
+
+- **QA/acceptance agent crash leaves issues stuck in Started** — Auto-transition now handles `agent.status === 'failed'` for result-sensitive work types (qa, acceptance, coordination), transitioning to the fail status (Rejected) instead of silently stalling.
+- **Stale providerSessionId blocks recovery indefinitely** — When resume fails with "No conversation found", the stale session ID is cleared from state so the next recovery attempt starts fresh. Guards against a race condition where a late init event re-persists the stale ID.
+- **False positives in validate-cross-deps tool** — Eliminated spurious dependency violation warnings.
+- **Agent forced foreground execution** — Agents now run in foreground mode to prevent premature detach.
+
 ## v0.8.18
 
 ### Features
