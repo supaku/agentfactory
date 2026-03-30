@@ -107,6 +107,19 @@ export interface AgentSpawnConfig {
     args: string[]
     env?: Record<string, string>
   }>
+  /**
+   * Persistent system instructions for Codex App Server (SUP-1746).
+   * Passed via `instructions` on `thread/start`. Contains safety rules,
+   * project instructions (AGENTS.md), and work-type context.
+   * Separate from `prompt` which contains only the task-specific directive.
+   */
+  baseInstructions?: string
+  /**
+   * Structured permission config for Codex approval bridge (SUP-1748).
+   * Translates template `tools.allow` / `tools.disallow` into patterns
+   * consumed by the approval bridge for runtime tool evaluation.
+   */
+  permissionConfig?: import('../templates/adapters.js').CodexPermissionConfig
 }
 
 /**

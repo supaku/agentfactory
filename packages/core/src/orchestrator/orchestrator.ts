@@ -45,7 +45,7 @@ import { runBackstop, formatBackstopComment, type SessionContext } from './sessi
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
-import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
+import { TemplateRegistry, CodexToolPermissionAdapter, createToolPermissionAdapter } from '../templates/index.js'
 import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
@@ -2389,6 +2389,65 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * Resolve the provider for a specific spawn, using the full priority cascade.
    * Returns a cached provider instance (creating one if needed) and the resolved name.
    */
+  /**
+   * Build base instructions for Codex App Server agents (SUP-1746).
+   *
+   * Assembles safety rules and project-specific instructions (AGENTS.md / CLAUDE.md)
+   * into a persistent system prompt passed via `instructions` on `thread/start`.
+   */
+  private buildCodexBaseInstructions(workType?: AgentWorkType, worktreePath?: string): string {
+    const sections: string[] = []
+
+    // Safety rules — mirrors autonomousCanUseTool deny patterns as natural-language rules
+    sections.push(`# Safety Rules
+
+You are running in an AgentFactory-managed worktree. Follow these rules strictly:
+
+1. NEVER run: rm -rf / (or any rm of the filesystem root)
+2. NEVER run: git worktree remove, git worktree prune
+3. NEVER run: git reset --hard
+4. NEVER run: git push --force (use --force-with-lease on feature branches if needed)
+5. NEVER run: git checkout <branch>, git switch <branch> (do not change the checked-out branch)
+6. NEVER modify files in the .git directory
+7. Commit changes with descriptive messages before reporting completion`)
+
+    // Project-specific instructions — load AGENTS.md or CLAUDE.md from worktree root
+    if (worktreePath) {
+      for (const filename of ['AGENTS.md', 'CLAUDE.md']) {
+        const instrPath = resolve(worktreePath, filename)
+        if (existsSync(instrPath)) {
+          try {
+            const content = readFileSync(instrPath, 'utf-8')
+            if (content.trim()) {
+              sections.push(`# Project Instructions (${filename})\n\n${content.trim()}`)
+              break // Only load one: AGENTS.md takes priority
+            }
+          } catch {
+            // Ignore read errors — project instructions are optional
+          }
+        }
+      }
+    }
+
+    return sections.join('\n\n')
+  }
+
+  /**
+   * Build Codex permission config from template permissions (SUP-1748).
+   *
+   * Translates abstract template `tools.allow` / `tools.disallow` into
+   * structured regex patterns for the Codex approval bridge.
+   */
+  private buildCodexPermissionConfig(workType?: AgentWorkType): import('../templates/adapters.js').CodexPermissionConfig | undefined {
+    if (!this.templateRegistry || !workType) return undefined
+
+    const { allow, disallow } = this.templateRegistry.getRawToolPermissions(workType)
+    if (allow.length === 0 && disallow.length === 0) return undefined
+
+    const adapter = new CodexToolPermissionAdapter()
+    return adapter.buildPermissionConfig(allow, disallow)
+  }
+
   private resolveProviderForSpawn(context: {
     workType?: string
     projectName?: string
@@ -2685,6 +2744,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
+    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
+    const codexBaseInstructions = spawnProviderName === 'codex'
+      ? this.buildCodexBaseInstructions(workType, worktreePath)
+      : undefined
+    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
+      ? this.buildCodexPermissionConfig(workType)
+      : undefined
+
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -2697,6 +2764,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       mcpToolNames: toolServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
+      baseInstructions: codexBaseInstructions,
+      permissionConfig: codexPermissionConfig,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -4668,6 +4737,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
+    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
+    const codexBaseInstructions = spawnProviderName === 'codex'
+      ? this.buildCodexBaseInstructions(workType, worktreePath)
+      : undefined
+    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
+      ? this.buildCodexPermissionConfig(workType)
+      : undefined
+
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -4680,6 +4757,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       mcpToolNames: toolServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
+      baseInstructions: codexBaseInstructions,
+      permissionConfig: codexPermissionConfig,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })

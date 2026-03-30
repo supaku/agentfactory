@@ -98,6 +98,79 @@ describe('CodexToolPermissionAdapter', () => {
     const result = adapter.translatePermissions([])
     expect(result).toEqual([])
   })
+
+  describe('buildPermissionConfig (SUP-1748)', () => {
+    it('builds permission config from allow and disallow lists', () => {
+      const config = adapter.buildPermissionConfig(
+        [{ shell: 'pnpm *' }, { shell: 'git commit *' }],
+        [{ shell: 'git checkout *' }, 'user-input'],
+      )
+
+      expect(config.allowedCommandPatterns).toHaveLength(2)
+      expect(config.deniedCommandPatterns).toHaveLength(1)
+      expect(config.allowFileEdits).toBe(true)
+      expect(config.allowFileWrites).toBe(true)
+    })
+
+    it('allowed patterns match expected commands', () => {
+      const config = adapter.buildPermissionConfig(
+        [{ shell: 'pnpm *' }],
+        [],
+      )
+
+      expect(config.allowedCommandPatterns[0].test('pnpm install')).toBe(true)
+      expect(config.allowedCommandPatterns[0].test('pnpm run build')).toBe(true)
+      expect(config.allowedCommandPatterns[0].test('npm install')).toBe(false)
+    })
+
+    it('denied patterns match expected commands', () => {
+      const config = adapter.buildPermissionConfig(
+        [],
+        [{ shell: 'git *' }],
+      )
+
+      expect(config.deniedCommandPatterns[0].pattern.test('git push')).toBe(true)
+      expect(config.deniedCommandPatterns[0].pattern.test('git commit')).toBe(true)
+      expect(config.deniedCommandPatterns[0].reason).toContain('blocked by template')
+    })
+
+    it('sets allowFileEdits to false when file-edit is in disallow', () => {
+      const config = adapter.buildPermissionConfig([], ['file-edit'])
+      expect(config.allowFileEdits).toBe(false)
+      expect(config.allowFileWrites).toBe(true)
+    })
+
+    it('sets allowFileWrites to false when file-write is in disallow', () => {
+      const config = adapter.buildPermissionConfig([], ['file-write'])
+      expect(config.allowFileEdits).toBe(true)
+      expect(config.allowFileWrites).toBe(false)
+    })
+
+    it('ignores user-input in disallow (non-interactive)', () => {
+      const config = adapter.buildPermissionConfig([], ['user-input'])
+      expect(config.deniedCommandPatterns).toHaveLength(0)
+      expect(config.allowFileEdits).toBe(true)
+      expect(config.allowFileWrites).toBe(true)
+    })
+
+    it('handles empty allow and disallow lists', () => {
+      const config = adapter.buildPermissionConfig([], [])
+      expect(config.allowedCommandPatterns).toHaveLength(0)
+      expect(config.deniedCommandPatterns).toHaveLength(0)
+      expect(config.allowFileEdits).toBe(true)
+      expect(config.allowFileWrites).toBe(true)
+    })
+
+    it('multi-word commands create correct regex', () => {
+      const config = adapter.buildPermissionConfig(
+        [{ shell: 'git commit *' }],
+        [],
+      )
+
+      expect(config.allowedCommandPatterns[0].test('git commit -m "message"')).toBe(true)
+      expect(config.allowedCommandPatterns[0].test('git push origin main')).toBe(false)
+    })
+  })
 })
 
 describe('SpringAiToolPermissionAdapter', () => {
