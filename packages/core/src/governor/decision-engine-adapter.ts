@@ -395,16 +395,11 @@ function buildFinishedNode(config: GovernorConfig, includeMergeQueue: boolean): 
     },
   ]
 
-  if (includeMergeQueue) {
-    steps.push({
-      id: 'check-merge-queue',
-      action: 'trigger-merge',
-      when: '{{ mergeQueueEnabled }}',
-      with: {
-        reason: 'Issue {{ issue.identifier }} is in Finished — enqueuing to merge queue',
-      },
-    })
-  }
+  // Always trigger QA for functional validation — merge queue handles git
+  // mechanics at merge time, not as a QA bypass.
+  // The includeMergeQueue flag is preserved for the adapter signature but the
+  // Finished node no longer short-circuits to trigger-merge.
+  void includeMergeQueue
 
   steps.push({
     id: 'dispatch-qa',

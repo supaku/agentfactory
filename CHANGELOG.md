@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.8.21
+
+### Fixes
+
+- **Republish `@renseiai/agentfactory-code-intelligence`** — Tarball for v0.8.20 was missing on npm (ghost publish). Bumped all packages to v0.8.21 to work around npm's 24-hour republish restriction.
+
+## v0.8.20
+
+### Features
+
+- **Local merge queue** — New `provider: 'local'` merge queue adapter that serializes merges through a Redis-backed worker without requiring GitHub's paid merge queue feature. Default for all repos with `mergeQueue.enabled: true`.
+- **Merge worker fleet sidecar** — `af-worker-fleet` automatically starts a merge worker sidecar that polls the Redis queue and processes PRs (rebase → mergiraf → lock regen → test → merge). One per fleet, enforced by Redis lock.
+- **QA no longer bypassed by merge queue** — Governor always routes `Finished → trigger-qa` regardless of merge queue config. QA validates functional correctness; merge worker handles git mechanics at merge time.
+- **Merge-queue-aware QA/acceptance templates** — QA templates skip the merge conflict hard-fail rule when merge queue is enabled (conflicts handled by the merge worker). Acceptance templates label PRs `approved-for-merge` instead of merging directly.
+- **`mergeQueueEnabled` template variable** — New Handlebars variable injected by the orchestrator, enabling templates to conditionally adjust behavior based on merge queue availability.
+- **Codex instructions & permissions via App Server** — Codex agents receive system prompts and tool permissions through the App Server protocol (SUP-1734).
+- **Codex MCP tool integration via App Server** — MCP tools forwarded to Codex agents through App Server events (SUP-1733).
+- **Codex message injection via App Server** — Mid-session message injection for Codex agents via App Server turn/start (SUP-1732).
+- **Quality gates** — Baseline-diff, quality ratchet, TDD workflow, and boy scout rule prevent agents from degrading codebase health.
+
+### Fixes
+
+- **Stale session recovery** — Fall back to fresh spawn when resume hits stale session instead of blocking indefinitely.
+- **Coordination work result heuristics** — Broadened result parsing patterns and added missing result-sensitive work types.
+- **Stale providerSessionId on work type change** — Clear stale session ID during recovery when work type changes mid-lifecycle.
+
 ## v0.8.19
 
 ### Features

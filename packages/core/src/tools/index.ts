@@ -3,3 +3,13 @@ export type { CreateServersResult } from './registry.js'
 export type { ToolPlugin, ToolPluginContext } from './types.js'
 export { classifyTool } from './tool-category.js'
 export type { ToolCategory } from './tool-category.js'
+export {
+  createStdioServerConfigs,
+  spawnStdioServer,
+} from './stdio-server.js'
+export type {
+  StdioMcpServerConfig,
+  CreateStdioServersResult,
+  StdioServerHandle,
+  PluginBootstrap,
+} from './stdio-server.js'

@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory",
-  "version": "0.8.19",
+  "version": "0.8.21",
   "type": "module",
   "description": "Multi-agent fleet management for coding agents — orchestrator, providers, crash recovery",
   "author": "Rensei AI (https://rensei.ai)",
@@ -46,6 +46,7 @@
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.7",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "dotenv": "^17.2.3",
     "handlebars": "^4.7.8",
     "yaml": "^2.8.2",

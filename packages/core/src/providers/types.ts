@@ -68,6 +68,11 @@ export interface AgentSpawnConfig {
   /** Sandbox level for filesystem/network restrictions */
   sandboxEnabled: boolean
   /**
+   * Codex-specific sandbox level override. When set, takes precedence over sandboxEnabled.
+   * Maps to Codex sandbox policies: readOnly, workspaceWrite, dangerFullAccess.
+   */
+  sandboxLevel?: 'read-only' | 'workspace-write' | 'full-access'
+  /**
    * Tools to auto-allow without prompting for permission.
    * Uses Claude Code permission pattern format: 'Bash(prefix:glob)'.
    * Examples: 'Bash(pnpm:*)', 'Bash(git commit:*)'.
@@ -95,6 +100,36 @@ export interface AgentSpawnConfig {
    * When omitted, the provider's default applies.
    */
   maxTurns?: number
+  /**
+   * Stdio MCP server configurations for Codex provider (SUP-1744).
+   * Created by ToolRegistry.createStdioServerConfigs() from registered plugins.
+   * Passed to Codex app-server via config/batchWrite so it can spawn and
+   * connect to these tool servers.
+   */
+  mcpStdioServers?: Array<{
+    name: string
+    command: string
+    args: string[]
+    env?: Record<string, string>
+  }>
+  /**
+   * Persistent system instructions for Codex App Server (SUP-1746).
+   * Passed via `instructions` on `thread/start`. Contains safety rules,
+   * project instructions (AGENTS.md), and work-type context.
+   * Separate from `prompt` which contains only the task-specific directive.
+   */
+  baseInstructions?: string
+  /**
+   * Structured permission config for Codex approval bridge (SUP-1748).
+   * Translates template `tools.allow` / `tools.disallow` into patterns
+   * consumed by the approval bridge for runtime tool evaluation.
+   */
+  permissionConfig?: import('../templates/adapters.js').CodexPermissionConfig
+  /**
+   * Model identifier to use for the agent session.
+   * When omitted, the provider resolves the model from environment variables or defaults.
+   */
+  model?: string
 }
 
 /**
@@ -208,6 +243,7 @@ export interface AgentErrorEvent {
 export interface AgentCostData {
   inputTokens?: number
   outputTokens?: number
+  cachedInputTokens?: number
   totalCostUsd?: number
   numTurns?: number
 }

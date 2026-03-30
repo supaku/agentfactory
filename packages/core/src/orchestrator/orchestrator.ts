@@ -42,10 +42,18 @@ import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-cl
 import { parseWorkResult } from './parse-work-result.js'
 import { parseSecurityScanOutput } from './security-scan-event.js'
 import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
+import {
+  captureQualityBaseline,
+  computeQualityDelta,
+  formatQualityReport,
+  saveBaseline,
+  loadBaseline,
+  type QualityConfig,
+} from './quality-baseline.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
-import { TemplateRegistry, createToolPermissionAdapter } from '../templates/index.js'
+import { TemplateRegistry, CodexToolPermissionAdapter, createToolPermissionAdapter } from '../templates/index.js'
 import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
@@ -128,7 +136,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -978,7 +986,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -1160,10 +1168,11 @@ export class AgentOrchestrator {
           // Initialize merge queue adapter from repository config
           if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
             try {
-              this.mergeQueueAdapter = createMergeQueueAdapter(
-                repoConfig.mergeQueue.provider ?? 'github-native'
-              )
-              console.log(`[orchestrator] Merge queue adapter initialized: ${repoConfig.mergeQueue.provider ?? 'github-native'}`)
+              const provider = repoConfig.mergeQueue.provider ?? 'local'
+              this.mergeQueueAdapter = createMergeQueueAdapter(provider, {
+                storage: config.mergeQueueStorage,
+              })
+              console.log(`[orchestrator] Merge queue adapter initialized: ${provider}`)
             } catch (error) {
               console.warn(`[orchestrator] Failed to initialize merge queue adapter: ${error instanceof Error ? error.message : String(error)}`)
             }
@@ -1845,6 +1854,19 @@ export class AgentOrchestrator {
     // Configure mergiraf merge driver if enabled
     this.configureMergiraf(worktreePath)
 
+    // Capture quality baseline for delta checking (runs test/typecheck on main)
+    if (this.isQualityBaselineEnabled()) {
+      try {
+        const qualityConfig = this.buildQualityConfig()
+        const baseline = captureQualityBaseline(worktreePath, qualityConfig)
+        saveBaseline(worktreePath, baseline)
+        console.log(`Quality baseline captured: ${baseline.tests.total} tests, ${baseline.typecheck.errorCount} type errors, ${baseline.lint.errorCount} lint errors`)
+      } catch (baselineError) {
+        // Log but don't fail worktree creation — quality gate is advisory
+        console.warn(`Failed to capture quality baseline: ${baselineError instanceof Error ? baselineError.message : String(baselineError)}`)
+      }
+    }
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -2015,6 +2037,54 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.warn(
         `Failed to configure mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
+    }
+  }
+
+  /**
+   * Check if quality baseline capture is enabled via repository config.
+   */
+  private isQualityBaselineEnabled(): boolean {
+    const quality = (this.repoConfig as Record<string, unknown> | null)?.quality as
+      | { baselineEnabled?: boolean }
+      | undefined
+    return quality?.baselineEnabled ?? false
+  }
+
+  /**
+   * Build quality config from orchestrator settings.
+   */
+  private buildQualityConfig(): QualityConfig {
+    return {
+      testCommand: this.testCommand,
+      validateCommand: this.validateCommand,
+      packageManager: this.packageManager ?? 'pnpm',
+      timeoutMs: 120_000,
+    }
+  }
+
+  /**
+   * Load quality baseline from a worktree and convert to TemplateContext shape.
+   */
+  private loadQualityBaselineForContext(worktreePath?: string): {
+    tests: { total: number; passed: number; failed: number }
+    typecheckErrors: number
+    lintErrors: number
+  } | undefined {
+    if (!worktreePath || !this.isQualityBaselineEnabled()) return undefined
+    try {
+      const baseline = loadBaseline(worktreePath)
+      if (!baseline) return undefined
+      return {
+        tests: {
+          total: baseline.tests.total,
+          passed: baseline.tests.passed,
+          failed: baseline.tests.failed,
+        },
+        typecheckErrors: baseline.typecheck.errorCount,
+        lintErrors: baseline.lint.errorCount,
+      }
+    } catch {
+      return undefined
     }
   }
 
@@ -2389,6 +2459,65 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * Resolve the provider for a specific spawn, using the full priority cascade.
    * Returns a cached provider instance (creating one if needed) and the resolved name.
    */
+  /**
+   * Build base instructions for Codex App Server agents (SUP-1746).
+   *
+   * Assembles safety rules and project-specific instructions (AGENTS.md / CLAUDE.md)
+   * into a persistent system prompt passed via `instructions` on `thread/start`.
+   */
+  private buildCodexBaseInstructions(workType?: AgentWorkType, worktreePath?: string): string {
+    const sections: string[] = []
+
+    // Safety rules — mirrors autonomousCanUseTool deny patterns as natural-language rules
+    sections.push(`# Safety Rules
+
+You are running in an AgentFactory-managed worktree. Follow these rules strictly:
+
+1. NEVER run: rm -rf / (or any rm of the filesystem root)
+2. NEVER run: git worktree remove, git worktree prune
+3. NEVER run: git reset --hard
+4. NEVER run: git push --force (use --force-with-lease on feature branches if needed)
+5. NEVER run: git checkout <branch>, git switch <branch> (do not change the checked-out branch)
+6. NEVER modify files in the .git directory
+7. Commit changes with descriptive messages before reporting completion`)
+
+    // Project-specific instructions — load AGENTS.md or CLAUDE.md from worktree root
+    if (worktreePath) {
+      for (const filename of ['AGENTS.md', 'CLAUDE.md']) {
+        const instrPath = resolve(worktreePath, filename)
+        if (existsSync(instrPath)) {
+          try {
+            const content = readFileSync(instrPath, 'utf-8')
+            if (content.trim()) {
+              sections.push(`# Project Instructions (${filename})\n\n${content.trim()}`)
+              break // Only load one: AGENTS.md takes priority
+            }
+          } catch {
+            // Ignore read errors — project instructions are optional
+          }
+        }
+      }
+    }
+
+    return sections.join('\n\n')
+  }
+
+  /**
+   * Build Codex permission config from template permissions (SUP-1748).
+   *
+   * Translates abstract template `tools.allow` / `tools.disallow` into
+   * structured regex patterns for the Codex approval bridge.
+   */
+  private buildCodexPermissionConfig(workType?: AgentWorkType): import('../templates/adapters.js').CodexPermissionConfig | undefined {
+    if (!this.templateRegistry || !workType) return undefined
+
+    const { allow, disallow } = this.templateRegistry.getRawToolPermissions(workType)
+    if (allow.length === 0 && disallow.length === 0) return undefined
+
+    const adapter = new CodexToolPermissionAdapter()
+    return adapter.buildPermissionConfig(allow, disallow)
+  }
+
   private resolveProviderForSpawn(context: {
     workType?: string
     projectName?: string
@@ -2459,6 +2588,8 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         testCommand: perProject?.testCommand ?? this.testCommand,
         validateCommand: perProject?.validateCommand ?? this.validateCommand,
         agentBugBacklog: process.env.AGENT_BUG_BACKLOG || undefined,
+        mergeQueueEnabled: !!this.mergeQueueAdapter,
+        qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
@@ -2668,9 +2799,15 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
 
     log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
-    // Create in-process tool servers from registered plugins
+    // Create tool servers from registered plugins
+    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
     const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      ? this.toolRegistry.createServers(toolPluginContext)
+      : undefined
+
+    // Create stdio MCP server configs for Codex provider (SUP-1744)
+    const stdioServers = spawnProviderName === 'codex'
+      ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
     // Coordinators need significantly more turns than standard agents
@@ -2678,6 +2815,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Inflight also gets the bump — it may be resuming coordination work.
     const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
+
+    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
+    const codexBaseInstructions = spawnProviderName === 'codex'
+      ? this.buildCodexBaseInstructions(workType, worktreePath)
+      : undefined
+    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
+      ? this.buildCodexPermissionConfig(workType)
+      : undefined
 
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
@@ -2689,7 +2834,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers: toolServers?.servers,
       mcpToolNames: toolServers?.toolNames,
+      mcpStdioServers: stdioServers?.servers,
       maxTurns,
+      baseInstructions: codexBaseInstructions,
+      permissionConfig: codexPermissionConfig,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -2879,6 +3027,67 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
             await this.updateSessionPullRequest(sessionId, agent.pullRequestUrl, agent)
           } catch {
             // Best-effort session update
+          }
+        }
+      }
+
+      // --- Quality Gate: Check quality delta for code-producing work types ---
+      if (agent.status === 'completed' && agent.worktreePath && this.isQualityBaselineEnabled()) {
+        const codeProducingTypes = ['development', 'inflight', 'coordination', 'inflight-coordination']
+        const agentWorkType = agent.workType ?? 'development'
+        if (codeProducingTypes.includes(agentWorkType)) {
+          try {
+            const baseline = loadBaseline(agent.worktreePath)
+            if (baseline) {
+              const qualityConfig = this.buildQualityConfig()
+              const current = captureQualityBaseline(agent.worktreePath, qualityConfig)
+              const delta = computeQualityDelta(baseline, current)
+
+              if (!delta.passed) {
+                const report = formatQualityReport(baseline, current, delta)
+                log?.warn('Quality gate FAILED — agent worsened quality metrics', {
+                  testFailuresDelta: delta.testFailuresDelta,
+                  typeErrorsDelta: delta.typeErrorsDelta,
+                  lintErrorsDelta: delta.lintErrorsDelta,
+                })
+
+                // Post quality gate failure comment
+                try {
+                  await this.client.createComment(
+                    issueId,
+                    `## Quality Gate Failed\n\n` +
+                    `The agent's changes worsened quality metrics compared to the baseline (main).\n\n` +
+                    report +
+                    `\n\n**Status promotion blocked.** The agent must fix quality regressions before this work can advance to QA.`
+                  )
+                } catch {
+                  // Best-effort comment
+                }
+
+                // Block status promotion by marking agent as failed
+                agent.status = 'failed'
+                agent.workResult = 'failed'
+              } else {
+                log?.info('Quality gate passed', {
+                  testFailuresDelta: delta.testFailuresDelta,
+                  typeErrorsDelta: delta.typeErrorsDelta,
+                  testCountDelta: delta.testCountDelta,
+                })
+
+                if (delta.testFailuresDelta < 0 || delta.typeErrorsDelta < 0 || delta.lintErrorsDelta < 0) {
+                  log?.info('Boy scout rule: agent improved quality metrics', {
+                    testFailuresDelta: delta.testFailuresDelta,
+                    typeErrorsDelta: delta.typeErrorsDelta,
+                    lintErrorsDelta: delta.lintErrorsDelta,
+                  })
+                }
+              }
+            }
+          } catch (qualityError) {
+            log?.warn('Quality gate check failed (non-fatal)', {
+              error: qualityError instanceof Error ? qualityError.message : String(qualityError),
+            })
+            // Quality gate check failure should not block the session — degrade gracefully
           }
         }
       }
@@ -4645,15 +4854,29 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       workType: workType ?? 'development',
     })
 
-    // Create in-process tool servers from registered plugins
+    // Create tool servers from registered plugins
+    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
     const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers({ env, cwd: worktreePath ?? process.cwd() })
+      ? this.toolRegistry.createServers(toolPluginContext)
+      : undefined
+
+    // Create stdio MCP server configs for Codex provider (SUP-1744)
+    const stdioServers = spawnProviderName === 'codex'
+      ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
     // Coordinators need significantly more turns than standard agents
     const resolvedWorkType = workType ?? 'development'
     const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
+
+    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
+    const codexBaseInstructions = spawnProviderName === 'codex'
+      ? this.buildCodexBaseInstructions(workType, worktreePath)
+      : undefined
+    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
+      ? this.buildCodexPermissionConfig(workType)
+      : undefined
 
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
@@ -4665,7 +4888,10 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       sandboxEnabled: this.config.sandboxEnabled,
       mcpServers: toolServers?.servers,
       mcpToolNames: toolServers?.toolNames,
+      mcpStdioServers: stdioServers?.servers,
       maxTurns,
+      baseInstructions: codexBaseInstructions,
+      permissionConfig: codexPermissionConfig,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -4673,7 +4899,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     const handle = providerSessionId
-      ? spawnProvider.resume(providerSessionId, spawnConfig)
+      ? this.createResumeWithFallbackHandle(spawnProvider, providerSessionId, spawnConfig, agent, log)
       : spawnProvider.spawn(spawnConfig)
 
     this.agentHandles.set(issueId, handle)
@@ -4683,6 +4909,59 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     this.processEventStream(issueId, identifier, sessionId, handle, emitter, agent)
 
     return agent
+  }
+
+  /**
+   * Create a resume handle that falls back to a fresh spawn if the session is stale.
+   * This avoids wasting a recovery attempt when the Claude Code session has expired.
+   */
+  private createResumeWithFallbackHandle(
+    provider: AgentProvider,
+    providerSessionId: string,
+    spawnConfig: AgentSpawnConfig,
+    agent: AgentProcess,
+    log: Logger | undefined,
+  ): AgentHandle {
+    let currentHandle = provider.resume(providerSessionId, spawnConfig)
+
+    const fallbackStream = async function* (): AsyncIterable<AgentEvent> {
+      for await (const event of currentHandle.stream) {
+        // Detect stale session error: the resume failed because the session no longer exists
+        if (
+          event.type === 'result' &&
+          !event.success &&
+          event.errors?.some(e => e.includes('No conversation found with session ID'))
+        ) {
+          log?.warn('Stale session detected during resume — falling back to fresh spawn', {
+            staleSessionId: providerSessionId,
+          })
+
+          // Clear stale session from worktree state
+          if (agent.worktreePath) {
+            try {
+              updateState(agent.worktreePath, { providerSessionId: null })
+            } catch {
+              // Ignore state update errors
+            }
+          }
+          agent.providerSessionId = undefined
+
+          // Spawn fresh and yield all its events instead
+          currentHandle = provider.spawn(spawnConfig)
+          yield* currentHandle.stream
+          return
+        }
+
+        yield event
+      }
+    }
+
+    return {
+      get sessionId() { return currentHandle.sessionId },
+      stream: fallbackStream(),
+      injectMessage: (text: string) => currentHandle.injectMessage(text),
+      stop: () => currentHandle.stop(),
+    }
   }
 
   /**

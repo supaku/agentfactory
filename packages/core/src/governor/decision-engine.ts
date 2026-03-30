@@ -344,14 +344,9 @@ function decideFinished(ctx: DecisionContext): DecisionResult {
     }
   }
 
-  // When merge queue is enabled, enqueue to merge queue instead of QA
-  if (ctx.mergeQueueEnabled) {
-    return {
-      action: 'trigger-merge',
-      reason: `Issue ${issue.identifier} is in Finished — enqueuing to merge queue`,
-    }
-  }
-
+  // Always run QA to validate functional correctness, even when merge queue is
+  // enabled. The merge queue handles git mechanics (rebase, conflict resolution)
+  // at merge time — it should not bypass implementation validation.
   return {
     action: 'trigger-qa',
     reason: `Issue ${issue.identifier} is in Finished — triggering QA`,

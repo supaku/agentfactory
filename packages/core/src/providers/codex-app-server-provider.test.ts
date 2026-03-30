@@ -3,9 +3,18 @@ import { EventEmitter } from 'events'
 import {
   mapAppServerNotification,
   mapAppServerItemEvent,
+  normalizeMcpToolName,
+  resolveSandboxPolicy,
+  resolveCodexModel,
+  calculateCostUsd,
+  CODEX_MODEL_MAP,
+  CODEX_DEFAULT_MODEL,
+  CODEX_PRICING,
+  CODEX_DEFAULT_PRICING,
   type AppServerEventMapperState,
   type JsonRpcNotification,
 } from './codex-app-server-provider.js'
+import type { AgentSpawnConfig } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Mock child_process and readline for AppServerProcessManager tests
@@ -65,8 +74,10 @@ const mockSpawn = vi.mocked(spawn)
 function freshState(): AppServerEventMapperState {
   return {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
 }
@@ -184,6 +195,7 @@ describe('mapAppServerNotification', () => {
   it('maps turn/completed (success) with usage', () => {
     const state = freshState()
     state.turnCount = 1
+    state.model = 'gpt-5-codex'
 
     const notification: JsonRpcNotification = {
       method: 'turn/completed',
@@ -191,7 +203,7 @@ describe('mapAppServerNotification', () => {
         turn: {
           id: 'turn_1',
           status: 'completed',
-          usage: { input_tokens: 100, output_tokens: 50 },
+          usage: { input_tokens: 100, output_tokens: 50, cached_input_tokens: 20 },
         },
       },
     }
@@ -204,32 +216,38 @@ describe('mapAppServerNotification', () => {
       cost: {
         inputTokens: 100,
         outputTokens: 50,
+        cachedInputTokens: 20,
         numTurns: 1,
       },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
     expect(state.totalInputTokens).toBe(100)
     expect(state.totalOutputTokens).toBe(50)
+    expect(state.totalCachedInputTokens).toBe(20)
   })
 
   it('accumulates usage across multiple turns', () => {
     const state = freshState()
     state.turnCount = 2
+    state.model = 'gpt-5-codex'
 
     mapAppServerNotification({
       method: 'turn/completed',
-      params: { turn: { id: 't1', status: 'completed', usage: { input_tokens: 100, output_tokens: 50 } } },
+      params: { turn: { id: 't1', status: 'completed', usage: { input_tokens: 100, output_tokens: 50, cached_input_tokens: 10 } } },
     }, state)
 
     const result = mapAppServerNotification({
       method: 'turn/completed',
-      params: { turn: { id: 't2', status: 'completed', usage: { input_tokens: 200, output_tokens: 80 } } },
+      params: { turn: { id: 't2', status: 'completed', usage: { input_tokens: 200, output_tokens: 80, cached_input_tokens: 30 } } },
     }, state)
 
     expect(result[0]).toMatchObject({
       type: 'result',
       success: true,
-      cost: { inputTokens: 300, outputTokens: 130 },
+      cost: { inputTokens: 300, outputTokens: 130, cachedInputTokens: 40 },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
+    expect(state.totalCachedInputTokens).toBe(40)
   })
 
   it('maps turn/completed (failed) with error', () => {
@@ -537,13 +555,15 @@ describe('mapAppServerItemEvent', () => {
     })
   })
 
-  it('maps mcpToolCall item.started to tool_use', () => {
+  // --- MCP tool call mapping (SUP-1745) ---
+
+  it('maps mcpToolCall item.started to tool_use with normalized name', () => {
     const result = mapAppServerItemEvent('item/started', {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: { title: 'Test' },
         status: 'in_progress',
       },
@@ -551,19 +571,20 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_use',
-      toolName: 'mcp:linear/create_issue',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       toolUseId: 'mcp-1',
       input: { title: 'Test' },
+      toolCategory: 'general',
     })
   })
 
-  it('maps mcpToolCall item.completed to tool_result (success)', () => {
+  it('maps mcpToolCall item.completed to tool_result with normalized name (success)', () => {
     const result = mapAppServerItemEvent('item/completed', {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: {},
         result: { content: [{ text: 'Created' }] },
         status: 'completed',
@@ -572,7 +593,7 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_result',
-      toolName: 'mcp:linear/create_issue',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       content: '[{"text":"Created"}]',
       isError: false,
     })
@@ -583,8 +604,8 @@ describe('mapAppServerItemEvent', () => {
       item: {
         id: 'mcp-1',
         type: 'mcpToolCall',
-        server: 'linear',
-        tool: 'create_issue',
+        server: 'af-linear',
+        tool: 'af_linear_create_issue',
         arguments: {},
         error: { message: 'Auth failed' },
         status: 'failed',
@@ -593,8 +614,28 @@ describe('mapAppServerItemEvent', () => {
 
     expect(result[0]).toMatchObject({
       type: 'tool_result',
+      toolName: 'mcp__af-linear__af_linear_create_issue',
       isError: true,
       content: 'Auth failed',
+    })
+  })
+
+  it('maps mcpToolCall with code-intelligence server to searchable category', () => {
+    const result = mapAppServerItemEvent('item/started', {
+      item: {
+        id: 'mcp-2',
+        type: 'mcpToolCall',
+        server: 'af-code-intelligence',
+        tool: 'af_code_search_symbols',
+        arguments: { query: 'ToolRegistry' },
+        status: 'in_progress',
+      },
+    })
+
+    expect(result[0]).toMatchObject({
+      type: 'tool_use',
+      toolName: 'mcp__af-code-intelligence__af_code_search_symbols',
+      toolCategory: 'research', // search matches research category
     })
   })
 
@@ -783,13 +824,18 @@ describe('AppServerProcessManager — lifecycle', () => {
     // Send back a successful response
     emitLine({ id: 1, result: { capabilities: {} } })
 
-    await startPromise
-
-    // After start, the `initialized` notification should have been sent
-    expect(mockProc.stdin.write).toHaveBeenCalledTimes(2)
+    // After initialize, the `initialized` notification is sent, then model/list request
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
     const initializedCall = mockProc.stdin.write.mock.calls[1]![0] as string
     const initializedMsg = JSON.parse(initializedCall.trim())
     expect(initializedMsg.method).toBe('initialized')
+
+    // Respond to model/list request
+    emitLine({ id: 2, result: { models: [] } })
+
+    await startPromise
 
     expect(manager.isHealthy()).toBe(true)
     expect(manager.pid).toBe(12345)
@@ -803,6 +849,10 @@ describe('AppServerProcessManager — lifecycle', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     expect(mockSpawn).toHaveBeenCalledTimes(1)
@@ -821,41 +871,49 @@ describe('AppServerProcessManager — lifecycle', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     // Send a request
     const reqPromise = manager.request('thread/start', { cwd: '/project' })
 
     await vi.waitFor(() => {
-      // The request should be the 3rd write (initialize, initialized, thread/start)
-      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+      // The request should be the 4th write (initialize, initialized, model/list, thread/start)
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
     })
 
-    const reqCall = mockProc.stdin.write.mock.calls[2]![0] as string
+    const reqCall = mockProc.stdin.write.mock.calls[3]![0] as string
     const req = JSON.parse(reqCall.trim())
     expect(req.method).toBe('thread/start')
-    expect(req.id).toBe(2)
+    expect(req.id).toBe(3)
 
     // Respond
-    emitLine({ id: 2, result: { thread: { id: 'thr_123' } } })
+    emitLine({ id: 3, result: { thread: { id: 'thr_123' } } })
 
     const result = await reqPromise
     expect(result).toEqual({ thread: { id: 'thr_123' } })
   })
 
   it('request() times out when no response is received', async () => {
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+
+    const startPromise = manager.start()
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalled()
+    })
+    emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
+    await startPromise
+
+    // Now switch to fake timers for the timeout test
     vi.useFakeTimers()
-
     try {
-      const manager = new AppServerProcessManager({ cwd: '/tmp' })
-
-      const startPromise = manager.start()
-      await vi.waitFor(() => {
-        expect(mockProc.stdin.write).toHaveBeenCalled()
-      })
-      emitLine({ id: 1, result: {} })
-      await startPromise
-
       // Send a request with a short timeout
       const reqPromise = manager.request('thread/start', {}, 5000)
 
@@ -876,16 +934,20 @@ describe('AppServerProcessManager — lifecycle', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     const reqPromise = manager.request('thread/start', { cwd: '/project' })
 
     await vi.waitFor(() => {
-      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
     })
 
     // Respond with an error
-    emitLine({ id: 2, error: { code: -32600, message: 'Invalid request' } })
+    emitLine({ id: 3, error: { code: -32600, message: 'Invalid request' } })
 
     await expect(reqPromise).rejects.toThrow('JSON-RPC error (-32600): Invalid request')
   })
@@ -906,6 +968,11 @@ describe('AppServerProcessManager — lifecycle', () => {
 
     // Now send the valid response
     emitLine({ id: 1, result: {} })
+    // Respond to model/list request
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     expect(manager.isHealthy()).toBe(true)
@@ -919,6 +986,10 @@ describe('AppServerProcessManager — lifecycle', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     expect(manager.isHealthy()).toBe(true)
@@ -927,7 +998,7 @@ describe('AppServerProcessManager — lifecycle', () => {
     const reqPromise = manager.request('thread/start', {})
 
     await vi.waitFor(() => {
-      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
     })
 
     // Simulate process exit
@@ -945,13 +1016,17 @@ describe('AppServerProcessManager — lifecycle', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     // Send a request but don't respond
     const reqPromise = manager.request('some/method', {})
 
     await vi.waitFor(() => {
-      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
     })
 
     // Simulate process error
@@ -982,6 +1057,11 @@ describe('AppServerProcessManager — thread notification routing', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    // Respond to model/list request (called by start() after handshake)
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
     return manager
   }
@@ -1114,12 +1194,18 @@ describe('Approval & Sandbox Policy Resolution (via spawn params)', () => {
     // Respond to initialize
     emitLine({ id: 1, result: {} })
 
-    // Wait for thread/start request (3 writes: initialize, initialized, thread/start)
+    // Respond to model/list request (called by start() after handshake)
     await vi.waitFor(() => {
       expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
     }, { timeout: 3000 })
+    emitLine({ id: 2, result: { models: [] } })
 
-    const threadStartCall = mockProc.stdin.write.mock.calls[2]![0] as string
+    // Wait for thread/start request (4 writes: initialize, initialized, model/list, thread/start)
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
+    }, { timeout: 3000 })
+
+    const threadStartCall = mockProc.stdin.write.mock.calls[3]![0] as string
     const threadStartReq = JSON.parse(threadStartCall.trim())
 
     // Do NOT respond — we only need to inspect the request params.
@@ -1129,12 +1215,12 @@ describe('Approval & Sandbox Policy Resolution (via spawn params)', () => {
     return threadStartReq
   }
 
-  it('autonomous: true resolves approval policy to never', async () => {
+  it('autonomous: true resolves approval policy to onRequest', async () => {
     const provider = new CodexAppServerProvider()
     const handle = provider.spawn(makeConfig({ autonomous: true, sandboxEnabled: false }))
 
     const threadStartReq = await driveToThreadStart(handle)
-    expect(threadStartReq.params.approvalPolicy).toBe('never')
+    expect(threadStartReq.params.approvalPolicy).toBe('onRequest')
   })
 
   it('autonomous: false resolves approval policy to unlessTrusted', async () => {
@@ -1190,6 +1276,11 @@ describe('AppServerProcessManager — shutdown', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    // Respond to model/list request (called by start() after handshake)
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
     return manager
   }
@@ -1269,7 +1360,8 @@ describe('AppServerProcessManager — shutdown', () => {
     const rejectionPromise = reqPromise.catch((err: Error) => err)
 
     await vi.waitFor(() => {
-      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+      // 4 writes: initialize, initialized, model/list, thread/start
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(4)
     })
 
     // Make process exit on SIGTERM
@@ -1283,7 +1375,7 @@ describe('AppServerProcessManager — shutdown', () => {
 
     const error = await rejectionPromise
     expect(error).toBeInstanceOf(Error)
-    expect(error.message).toMatch(/shutting down/)
+    expect((error as Error).message).toMatch(/shutting down/)
   })
 
   it('after shutdown, isHealthy() is false, pid is undefined, thread listeners cleared', async () => {
@@ -1406,6 +1498,10 @@ describe('CodexAppServerProvider — spawn/resume/shutdown', () => {
       expect(mockProc.stdin.write).toHaveBeenCalled()
     })
     emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
     await startPromise
 
     expect(pm.isHealthy()).toBe(true)
@@ -1434,5 +1530,219 @@ describe('CodexAppServerProvider — spawn/resume/shutdown', () => {
     const provider = new CodexAppServerProvider()
     // No spawn() called, so no processManager
     await expect(provider.shutdown()).resolves.toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// AppServerProcessManager — MCP server configuration (SUP-1733)
+// ---------------------------------------------------------------------------
+
+describe('AppServerProcessManager — MCP server configuration', () => {
+  it('configureMcpServers is a no-op when not initialized', async () => {
+    const { AppServerProcessManager } = await import('./codex-app-server-provider.js')
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+
+    // Should not throw when not initialized
+    await manager.configureMcpServers([
+      { name: 'af-linear', command: 'node', args: ['server.js'] },
+    ])
+    // No error means it silently skipped (not initialized)
+  })
+
+  it('getMcpServerStatus returns empty when not initialized', async () => {
+    const { AppServerProcessManager } = await import('./codex-app-server-provider.js')
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+
+    const result = await manager.getMcpServerStatus()
+    expect(result).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// normalizeMcpToolName (SUP-1745)
+// ---------------------------------------------------------------------------
+
+describe('normalizeMcpToolName', () => {
+  it('normalizes server and tool to mcp__ format', () => {
+    expect(normalizeMcpToolName('af-linear', 'af_linear_get_issue'))
+      .toBe('mcp__af-linear__af_linear_get_issue')
+  })
+
+  it('normalizes code-intelligence tools', () => {
+    expect(normalizeMcpToolName('af-code-intelligence', 'af_code_search_symbols'))
+      .toBe('mcp__af-code-intelligence__af_code_search_symbols')
+  })
+
+  it('falls back to mcp:server/tool format for missing server', () => {
+    expect(normalizeMcpToolName(undefined, 'some_tool'))
+      .toBe('mcp:unknown/some_tool')
+  })
+
+  it('falls back to mcp:server/tool format for missing tool', () => {
+    expect(normalizeMcpToolName('server', undefined))
+      .toBe('mcp:server/unknown')
+  })
+
+  it('handles both missing server and tool', () => {
+    expect(normalizeMcpToolName(undefined, undefined))
+      .toBe('mcp:unknown/unknown')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveSandboxPolicy
+// ---------------------------------------------------------------------------
+
+describe('resolveSandboxPolicy', () => {
+  it('returns readOnly policy for read-only level', () => {
+    const config = { sandboxLevel: 'read-only', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+  })
+
+  it('returns workspaceWrite policy with writableRoots for workspace-write level', () => {
+    const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+  })
+
+  it('returns dangerFullAccess policy for full-access level', () => {
+    const config = { sandboxLevel: 'full-access', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'dangerFullAccess' })
+  })
+
+  it('falls back to sandboxEnabled boolean when no level set', () => {
+    const config = { sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+  })
+
+  it('returns undefined when sandbox disabled and no level set', () => {
+    const config = { sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toBeUndefined()
+  })
+
+  it('sandboxLevel takes precedence over sandboxEnabled boolean', () => {
+    const config = { sandboxLevel: 'read-only', sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveCodexModel (SUP-1749)
+// ---------------------------------------------------------------------------
+
+describe('resolveCodexModel', () => {
+  it('returns explicit model when set', () => {
+    const config = { model: 'custom-model', env: {} } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('custom-model')
+  })
+
+  it('maps opus tier to gpt-5-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'opus' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5-codex')
+  })
+
+  it('maps sonnet tier to gpt-5.2-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'sonnet' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.2-codex')
+  })
+
+  it('maps haiku tier to gpt-5.3-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'haiku' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.3-codex')
+  })
+
+  it('uses CODEX_MODEL env var as fallback', () => {
+    const config = { env: { CODEX_MODEL: 'gpt-5.5-codex' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.5-codex')
+  })
+
+  it('returns default model when nothing configured', () => {
+    const config = { env: {} } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5-codex')
+  })
+
+  it('explicit model takes precedence over tier', () => {
+    const config = { model: 'my-model', env: { CODEX_MODEL_TIER: 'opus' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('my-model')
+  })
+
+  it('tier takes precedence over CODEX_MODEL env', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'haiku', CODEX_MODEL: 'custom' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.3-codex')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// calculateCostUsd (SUP-1750)
+// ---------------------------------------------------------------------------
+
+describe('calculateCostUsd', () => {
+  it('calculates cost with default pricing (gpt-5-codex)', () => {
+    // 1000 input (800 fresh + 200 cached), 500 output
+    const cost = calculateCostUsd(1000, 200, 500)
+    // fresh: 800/1M * 2.00 = 0.0016
+    // cached: 200/1M * 0.50 = 0.0001
+    // output: 500/1M * 8.00 = 0.004
+    expect(cost).toBeCloseTo(0.0057, 6)
+  })
+
+  it('calculates cost with specific model pricing', () => {
+    const cost = calculateCostUsd(1000, 200, 500, 'gpt-5.2-codex')
+    // fresh: 800/1M * 1.00 = 0.0008
+    // cached: 200/1M * 0.25 = 0.00005
+    // output: 500/1M * 4.00 = 0.002
+    expect(cost).toBeCloseTo(0.00285, 6)
+  })
+
+  it('calculates cost with haiku model pricing', () => {
+    const cost = calculateCostUsd(1000, 200, 500, 'gpt-5.3-codex')
+    // fresh: 800/1M * 0.50 = 0.0004
+    // cached: 200/1M * 0.125 = 0.000025
+    // output: 500/1M * 2.00 = 0.001
+    expect(cost).toBeCloseTo(0.001425, 6)
+  })
+
+  it('uses default pricing for unknown models', () => {
+    const cost = calculateCostUsd(1000, 0, 500, 'unknown-model')
+    // fresh: 1000/1M * 2.00 = 0.002
+    // output: 500/1M * 8.00 = 0.004
+    expect(cost).toBeCloseTo(0.006, 6)
+  })
+
+  it('handles zero tokens', () => {
+    expect(calculateCostUsd(0, 0, 0)).toBe(0)
+  })
+
+  it('handles all cached tokens (fresh = 0)', () => {
+    const cost = calculateCostUsd(1000, 1000, 0)
+    // fresh: 0
+    // cached: 1000/1M * 0.50 = 0.0005
+    expect(cost).toBeCloseTo(0.0005, 6)
+  })
+
+  it('clamps fresh tokens to zero when cached exceeds input', () => {
+    const cost = calculateCostUsd(100, 200, 0)
+    // fresh: max(0, 100 - 200) = 0
+    // cached: 200/1M * 0.50 = 0.0001
+    expect(cost).toBeCloseTo(0.0001, 6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CODEX_MODEL_MAP and CODEX_DEFAULT_MODEL (SUP-1749)
+// ---------------------------------------------------------------------------
+
+describe('CODEX_MODEL_MAP', () => {
+  it('maps all three tiers', () => {
+    expect(CODEX_MODEL_MAP).toEqual({
+      opus: 'gpt-5-codex',
+      sonnet: 'gpt-5.2-codex',
+      haiku: 'gpt-5.3-codex',
+    })
+  })
+})
+
+describe('CODEX_DEFAULT_MODEL', () => {
+  it('is gpt-5-codex', () => {
+    expect(CODEX_DEFAULT_MODEL).toBe('gpt-5-codex')
   })
 })

@@ -5,6 +5,7 @@ vi.mock('./redis.js', () => ({
   isRedisConfigured: vi.fn(() => true),
   redisZAdd: vi.fn(),
   redisZRem: vi.fn(),
+  redisZRank: vi.fn(),
   redisZRangeByScore: vi.fn(() => []),
   redisZCard: vi.fn(() => 0),
   redisZPopMin: vi.fn(),
@@ -30,6 +31,7 @@ import {
   isRedisConfigured,
   redisZAdd,
   redisZRem,
+  redisZRank,
   redisZRangeByScore,
   redisZCard,
   redisZPopMin,
@@ -47,6 +49,7 @@ import {
 const mockIsRedisConfigured = vi.mocked(isRedisConfigured)
 const mockRedisZAdd = vi.mocked(redisZAdd)
 const mockRedisZRem = vi.mocked(redisZRem)
+const mockRedisZRank = vi.mocked(redisZRank)
 const mockRedisZRangeByScore = vi.mocked(redisZRangeByScore)
 const mockRedisZCard = vi.mocked(redisZCard)
 const mockRedisZPopMin = vi.mocked(redisZPopMin)
@@ -685,5 +688,153 @@ describe('listBlocked', () => {
 
     const result = await storage.listBlocked('repo-1')
     expect(result).toEqual([])
+  })
+})
+
+// ============================================
+// isEnqueued
+// ============================================
+
+describe('isEnqueued', () => {
+  it('returns true when PR is in sorted set', async () => {
+    mockRedisZRank.mockResolvedValue(2)
+
+    const result = await storage.isEnqueued('repo-1', 42)
+    expect(result).toBe(true)
+    expect(mockRedisZRank).toHaveBeenCalledWith('merge:queue:repo-1', '42')
+  })
+
+  it('returns false when PR is not in sorted set', async () => {
+    mockRedisZRank.mockResolvedValue(null)
+
+    const result = await storage.isEnqueued('repo-1', 42)
+    expect(result).toBe(false)
+  })
+
+  it('returns false when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+
+    const result = await storage.isEnqueued('repo-1', 42)
+    expect(result).toBe(false)
+  })
+
+  it('returns false on Redis error', async () => {
+    mockRedisZRank.mockRejectedValue(new Error('connection lost'))
+
+    const result = await storage.isEnqueued('repo-1', 42)
+    expect(result).toBe(false)
+  })
+})
+
+// ============================================
+// getPosition
+// ============================================
+
+describe('getPosition', () => {
+  it('returns 1-based position when PR is in queue', async () => {
+    mockRedisZRank.mockResolvedValue(0) // 0-based rank
+
+    const result = await storage.getPosition('repo-1', 42)
+    expect(result).toBe(1) // 1-based position
+  })
+
+  it('returns correct position for non-first item', async () => {
+    mockRedisZRank.mockResolvedValue(4) // 5th in 0-based
+
+    const result = await storage.getPosition('repo-1', 42)
+    expect(result).toBe(5) // 5th in 1-based
+  })
+
+  it('returns null when PR is not in queue', async () => {
+    mockRedisZRank.mockResolvedValue(null)
+
+    const result = await storage.getPosition('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+
+    const result = await storage.getPosition('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null on Redis error', async () => {
+    mockRedisZRank.mockRejectedValue(new Error('connection lost'))
+
+    const result = await storage.getPosition('repo-1', 42)
+    expect(result).toBeNull()
+  })
+})
+
+// ============================================
+// getFailedReason
+// ============================================
+
+describe('getFailedReason', () => {
+  it('returns reason when PR is in failed state', async () => {
+    const failedData = { entry: makeEntry(), reason: 'CI checks failed' }
+    mockRedisHGet.mockResolvedValue(JSON.stringify(failedData))
+
+    const result = await storage.getFailedReason('repo-1', 42)
+    expect(result).toBe('CI checks failed')
+    expect(mockRedisHGet).toHaveBeenCalledWith('merge:failed:repo-1', '42')
+  })
+
+  it('returns null when PR is not in failed state', async () => {
+    mockRedisHGet.mockResolvedValue(null)
+
+    const result = await storage.getFailedReason('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+
+    const result = await storage.getFailedReason('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null on Redis error', async () => {
+    mockRedisHGet.mockRejectedValue(new Error('connection lost'))
+
+    const result = await storage.getFailedReason('repo-1', 42)
+    expect(result).toBeNull()
+  })
+})
+
+// ============================================
+// getBlockedReason
+// ============================================
+
+describe('getBlockedReason', () => {
+  it('returns reason when PR is in blocked state', async () => {
+    const blockedData = { entry: makeEntry(), reason: 'Merge conflict in utils.ts' }
+    mockRedisHGet.mockResolvedValue(JSON.stringify(blockedData))
+
+    const result = await storage.getBlockedReason('repo-1', 42)
+    expect(result).toBe('Merge conflict in utils.ts')
+    expect(mockRedisHGet).toHaveBeenCalledWith('merge:blocked:repo-1', '42')
+  })
+
+  it('returns null when PR is not in blocked state', async () => {
+    mockRedisHGet.mockResolvedValue(null)
+
+    const result = await storage.getBlockedReason('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+
+    const result = await storage.getBlockedReason('repo-1', 42)
+    expect(result).toBeNull()
+  })
+
+  it('returns null on Redis error', async () => {
+    mockRedisHGet.mockRejectedValue(new Error('connection lost'))
+
+    const result = await storage.getBlockedReason('repo-1', 42)
+    expect(result).toBeNull()
   })
 })

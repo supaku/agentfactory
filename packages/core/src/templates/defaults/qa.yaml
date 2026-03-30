@@ -28,6 +28,18 @@ prompt: |
   Validate: `{{validateCommand}}`
   {{/if}}
 
+  {{#if qualityBaseline}}
+  BASELINE-AWARE FAILURE ATTRIBUTION:
+  The development agent was given this quality baseline (captured from main):
+  - Tests: {{qualityBaseline.tests.failed}} pre-existing failures out of {{qualityBaseline.tests.total}} total
+  - Typecheck errors: {{qualityBaseline.typecheckErrors}}
+  - Lint errors: {{qualityBaseline.lintErrors}}
+  If the current branch has MORE failures than this baseline, the development agent made
+  things worse — this is a HARD FAIL. If failures are equal to or less than baseline,
+  they are pre-existing and should NOT cause QA failure (unless the issue specifically
+  requires fixing them).
+  {{/if}}
+
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT make code changes, git commits, or fix issues yourself.
   - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
@@ -39,6 +51,13 @@ prompt: |
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 
+  {{#if mergeQueueEnabled}}
+  MERGE CONFLICTS — INFORMATIONAL ONLY (merge queue enabled):
+  Check PR mergeability: `gh pr view <PR_NUMBER> --json mergeable,mergeStateStatus`
+  If the PR has merge conflicts, NOTE them in your report but do NOT fail QA for this reason.
+  The merge queue worker will rebase the branch and resolve conflicts at merge time.
+  Focus your validation on functional correctness — implementation, tests, and acceptance criteria.
+  {{else}}
   HARD FAIL RULE — MERGE CONFLICTS:
   Check PR mergeability: `gh pr view <PR_NUMBER> --json mergeable,mergeStateStatus`
   If the PR has merge conflicts (mergeable=CONFLICTING or mergeStateStatus=DIRTY), you MUST
@@ -46,6 +65,7 @@ prompt: |
   Do NOT pass QA with a "caveat" about merge conflicts. A non-mergeable PR cannot be delivered —
   passing it wastes an entire acceptance session that will predictably fail on the same conflicts.
   Merge conflicts are an automatic QA failure regardless of implementation correctness.
+  {{/if}}
 
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}

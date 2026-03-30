@@ -80,6 +80,7 @@ const AUTO_RESPOND_METHODS = new Set([
   'turn/interrupt',
   'thread/unsubscribe',
   'turn/steer',
+  'model/list',
 ])
 
 /**
@@ -160,9 +161,10 @@ class MockAppServer {
     expect(initReq?.method).toBe('initialize')
     this.pushResponse(initReq!.id!, { capabilities: {} })
 
-    // Wait for the `initialized` notification
-    await this.waitForRequests(2)
+    // Wait for the `initialized` notification + model/list request (auto-responded)
+    await this.waitForRequests(3)
     expect(this.requests[1]?.method).toBe('initialized')
+    expect(this.requests[2]?.method).toBe('model/list')
   }
 
   /**
@@ -173,15 +175,15 @@ class MockAppServer {
     await this.completeHandshake()
 
     // Wait for thread/start request
-    await this.waitForRequests(3)
-    const threadStartReq = this.requests[2]
+    await this.waitForRequests(4)
+    const threadStartReq = this.requests[3]
     expect(threadStartReq?.method).toBe('thread/start')
     this.pushResponse(threadStartReq!.id!, { thread: { id: threadId } })
 
     // Wait for turn/start request
-    await this.waitForRequests(4)
-    expect(this.requests[3]?.method).toBe('turn/start')
-    this.pushResponse(this.requests[3]!.id!, {})
+    await this.waitForRequests(5)
+    expect(this.requests[4]?.method).toBe('turn/start')
+    this.pushResponse(this.requests[4]!.id!, {})
 
     return threadId
   }
@@ -194,15 +196,15 @@ class MockAppServer {
     await this.completeHandshake()
 
     // Wait for thread/resume request
-    await this.waitForRequests(3)
-    const threadResumeReq = this.requests[2]
+    await this.waitForRequests(4)
+    const threadResumeReq = this.requests[3]
     expect(threadResumeReq?.method).toBe('thread/resume')
     this.pushResponse(threadResumeReq!.id!, { thread: { id: threadId } })
 
     // Wait for turn/start request
-    await this.waitForRequests(4)
-    expect(this.requests[3]?.method).toBe('turn/start')
-    this.pushResponse(this.requests[3]!.id!, {})
+    await this.waitForRequests(5)
+    expect(this.requests[4]?.method).toBe('turn/start')
+    this.pushResponse(this.requests[4]!.id!, {})
 
     return threadId
   }
@@ -429,7 +431,7 @@ describe('CodexAppServerProvider integration', () => {
       const threadStartReq = mock.lastRequestByMethod('thread/start')!
       expect(threadStartReq.params).toMatchObject({
         cwd: '/project/workspace',
-        approvalPolicy: 'never',
+        approvalPolicy: 'onRequest',
       })
 
       expect(mock.requestsByMethod('turn/start')).toHaveLength(1)
@@ -522,7 +524,7 @@ describe('CodexAppServerProvider integration', () => {
         threadId: 'thr_inject_001',
         input: [{ type: 'text', text: 'follow-up question' }],
         cwd: '/project/workspace',
-        approvalPolicy: 'never',
+        approvalPolicy: 'onRequest',
       })
 
       // Respond to the new turn/start
@@ -575,9 +577,9 @@ describe('CodexAppServerProvider integration', () => {
       // Complete handshake and thread/resume
       await mock.completeHandshake()
 
-      // Wait for thread/resume request
-      await mock.waitForRequests(3)
-      const threadResumeReq = mock.requests[2]
+      // Wait for thread/resume request (after initialize, initialized, model/list)
+      await mock.waitForRequests(4)
+      const threadResumeReq = mock.requests[3]
       expect(threadResumeReq?.method).toBe('thread/resume')
       expect(threadResumeReq?.params?.threadId).toBe('thr_existing_session')
 
@@ -585,9 +587,9 @@ describe('CodexAppServerProvider integration', () => {
       mock.pushResponse(threadResumeReq!.id!, { thread: { id: 'thr_existing_session' } })
 
       // Wait for turn/start
-      await mock.waitForRequests(4)
-      expect(mock.requests[3]?.method).toBe('turn/start')
-      mock.pushResponse(mock.requests[3]!.id!, {})
+      await mock.waitForRequests(5)
+      expect(mock.requests[4]?.method).toBe('turn/start')
+      mock.pushResponse(mock.requests[4]!.id!, {})
 
       // Push some notifications and stop
       mock.pushTurnStarted('thr_existing_session', 'turn_resume_1')
@@ -709,11 +711,12 @@ describe('CodexAppServerProvider integration', () => {
       // Complete handshake
       await mock.waitForRequests(1)
       mock.pushResponse(mock.requests[0]!.id!, { capabilities: {} })
-      await mock.waitForRequests(2)
+      // model/list is auto-responded
+      await mock.waitForRequests(3)
 
       // Wait for thread/start request — but never respond
-      await mock.waitForRequests(3)
-      expect(mock.requests[2]?.method).toBe('thread/start')
+      await mock.waitForRequests(4)
+      expect(mock.requests[3]?.method).toBe('thread/start')
 
       // Advance past the timeout (default 30s)
       vi.advanceTimersByTime(31000)
@@ -758,11 +761,12 @@ describe('CodexAppServerProvider integration', () => {
       // Complete the handshake
       await mock.waitForRequests(1)
       mock.pushResponse(mock.requests[0]!.id!, { capabilities: {} })
-      await mock.waitForRequests(2)
+      // model/list is auto-responded
+      await mock.waitForRequests(3)
 
       // Wait for thread/start
-      await mock.waitForRequests(3)
-      const threadStartReq = mock.requests[2]
+      await mock.waitForRequests(4)
+      const threadStartReq = mock.requests[3]
       expect(threadStartReq?.method).toBe('thread/start')
 
       // Clean up (don't wait — just prevent unhandled rejection)
@@ -771,12 +775,12 @@ describe('CodexAppServerProvider integration', () => {
       return threadStartReq!.params!
     }
 
-    it('autonomous: true resolves approvalPolicy to "never"', async () => {
+    it('autonomous: true resolves approvalPolicy to "onRequest"', async () => {
       const provider = new CodexAppServerProvider()
       const handle = provider.spawn(makeConfig({ autonomous: true, sandboxEnabled: false }))
 
       const params = await getThreadStartParams(handle)
-      expect(params.approvalPolicy).toBe('never')
+      expect(params.approvalPolicy).toBe('onRequest')
     })
 
     it('autonomous: false resolves approvalPolicy to "unlessTrusted"', async () => {
@@ -864,7 +868,7 @@ describe('CodexAppServerProvider integration', () => {
       const toolUseEvent = events.find((e) => e.type === 'tool_use')
       expect(toolUseEvent).toMatchObject({
         type: 'tool_use',
-        toolName: 'mcp:linear/create_issue',
+        toolName: 'mcp__linear__create_issue',
         toolUseId: 'mcp_001',
         input: { title: 'New feature', description: 'Build it' },
       })
@@ -873,7 +877,7 @@ describe('CodexAppServerProvider integration', () => {
       const toolResultEvent = events.find((e) => e.type === 'tool_result')
       expect(toolResultEvent).toMatchObject({
         type: 'tool_result',
-        toolName: 'mcp:linear/create_issue',
+        toolName: 'mcp__linear__create_issue',
         toolUseId: 'mcp_001',
         content: '[{"text":"Issue LIN-123 created"}]',
         isError: false,
@@ -895,30 +899,30 @@ describe('CodexAppServerProvider integration', () => {
 
       // Complete handshake + thread start for handle1
       await mock.completeHandshake()
-      await mock.waitForRequests(3)
-      const threadStart1 = mock.requests[2]
+      await mock.waitForRequests(4)
+      const threadStart1 = mock.requests[3]
       expect(threadStart1?.method).toBe('thread/start')
       mock.pushResponse(threadStart1!.id!, { thread: { id: 'thr_A' } })
 
       // Wait for turn/start from handle1
-      await mock.waitForRequests(4)
-      expect(mock.requests[3]?.method).toBe('turn/start')
-      mock.pushResponse(mock.requests[3]!.id!, {})
+      await mock.waitForRequests(5)
+      expect(mock.requests[4]?.method).toBe('turn/start')
+      mock.pushResponse(mock.requests[4]!.id!, {})
 
       // Spawn second handle (reuses same process manager since PM is healthy)
       const handle2 = provider.spawn(makeConfig({ prompt: 'Task B' }))
       const events2Promise = collectEventsWithTimeout(handle2.stream, 5000)
 
       // Handle2 will call processManager.start() (idempotent) then thread/start
-      await mock.waitForRequests(5)
-      const threadStart2 = mock.requests[4]
+      await mock.waitForRequests(6)
+      const threadStart2 = mock.requests[5]
       expect(threadStart2?.method).toBe('thread/start')
       mock.pushResponse(threadStart2!.id!, { thread: { id: 'thr_B' } })
 
       // Wait for turn/start from handle2
-      await mock.waitForRequests(6)
-      expect(mock.requests[5]?.method).toBe('turn/start')
-      mock.pushResponse(mock.requests[5]!.id!, {})
+      await mock.waitForRequests(7)
+      expect(mock.requests[6]?.method).toBe('turn/start')
+      mock.pushResponse(mock.requests[6]!.id!, {})
 
       // Push interleaved notifications for both threads
       mock.pushTurnStarted('thr_A', 'turn_A1')
@@ -1028,10 +1032,10 @@ describe('CodexAppServerProvider integration', () => {
       // Complete handshake
       await mock.completeHandshake()
 
-      // Wait for thread/start
-      await mock.waitForRequests(3)
+      // Wait for thread/start (after initialize, initialized, model/list)
+      await mock.waitForRequests(4)
       // Respond without a thread ID
-      mock.pushResponse(mock.requests[2]!.id!, { thread: {} })
+      mock.pushResponse(mock.requests[3]!.id!, { thread: {} })
 
       const events = await eventsPromise
 

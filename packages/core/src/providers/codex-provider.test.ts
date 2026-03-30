@@ -10,8 +10,10 @@ import {
 function freshState(): CodexEventMapperState {
   return {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
 }
@@ -50,6 +52,7 @@ describe('mapCodexEvent', () => {
   it('maps turn.completed to result with accumulated usage', () => {
     const state = freshState()
     state.turnCount = 1
+    state.model = 'gpt-5-codex'
 
     const event: CodexEvent = {
       type: 'turn.completed',
@@ -64,31 +67,37 @@ describe('mapCodexEvent', () => {
       cost: {
         inputTokens: 100,
         outputTokens: 50,
+        cachedInputTokens: 20,
         numTurns: 1,
       },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
     expect(state.totalInputTokens).toBe(100)
     expect(state.totalOutputTokens).toBe(50)
+    expect(state.totalCachedInputTokens).toBe(20)
   })
 
   it('accumulates usage across multiple turns', () => {
     const state = freshState()
     state.turnCount = 2
+    state.model = 'gpt-5-codex'
 
     mapCodexEvent(
-      { type: 'turn.completed', usage: { input_tokens: 100, output_tokens: 50 } },
+      { type: 'turn.completed', usage: { input_tokens: 100, output_tokens: 50, cached_input_tokens: 10 } },
       state,
     )
     const result = mapCodexEvent(
-      { type: 'turn.completed', usage: { input_tokens: 200, output_tokens: 80 } },
+      { type: 'turn.completed', usage: { input_tokens: 200, output_tokens: 80, cached_input_tokens: 30 } },
       state,
     )
 
     expect(result[0]).toMatchObject({
       type: 'result',
       success: true,
-      cost: { inputTokens: 300, outputTokens: 130 },
+      cost: { inputTokens: 300, outputTokens: 130, cachedInputTokens: 40 },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
+    expect(state.totalCachedInputTokens).toBe(40)
   })
 
   it('maps turn.completed without usage', () => {

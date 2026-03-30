@@ -119,6 +119,8 @@ export interface OrchestratorConfig {
   repository?: string
   /** Merge queue adapter for automated merge operations */
   mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
+  /** Storage backend for the local merge queue adapter (required when provider is 'local') */
+  mergeQueueStorage?: import('../merge-queue/adapters/local.js').LocalMergeQueueStorage
 }
 
 export interface OrchestratorIssue {

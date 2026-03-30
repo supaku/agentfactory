@@ -44,6 +44,13 @@ prompt: |
   Do NOT rationalize, skip, or explain away build/typecheck failures (e.g., "will resolve on merge").
   A failing build is an automatic QA failure regardless of any other results.
 
+  {{#if mergeQueueEnabled}}
+  MERGE CONFLICTS — INFORMATIONAL ONLY (merge queue enabled):
+  Check PR mergeability: `gh pr view <PR_NUMBER> --json mergeable,mergeStateStatus`
+  If the PR has merge conflicts, NOTE them in your report but do NOT fail QA for this reason.
+  The merge queue worker will rebase the branch and resolve conflicts at merge time.
+  Focus your validation on functional correctness — implementation, tests, and acceptance criteria.
+  {{else}}
   HARD FAIL RULE — MERGE CONFLICTS:
   Check PR mergeability: `gh pr view <PR_NUMBER> --json mergeable,mergeStateStatus`
   If the PR has merge conflicts (mergeable=CONFLICTING or mergeStateStatus=DIRTY), you MUST
@@ -51,6 +58,7 @@ prompt: |
   Do NOT pass QA with a "caveat" about merge conflicts. A non-mergeable PR cannot be delivered —
   passing it wastes an entire acceptance session that will predictably fail on the same conflicts.
   Merge conflicts are an automatic QA failure regardless of implementation correctness.
+  {{/if}}
 
   {{> partials/shared-worktree-safety}}
   {{> partials/dependency-instructions}}

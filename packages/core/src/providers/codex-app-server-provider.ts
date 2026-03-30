@@ -30,6 +30,11 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
+import { classifyTool } from '../tools/tool-category.js'
+import {
+  evaluateCommandApproval,
+  evaluateFileChangeApproval,
+} from './codex-approval-bridge.js'
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 types
@@ -60,6 +65,18 @@ function isResponse(msg: JsonRpcMessage): msg is JsonRpcResponse {
 
 function isNotification(msg: JsonRpcMessage): msg is JsonRpcNotification {
   return 'method' in msg && !('id' in msg)
+}
+
+// ---------------------------------------------------------------------------
+// MCP Server Status (SUP-1744)
+// ---------------------------------------------------------------------------
+
+/** Status of a registered MCP server as reported by mcpServerStatus/list */
+export interface McpServerStatusResult {
+  name: string
+  status: 'connected' | 'connecting' | 'disconnected' | 'error'
+  toolCount?: number
+  error?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +122,54 @@ interface AppServerTurn {
 interface AppServerThread {
   id: string
   status?: string
+}
+
+// ---------------------------------------------------------------------------
+// Codex model mapping (SUP-1749)
+// ---------------------------------------------------------------------------
+
+export const CODEX_MODEL_MAP: Record<string, string> = {
+  'opus':   'gpt-5-codex',
+  'sonnet': 'gpt-5.2-codex',
+  'haiku':  'gpt-5.3-codex',
+}
+
+export const CODEX_DEFAULT_MODEL = 'gpt-5-codex'
+
+export function resolveCodexModel(config: AgentSpawnConfig): string {
+  if (config.model) return config.model
+  const tier = config.env.CODEX_MODEL_TIER
+  if (tier && CODEX_MODEL_MAP[tier]) return CODEX_MODEL_MAP[tier]
+  if (config.env.CODEX_MODEL) return config.env.CODEX_MODEL
+  return CODEX_DEFAULT_MODEL
+}
+
+// ---------------------------------------------------------------------------
+// Codex pricing and cost calculation (SUP-1750)
+// ---------------------------------------------------------------------------
+
+/** Codex pricing per 1M tokens (USD). Update when pricing changes. */
+export const CODEX_PRICING: Record<string, { input: number; cachedInput: number; output: number }> = {
+  'gpt-5-codex':   { input: 2.00, cachedInput: 0.50, output: 8.00 },
+  'gpt-5.2-codex': { input: 1.00, cachedInput: 0.25, output: 4.00 },
+  'gpt-5.3-codex': { input: 0.50, cachedInput: 0.125, output: 2.00 },
+}
+
+export const CODEX_DEFAULT_PRICING = CODEX_PRICING['gpt-5-codex']
+
+export function calculateCostUsd(
+  inputTokens: number,
+  cachedInputTokens: number,
+  outputTokens: number,
+  model?: string,
+): number {
+  const pricing = (model && CODEX_PRICING[model]) || CODEX_DEFAULT_PRICING
+  const freshInputTokens = Math.max(0, inputTokens - cachedInputTokens)
+  return (
+    (freshInputTokens / 1_000_000) * pricing.input +
+    (cachedInputTokens / 1_000_000) * pricing.cachedInput +
+    (outputTokens / 1_000_000) * pricing.output
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -207,6 +272,16 @@ export class AppServerProcessManager {
 
     // Perform initialization handshake
     await this.initialize()
+
+    // Discover available models (best effort — older servers may not support model/list)
+    try {
+      const models = await this.listModels()
+      if (models.length > 0) {
+        console.error(`[CodexAppServer] Available models: ${models.map(m => m.id).join(', ')}`)
+      }
+    } catch {
+      console.error('[CodexAppServer] model/list not supported by this server version')
+    }
   }
 
   /**
@@ -326,6 +401,76 @@ export class AppServerProcessManager {
     return this.initialized && !!this.process && !this.process.killed
   }
 
+  // ─── MCP Server Configuration (SUP-1744) ──────────────────────────
+
+  /** Whether MCP servers have been configured on this process */
+  private mcpConfigured = false
+
+  /**
+   * Register MCP servers with the app-server via config/batchWrite.
+   * Called once after initialization to tell Codex about the stdio
+   * MCP tool servers (af-linear, af-code-intelligence, etc.).
+   *
+   * Uses the Codex app-server `config/batchWrite` JSON-RPC method
+   * to register multiple MCP server configurations in a single call.
+   */
+  async configureMcpServers(
+    servers: Array<{ name: string; command: string; args: string[]; env?: Record<string, string> }>,
+  ): Promise<void> {
+    if (!this.initialized || this.mcpConfigured) return
+    if (servers.length === 0) return
+
+    const mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {}
+    for (const server of servers) {
+      mcpServers[server.name] = {
+        command: server.command,
+        args: server.args,
+        env: server.env,
+      }
+    }
+
+    try {
+      await this.request('config/batchWrite', {
+        entries: [
+          { key: 'mcpServers', value: mcpServers },
+        ],
+      })
+      this.mcpConfigured = true
+      console.error(`[CodexAppServer] Configured ${servers.length} MCP servers: ${servers.map(s => s.name).join(', ')}`)
+    } catch (err) {
+      // config/batchWrite may not be supported in all Codex versions
+      console.error(`[CodexAppServer] Failed to configure MCP servers: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  /**
+   * Query MCP server health via mcpServerStatus/list.
+   * Returns the status of all registered MCP servers.
+   */
+  async getMcpServerStatus(): Promise<McpServerStatusResult[]> {
+    if (!this.initialized) return []
+
+    try {
+      const result = await this.request('mcpServerStatus/list') as {
+        servers?: McpServerStatusResult[]
+      }
+      return result?.servers ?? []
+    } catch {
+      // mcpServerStatus/list may not be supported
+      return []
+    }
+  }
+
+  /**
+   * Discover available models from the app-server via model/list.
+   */
+  async listModels(): Promise<Array<{ id: string; name?: string; capabilities?: Record<string, unknown> }>> {
+    const result = await this.request('model/list', {}) as {
+      models?: Array<{ id: string; name?: string; capabilities?: Record<string, unknown> }>
+    }
+    return result?.models ?? []
+  }
+
   /**
    * Get the PID of the app-server process.
    */
@@ -388,8 +533,10 @@ export class AppServerProcessManager {
 
 export interface AppServerEventMapperState {
   sessionId: string | null
+  model: string | null
   totalInputTokens: number
   totalOutputTokens: number
+  totalCachedInputTokens: number
   turnCount: number
 }
 
@@ -448,6 +595,7 @@ export function mapAppServerNotification(
       if (turn?.usage) {
         state.totalInputTokens += turn.usage.input_tokens ?? 0
         state.totalOutputTokens += turn.usage.output_tokens ?? 0
+        state.totalCachedInputTokens += turn.usage.cached_input_tokens ?? 0
       }
 
       if (turnStatus === 'completed') {
@@ -457,6 +605,13 @@ export function mapAppServerNotification(
           cost: {
             inputTokens: state.totalInputTokens || undefined,
             outputTokens: state.totalOutputTokens || undefined,
+            cachedInputTokens: state.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              state.totalInputTokens,
+              state.totalCachedInputTokens,
+              state.totalOutputTokens,
+              state.model ?? undefined,
+            ),
             numTurns: state.turnCount || undefined,
           },
           raw: notification,
@@ -472,6 +627,13 @@ export function mapAppServerNotification(
           cost: {
             inputTokens: state.totalInputTokens || undefined,
             outputTokens: state.totalOutputTokens || undefined,
+            cachedInputTokens: state.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              state.totalInputTokens,
+              state.totalCachedInputTokens,
+              state.totalOutputTokens,
+              state.model ?? undefined,
+            ),
             numTurns: state.turnCount || undefined,
           },
           raw: notification,
@@ -635,13 +797,19 @@ export function mapAppServerItemEvent(
       }
       return []
 
-    case 'mcpToolCall':
+    case 'mcpToolCall': {
+      // Normalize tool name to mcp__{server}__{tool} format (SUP-1745)
+      // This matches the convention used by the Claude provider for
+      // in-process MCP tools, enabling consistent tool tracking.
+      const mcpToolName = normalizeMcpToolName(item.server, item.tool)
+
       if (isStarted) {
         return [{
           type: 'tool_use',
-          toolName: `mcp:${item.server}/${item.tool}`,
+          toolName: mcpToolName,
           toolUseId: item.id,
           input: (item.arguments ?? {}) as Record<string, unknown>,
+          toolCategory: classifyTool(mcpToolName),
           raw: { method, params },
         }]
       }
@@ -651,7 +819,7 @@ export function mapAppServerItemEvent(
           ?? (item.result?.content ? JSON.stringify(item.result.content) : '')
         return [{
           type: 'tool_result',
-          toolName: `mcp:${item.server}/${item.tool}`,
+          toolName: mcpToolName,
           toolUseId: item.id,
           content,
           isError,
@@ -659,6 +827,7 @@ export function mapAppServerItemEvent(
         }]
       }
       return []
+    }
 
     case 'plan':
       return [{
@@ -695,20 +864,105 @@ export function mapAppServerItemEvent(
 }
 
 // ---------------------------------------------------------------------------
+// MCP tool name normalization (SUP-1745)
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize Codex MCP tool names to the `mcp__{server}__{tool}` format
+ * used by the orchestrator and Claude provider for consistent tool tracking.
+ *
+ * Codex reports MCP tools as `server` + `tool` (e.g., server='af-linear',
+ * tool='af_linear_get_issue'). We normalize to 'mcp__af-linear__af_linear_get_issue'.
+ */
+export function normalizeMcpToolName(server?: string, tool?: string): string {
+  if (server && tool) {
+    return `mcp__${server}__${tool}`
+  }
+  // Fallback for missing server/tool
+  return `mcp:${server ?? 'unknown'}/${tool ?? 'unknown'}`
+}
+
+// ---------------------------------------------------------------------------
 // Resolve approval policy from AgentSpawnConfig
 // ---------------------------------------------------------------------------
 
 function resolveApprovalPolicy(config: AgentSpawnConfig): string {
-  if (config.autonomous) return 'never'
+  // SUP-1747: Use 'onRequest' for autonomous agents so all tool executions
+  // flow through the approval bridge for safety evaluation. The bridge
+  // auto-approves safe commands and declines destructive patterns.
+  if (config.autonomous) return 'onRequest'
   return 'unlessTrusted'
 }
 
-function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown> | undefined {
-  if (!config.sandboxEnabled) return undefined
-  return {
-    type: 'workspaceWrite',
-    writableRoots: [config.cwd],
+/**
+ * Map AgentSpawnConfig sandbox settings to Codex App Server sandbox policy.
+ *
+ * Codex sandbox levels vs Claude sandbox:
+ * | Feature               | Claude                  | Codex                          |
+ * |-----------------------|-------------------------|--------------------------------|
+ * | File write control    | Per-file glob patterns  | Workspace root only            |
+ * | Network access        | Per-domain allow-lists  | All-or-nothing per level       |
+ * | Tool-level permissions| Per-tool allow/deny     | Not supported (approval policy)|
+ * | Custom writable paths | Multiple glob patterns  | Single writableRoots array     |
+ * | Process isolation     | macOS sandbox-exec      | Docker/firewall container      |
+ *
+ * Key limitation: Codex cannot restrict writes to specific subdirectories within
+ * the workspace or allow network access to specific domains. The mapping is intent-based:
+ *   "safe browsing/analysis" → readOnly
+ *   "normal development"     → workspaceWrite
+ *   "install/deploy/admin"   → dangerFullAccess
+ */
+export function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown> | undefined {
+  if (config.sandboxLevel) {
+    switch (config.sandboxLevel) {
+      case 'read-only':
+        return { type: 'readOnly' }
+      case 'workspace-write':
+        return { type: 'workspaceWrite', writableRoots: [config.cwd] }
+      case 'full-access':
+        return { type: 'dangerFullAccess' }
+    }
   }
+
+  // Fallback: boolean sandboxEnabled → workspaceWrite
+  if (!config.sandboxEnabled) return undefined
+  return { type: 'workspaceWrite', writableRoots: [config.cwd] }
+}
+
+// ---------------------------------------------------------------------------
+// Base Instructions Builder (SUP-1746)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build persistent base instructions for the Codex App Server `thread/start`.
+ *
+ * Assembles safety rules (mirroring `autonomousCanUseTool` deny patterns as
+ * natural-language rules) and optional project-specific instructions loaded
+ * from AGENTS.md or CLAUDE.md in the worktree root.
+ */
+function buildBaseInstructions(config: AgentSpawnConfig): string | undefined {
+  // If explicit baseInstructions are provided (from orchestrator), use those
+  if (config.baseInstructions) {
+    return config.baseInstructions
+  }
+
+  // Otherwise, build safety-only instructions as a fallback
+  const sections: string[] = []
+
+  sections.push(`# Safety Rules
+
+You are running in an AgentFactory-managed worktree. Follow these rules strictly:
+
+1. NEVER run: rm -rf / (or any rm of the filesystem root)
+2. NEVER run: git worktree remove, git worktree prune
+3. NEVER run: git reset --hard
+4. NEVER run: git push --force (use --force-with-lease on feature branches if needed)
+5. NEVER run: git checkout <branch>, git switch <branch> (do not change the checked-out branch)
+6. NEVER modify files in the .git directory
+7. Work only within the worktree directory: ${config.cwd}
+8. Commit changes with descriptive messages before reporting completion`)
+
+  return sections.join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -722,8 +976,10 @@ class AppServerAgentHandle implements AgentHandle {
   private readonly resumeThreadId?: string
   private readonly mapperState: AppServerEventMapperState = {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
   private activeTurnId: string | null = null
@@ -801,6 +1057,56 @@ class AppServerAgentHandle implements AgentHandle {
   }
 
   /**
+   * Handle an approval request from the App Server (SUP-1747).
+   *
+   * Evaluates the command or file change against deny patterns (ported from
+   * Claude's `autonomousCanUseTool`) and template-level permissions, then
+   * responds with accept/decline/acceptForSession via JSON-RPC.
+   *
+   * Returns a system event if the request was declined, for observability.
+   */
+  private async handleApprovalRequest(notification: JsonRpcNotification): Promise<AgentEvent | null> {
+    const params = notification.params ?? {}
+    const requestId = params.requestId as string
+    const command = params.command as string | undefined
+    const filePath = params.filePath as string | undefined
+
+    let decision: import('./codex-approval-bridge.js').ApprovalDecision
+
+    if (command !== undefined) {
+      // Command execution approval
+      decision = evaluateCommandApproval(command, this.config.permissionConfig)
+    } else if (filePath !== undefined) {
+      // File change approval
+      decision = evaluateFileChangeApproval(filePath, this.config.cwd, this.config.permissionConfig)
+    } else {
+      // Unknown approval request — accept by default
+      decision = { action: 'acceptForSession' }
+    }
+
+    // Respond to the App Server with the approval decision
+    await this.processManager.request('approval/respond', {
+      threadId: this.sessionId,
+      requestId,
+      decision: decision.action,
+      reason: decision.reason,
+    })
+
+    // Emit system event for declined approvals (observability)
+    if (decision.action === 'decline') {
+      const target = command ?? filePath ?? 'unknown'
+      return {
+        type: 'system',
+        subtype: 'approval_denied',
+        message: `Blocked: ${decision.reason} — ${command ? 'command' : 'file'}: ${target}`,
+        raw: notification,
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Start a new turn on the existing thread with additional user input (SUP-1741).
    * Used for between-turn injection when no turn is currently active.
    */
@@ -815,6 +1121,8 @@ class AppServerAgentHandle implements AgentHandle {
       cwd: this.config.cwd,
       approvalPolicy: resolveApprovalPolicy(this.config),
     }
+
+    turnParams.model = resolveCodexModel(this.config)
 
     if (this.config.maxTurns) {
       turnParams.maxTurns = this.config.maxTurns
@@ -839,6 +1147,13 @@ class AppServerAgentHandle implements AgentHandle {
       // Ensure the app-server is running
       await this.processManager.start()
 
+      // Configure MCP servers if provided (SUP-1744)
+      // This registers stdio MCP tool servers (af-linear, af-code-intelligence)
+      // with the Codex app-server so it can discover and invoke them.
+      if (this.config.mcpStdioServers && this.config.mcpStdioServers.length > 0) {
+        await this.processManager.configureMcpServers(this.config.mcpStdioServers)
+      }
+
       // Start or resume the thread
       let threadId: string
 
@@ -857,6 +1172,15 @@ class AppServerAgentHandle implements AgentHandle {
           approvalPolicy: resolveApprovalPolicy(this.config),
           serviceName: 'agentfactory',
         }
+
+        // SUP-1746: Pass persistent system instructions via `instructions` on thread/start.
+        // Separates safety rules and project context from per-turn task input.
+        const instructions = buildBaseInstructions(this.config)
+        if (instructions) {
+          threadParams.instructions = instructions
+        }
+
+        threadParams.model = resolveCodexModel(this.config)
 
         const sandboxPolicy = resolveSandboxPolicy(this.config)
         if (sandboxPolicy) {
@@ -880,6 +1204,7 @@ class AppServerAgentHandle implements AgentHandle {
 
       this.sessionId = threadId
       this.mapperState.sessionId = threadId
+      this.mapperState.model = resolveCodexModel(this.config)
 
       // Subscribe to thread notifications
       this.processManager.subscribeThread(threadId, (notification) => {
@@ -905,6 +1230,8 @@ class AppServerAgentHandle implements AgentHandle {
         cwd: this.config.cwd,
         approvalPolicy: resolveApprovalPolicy(this.config),
       }
+
+      turnParams.model = resolveCodexModel(this.config)
 
       if (this.config.maxTurns) {
         turnParams.maxTurns = this.config.maxTurns
@@ -942,6 +1269,16 @@ class AppServerAgentHandle implements AgentHandle {
         // Drain the queue
         while (this.notificationQueue.length > 0) {
           const notification = this.notificationQueue.shift()!
+
+          // SUP-1747: Intercept approval requests before other processing.
+          // The App Server emits these when approvalPolicy is 'onRequest'.
+          if (notification.method.endsWith('/requestApproval')) {
+            const deniedEvent = await this.handleApprovalRequest(notification)
+            if (deniedEvent) {
+              yield deniedEvent
+            }
+            continue // Don't yield as a regular AgentEvent
+          }
 
           // Track active turn ID for mid-turn steering (SUP-1740)
           if (notification.method === 'turn/started') {
@@ -994,6 +1331,13 @@ class AppServerAgentHandle implements AgentHandle {
         cost: {
           inputTokens: this.mapperState.totalInputTokens || undefined,
           outputTokens: this.mapperState.totalOutputTokens || undefined,
+          cachedInputTokens: this.mapperState.totalCachedInputTokens || undefined,
+          totalCostUsd: calculateCostUsd(
+            this.mapperState.totalInputTokens,
+            this.mapperState.totalCachedInputTokens,
+            this.mapperState.totalOutputTokens,
+            this.mapperState.model ?? undefined,
+          ),
           numTurns: this.mapperState.turnCount || undefined,
         },
         raw: null,

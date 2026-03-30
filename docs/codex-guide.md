@@ -136,11 +136,11 @@ Higher-priority sources always override lower ones. Aliases are supported: `opus
 | **Between-turn injection** | Yes | Yes (`turn/start` on existing thread) | No |
 | **In-process MCP tools** | Yes (`createSdkMcpServer`) | No | No |
 | **MCP tool observation** | N/A (uses in-process) | Yes (passive, via `mcpToolCall` events) | Yes (passive, via `mcp_tool_call` events) |
-| **Approval bridge** | Managed by SDK | Coarse (`'never'` or `'unlessTrusted'`) | Via `--full-auto` / `--approval-mode` flags |
+| **Approval bridge** | Managed by SDK | `'onRequest'` (with bridge) or `'unlessTrusted'` | Via `--full-auto` / `--approval-mode` flags |
 | **Sandbox** | Yes (SDK-managed) | Yes (`sandboxPolicy: workspaceWrite`) | Yes (`--sandbox workspace-write`) |
 | **Concurrent threads** | One process per session | Multiple threads per process | One process per session |
 | **Token tracking** | Yes (input + output) | Yes (input + output via `turn.usage`) | Yes (input + output via `turn.completed`) |
-| **USD cost calculation** | Yes (`total_cost_usd`) | No (tokens only) | No (tokens only) |
+| **USD cost calculation** | Yes (`total_cost_usd`) | Yes (estimate via `calculateCostUsd`) | No (tokens only) |
 | **Tool plugins** | Yes (in-process MCP servers) | No (uses CLI/Bash fallback) | No (uses CLI/Bash fallback) |
 
 ---
@@ -153,17 +153,17 @@ Codex does not support the `createSdkMcpServer()` in-process MCP pattern used by
 
 Codex does *observe* MCP tool calls made by the Codex CLI itself (via its own MCP server configuration) and maps them to normalized `tool_use` / `tool_result` events.
 
-### 2. No model selection passthrough
+### 2. Model selection via tier mapping
 
-AgentFactory does not currently pass a model parameter to Codex. The model is determined by the Codex CLI / App Server configuration. Tracked in **SUP-1735**.
+Model selection is supported via `config.model`, `CODEX_MODEL_TIER` (maps `opus`/`sonnet`/`haiku` to Codex equivalents), or `CODEX_MODEL` env var. See `resolveCodexModel()` in `codex-app-server-provider.ts`. Direct model IDs from the Claude provider (e.g., `claude-sonnet-4-5`) are not automatically translated — use tier mapping or explicit Codex model names.
 
-### 3. No USD cost calculation
+### 3. USD cost calculation is estimate-based
 
-Codex provides token counts (`input_tokens`, `output_tokens`) but not dollar costs. The `totalCostUsd` field in `AgentCostData` is always `undefined` for Codex agents. Tracked in **SUP-1735**.
+Codex cost is calculated from token counts using a built-in pricing table (`CODEX_PRICING`). Costs are estimates based on known per-model rates, not API-reported values. Unknown models fall back to default (gpt-5-codex) pricing. See `calculateCostUsd()` in `codex-app-server-provider.ts`.
 
-### 4. No instructions/permissions passthrough
+### 4. Instructions passthrough
 
-AgentFactory does not pass custom system instructions or fine-grained permissions to Codex sessions. The Codex agent uses its own default instructions. Tracked in **SUP-1734**.
+System instructions are now passed to Codex via the `instructions` field on `thread/start`. Instructions are built from `config.baseInstructions` or loaded from `AGENTS.md`/`CLAUDE.md` in the worktree root. Fine-grained per-tool permissions are not supported — use the approval bridge instead. See `buildBaseInstructions()` in `codex-app-server-provider.ts`.
 
 ### 5. Single personality
 
@@ -179,11 +179,11 @@ If the `codex app-server` process crashes, all active threads are lost. The `App
 
 ### 8. Approval policy is coarse
 
-The App Server approval policy only supports two values:
-- `'never'` -- when `config.autonomous` is `true`
+The App Server approval policy supports two values:
+- `'onRequest'` -- when `config.autonomous` is `true` (all tool executions flow through the approval bridge for safety evaluation; the bridge auto-approves safe commands and declines destructive patterns)
 - `'unlessTrusted'` -- when `config.autonomous` is `false`
 
-The Exec mode similarly maps to `--full-auto` (autonomous) or `--approval-mode untrusted` (non-autonomous). There is no support for fine-grained per-tool approval policies.
+The Exec mode similarly maps to `--full-auto` (autonomous) or `--approval-mode untrusted` (non-autonomous). Per-tool granularity is handled by the approval bridge in App Server mode, but not available in Exec mode.
 
 See `resolveApprovalPolicy()` in `codex-app-server-provider.ts`.
 

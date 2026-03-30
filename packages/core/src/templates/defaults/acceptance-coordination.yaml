@@ -21,10 +21,19 @@ prompt: |
   2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
   3. Validate the PR:
      - CI checks are passing
+     {{#if mergeQueueEnabled}}
+     - Merge conflicts are handled by the merge queue worker — do not fail for conflicts
+     {{else}}
      - No merge conflicts
+     {{/if}}
      - Preview deployment succeeded (if applicable)
+  {{#if mergeQueueEnabled}}
+  4. Add "approved-for-merge" label: gh pr edit <PR_NUMBER> --add-label "approved-for-merge"
+     The merge queue worker handles rebase, conflict resolution, and merging.
+  {{else}}
   4. Merge the PR: gh pr merge <PR_NUMBER> --squash
   5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+  {{/if}}
   6. Bulk-update all sub-issues to Accepted: for each sub-issue, run {{linearCli}} update-sub-issue <id> --state Accepted
   7. Mark parent as complete (transitions to Accepted)
 
@@ -32,7 +41,11 @@ prompt: |
   - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.
   - If the PR has problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
   - ALL sub-issues must be in Delivered status before proceeding
+  {{#if mergeQueueEnabled}}
+  - The PR must pass CI (conflicts are handled by the merge queue worker)
+  {{else}}
   - The PR must pass CI and have no conflicts
+  {{/if}}
   - If merge fails, report the error and do not mark as Accepted
   - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL parent issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
   - Only use {{linearCli}} for: list-sub-issue-statuses, list-sub-issues, update-sub-issue, create-comment, check-deployment
