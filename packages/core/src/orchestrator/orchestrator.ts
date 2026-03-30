@@ -4687,7 +4687,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     }
 
     const handle = providerSessionId
-      ? spawnProvider.resume(providerSessionId, spawnConfig)
+      ? this.createResumeWithFallbackHandle(spawnProvider, providerSessionId, spawnConfig, agent, log)
       : spawnProvider.spawn(spawnConfig)
 
     this.agentHandles.set(issueId, handle)
@@ -4697,6 +4697,59 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     this.processEventStream(issueId, identifier, sessionId, handle, emitter, agent)
 
     return agent
+  }
+
+  /**
+   * Create a resume handle that falls back to a fresh spawn if the session is stale.
+   * This avoids wasting a recovery attempt when the Claude Code session has expired.
+   */
+  private createResumeWithFallbackHandle(
+    provider: AgentProvider,
+    providerSessionId: string,
+    spawnConfig: AgentSpawnConfig,
+    agent: AgentProcess,
+    log: Logger | undefined,
+  ): AgentHandle {
+    let currentHandle = provider.resume(providerSessionId, spawnConfig)
+
+    const fallbackStream = async function* (): AsyncIterable<AgentEvent> {
+      for await (const event of currentHandle.stream) {
+        // Detect stale session error: the resume failed because the session no longer exists
+        if (
+          event.type === 'result' &&
+          !event.success &&
+          event.errors?.some(e => e.includes('No conversation found with session ID'))
+        ) {
+          log?.warn('Stale session detected during resume — falling back to fresh spawn', {
+            staleSessionId: providerSessionId,
+          })
+
+          // Clear stale session from worktree state
+          if (agent.worktreePath) {
+            try {
+              updateState(agent.worktreePath, { providerSessionId: null })
+            } catch {
+              // Ignore state update errors
+            }
+          }
+          agent.providerSessionId = undefined
+
+          // Spawn fresh and yield all its events instead
+          currentHandle = provider.spawn(spawnConfig)
+          yield* currentHandle.stream
+          return
+        }
+
+        yield event
+      }
+    }
+
+    return {
+      get sessionId() { return currentHandle.sessionId },
+      stream: fallbackStream(),
+      injectMessage: (text: string) => currentHandle.injectMessage(text),
+      stop: () => currentHandle.stop(),
+    }
   }
 
   /**
