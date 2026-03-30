@@ -28,6 +28,16 @@ content: |
      If any command fails, fix the issue and re-run until all pass.
      Do NOT skip validation — pushing code that fails typecheck/build/test wastes
      an entire QA cycle and delays delivery.
+     {{#if qualityBaseline}}
+
+     QUALITY DELTA SELF-CHECK:
+     Before committing, verify you have not worsened quality metrics beyond the baseline:
+     - Baseline had {{qualityBaseline.tests.failed}} failing tests — you must not have MORE.
+     - Baseline had {{qualityBaseline.typecheckErrors}} typecheck errors — you must not have MORE.
+     - Baseline had {{qualityBaseline.lintErrors}} lint errors — you must not have MORE.
+     The orchestrator will enforce this automatically, but catching regressions early
+     saves a full QA cycle.
+     {{/if}}
 
   1. COMMIT: git add <files> && git commit -m "descriptive message"
 

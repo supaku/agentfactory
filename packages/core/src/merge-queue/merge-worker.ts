@@ -16,6 +16,13 @@ import { LockFileRegeneration } from './lock-file-regeneration.js'
 import type { MergeContext } from './strategies/types.js'
 import type { ConflictResolverConfig } from './conflict-resolver.js'
 import type { PackageManager } from './lock-file-regeneration.js'
+import {
+  loadQualityRatchet,
+  checkQualityRatchet,
+  updateQualityRatchet,
+  formatRatchetResult,
+} from '../orchestrator/quality-ratchet.js'
+import { captureQualityBaseline, type QualityConfig } from '../orchestrator/quality-baseline.js'
 
 const exec = promisify(execCb)
 
@@ -225,6 +232,41 @@ export class MergeWorker {
       const testResult = await this.runTests(ctx.worktreePath)
       if (!testResult.passed) {
         return { prNumber: entry.prNumber, status: 'test-failure', message: testResult.output }
+      }
+
+      // 5.5. Quality ratchet check (if ratchet file exists)
+      const ratchet = loadQualityRatchet(ctx.worktreePath)
+      if (ratchet) {
+        const qualityConfig: QualityConfig = {
+          testCommand: this.config.testCommand,
+          packageManager: this.config.packageManager as string,
+        }
+        const current = captureQualityBaseline(ctx.worktreePath, qualityConfig)
+        const ratchetResult = checkQualityRatchet(ratchet, current)
+        if (!ratchetResult.passed) {
+          return {
+            prNumber: entry.prNumber,
+            status: 'test-failure',
+            message: `Quality ratchet violated: ${formatRatchetResult(ratchetResult)}`,
+          }
+        }
+
+        // Tighten ratchet if metrics improved (will be included in the merge)
+        const updated = updateQualityRatchet(
+          ctx.worktreePath,
+          current,
+          entry.issueIdentifier ?? `PR-${entry.prNumber}`,
+        )
+        if (updated) {
+          try {
+            await exec(
+              'git add .agentfactory/quality-ratchet.json && git commit -m "chore: tighten quality ratchet"',
+              { cwd: ctx.worktreePath },
+            )
+          } catch {
+            // Ratchet update commit is best-effort
+          }
+        }
       }
 
       // 6. Finalize: push and merge

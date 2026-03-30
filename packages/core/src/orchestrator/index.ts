@@ -197,6 +197,31 @@ export type {
   BackstopRunResult,
 } from './session-backstop.js'
 
+// Quality Baseline & Ratchet
+export {
+  captureQualityBaseline,
+  computeQualityDelta,
+  formatQualityReport,
+  saveBaseline,
+  loadBaseline,
+} from './quality-baseline.js'
+export type {
+  QualityBaseline,
+  QualityDelta,
+  QualityConfig,
+} from './quality-baseline.js'
+export {
+  loadQualityRatchet,
+  checkQualityRatchet,
+  updateQualityRatchet,
+  initializeQualityRatchet,
+  formatRatchetResult,
+} from './quality-ratchet.js'
+export type {
+  QualityRatchet,
+  RatchetCheckResult,
+} from './quality-ratchet.js'
+
 // Log Analyzer
 export { LogAnalyzer, createLogAnalyzer } from './log-analyzer.js'
 

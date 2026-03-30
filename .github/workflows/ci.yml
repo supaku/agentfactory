@@ -164,3 +164,66 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+
+  quality-ratchet:
+    name: Quality Ratchet
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: hashFiles('.agentfactory/quality-ratchet.json') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Check quality ratchet
+        run: |
+          set +e
+
+          # Run typecheck, count errors
+          pnpm typecheck 2> typecheck-stderr.txt
+          TYPECHECK_EXIT=$?
+          TYPECHECK_ERRORS=$(grep -c 'error TS' typecheck-stderr.txt 2>/dev/null || echo 0)
+
+          # Run tests with JSON reporter for counts
+          pnpm test -- --reporter=json > test-results.json 2>&1
+          TEST_EXIT=$?
+
+          # Parse test results
+          TEST_TOTAL=$(node -e "try { const r=require('./test-results.json'); console.log(r.numTotalTests || 0) } catch { console.log(0) }" 2>/dev/null || echo 0)
+          TEST_FAILED=$(node -e "try { const r=require('./test-results.json'); console.log(r.numFailedTests || 0) } catch { console.log(0) }" 2>/dev/null || echo 0)
+
+          # Load ratchet thresholds
+          MIN_TESTS=$(node -e "const r=JSON.parse(require('fs').readFileSync('.agentfactory/quality-ratchet.json','utf8')); console.log(r.thresholds.testCount.min)")
+          MAX_FAILURES=$(node -e "const r=JSON.parse(require('fs').readFileSync('.agentfactory/quality-ratchet.json','utf8')); console.log(r.thresholds.testFailures.max)")
+          MAX_TYPE_ERRORS=$(node -e "const r=JSON.parse(require('fs').readFileSync('.agentfactory/quality-ratchet.json','utf8')); console.log(r.thresholds.typecheckErrors.max)")
+
+          echo "Test count: $TEST_TOTAL (min: $MIN_TESTS)"
+          echo "Test failures: $TEST_FAILED (max: $MAX_FAILURES)"
+          echo "Typecheck errors: $TYPECHECK_ERRORS (max: $MAX_TYPE_ERRORS)"
+
+          FAILED=0
+          if [ "$TEST_TOTAL" -lt "$MIN_TESTS" ]; then
+            echo "::error::RATCHET VIOLATION: Test count $TEST_TOTAL < minimum $MIN_TESTS"
+            FAILED=1
+          fi
+          if [ "$TEST_FAILED" -gt "$MAX_FAILURES" ]; then
+            echo "::error::RATCHET VIOLATION: Test failures $TEST_FAILED > maximum $MAX_FAILURES"
+            FAILED=1
+          fi
+          if [ "$TYPECHECK_ERRORS" -gt "$MAX_TYPE_ERRORS" ]; then
+            echo "::error::RATCHET VIOLATION: Typecheck errors $TYPECHECK_ERRORS > maximum $MAX_TYPE_ERRORS"
+            FAILED=1
+          fi
+
+          if [ "$FAILED" -eq 1 ]; then
+            exit 1
+          fi
+          echo "Quality ratchet check passed"

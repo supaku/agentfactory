@@ -42,6 +42,14 @@ import type { IssueTrackerClient, IssueTrackerSession } from './issue-tracker-cl
 import { parseWorkResult } from './parse-work-result.js'
 import { parseSecurityScanOutput } from './security-scan-event.js'
 import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
+import {
+  captureQualityBaseline,
+  computeQualityDelta,
+  formatQualityReport,
+  saveBaseline,
+  loadBaseline,
+  type QualityConfig,
+} from './quality-baseline.js'
 import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.js'
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
@@ -1845,6 +1853,19 @@ export class AgentOrchestrator {
     // Configure mergiraf merge driver if enabled
     this.configureMergiraf(worktreePath)
 
+    // Capture quality baseline for delta checking (runs test/typecheck on main)
+    if (this.isQualityBaselineEnabled()) {
+      try {
+        const qualityConfig = this.buildQualityConfig()
+        const baseline = captureQualityBaseline(worktreePath, qualityConfig)
+        saveBaseline(worktreePath, baseline)
+        console.log(`Quality baseline captured: ${baseline.tests.total} tests, ${baseline.typecheck.errorCount} type errors, ${baseline.lint.errorCount} lint errors`)
+      } catch (baselineError) {
+        // Log but don't fail worktree creation — quality gate is advisory
+        console.warn(`Failed to capture quality baseline: ${baselineError instanceof Error ? baselineError.message : String(baselineError)}`)
+      }
+    }
+
     return { worktreePath, worktreeIdentifier }
   }
 
@@ -2015,6 +2036,54 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.warn(
         `Failed to configure mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
       )
+    }
+  }
+
+  /**
+   * Check if quality baseline capture is enabled via repository config.
+   */
+  private isQualityBaselineEnabled(): boolean {
+    const quality = (this.repoConfig as Record<string, unknown> | null)?.quality as
+      | { baselineEnabled?: boolean }
+      | undefined
+    return quality?.baselineEnabled ?? false
+  }
+
+  /**
+   * Build quality config from orchestrator settings.
+   */
+  private buildQualityConfig(): QualityConfig {
+    return {
+      testCommand: this.testCommand,
+      validateCommand: this.validateCommand,
+      packageManager: this.packageManager ?? 'pnpm',
+      timeoutMs: 120_000,
+    }
+  }
+
+  /**
+   * Load quality baseline from a worktree and convert to TemplateContext shape.
+   */
+  private loadQualityBaselineForContext(worktreePath?: string): {
+    tests: { total: number; passed: number; failed: number }
+    typecheckErrors: number
+    lintErrors: number
+  } | undefined {
+    if (!worktreePath || !this.isQualityBaselineEnabled()) return undefined
+    try {
+      const baseline = loadBaseline(worktreePath)
+      if (!baseline) return undefined
+      return {
+        tests: {
+          total: baseline.tests.total,
+          passed: baseline.tests.passed,
+          failed: baseline.tests.failed,
+        },
+        typecheckErrors: baseline.typecheck.errorCount,
+        lintErrors: baseline.lint.errorCount,
+      }
+    } catch {
+      return undefined
     }
   }
 
@@ -2518,6 +2587,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         testCommand: perProject?.testCommand ?? this.testCommand,
         validateCommand: perProject?.validateCommand ?? this.validateCommand,
         agentBugBacklog: process.env.AGENT_BUG_BACKLOG || undefined,
+        qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
@@ -2955,6 +3025,67 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
             await this.updateSessionPullRequest(sessionId, agent.pullRequestUrl, agent)
           } catch {
             // Best-effort session update
+          }
+        }
+      }
+
+      // --- Quality Gate: Check quality delta for code-producing work types ---
+      if (agent.status === 'completed' && agent.worktreePath && this.isQualityBaselineEnabled()) {
+        const codeProducingTypes = ['development', 'inflight', 'coordination', 'inflight-coordination']
+        const agentWorkType = agent.workType ?? 'development'
+        if (codeProducingTypes.includes(agentWorkType)) {
+          try {
+            const baseline = loadBaseline(agent.worktreePath)
+            if (baseline) {
+              const qualityConfig = this.buildQualityConfig()
+              const current = captureQualityBaseline(agent.worktreePath, qualityConfig)
+              const delta = computeQualityDelta(baseline, current)
+
+              if (!delta.passed) {
+                const report = formatQualityReport(baseline, current, delta)
+                log?.warn('Quality gate FAILED — agent worsened quality metrics', {
+                  testFailuresDelta: delta.testFailuresDelta,
+                  typeErrorsDelta: delta.typeErrorsDelta,
+                  lintErrorsDelta: delta.lintErrorsDelta,
+                })
+
+                // Post quality gate failure comment
+                try {
+                  await this.client.createComment(
+                    issueId,
+                    `## Quality Gate Failed\n\n` +
+                    `The agent's changes worsened quality metrics compared to the baseline (main).\n\n` +
+                    report +
+                    `\n\n**Status promotion blocked.** The agent must fix quality regressions before this work can advance to QA.`
+                  )
+                } catch {
+                  // Best-effort comment
+                }
+
+                // Block status promotion by marking agent as failed
+                agent.status = 'failed'
+                agent.workResult = 'failed'
+              } else {
+                log?.info('Quality gate passed', {
+                  testFailuresDelta: delta.testFailuresDelta,
+                  typeErrorsDelta: delta.typeErrorsDelta,
+                  testCountDelta: delta.testCountDelta,
+                })
+
+                if (delta.testFailuresDelta < 0 || delta.typeErrorsDelta < 0 || delta.lintErrorsDelta < 0) {
+                  log?.info('Boy scout rule: agent improved quality metrics', {
+                    testFailuresDelta: delta.testFailuresDelta,
+                    typeErrorsDelta: delta.typeErrorsDelta,
+                    lintErrorsDelta: delta.lintErrorsDelta,
+                  })
+                }
+              }
+            }
+          } catch (qualityError) {
+            log?.warn('Quality gate check failed (non-fatal)', {
+              error: qualityError instanceof Error ? qualityError.message : String(qualityError),
+            })
+            // Quality gate check failure should not block the session — degrade gracefully
           }
         }
       }

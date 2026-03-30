@@ -176,6 +176,20 @@ export const RepositoryConfigSchema = z.object({
    * Defaults to 'default' (standard git line-based merge).
    */
   mergeDriver: z.enum(['mergiraf', 'default']).optional(),
+  /**
+   * Quality gate configuration.
+   * Controls baseline-diff quality checks and ratchet enforcement.
+   */
+  quality: z.object({
+    /** Enable quality baseline capture at worktree creation and post-session delta check */
+    baselineEnabled: z.boolean().default(false),
+    /** Enable quality ratchet enforcement in merge queue and CI */
+    ratchetEnabled: z.boolean().default(false),
+    /** Include boy scout rule instructions in agent prompts */
+    boyscoutRule: z.boolean().default(true),
+    /** Include TDD workflow instructions in agent prompts */
+    tddWorkflow: z.boolean().default(true),
+  }).optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },

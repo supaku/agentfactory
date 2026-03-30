@@ -28,6 +28,18 @@ prompt: |
   Validate: `{{validateCommand}}`
   {{/if}}
 
+  {{#if qualityBaseline}}
+  BASELINE-AWARE FAILURE ATTRIBUTION:
+  The development agent was given this quality baseline (captured from main):
+  - Tests: {{qualityBaseline.tests.failed}} pre-existing failures out of {{qualityBaseline.tests.total}} total
+  - Typecheck errors: {{qualityBaseline.typecheckErrors}}
+  - Lint errors: {{qualityBaseline.lintErrors}}
+  If the current branch has MORE failures than this baseline, the development agent made
+  things worse — this is a HARD FAIL. If failures are equal to or less than baseline,
+  they are pre-existing and should NOT cause QA failure (unless the issue specifically
+  requires fixing them).
+  {{/if}}
+
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT make code changes, git commits, or fix issues yourself.
   - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.

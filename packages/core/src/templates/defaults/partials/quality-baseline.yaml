@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: quality-baseline
+  description: Quality baseline metrics, TDD workflow, and boy scout rule instructions
+content: |
+  {{#if qualityBaseline}}
+
+  QUALITY BASELINE (captured from main before your session):
+  - Tests: {{qualityBaseline.tests.total}} total, {{qualityBaseline.tests.passed}} passed, {{qualityBaseline.tests.failed}} failed
+  - Typecheck errors: {{qualityBaseline.typecheckErrors}}
+  - Lint errors: {{qualityBaseline.lintErrors}}
+
+  YOUR QUALITY RESPONSIBILITY:
+  The orchestrator captured this baseline before your session. After you finish, it will
+  re-run the same commands and compute a delta. If you introduce new test failures,
+  typecheck errors, or lint errors beyond the baseline, your work will be BLOCKED from
+  promotion to QA. Pre-existing failures are NOT your fault, but new ones ARE.
+
+  TDD WORKFLOW:
+  1. Before writing implementation code, write or update the test(s) that verify your change.
+     Run them — they should fail (RED).
+  2. Write the minimum implementation to make the tests pass (GREEN).
+  3. Refactor if needed, keeping tests green (REFACTOR).
+  4. Run the full test suite before committing to catch regressions.
+
+  BOY SCOUT RULE:
+  If you modify a file that has pre-existing lint warnings, type errors, or failing tests,
+  fix them while you are there. Only fix issues in files you are already touching — do not
+  go on a cleanup spree in unrelated files (this causes merge conflicts with other agents).
+  This is how we ratchet quality upward over time.
+  {{/if}}

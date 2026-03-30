@@ -38,6 +38,7 @@ prompt: |
   5. Create a PR
 
   {{> partials/path-scoping}}
+  {{> partials/quality-baseline}}
   {{> partials/dependency-instructions}}
   {{> partials/code-intelligence-instructions}}
   {{> partials/cli-instructions}}
