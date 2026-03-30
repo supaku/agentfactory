@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.21
+
+### Fixes
+
+- **Republish `@renseiai/agentfactory-code-intelligence`** — Tarball for v0.8.20 was missing on npm (ghost publish). Bumped all packages to v0.8.21 to work around npm's 24-hour republish restriction.
+
 ## v0.8.20
 
 ### Features
