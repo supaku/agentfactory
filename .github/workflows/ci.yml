@@ -169,7 +169,7 @@ jobs:
     name: Quality Ratchet
     runs-on: ubuntu-latest
     needs: [build]
-    if: hashFiles('.agentfactory/quality-ratchet.json') != ''
+    if: ${{ hashFiles('.agentfactory/quality-ratchet.json') != '' }}
     steps:
       - uses: actions/checkout@v4
 
