@@ -37,7 +37,7 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
-import { CodexAppServerProvider } from './codex-app-server-provider.js'
+import { CodexAppServerProvider, resolveCodexModel, calculateCostUsd } from './codex-app-server-provider.js'
 
 // ---------------------------------------------------------------------------
 // Codex JSONL event types (subset we care about)
@@ -157,8 +157,10 @@ export type { CodexEvent, CodexItem, CodexItemEvent }
 
 export interface CodexEventMapperState {
   sessionId: string | null
+  model: string | null
   totalInputTokens: number
   totalOutputTokens: number
+  totalCachedInputTokens: number
   turnCount: number
 }
 
@@ -192,6 +194,7 @@ export function mapCodexEvent(
       if (event.usage) {
         state.totalInputTokens += event.usage.input_tokens ?? 0
         state.totalOutputTokens += event.usage.output_tokens ?? 0
+        state.totalCachedInputTokens += event.usage.cached_input_tokens ?? 0
       }
       return [{
         type: 'result',
@@ -199,6 +202,13 @@ export function mapCodexEvent(
         cost: {
           inputTokens: state.totalInputTokens || undefined,
           outputTokens: state.totalOutputTokens || undefined,
+          cachedInputTokens: state.totalCachedInputTokens || undefined,
+          totalCostUsd: calculateCostUsd(
+            state.totalInputTokens,
+            state.totalCachedInputTokens,
+            state.totalOutputTokens,
+            state.model ?? undefined,
+          ),
           numTurns: state.turnCount || undefined,
         },
         raw: event,
@@ -424,12 +434,20 @@ export class CodexProvider implements AgentProvider {
       if (config.autonomous) {
         args.push('--full-auto')
       } else {
-        // Non-autonomous: use suggest-equivalent approval mode
         args.push('--approval-mode', 'untrusted')
-        if (config.sandboxEnabled) {
+        if (config.sandboxLevel) {
+          const cliSandboxMap: Record<string, string> = {
+            'read-only':       'read-only',
+            'workspace-write': 'workspace-write',
+            'full-access':     'danger-full-access',
+          }
+          args.push('--sandbox', cliSandboxMap[config.sandboxLevel])
+        } else if (config.sandboxEnabled) {
           args.push('--sandbox', 'workspace-write')
         }
       }
+      const model = resolveCodexModel(config)
+      if (model) args.push('--model', model)
       args.push(resumeSessionId)
       // Prompt is the final positional arg
       if (config.prompt) {
@@ -443,10 +461,19 @@ export class CodexProvider implements AgentProvider {
         args.push('--full-auto')
       } else {
         args.push('--approval-mode', 'untrusted')
-        if (config.sandboxEnabled) {
+        if (config.sandboxLevel) {
+          const cliSandboxMap: Record<string, string> = {
+            'read-only':       'read-only',
+            'workspace-write': 'workspace-write',
+            'full-access':     'danger-full-access',
+          }
+          args.push('--sandbox', cliSandboxMap[config.sandboxLevel])
+        } else if (config.sandboxEnabled) {
           args.push('--sandbox', 'workspace-write')
         }
       }
+      const model = resolveCodexModel(config)
+      if (model) args.push('--model', model)
       // Working directory
       args.push('-C', config.cwd)
       // Prompt is the final positional arg
@@ -478,7 +505,7 @@ export class CodexProvider implements AgentProvider {
       console.error('[CodexProvider] Child process error:', err.message)
     })
 
-    return new CodexAgentHandle(child, abortController)
+    return new CodexAgentHandle(child, abortController, resolveCodexModel(config))
   }
 }
 
@@ -492,14 +519,17 @@ class CodexAgentHandle implements AgentHandle {
   private readonly abortController: AbortController
   private readonly mapperState: CodexEventMapperState = {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
 
-  constructor(child: ChildProcess, abortController: AbortController) {
+  constructor(child: ChildProcess, abortController: AbortController, model?: string) {
     this.child = child
     this.abortController = abortController
+    if (model) this.mapperState.model = model
   }
 
   get stream(): AsyncIterable<AgentEvent> {
@@ -589,6 +619,13 @@ class CodexAgentHandle implements AgentHandle {
           cost: {
             inputTokens: this.mapperState.totalInputTokens || undefined,
             outputTokens: this.mapperState.totalOutputTokens || undefined,
+            cachedInputTokens: this.mapperState.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              this.mapperState.totalInputTokens,
+              this.mapperState.totalCachedInputTokens,
+              this.mapperState.totalOutputTokens,
+              this.mapperState.model ?? undefined,
+            ),
             numTurns: this.mapperState.turnCount || undefined,
           },
           raw: { exitCode },
