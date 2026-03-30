@@ -7,7 +7,7 @@ AgentFactory abstracts coding agents behind a unified `AgentProvider` interface.
 | Provider | Status | Agent |
 |----------|--------|-------|
 | `claude` | Production | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) via `@anthropic-ai/claude-agent-sdk` |
-| `codex` | Experimental | [OpenAI Codex](https://platform.openai.com/) |
+| `codex` | Experimental | [OpenAI Codex](https://platform.openai.com/) -- two modes: **App Server** (long-lived JSON-RPC 2.0 process, concurrent threads, message injection) and **Exec fallback** (one CLI process per session, JSONL events). See [`docs/codex-guide.md`](codex-guide.md) for Codex-specific setup. |
 | `amp` | Experimental | [Amp](https://amp.dev/) |
 | `spring-ai` | Experimental | [Spring AI](https://spring.io/projects/spring-ai) agents via HTTP |
 | `a2a` | Experimental | Any [A2A protocol](https://a2a-protocol.org) compatible agent |
@@ -181,7 +181,9 @@ query({ mcpServers: { 'af-linear': createSdkMcpServer({ tools: [...] }) } })
 
 ### Provider Compatibility
 
-Tool plugins only activate for the Claude provider. Non-Claude providers (Codex, Amp) continue using the Bash-based CLI — their prompts receive the `{{linearCli}}` CLI instructions as before. This is controlled by the `useToolPlugins` template variable.
+Tool plugins only activate for the Claude provider. Non-Claude providers (Codex, Amp) continue using the Bash-based CLI -- their prompts receive the `{{linearCli}}` CLI instructions as before. This is controlled by the `useToolPlugins` template variable.
+
+**Codex** does not support in-process MCP servers. However, Codex agents can invoke MCP tools via the Codex CLI's own MCP server configuration. AgentFactory passively observes these calls and maps them to normalized `tool_use` / `tool_result` events (item type `mcpToolCall` in App Server mode, `mcp_tool_call` in Exec mode). See [`docs/codex-guide.md`](codex-guide.md) for details on Codex capabilities and limitations.
 
 ### Available Plugins
 
