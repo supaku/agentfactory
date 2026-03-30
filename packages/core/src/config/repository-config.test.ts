@@ -791,7 +791,7 @@ describe('RepositoryConfigSchema mergeQueue — Refinery fields', () => {
       mergeQueue: { enabled: true },
     })
     expect(result.mergeQueue).toBeDefined()
-    expect(result.mergeQueue!.provider).toBe('github-native')
+    expect(result.mergeQueue!.provider).toBe('local')
     expect(result.mergeQueue!.enabled).toBe(true)
     expect(result.mergeQueue!.autoMerge).toBe(true)
     expect(result.mergeQueue!.requiredChecks).toBeUndefined()

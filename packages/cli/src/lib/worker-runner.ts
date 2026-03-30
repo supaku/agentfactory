@@ -12,6 +12,7 @@ import os from 'os'
 import {
   createOrchestrator,
   createLogger,
+  loadRepositoryConfig,
   type AgentProcess,
   type OrchestratorIssue,
   type AgentOrchestrator,
@@ -24,6 +25,7 @@ import {
   linearPlugin,
   type AgentWorkType,
 } from '@renseiai/plugin-linear'
+import { MergeQueueStorage, createLocalMergeQueueStorage } from '@renseiai/agentfactory-server'
 
 let codeIntelligencePlugin: ToolPlugin | undefined
 try {
@@ -649,12 +651,21 @@ export async function runWorker(
       const issueTrackerClient = new LinearIssueTrackerClient({ apiKey: linearApiKey! })
       const statusMappings = createLinearStatusMappings()
 
+      // Create local merge queue storage if configured
+      const repoConfig = loadRepositoryConfig(gitRoot)
+      const needsLocalStorage = repoConfig?.mergeQueue?.enabled &&
+        (!repoConfig.mergeQueue.provider || repoConfig.mergeQueue.provider === 'local')
+      const mergeQueueStorage = needsLocalStorage
+        ? createLocalMergeQueueStorage(new MergeQueueStorage())
+        : undefined
+
       const orchestrator = createOrchestrator(
         {
           maxConcurrent: 1,
           worktreePath: path.resolve(gitRoot, '..', path.basename(gitRoot) + '.wt'),
           issueTrackerClient,
           statusMappings,
+          mergeQueueStorage,
           toolPlugins: [linearPlugin, codeIntelligencePlugin].filter(Boolean) as ToolPlugin[],
           apiActivityConfig: {
             baseUrl: workerConfig.apiUrl,

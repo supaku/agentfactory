@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createMergeQueueAdapter } from './index.js'
 import { GitHubNativeMergeQueueAdapter } from './adapters/github-native.js'
+import { LocalMergeQueueAdapter } from './adapters/local.js'
+import type { LocalMergeQueueStorage } from './adapters/local.js'
 import type { MergeQueueAdapter, MergeQueueStatus } from './types.js'
 
 describe('merge queue integration', () => {
@@ -9,6 +11,26 @@ describe('merge queue integration', () => {
       const adapter = createMergeQueueAdapter('github-native')
       expect(adapter).toBeInstanceOf(GitHubNativeMergeQueueAdapter)
       expect(adapter.name).toBe('github-native')
+    })
+
+    it('creates local adapter with storage', () => {
+      const mockStorage: LocalMergeQueueStorage = {
+        enqueue: vi.fn(),
+        dequeue: vi.fn(),
+        getQueueDepth: vi.fn(),
+        isEnqueued: vi.fn(),
+        getPosition: vi.fn(),
+        remove: vi.fn(),
+        getFailedReason: vi.fn(),
+        getBlockedReason: vi.fn(),
+      }
+      const adapter = createMergeQueueAdapter('local', { storage: mockStorage })
+      expect(adapter).toBeInstanceOf(LocalMergeQueueAdapter)
+      expect(adapter.name).toBe('local')
+    })
+
+    it('throws for local adapter without storage', () => {
+      expect(() => createMergeQueueAdapter('local')).toThrow('storage')
     })
 
     it('throws for mergify (not yet implemented)', () => {

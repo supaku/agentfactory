@@ -136,7 +136,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -986,7 +986,7 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -1168,10 +1168,11 @@ export class AgentOrchestrator {
           // Initialize merge queue adapter from repository config
           if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
             try {
-              this.mergeQueueAdapter = createMergeQueueAdapter(
-                repoConfig.mergeQueue.provider ?? 'github-native'
-              )
-              console.log(`[orchestrator] Merge queue adapter initialized: ${repoConfig.mergeQueue.provider ?? 'github-native'}`)
+              const provider = repoConfig.mergeQueue.provider ?? 'local'
+              this.mergeQueueAdapter = createMergeQueueAdapter(provider, {
+                storage: config.mergeQueueStorage,
+              })
+              console.log(`[orchestrator] Merge queue adapter initialized: ${provider}`)
             } catch (error) {
               console.warn(`[orchestrator] Failed to initialize merge queue adapter: ${error instanceof Error ? error.message : String(error)}`)
             }
@@ -2587,6 +2588,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         testCommand: perProject?.testCommand ?? this.testCommand,
         validateCommand: perProject?.validateCommand ?? this.validateCommand,
         agentBugBacklog: process.env.AGENT_BUG_BACKLOG || undefined,
+        mergeQueueEnabled: !!this.mergeQueueAdapter,
         qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)

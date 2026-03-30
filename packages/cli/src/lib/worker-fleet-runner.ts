@@ -12,6 +12,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { getVersion, checkForUpdate, printUpdateNotification } from './version.js'
 import { maybeAutoUpdate, isAutoUpdateEnabled } from './auto-updater.js'
+import { startMergeWorkerSidecar, type MergeWorkerSidecarHandle } from './merge-worker-sidecar.js'
 
 // ---------------------------------------------------------------------------
 // Public config interface
@@ -113,6 +114,7 @@ function getDefaultWorkerScript(): string {
 
 class WorkerFleet {
   private workers: Map<number, WorkerInfo> = new Map()
+  private mergeWorkerHandle: MergeWorkerSidecarHandle | null = null
   private readonly fleetConfig: {
     workers: number
     capacity: number
@@ -192,6 +194,12 @@ ${colors.cyan}================================================================${
       if (signal?.aborted) return
 
       fleetLog(null, colors.green, 'INF', `All ${workers} workers started`)
+
+      // Start merge worker sidecar (one per fleet, Redis lock prevents duplicates)
+      this.mergeWorkerHandle = startMergeWorkerSidecar({}, signal)
+      if (this.mergeWorkerHandle) {
+        fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar started')
+      }
 
       // Periodic auto-update check (every 4 hours)
       if (isAutoUpdateEnabled(this.autoUpdateFlag)) {
@@ -356,6 +364,14 @@ ${colors.cyan}================================================================${
     )
 
     clearTimeout(forceKillTimeout)
+
+    // Stop merge worker sidecar
+    if (this.mergeWorkerHandle) {
+      fleetLog(null, colors.cyan, 'INF', 'Stopping merge worker sidecar...')
+      this.mergeWorkerHandle.stop()
+      await this.mergeWorkerHandle.done
+      fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar stopped')
+    }
     console.log(`${colors.green}All workers stopped${colors.reset}`)
 
     // Resolve the running promise so start() returns

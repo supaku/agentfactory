@@ -128,7 +128,7 @@ export const RepositoryConfigSchema = z.object({
    */
   mergeQueue: z.object({
     /** Merge queue provider to use */
-    provider: z.enum(['github-native', 'mergify', 'trunk']).default('github-native'),
+    provider: z.enum(['github-native', 'local', 'mergify', 'trunk']).default('local'),
     /** Whether merge queue integration is enabled */
     enabled: z.boolean().default(false),
     /** Automatically add approved PRs to merge queue */

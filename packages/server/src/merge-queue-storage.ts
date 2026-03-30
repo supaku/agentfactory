@@ -18,6 +18,7 @@ import {
   isRedisConfigured,
   redisZAdd,
   redisZRem,
+  redisZRank,
   redisZRangeByScore,
   redisZCard,
   redisZPopMin,
@@ -513,6 +514,82 @@ export class MergeQueueStorage {
         prNumber,
       })
       throw error
+    }
+  }
+
+  /**
+   * Check if a PR is currently in the queue (sorted set).
+   */
+  async isEnqueued(repoId: string, prNumber: number): Promise<boolean> {
+    if (!isRedisConfigured()) return false
+    try {
+      const rank = await redisZRank(queueKey(repoId), String(prNumber))
+      return rank !== null
+    } catch (error) {
+      log.error('Failed to check isEnqueued', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+        prNumber,
+      })
+      return false
+    }
+  }
+
+  /**
+   * Get 1-based position of a PR in the queue, or null if not queued.
+   */
+  async getPosition(repoId: string, prNumber: number): Promise<number | null> {
+    if (!isRedisConfigured()) return null
+    try {
+      const rank = await redisZRank(queueKey(repoId), String(prNumber))
+      return rank !== null ? rank + 1 : null // Convert 0-based rank to 1-based position
+    } catch (error) {
+      log.error('Failed to get position', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+        prNumber,
+      })
+      return null
+    }
+  }
+
+  /**
+   * Get the failure reason for a PR, or null if not in failed state.
+   */
+  async getFailedReason(repoId: string, prNumber: number): Promise<string | null> {
+    if (!isRedisConfigured()) return null
+    try {
+      const failedJson = await redisHGet(failedKey(repoId), String(prNumber))
+      if (!failedJson) return null
+      const data = JSON.parse(failedJson) as { entry: MergeQueueEntry; reason: string }
+      return data.reason
+    } catch (error) {
+      log.error('Failed to get failed reason', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+        prNumber,
+      })
+      return null
+    }
+  }
+
+  /**
+   * Get the blocked reason for a PR, or null if not in blocked state.
+   */
+  async getBlockedReason(repoId: string, prNumber: number): Promise<string | null> {
+    if (!isRedisConfigured()) return null
+    try {
+      const blockedJson = await redisHGet(blockedKey(repoId), String(prNumber))
+      if (!blockedJson) return null
+      const data = JSON.parse(blockedJson) as { entry: MergeQueueEntry; reason: string }
+      return data.reason
+    } catch (error) {
+      log.error('Failed to get blocked reason', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+        prNumber,
+      })
+      return null
     }
   }
 

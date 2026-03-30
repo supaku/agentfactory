@@ -174,22 +174,20 @@ describe('DecisionEngineAdapter', () => {
       expect(actions).toContain('decompose')
     })
 
-    it('includes merge queue step in Finished when enabled', () => {
-      const workflow = DecisionEngineAdapter.toWorkflowDefinition({
+    it('never includes merge queue step in Finished (merge queue does not bypass QA)', () => {
+      const workflowEnabled = DecisionEngineAdapter.toWorkflowDefinition({
         includeMergeQueue: true,
       })
-      const node = findNode(workflow, 'route-finished')
-      const actions = node?.steps?.map(s => s.action)
-      expect(actions).toContain('trigger-merge')
-    })
+      const nodeEnabled = findNode(workflowEnabled, 'route-finished')
+      const actionsEnabled = nodeEnabled?.steps?.map(s => s.action)
+      expect(actionsEnabled).not.toContain('trigger-merge')
 
-    it('excludes merge queue step in Finished when disabled', () => {
-      const workflow = DecisionEngineAdapter.toWorkflowDefinition({
+      const workflowDisabled = DecisionEngineAdapter.toWorkflowDefinition({
         includeMergeQueue: false,
       })
-      const node = findNode(workflow, 'route-finished')
-      const actions = node?.steps?.map(s => s.action)
-      expect(actions).not.toContain('trigger-merge')
+      const nodeDisabled = findNode(workflowDisabled, 'route-finished')
+      const actionsDisabled = nodeDisabled?.steps?.map(s => s.action)
+      expect(actionsDisabled).not.toContain('trigger-merge')
     })
 
     it('includes Delivered routing node', () => {
@@ -343,17 +341,18 @@ describe('DecisionEngineAdapter', () => {
       expect(decomposeStep).toBeDefined()
     })
 
-    it('covers Finished + merge queue → trigger-merge', () => {
+    it('Finished always triggers QA even with merge queue enabled (merge queue does not bypass QA)', () => {
       const ctx = makeContext({
         issue: makeIssue({ status: 'Finished' }),
         mergeQueueEnabled: true,
       })
       const result = decideAction(ctx)
-      expect(result.action).toBe('trigger-merge')
+      expect(result.action).toBe('trigger-qa')
 
       const node = findNode(workflow, 'route-finished')
+      // No trigger-merge step should exist in the Finished node
       const mergeStep = node?.steps?.find(s => s.action === 'trigger-merge')
-      expect(mergeStep).toBeDefined()
+      expect(mergeStep).toBeUndefined()
     })
 
     it('covers Delivered → trigger-acceptance', () => {

@@ -117,5 +117,8 @@ export * from './webhook-gate-handler.js'
 // Merge queue storage (Redis-backed sorted set + state tracking)
 export * from './merge-queue-storage.js'
 
+// Merge queue bridge (adapts MergeQueueStorage → LocalMergeQueueStorage for local merge queue)
+export { createLocalMergeQueueStorage } from './merge-queue-storage-bridge.js'
+
 // Security scan event storage (Redis-backed)
 export * from './security-scan-storage.js'

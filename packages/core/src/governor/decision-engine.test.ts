@@ -459,15 +459,15 @@ describe('decideAction — Finished (QA)', () => {
 // Finished (merge queue)
 // ---------------------------------------------------------------------------
 
-describe('decideAction — Finished (merge queue)', () => {
-  it('triggers trigger-merge when mergeQueueEnabled is true', () => {
+describe('decideAction — Finished (merge queue does not bypass QA)', () => {
+  it('triggers QA even when mergeQueueEnabled is true', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Finished' }),
       mergeQueueEnabled: true,
     })
     const result = decideAction(ctx)
-    expect(result.action).toBe('trigger-merge')
-    expect(result.reason).toContain('merge queue')
+    expect(result.action).toBe('trigger-qa')
+    expect(result.reason).toContain('triggering QA')
   })
 
   it('triggers QA when mergeQueueEnabled is false', () => {
@@ -509,7 +509,7 @@ describe('decideAction — Finished (merge queue)', () => {
     expect(result.action).toBe('decompose')
   })
 
-  it('auto-QA disabled takes precedence over merge queue', () => {
+  it('auto-QA disabled takes precedence even with merge queue', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Finished' }),
       mergeQueueEnabled: true,

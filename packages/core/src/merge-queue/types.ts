@@ -7,7 +7,7 @@
  */
 
 /** Supported merge queue provider names */
-export type MergeQueueProviderName = 'github-native' | 'mergify' | 'trunk'
+export type MergeQueueProviderName = 'github-native' | 'local' | 'mergify' | 'trunk'
 
 /** Status of a PR in the merge queue */
 export interface MergeQueueStatus {

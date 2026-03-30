@@ -356,6 +356,15 @@ export async function redisZCard(key: string): Promise<number> {
 }
 
 /**
+ * Get the rank (0-based position) of a member in a sorted set (ZRANK).
+ * @returns 0-based rank, or null if member is not in the set
+ */
+export async function redisZRank(key: string, member: string): Promise<number | null> {
+  const redis = getRedisClient()
+  return redis.zrank(key, member)
+}
+
+/**
  * Pop the member with the lowest score (ZPOPMIN)
  * @returns [member, score] or null if set is empty
  */
