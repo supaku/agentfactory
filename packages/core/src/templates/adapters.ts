@@ -7,6 +7,25 @@
 import type { ToolPermission, ToolPermissionAdapter } from './types.js'
 import type { AgentProviderName } from '../providers/types.js'
 
+// ---------------------------------------------------------------------------
+// Codex Permission Config (SUP-1748)
+// ---------------------------------------------------------------------------
+
+/**
+ * Structured permission config consumed by the Codex approval bridge.
+ * Produced by `CodexToolPermissionAdapter.buildPermissionConfig()`.
+ */
+export interface CodexPermissionConfig {
+  /** Allowed command patterns from `tools.allow` */
+  allowedCommandPatterns: RegExp[]
+  /** Denied command patterns from `tools.disallow` (additive to safety defaults) */
+  deniedCommandPatterns: Array<{ pattern: RegExp; reason: string }>
+  /** Whether file edits are allowed (default: true) */
+  allowFileEdits: boolean
+  /** Whether file writes are allowed (default: true) */
+  allowFileWrites: boolean
+}
+
 /**
  * Claude Code tool permission adapter.
  *
@@ -62,6 +81,54 @@ export class CodexToolPermissionAdapter implements ToolPermissionAdapter {
     return permissions.map(p => this.translateOne(p))
   }
 
+  /**
+   * Build a structured permission config for the Codex approval bridge (SUP-1748).
+   *
+   * Translates abstract `tools.allow` and `tools.disallow` from templates
+   * into regex patterns consumed by `evaluateCommandApproval()` and
+   * `evaluateFileChangeApproval()` in the approval bridge.
+   */
+  buildPermissionConfig(
+    allow: ToolPermission[],
+    disallow: ToolPermission[],
+  ): CodexPermissionConfig {
+    const allowedCommandPatterns: RegExp[] = []
+    const deniedCommandPatterns: Array<{ pattern: RegExp; reason: string }> = []
+    let allowFileEdits = true
+    let allowFileWrites = true
+
+    // Process allow list → allowed command patterns
+    for (const permission of allow) {
+      if (typeof permission !== 'string' && 'shell' in permission) {
+        allowedCommandPatterns.push(shellGlobToRegex(permission.shell))
+      }
+    }
+
+    // Process disallow list → denied patterns + file permission flags
+    for (const permission of disallow) {
+      if (typeof permission === 'string') {
+        if (permission === 'file-edit') {
+          allowFileEdits = false
+        } else if (permission === 'file-write') {
+          allowFileWrites = false
+        }
+        // 'user-input' is a no-op for Codex (non-interactive)
+      } else if ('shell' in permission) {
+        deniedCommandPatterns.push({
+          pattern: shellGlobToRegex(permission.shell),
+          reason: `${permission.shell} blocked by template`,
+        })
+      }
+    }
+
+    return {
+      allowedCommandPatterns,
+      deniedCommandPatterns,
+      allowFileEdits,
+      allowFileWrites,
+    }
+  }
+
   private translateOne(permission: ToolPermission): string {
     if (typeof permission === 'string') {
       return permission
@@ -73,6 +140,38 @@ export class CodexToolPermissionAdapter implements ToolPermissionAdapter {
 
     return String(permission)
   }
+}
+
+/**
+ * Convert a shell glob pattern (e.g., "pnpm *", "git commit *") to a regex.
+ *
+ * The pattern "pnpm *" matches any command starting with "pnpm".
+ * The pattern "git commit *" matches "git commit" followed by anything.
+ */
+function shellGlobToRegex(glob: string): RegExp {
+  // Split on the last space to separate command from glob
+  const lastSpace = glob.lastIndexOf(' ')
+  if (lastSpace === -1) {
+    // No glob part — match command prefix (e.g., "pnpm" matches "pnpm install")
+    return new RegExp(`^${escapeRegex(glob)}\\b`)
+  }
+
+  const command = glob.substring(0, lastSpace)
+  const globPart = glob.substring(lastSpace + 1)
+
+  if (globPart === '*') {
+    // "git commit *" → matches "git commit" followed by anything
+    return new RegExp(`^${escapeRegex(command)}\\b`)
+  }
+
+  // More specific globs: escape and convert * to .*
+  const escapedCommand = escapeRegex(command)
+  const regexGlob = escapeRegex(globPart).replace(/\\\*/g, '.*')
+  return new RegExp(`^${escapedCommand}\\s+${regexGlob}`)
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /**

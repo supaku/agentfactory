@@ -36,6 +36,7 @@ export {
 } from './loader.js'
 
 export { ClaudeToolPermissionAdapter, CodexToolPermissionAdapter, createToolPermissionAdapter } from './adapters.js'
+export type { CodexPermissionConfig } from './adapters.js'
 
 export { renderPromptWithFallback } from './renderer.js'
 

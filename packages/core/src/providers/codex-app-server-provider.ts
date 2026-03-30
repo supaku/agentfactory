@@ -31,6 +31,10 @@ import type {
   AgentEvent,
 } from './types.js'
 import { classifyTool } from '../tools/tool-category.js'
+import {
+  evaluateCommandApproval,
+  evaluateFileChangeApproval,
+} from './codex-approval-bridge.js'
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 types
@@ -798,7 +802,10 @@ export function normalizeMcpToolName(server?: string, tool?: string): string {
 // ---------------------------------------------------------------------------
 
 function resolveApprovalPolicy(config: AgentSpawnConfig): string {
-  if (config.autonomous) return 'never'
+  // SUP-1747: Use 'onRequest' for autonomous agents so all tool executions
+  // flow through the approval bridge for safety evaluation. The bridge
+  // auto-approves safe commands and declines destructive patterns.
+  if (config.autonomous) return 'onRequest'
   return 'unlessTrusted'
 }
 
@@ -808,6 +815,42 @@ function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown>
     type: 'workspaceWrite',
     writableRoots: [config.cwd],
   }
+}
+
+// ---------------------------------------------------------------------------
+// Base Instructions Builder (SUP-1746)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build persistent base instructions for the Codex App Server `thread/start`.
+ *
+ * Assembles safety rules (mirroring `autonomousCanUseTool` deny patterns as
+ * natural-language rules) and optional project-specific instructions loaded
+ * from AGENTS.md or CLAUDE.md in the worktree root.
+ */
+function buildBaseInstructions(config: AgentSpawnConfig): string | undefined {
+  // If explicit baseInstructions are provided (from orchestrator), use those
+  if (config.baseInstructions) {
+    return config.baseInstructions
+  }
+
+  // Otherwise, build safety-only instructions as a fallback
+  const sections: string[] = []
+
+  sections.push(`# Safety Rules
+
+You are running in an AgentFactory-managed worktree. Follow these rules strictly:
+
+1. NEVER run: rm -rf / (or any rm of the filesystem root)
+2. NEVER run: git worktree remove, git worktree prune
+3. NEVER run: git reset --hard
+4. NEVER run: git push --force (use --force-with-lease on feature branches if needed)
+5. NEVER run: git checkout <branch>, git switch <branch> (do not change the checked-out branch)
+6. NEVER modify files in the .git directory
+7. Work only within the worktree directory: ${config.cwd}
+8. Commit changes with descriptive messages before reporting completion`)
+
+  return sections.join('\n\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -900,6 +943,56 @@ class AppServerAgentHandle implements AgentHandle {
   }
 
   /**
+   * Handle an approval request from the App Server (SUP-1747).
+   *
+   * Evaluates the command or file change against deny patterns (ported from
+   * Claude's `autonomousCanUseTool`) and template-level permissions, then
+   * responds with accept/decline/acceptForSession via JSON-RPC.
+   *
+   * Returns a system event if the request was declined, for observability.
+   */
+  private async handleApprovalRequest(notification: JsonRpcNotification): Promise<AgentEvent | null> {
+    const params = notification.params ?? {}
+    const requestId = params.requestId as string
+    const command = params.command as string | undefined
+    const filePath = params.filePath as string | undefined
+
+    let decision: import('./codex-approval-bridge.js').ApprovalDecision
+
+    if (command !== undefined) {
+      // Command execution approval
+      decision = evaluateCommandApproval(command, this.config.permissionConfig)
+    } else if (filePath !== undefined) {
+      // File change approval
+      decision = evaluateFileChangeApproval(filePath, this.config.cwd, this.config.permissionConfig)
+    } else {
+      // Unknown approval request — accept by default
+      decision = { action: 'acceptForSession' }
+    }
+
+    // Respond to the App Server with the approval decision
+    await this.processManager.request('approval/respond', {
+      threadId: this.sessionId,
+      requestId,
+      decision: decision.action,
+      reason: decision.reason,
+    })
+
+    // Emit system event for declined approvals (observability)
+    if (decision.action === 'decline') {
+      const target = command ?? filePath ?? 'unknown'
+      return {
+        type: 'system',
+        subtype: 'approval_denied',
+        message: `Blocked: ${decision.reason} — ${command ? 'command' : 'file'}: ${target}`,
+        raw: notification,
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Start a new turn on the existing thread with additional user input (SUP-1741).
    * Used for between-turn injection when no turn is currently active.
    */
@@ -962,6 +1055,13 @@ class AppServerAgentHandle implements AgentHandle {
           cwd: this.config.cwd,
           approvalPolicy: resolveApprovalPolicy(this.config),
           serviceName: 'agentfactory',
+        }
+
+        // SUP-1746: Pass persistent system instructions via `instructions` on thread/start.
+        // Separates safety rules and project context from per-turn task input.
+        const instructions = buildBaseInstructions(this.config)
+        if (instructions) {
+          threadParams.instructions = instructions
         }
 
         const sandboxPolicy = resolveSandboxPolicy(this.config)
@@ -1048,6 +1148,16 @@ class AppServerAgentHandle implements AgentHandle {
         // Drain the queue
         while (this.notificationQueue.length > 0) {
           const notification = this.notificationQueue.shift()!
+
+          // SUP-1747: Intercept approval requests before other processing.
+          // The App Server emits these when approvalPolicy is 'onRequest'.
+          if (notification.method.endsWith('/requestApproval')) {
+            const deniedEvent = await this.handleApprovalRequest(notification)
+            if (deniedEvent) {
+              yield deniedEvent
+            }
+            continue // Don't yield as a regular AgentEvent
+          }
 
           // Track active turn ID for mid-turn steering (SUP-1740)
           if (notification.method === 'turn/started') {

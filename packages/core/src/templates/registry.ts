@@ -207,6 +207,21 @@ export class TemplateRegistry {
   }
 
   /**
+   * Get the raw allow and disallow permission arrays for a work type (SUP-1748).
+   * Used by the orchestrator to build Codex permission configs via the adapter.
+   */
+  getRawToolPermissions(workType: AgentWorkType, strategy?: string): {
+    allow: ToolPermission[]
+    disallow: ToolPermission[]
+  } {
+    const template = this.getTemplate(workType, strategy)
+    return {
+      allow: template?.tools?.allow ?? [],
+      disallow: template?.tools?.disallow ?? [],
+    }
+  }
+
+  /**
    * Register a partial template for use in Handlebars rendering.
    */
   registerPartial(name: string, content: string): void {
