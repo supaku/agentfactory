@@ -125,6 +125,54 @@ interface AppServerThread {
 }
 
 // ---------------------------------------------------------------------------
+// Codex model mapping (SUP-1749)
+// ---------------------------------------------------------------------------
+
+export const CODEX_MODEL_MAP: Record<string, string> = {
+  'opus':   'gpt-5-codex',
+  'sonnet': 'gpt-5.2-codex',
+  'haiku':  'gpt-5.3-codex',
+}
+
+export const CODEX_DEFAULT_MODEL = 'gpt-5-codex'
+
+export function resolveCodexModel(config: AgentSpawnConfig): string {
+  if (config.model) return config.model
+  const tier = config.env.CODEX_MODEL_TIER
+  if (tier && CODEX_MODEL_MAP[tier]) return CODEX_MODEL_MAP[tier]
+  if (config.env.CODEX_MODEL) return config.env.CODEX_MODEL
+  return CODEX_DEFAULT_MODEL
+}
+
+// ---------------------------------------------------------------------------
+// Codex pricing and cost calculation (SUP-1750)
+// ---------------------------------------------------------------------------
+
+/** Codex pricing per 1M tokens (USD). Update when pricing changes. */
+export const CODEX_PRICING: Record<string, { input: number; cachedInput: number; output: number }> = {
+  'gpt-5-codex':   { input: 2.00, cachedInput: 0.50, output: 8.00 },
+  'gpt-5.2-codex': { input: 1.00, cachedInput: 0.25, output: 4.00 },
+  'gpt-5.3-codex': { input: 0.50, cachedInput: 0.125, output: 2.00 },
+}
+
+export const CODEX_DEFAULT_PRICING = CODEX_PRICING['gpt-5-codex']
+
+export function calculateCostUsd(
+  inputTokens: number,
+  cachedInputTokens: number,
+  outputTokens: number,
+  model?: string,
+): number {
+  const pricing = (model && CODEX_PRICING[model]) || CODEX_DEFAULT_PRICING
+  const freshInputTokens = Math.max(0, inputTokens - cachedInputTokens)
+  return (
+    (freshInputTokens / 1_000_000) * pricing.input +
+    (cachedInputTokens / 1_000_000) * pricing.cachedInput +
+    (outputTokens / 1_000_000) * pricing.output
+  )
+}
+
+// ---------------------------------------------------------------------------
 // App Server Process Manager (SUP-1755)
 // ---------------------------------------------------------------------------
 
@@ -224,6 +272,16 @@ export class AppServerProcessManager {
 
     // Perform initialization handshake
     await this.initialize()
+
+    // Discover available models (best effort — older servers may not support model/list)
+    try {
+      const models = await this.listModels()
+      if (models.length > 0) {
+        console.error(`[CodexAppServer] Available models: ${models.map(m => m.id).join(', ')}`)
+      }
+    } catch {
+      console.error('[CodexAppServer] model/list not supported by this server version')
+    }
   }
 
   /**
@@ -404,6 +462,16 @@ export class AppServerProcessManager {
   }
 
   /**
+   * Discover available models from the app-server via model/list.
+   */
+  async listModels(): Promise<Array<{ id: string; name?: string; capabilities?: Record<string, unknown> }>> {
+    const result = await this.request('model/list', {}) as {
+      models?: Array<{ id: string; name?: string; capabilities?: Record<string, unknown> }>
+    }
+    return result?.models ?? []
+  }
+
+  /**
    * Get the PID of the app-server process.
    */
   get pid(): number | undefined {
@@ -465,8 +533,10 @@ export class AppServerProcessManager {
 
 export interface AppServerEventMapperState {
   sessionId: string | null
+  model: string | null
   totalInputTokens: number
   totalOutputTokens: number
+  totalCachedInputTokens: number
   turnCount: number
 }
 
@@ -525,6 +595,7 @@ export function mapAppServerNotification(
       if (turn?.usage) {
         state.totalInputTokens += turn.usage.input_tokens ?? 0
         state.totalOutputTokens += turn.usage.output_tokens ?? 0
+        state.totalCachedInputTokens += turn.usage.cached_input_tokens ?? 0
       }
 
       if (turnStatus === 'completed') {
@@ -534,6 +605,13 @@ export function mapAppServerNotification(
           cost: {
             inputTokens: state.totalInputTokens || undefined,
             outputTokens: state.totalOutputTokens || undefined,
+            cachedInputTokens: state.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              state.totalInputTokens,
+              state.totalCachedInputTokens,
+              state.totalOutputTokens,
+              state.model ?? undefined,
+            ),
             numTurns: state.turnCount || undefined,
           },
           raw: notification,
@@ -549,6 +627,13 @@ export function mapAppServerNotification(
           cost: {
             inputTokens: state.totalInputTokens || undefined,
             outputTokens: state.totalOutputTokens || undefined,
+            cachedInputTokens: state.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              state.totalInputTokens,
+              state.totalCachedInputTokens,
+              state.totalOutputTokens,
+              state.model ?? undefined,
+            ),
             numTurns: state.turnCount || undefined,
           },
           raw: notification,
@@ -809,12 +894,39 @@ function resolveApprovalPolicy(config: AgentSpawnConfig): string {
   return 'unlessTrusted'
 }
 
-function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown> | undefined {
-  if (!config.sandboxEnabled) return undefined
-  return {
-    type: 'workspaceWrite',
-    writableRoots: [config.cwd],
+/**
+ * Map AgentSpawnConfig sandbox settings to Codex App Server sandbox policy.
+ *
+ * Codex sandbox levels vs Claude sandbox:
+ * | Feature               | Claude                  | Codex                          |
+ * |-----------------------|-------------------------|--------------------------------|
+ * | File write control    | Per-file glob patterns  | Workspace root only            |
+ * | Network access        | Per-domain allow-lists  | All-or-nothing per level       |
+ * | Tool-level permissions| Per-tool allow/deny     | Not supported (approval policy)|
+ * | Custom writable paths | Multiple glob patterns  | Single writableRoots array     |
+ * | Process isolation     | macOS sandbox-exec      | Docker/firewall container      |
+ *
+ * Key limitation: Codex cannot restrict writes to specific subdirectories within
+ * the workspace or allow network access to specific domains. The mapping is intent-based:
+ *   "safe browsing/analysis" → readOnly
+ *   "normal development"     → workspaceWrite
+ *   "install/deploy/admin"   → dangerFullAccess
+ */
+export function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown> | undefined {
+  if (config.sandboxLevel) {
+    switch (config.sandboxLevel) {
+      case 'read-only':
+        return { type: 'readOnly' }
+      case 'workspace-write':
+        return { type: 'workspaceWrite', writableRoots: [config.cwd] }
+      case 'full-access':
+        return { type: 'dangerFullAccess' }
+    }
   }
+
+  // Fallback: boolean sandboxEnabled → workspaceWrite
+  if (!config.sandboxEnabled) return undefined
+  return { type: 'workspaceWrite', writableRoots: [config.cwd] }
 }
 
 // ---------------------------------------------------------------------------
@@ -864,8 +976,10 @@ class AppServerAgentHandle implements AgentHandle {
   private readonly resumeThreadId?: string
   private readonly mapperState: AppServerEventMapperState = {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
   private activeTurnId: string | null = null
@@ -1008,6 +1122,8 @@ class AppServerAgentHandle implements AgentHandle {
       approvalPolicy: resolveApprovalPolicy(this.config),
     }
 
+    turnParams.model = resolveCodexModel(this.config)
+
     if (this.config.maxTurns) {
       turnParams.maxTurns = this.config.maxTurns
     }
@@ -1064,6 +1180,8 @@ class AppServerAgentHandle implements AgentHandle {
           threadParams.instructions = instructions
         }
 
+        threadParams.model = resolveCodexModel(this.config)
+
         const sandboxPolicy = resolveSandboxPolicy(this.config)
         if (sandboxPolicy) {
           threadParams.sandboxPolicy = sandboxPolicy
@@ -1086,6 +1204,7 @@ class AppServerAgentHandle implements AgentHandle {
 
       this.sessionId = threadId
       this.mapperState.sessionId = threadId
+      this.mapperState.model = resolveCodexModel(this.config)
 
       // Subscribe to thread notifications
       this.processManager.subscribeThread(threadId, (notification) => {
@@ -1111,6 +1230,8 @@ class AppServerAgentHandle implements AgentHandle {
         cwd: this.config.cwd,
         approvalPolicy: resolveApprovalPolicy(this.config),
       }
+
+      turnParams.model = resolveCodexModel(this.config)
 
       if (this.config.maxTurns) {
         turnParams.maxTurns = this.config.maxTurns
@@ -1210,6 +1331,13 @@ class AppServerAgentHandle implements AgentHandle {
         cost: {
           inputTokens: this.mapperState.totalInputTokens || undefined,
           outputTokens: this.mapperState.totalOutputTokens || undefined,
+          cachedInputTokens: this.mapperState.totalCachedInputTokens || undefined,
+          totalCostUsd: calculateCostUsd(
+            this.mapperState.totalInputTokens,
+            this.mapperState.totalCachedInputTokens,
+            this.mapperState.totalOutputTokens,
+            this.mapperState.model ?? undefined,
+          ),
           numTurns: this.mapperState.turnCount || undefined,
         },
         raw: null,

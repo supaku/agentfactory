@@ -3,15 +3,25 @@ import {
   mapAppServerNotification,
   mapAppServerItemEvent,
   normalizeMcpToolName,
+  resolveSandboxPolicy,
+  resolveCodexModel,
+  calculateCostUsd,
+  CODEX_MODEL_MAP,
+  CODEX_DEFAULT_MODEL,
+  CODEX_PRICING,
+  CODEX_DEFAULT_PRICING,
   type AppServerEventMapperState,
   type JsonRpcNotification,
 } from './codex-app-server-provider.js'
+import type { AgentSpawnConfig } from './types.js'
 
 function freshState(): AppServerEventMapperState {
   return {
     sessionId: null,
+    model: null,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCachedInputTokens: 0,
     turnCount: 0,
   }
 }
@@ -119,6 +129,7 @@ describe('mapAppServerNotification', () => {
   it('maps turn/completed (success) with usage', () => {
     const state = freshState()
     state.turnCount = 1
+    state.model = 'gpt-5-codex'
 
     const notification: JsonRpcNotification = {
       method: 'turn/completed',
@@ -126,7 +137,7 @@ describe('mapAppServerNotification', () => {
         turn: {
           id: 'turn_1',
           status: 'completed',
-          usage: { input_tokens: 100, output_tokens: 50 },
+          usage: { input_tokens: 100, output_tokens: 50, cached_input_tokens: 20 },
         },
       },
     }
@@ -139,32 +150,38 @@ describe('mapAppServerNotification', () => {
       cost: {
         inputTokens: 100,
         outputTokens: 50,
+        cachedInputTokens: 20,
         numTurns: 1,
       },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
     expect(state.totalInputTokens).toBe(100)
     expect(state.totalOutputTokens).toBe(50)
+    expect(state.totalCachedInputTokens).toBe(20)
   })
 
   it('accumulates usage across multiple turns', () => {
     const state = freshState()
     state.turnCount = 2
+    state.model = 'gpt-5-codex'
 
     mapAppServerNotification({
       method: 'turn/completed',
-      params: { turn: { id: 't1', status: 'completed', usage: { input_tokens: 100, output_tokens: 50 } } },
+      params: { turn: { id: 't1', status: 'completed', usage: { input_tokens: 100, output_tokens: 50, cached_input_tokens: 10 } } },
     }, state)
 
     const result = mapAppServerNotification({
       method: 'turn/completed',
-      params: { turn: { id: 't2', status: 'completed', usage: { input_tokens: 200, output_tokens: 80 } } },
+      params: { turn: { id: 't2', status: 'completed', usage: { input_tokens: 200, output_tokens: 80, cached_input_tokens: 30 } } },
     }, state)
 
     expect(result[0]).toMatchObject({
       type: 'result',
       success: true,
-      cost: { inputTokens: 300, outputTokens: 130 },
+      cost: { inputTokens: 300, outputTokens: 130, cachedInputTokens: 40 },
     })
+    expect((result[0] as any).cost.totalCostUsd).toBeGreaterThan(0)
+    expect(state.totalCachedInputTokens).toBe(40)
   })
 
   it('maps turn/completed (failed) with error', () => {
@@ -689,5 +706,163 @@ describe('normalizeMcpToolName', () => {
   it('handles both missing server and tool', () => {
     expect(normalizeMcpToolName(undefined, undefined))
       .toBe('mcp:unknown/unknown')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveSandboxPolicy
+// ---------------------------------------------------------------------------
+
+describe('resolveSandboxPolicy', () => {
+  it('returns readOnly policy for read-only level', () => {
+    const config = { sandboxLevel: 'read-only', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+  })
+
+  it('returns workspaceWrite policy with writableRoots for workspace-write level', () => {
+    const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+  })
+
+  it('returns dangerFullAccess policy for full-access level', () => {
+    const config = { sandboxLevel: 'full-access', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'dangerFullAccess' })
+  })
+
+  it('falls back to sandboxEnabled boolean when no level set', () => {
+    const config = { sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+  })
+
+  it('returns undefined when sandbox disabled and no level set', () => {
+    const config = { sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toBeUndefined()
+  })
+
+  it('sandboxLevel takes precedence over sandboxEnabled boolean', () => {
+    const config = { sandboxLevel: 'read-only', sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveCodexModel (SUP-1749)
+// ---------------------------------------------------------------------------
+
+describe('resolveCodexModel', () => {
+  it('returns explicit model when set', () => {
+    const config = { model: 'custom-model', env: {} } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('custom-model')
+  })
+
+  it('maps opus tier to gpt-5-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'opus' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5-codex')
+  })
+
+  it('maps sonnet tier to gpt-5.2-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'sonnet' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.2-codex')
+  })
+
+  it('maps haiku tier to gpt-5.3-codex', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'haiku' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.3-codex')
+  })
+
+  it('uses CODEX_MODEL env var as fallback', () => {
+    const config = { env: { CODEX_MODEL: 'gpt-5.5-codex' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.5-codex')
+  })
+
+  it('returns default model when nothing configured', () => {
+    const config = { env: {} } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5-codex')
+  })
+
+  it('explicit model takes precedence over tier', () => {
+    const config = { model: 'my-model', env: { CODEX_MODEL_TIER: 'opus' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('my-model')
+  })
+
+  it('tier takes precedence over CODEX_MODEL env', () => {
+    const config = { env: { CODEX_MODEL_TIER: 'haiku', CODEX_MODEL: 'custom' } } as unknown as AgentSpawnConfig
+    expect(resolveCodexModel(config)).toBe('gpt-5.3-codex')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// calculateCostUsd (SUP-1750)
+// ---------------------------------------------------------------------------
+
+describe('calculateCostUsd', () => {
+  it('calculates cost with default pricing (gpt-5-codex)', () => {
+    // 1000 input (800 fresh + 200 cached), 500 output
+    const cost = calculateCostUsd(1000, 200, 500)
+    // fresh: 800/1M * 2.00 = 0.0016
+    // cached: 200/1M * 0.50 = 0.0001
+    // output: 500/1M * 8.00 = 0.004
+    expect(cost).toBeCloseTo(0.0057, 6)
+  })
+
+  it('calculates cost with specific model pricing', () => {
+    const cost = calculateCostUsd(1000, 200, 500, 'gpt-5.2-codex')
+    // fresh: 800/1M * 1.00 = 0.0008
+    // cached: 200/1M * 0.25 = 0.00005
+    // output: 500/1M * 4.00 = 0.002
+    expect(cost).toBeCloseTo(0.00285, 6)
+  })
+
+  it('calculates cost with haiku model pricing', () => {
+    const cost = calculateCostUsd(1000, 200, 500, 'gpt-5.3-codex')
+    // fresh: 800/1M * 0.50 = 0.0004
+    // cached: 200/1M * 0.125 = 0.000025
+    // output: 500/1M * 2.00 = 0.001
+    expect(cost).toBeCloseTo(0.001425, 6)
+  })
+
+  it('uses default pricing for unknown models', () => {
+    const cost = calculateCostUsd(1000, 0, 500, 'unknown-model')
+    // fresh: 1000/1M * 2.00 = 0.002
+    // output: 500/1M * 8.00 = 0.004
+    expect(cost).toBeCloseTo(0.006, 6)
+  })
+
+  it('handles zero tokens', () => {
+    expect(calculateCostUsd(0, 0, 0)).toBe(0)
+  })
+
+  it('handles all cached tokens (fresh = 0)', () => {
+    const cost = calculateCostUsd(1000, 1000, 0)
+    // fresh: 0
+    // cached: 1000/1M * 0.50 = 0.0005
+    expect(cost).toBeCloseTo(0.0005, 6)
+  })
+
+  it('clamps fresh tokens to zero when cached exceeds input', () => {
+    const cost = calculateCostUsd(100, 200, 0)
+    // fresh: max(0, 100 - 200) = 0
+    // cached: 200/1M * 0.50 = 0.0001
+    expect(cost).toBeCloseTo(0.0001, 6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CODEX_MODEL_MAP and CODEX_DEFAULT_MODEL (SUP-1749)
+// ---------------------------------------------------------------------------
+
+describe('CODEX_MODEL_MAP', () => {
+  it('maps all three tiers', () => {
+    expect(CODEX_MODEL_MAP).toEqual({
+      opus: 'gpt-5-codex',
+      sonnet: 'gpt-5.2-codex',
+      haiku: 'gpt-5.3-codex',
+    })
+  })
+})
+
+describe('CODEX_DEFAULT_MODEL', () => {
+  it('is gpt-5-codex', () => {
+    expect(CODEX_DEFAULT_MODEL).toBe('gpt-5-codex')
   })
 })

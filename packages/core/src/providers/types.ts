@@ -68,6 +68,11 @@ export interface AgentSpawnConfig {
   /** Sandbox level for filesystem/network restrictions */
   sandboxEnabled: boolean
   /**
+   * Codex-specific sandbox level override. When set, takes precedence over sandboxEnabled.
+   * Maps to Codex sandbox policies: readOnly, workspaceWrite, dangerFullAccess.
+   */
+  sandboxLevel?: 'read-only' | 'workspace-write' | 'full-access'
+  /**
    * Tools to auto-allow without prompting for permission.
    * Uses Claude Code permission pattern format: 'Bash(prefix:glob)'.
    * Examples: 'Bash(pnpm:*)', 'Bash(git commit:*)'.
@@ -120,6 +125,11 @@ export interface AgentSpawnConfig {
    * consumed by the approval bridge for runtime tool evaluation.
    */
   permissionConfig?: import('../templates/adapters.js').CodexPermissionConfig
+  /**
+   * Model identifier to use for the agent session.
+   * When omitted, the provider resolves the model from environment variables or defaults.
+   */
+  model?: string
 }
 
 /**
@@ -233,6 +243,7 @@ export interface AgentErrorEvent {
 export interface AgentCostData {
   inputTokens?: number
   outputTokens?: number
+  cachedInputTokens?: number
   totalCostUsd?: number
   numTurns?: number
 }
