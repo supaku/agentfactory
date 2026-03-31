@@ -48,6 +48,13 @@ export interface AgentProvider {
 
   /** Resume a previously interrupted session */
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle
+
+  /**
+   * Gracefully shut down provider resources (e.g., long-lived child processes).
+   * Called by the orchestrator on fleet shutdown. Optional — providers with
+   * per-agent child processes (Claude) don't need this.
+   */
+  shutdown?(): Promise<void>
 }
 
 /**

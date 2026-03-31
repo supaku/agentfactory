@@ -218,6 +218,7 @@ export async function runOrchestrator(
         result.completed = completed
       } finally {
         process.removeListener('SIGINT', sigintHandler)
+        await orchestrator.shutdownProviders()
       }
     }
 
@@ -248,6 +249,7 @@ export async function runOrchestrator(
       result.completed = completed
     } finally {
       process.removeListener('SIGINT', sigintHandler)
+      await orchestrator.shutdownProviders()
     }
   }
 

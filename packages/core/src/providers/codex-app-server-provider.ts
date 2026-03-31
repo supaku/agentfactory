@@ -24,6 +24,9 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { createInterface, type Interface } from 'readline'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+import { join } from 'path'
+import { homedir } from 'os'
 import type {
   AgentProvider,
   AgentSpawnConfig,
@@ -233,19 +236,110 @@ export class AppServerProcessManager {
   }
 
   /**
+   * Get the PID file path for tracking the app-server process.
+   * Used for orphan detection on startup.
+   */
+  private static getPidFilePath(): string {
+    const dir = join(homedir(), '.agentfactory')
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+    return join(dir, 'codex-app-server.pid')
+  }
+
+  /**
+   * Kill any orphaned app-server process from a prior fleet run.
+   * Called before starting a new process to prevent resource leaks.
+   */
+  private static killOrphanedProcess(): void {
+    const pidFile = AppServerProcessManager.getPidFilePath()
+    if (!existsSync(pidFile)) return
+
+    try {
+      const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10)
+      if (isNaN(pid)) {
+        unlinkSync(pidFile)
+        return
+      }
+
+      // Check if the process is alive
+      try {
+        process.kill(pid, 0) // signal 0 = check existence
+      } catch {
+        // Process is dead, just clean up the PID file
+        unlinkSync(pidFile)
+        return
+      }
+
+      // Process is alive — kill it
+      console.error(`[CodexAppServer] Killing orphaned app-server process (PID ${pid})`)
+      try {
+        process.kill(pid, 'SIGTERM')
+        // Give it a moment, then force kill
+        setTimeout(() => {
+          try {
+            process.kill(pid, 0) // still alive?
+            process.kill(pid, 'SIGKILL')
+          } catch {
+            // Already dead
+          }
+        }, 2000)
+      } catch {
+        // Kill failed, process may have already exited
+      }
+      unlinkSync(pidFile)
+    } catch {
+      // PID file read/delete failed — ignore
+    }
+  }
+
+  /**
+   * Write the current app-server PID to the PID file.
+   */
+  private writePidFile(): void {
+    if (!this.process?.pid) return
+    try {
+      writeFileSync(AppServerProcessManager.getPidFilePath(), String(this.process.pid))
+    } catch {
+      // Best effort
+    }
+  }
+
+  /**
+   * Remove the PID file on shutdown.
+   */
+  private static removePidFile(): void {
+    try {
+      const pidFile = AppServerProcessManager.getPidFilePath()
+      if (existsSync(pidFile)) {
+        unlinkSync(pidFile)
+      }
+    } catch {
+      // Best effort
+    }
+  }
+
+  /**
    * Start the app-server process and complete the initialization handshake.
    * Idempotent — returns immediately if already initialized.
+   * Kills any orphaned app-server from a prior fleet run before starting.
    */
   async start(): Promise<void> {
     if (this.initialized && this.process && !this.process.killed) {
       return
     }
 
+    // Kill orphaned app-server from prior fleet run
+    AppServerProcessManager.killOrphanedProcess()
+
     this.process = spawn(this.codexBin, ['app-server'], {
       cwd: this.cwd,
       env: { ...process.env, ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
+
+    // Track PID for orphan detection on next startup
+    this.writePidFile()
 
     this.readline = createInterface({ input: this.process.stdout! })
 
@@ -549,6 +643,9 @@ export class AppServerProcessManager {
 
   private async performShutdown(): Promise<void> {
     this.initialized = false
+
+    // Remove PID file before killing process
+    AppServerProcessManager.removePidFile()
 
     // Clear all pending requests
     this.rejectAllPending(new Error('App server shutting down'))

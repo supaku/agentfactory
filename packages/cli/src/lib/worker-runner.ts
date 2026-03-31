@@ -854,6 +854,8 @@ export async function runWorker(
       // Wait for agent to complete
       agentLog.info('Waiting for agent to complete...')
       const results = await orchestrator.waitForAll()
+      // Shut down provider resources (e.g., Codex app-server) to prevent orphans
+      await orchestrator.shutdownProviders()
       const agent = results[0]
 
       clearInterval(stopChecker)

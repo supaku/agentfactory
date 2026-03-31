@@ -1022,6 +1022,8 @@ export class AgentOrchestrator {
   // Buffered assistant text for batched logging (keyed by issueId)
   // Streaming providers (Codex) send one token per event — buffer and flush on sentence boundaries
   private readonly assistantTextBuffers: Map<string, { text: string; timer: ReturnType<typeof setTimeout> | null }> = new Map()
+  // Flag to prevent promoting agents during fleet shutdown
+  private shuttingDown = false
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
@@ -2934,10 +2936,13 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         await this.handleAgentEvent(issueId, sessionId, event, emitter, agent, handle)
       }
 
-      // Query completed successfully — preserve 'failed' status set by error results
-      // (e.g., error_max_turns, error_during_execution) so auto-transition doesn't
-      // fire with an empty resultMessage
-      if (agent.status !== 'stopped' && agent.status !== 'failed') {
+      // Query completed successfully — preserve 'failed' or 'stopped' status.
+      // If the orchestrator is shutting down (fleet kill), force 'stopped' to prevent
+      // the backstop from promoting incomplete work.
+      if (this.shuttingDown && agent.status !== 'failed') {
+        agent.status = 'stopped'
+        log?.info('Agent stopped by fleet shutdown — skipping backstop and auto-transition')
+      } else if (agent.status !== 'stopped' && agent.status !== 'failed') {
         agent.status = 'completed'
       }
       agent.completedAt = new Date()
@@ -5064,6 +5069,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
    * Stop all running agents
    */
   stopAll(): void {
+    this.shuttingDown = true
+
     for (const [issueId] of this.abortControllers) {
       try {
         const agent = this.activeAgents.get(issueId)
@@ -5079,6 +5086,36 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     }
     this.abortControllers.clear()
     this.sessionToIssue.clear()
+  }
+
+  /**
+   * Gracefully shut down all provider resources (e.g., Codex app-server processes).
+   * Call after stopAll() to ensure child processes don't become orphans.
+   */
+  async shutdownProviders(): Promise<void> {
+    const shutdownPromises: Promise<void>[] = []
+    for (const [name, provider] of this.providerCache) {
+      if (provider.shutdown) {
+        console.log(`Shutting down ${name} provider...`)
+        shutdownPromises.push(
+          provider.shutdown().catch((err) => {
+            console.warn(`Failed to shut down ${name} provider:`, err)
+          })
+        )
+      }
+    }
+    if (shutdownPromises.length > 0) {
+      await Promise.all(shutdownPromises)
+    }
+  }
+
+  /**
+   * Full graceful cleanup: stop all agents and shut down provider resources.
+   * Use this instead of stopAll() when the fleet is exiting.
+   */
+  async cleanup(): Promise<void> {
+    this.stopAll()
+    await this.shutdownProviders()
   }
 
   /**
