@@ -3592,7 +3592,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           }
           heartbeatWriter?.recordThinking()
           // Persist reasoning to Linear session (same pattern as Claude's assistant_text)
-          if (emitter && event.message) {
+          if (emitter && event.message && typeof event.message === 'string') {
             await emitter.emitThought(event.message.substring(0, 200))
           }
         } else if (event.subtype === 'auth_status') {
@@ -3753,7 +3753,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           }
 
           // Emit truncated preview to activity feed (ephemeral)
-          if (emitter && event.message) {
+          if (emitter && event.message && typeof event.message === 'string') {
             await emitter.emitThought(`Completed: ${event.message.substring(0, 200)}...`, true)
           }
         } else {
