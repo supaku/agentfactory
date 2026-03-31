@@ -176,6 +176,122 @@ quality:
 
 See [Quality Gates](./quality-gates.md) for details on baseline capture and ratchet enforcement.
 
+### `mergeDriver:` — Git Merge Driver
+
+Select the git merge driver used in agent worktrees:
+
+```yaml
+mergeDriver: mergiraf              # Syntax-aware merging (default: "default")
+```
+
+| Value | Description |
+|-------|-------------|
+| `default` | Standard git line-based merge (the default) |
+| `mergiraf` | Syntax-aware merging via [mergiraf](https://mergiraf.org/) for supported file types |
+
+When set to `mergiraf`, AgentFactory configures the worktree's `.gitattributes` and `.git/config` to use mergiraf as a custom merge driver. This reduces merge conflicts in structured files (TypeScript, JSON, YAML, etc.). See the [mergiraf setup guide](./guides/mergiraf-setup.md) for installation instructions.
+
+### `packageManager:` — Package Manager
+
+Specify the package manager used by the project:
+
+```yaml
+packageManager: pnpm               # default: "pnpm"
+```
+
+| Value | Description |
+|-------|-------------|
+| `pnpm` | pnpm (default) |
+| `npm` | npm |
+| `yarn` | Yarn |
+| `bun` | Bun |
+| `none` | No package manager — disables dependency linking and helper scripts (for non-Node projects) |
+
+Injected into workflow templates as `{{packageManager}}`. Set to `none` for non-Node projects (Go, Rust, Python, etc.).
+
+### `linearCli:` — Linear CLI Command
+
+Override the command used to invoke the Linear CLI:
+
+```yaml
+linearCli: "npx -y @renseiai/agentfactory-cli af-linear"
+```
+
+Default: `"pnpm af-linear"`. Override this for non-Node projects or custom setups:
+
+```yaml
+# Non-Node project — use npx to run without local install
+linearCli: "npx -y @renseiai/agentfactory-cli af-linear"
+
+# Custom wrapper script
+linearCli: "./tools/af-linear.sh"
+
+# Absolute path
+linearCli: "/usr/local/bin/af-linear"
+```
+
+Injected into workflow templates as `{{linearCli}}` (when `useToolPlugins` is false).
+
+### `buildCommand:`, `testCommand:`, `validateCommand:` — Command Overrides
+
+Override the build, test, and validation commands for non-Node or custom projects:
+
+```yaml
+buildCommand: "cargo build"
+testCommand: "cargo test"
+validateCommand: "cargo clippy"
+```
+
+| Option | Template Variable | Default | Description |
+|--------|------------------|---------|-------------|
+| `buildCommand` | `{{buildCommand}}` | — | Build command (e.g., `cargo build`, `cmake --build build`, `make`) |
+| `testCommand` | `{{testCommand}}` | — | Test command (e.g., `cargo test`, `ctest --test-dir build`, `make test`) |
+| `validateCommand` | `{{validateCommand}}` | — | Validation command — replaces typecheck for compiled projects (e.g., `cargo clippy`, `go vet ./...`) |
+
+These commands are injected into workflow templates and used by quality gates. When not set, agents use the package manager defaults (e.g., `pnpm build`, `pnpm test`).
+
+### `projectPaths:` — Project Directory Mapping
+
+Map Linear project names to their root directories within a monorepo. Supports two forms:
+
+**String shorthand** — project name maps to a path:
+
+```yaml
+projectPaths:
+  Frontend: "apps/web"
+  Backend: "apps/api"
+  Shared: "packages/shared"
+```
+
+**Object form** — per-project overrides for package manager, build, test, and validate commands:
+
+```yaml
+projectPaths:
+  Frontend: "apps/web"                     # String shorthand
+  Backend:
+    path: "apps/api"
+    packageManager: npm
+    testCommand: "npm test"
+  "Family iOS":
+    path: "apps/family-ios"
+    packageManager: none
+    buildCommand: "make build"
+    testCommand: "make test"
+    validateCommand: "swiftlint"
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes | Root directory for this project within the repo |
+| `packageManager` | string | No | Package manager override (`pnpm`, `npm`, `yarn`, `bun`, `none`) |
+| `buildCommand` | string | No | Build command override |
+| `testCommand` | string | No | Test command override |
+| `validateCommand` | string | No | Validation command override |
+
+Per-project values override the repo-wide defaults. String shorthand values are normalized to `{ path: value }` internally.
+
+> **Note:** `projectPaths` and `allowedProjects` are mutually exclusive. When `projectPaths` is set, its keys become the allowed project list.
+
 ### Provider Resolution Cascade
 
 Provider is resolved per agent using a 10-tier cascade (async mode with MAB routing):
