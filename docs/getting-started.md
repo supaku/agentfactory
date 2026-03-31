@@ -10,7 +10,9 @@ This guide walks through setting up AgentFactory to process Linear issues with c
 - **Linear account** — with API key access
 - A coding agent installed:
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default)
-  - [OpenAI Codex](https://platform.openai.com/docs/guides/codex) (experimental)
+  - [OpenAI Codex](https://platform.openai.com/docs/guides/codex) (experimental — supports App Server and Exec modes)
+  - [Spring AI](https://spring.io/projects/spring-ai) agents via HTTP (experimental)
+  - Any [A2A protocol](https://a2a-protocol.org) compatible agent (experimental)
 
 ## Quick Start (recommended)
 
@@ -59,6 +61,8 @@ LINEAR_ACCESS_TOKEN=lin_api_...
 LINEAR_WEBHOOK_SECRET=your-webhook-secret
 
 # Optional: agent provider (default: claude)
+# Also selectable via issue labels (provider:codex), mentions ("use codex"),
+# or .agentfactory/config.yaml — see docs/providers.md for the full cascade.
 AGENT_PROVIDER=claude
 
 # Optional: Linear team/project IDs
@@ -70,7 +74,52 @@ REDIS_URL=redis://localhost:6379
 # Optional: Worker configuration
 WORKER_API_URL=https://your-app.vercel.app
 WORKER_API_KEY=your-api-key
+
+# Optional: Codex App Server mode (persistent JSON-RPC 2.0 process)
+CODEX_USE_APP_SERVER=1
 ```
+
+### Repository Configuration
+
+For repository-level settings, create `.agentfactory/config.yaml` at the root of your repo:
+
+```yaml
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/yourorg/yourrepo
+
+# Map Linear projects to directories (monorepo support)
+projectPaths:
+  MyProject: "."
+  Frontend: "apps/web"
+  Backend:
+    path: "apps/api"
+    packageManager: npm
+    testCommand: "npm test"
+
+# Provider routing
+providers:
+  default: claude
+  byWorkType:
+    qa: codex
+  byProject:
+    Backend: codex
+
+# Quality gates
+quality:
+  baselineEnabled: true
+  ratchetEnabled: true
+  boyscoutRule: true
+
+# Merge queue
+mergeQueue:
+  enabled: true
+  provider: local          # local, github-native, mergify, trunk
+  strategy: rebase
+  autoMerge: true
+```
+
+See [Configuration](./configuration.md) for the full reference.
 
 ### Linear Setup
 
@@ -257,15 +306,53 @@ pnpm af-linear check-blocked PROJ-123
 
 Run `pnpm af-linear help` for the full command list.
 
+## Quality Gates
+
+Quality gates ensure agents don't regress your codebase. Enable them in `.agentfactory/config.yaml`:
+
+```yaml
+quality:
+  baselineEnabled: true    # Capture metrics before agent starts
+  ratchetEnabled: true     # Enforce "no regressions" rule
+  boyscoutRule: true       # Instruct agents to leave code better than found
+  tddWorkflow: true        # Include TDD instructions in agent prompts
+```
+
+When enabled, the orchestrator captures a quality baseline (test counts, typecheck errors, lint errors) from `main` before the agent starts. After the agent finishes, a delta check verifies the agent didn't introduce regressions. The ratchet enforces this in merge queue and CI.
+
+See [Quality Gates](./quality-gates.md) for details on baseline capture, ratchet enforcement, and CI integration.
+
+## Merge Queue
+
+The merge queue automatically rebases and merges agent PRs after they pass QA:
+
+```yaml
+mergeQueue:
+  enabled: true
+  provider: local           # local (built-in), github-native, mergify, trunk
+  strategy: rebase          # rebase, merge, or squash
+  autoMerge: true           # Auto-add approved PRs to queue
+  testCommand: "pnpm test"  # Run after rebase
+  mergiraf: true            # Syntax-aware conflict resolution
+  escalation:
+    onConflict: reassign    # reassign, notify, or park
+    onTestFailure: notify   # notify, park, or retry
+```
+
+When an agent's PR passes acceptance, it's automatically added to the merge queue. The queue rebases the PR onto `main`, runs tests, and merges if everything passes. Conflicts are handled by the escalation policy.
+
 ## What Happens When an Agent Runs
 
 1. **Worktree creation** — a git worktree is created at `../myrepo.wt/PROJ-123-DEV`
 2. **Branch setup** — a feature branch `PROJ-123` is created from `main`
-3. **Issue fetch** — requirements are fetched from the Linear issue description
-4. **Agent execution** — the coding agent reads the codebase, implements the change
-5. **PR creation** — the agent commits changes and creates a pull request
-6. **Status update** — Linear issue status transitions to "Finished"
-7. **Cost tracking** — token usage and cost are recorded on the agent process
+3. **Quality baseline** — if quality gates are enabled, metrics are captured from `main`
+4. **Issue fetch** — requirements are fetched from the Linear issue description
+5. **Agent execution** — the coding agent reads the codebase, uses [code intelligence tools](./code-intelligence.md) for search and navigation, and implements the change
+6. **PR creation** — the agent commits changes and creates a pull request
+7. **Quality check** — if enabled, a delta check ensures no regressions from baseline
+8. **Status update** — Linear issue status transitions to "Finished"
+9. **Merge queue** — if enabled, accepted PRs are automatically rebased and merged
+10. **Cost tracking** — token usage and cost are recorded on the agent process
 
 ## Event Callbacks
 
@@ -337,4 +424,9 @@ Each transition is automatic when `autoTransition: true` (default).
 - [Architecture](./architecture.md) — understand the system design
 - [Configuration](./configuration.md) — complete config reference
 - [Providers](./providers.md) — configure multiple agent providers
+- [Quality Gates](./quality-gates.md) — baseline-diff quality checks and ratchet enforcement
+- [Templates](./templates.md) — customize agent prompts and instructions
+- [Code Intelligence](./code-intelligence.md) — search, symbols, repo map, and duplicate detection
+- [MCP Server](./mcp-server.md) — expose fleet capabilities to external clients
+- [Codex Guide](./codex-guide.md) — Codex-specific setup (App Server, Exec mode)
 - [Examples](../examples/) — working code samples

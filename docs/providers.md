@@ -9,8 +9,63 @@ AgentFactory abstracts coding agents behind a unified `AgentProvider` interface.
 | `claude` | Production | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) via `@anthropic-ai/claude-agent-sdk` |
 | `codex` | Experimental | [OpenAI Codex](https://platform.openai.com/) -- two modes: **App Server** (long-lived JSON-RPC 2.0 process, concurrent threads, message injection) and **Exec fallback** (one CLI process per session, JSONL events). See [`docs/codex-guide.md`](codex-guide.md) for Codex-specific setup. |
 | `amp` | Experimental | [Amp](https://amp.dev/) |
-| `spring-ai` | Experimental | [Spring AI](https://spring.io/projects/spring-ai) agents via HTTP |
-| `a2a` | Experimental | Any [A2A protocol](https://a2a-protocol.org) compatible agent |
+| `spring-ai` | Experimental | [Spring AI](https://spring.io/projects/spring-ai) agents via HTTP (JSONL events, JAR process) |
+| `a2a` | Experimental | Any [A2A protocol](https://a2a-protocol.org) compatible agent (JSON-RPC 2.0, SSE streaming) |
+
+### Spring AI Provider Setup
+
+The Spring AI provider spawns a Spring AI agent as a JAR child process:
+
+```bash
+# Required
+SPRING_AI_JAR=/path/to/spring-ai-agent.jar    # Path to the Spring AI agent JAR
+
+# Optional
+SPRING_AI_JAVA_HOME=/usr/lib/jvm/java-21       # Java home (default: system Java)
+```
+
+**How it works:**
+- **New session:** `java -jar <JAR> --prompt "<prompt>" --cwd <cwd> --json`
+- **Resume:** `java -jar <JAR> --resume <sessionId> --prompt "<prompt>" --cwd <cwd> --json`
+
+The JAR emits JSONL events on stdout:
+
+| JSONL Event | Maps To |
+|-------------|---------|
+| `session.started` | `init` (sessionId) |
+| `assistant.message` | `assistant_text` |
+| `tool.invocation` | `tool_use` |
+| `tool.result` | `tool_result` |
+| `turn.completed` | `result` (success, usage) |
+| `turn.failed` | `result` (failure) |
+| `error` | `error` |
+
+**Limitations:** No message injection support. No session resume (sessions are stateless).
+
+### A2A Provider Setup
+
+The A2A provider invokes external agents over HTTP using the [A2A protocol](https://a2a-protocol.org) (v0.3.0):
+
+```bash
+# Required
+A2A_AGENT_URL=https://agent.example.com       # Base URL of the A2A agent
+
+# Optional — per-work-type URL override
+A2A_AGENT_URL_RESEARCH=https://research-agent.example.com
+
+# Authentication (choose one)
+A2A_API_KEY=your-api-key                       # Sent as x-api-key header
+A2A_BEARER_TOKEN=your-bearer-token             # Sent as Authorization: Bearer header
+```
+
+**Protocol details:**
+- **Discovery:** `GET /.well-known/agent-card.json`
+- **Task creation:** `POST /a2a` with JSON-RPC 2.0 (`message/send` or `message/stream`)
+- **Task lifecycle:** submitted → working → completed/failed/canceled
+- **Streaming:** SSE events (`TaskStatusUpdateEvent`, `TaskArtifactUpdateEvent`)
+- **Input required:** A paused state that requests user input (mapped to `injectMessage`)
+
+**Limitations:** Session resume depends on the remote agent's capabilities.
 
 ## Provider Interface
 
@@ -75,16 +130,65 @@ export AGENT_PROVIDER_BACKEND=codex
 
 ### Resolution Order
 
-Provider is resolved per agent with this priority:
+Provider is resolved per agent using a 10-tier cascade (highest to lowest priority):
+
+| Tier | Source | Example |
+|------|--------|---------|
+| 1 | Issue label | `provider:codex` label on the Linear issue |
+| 2 | Mention context | "use codex", "@codex", or "provider:codex" in prompt text |
+| 3 | Config `providers.byWorkType` | `providers: { byWorkType: { qa: codex } }` in config.yaml |
+| 4 | Config `providers.byProject` | `providers: { byProject: { Social: amp } }` in config.yaml |
+| 5 | MAB routing | Thompson Sampling learned routing (when `routing.enabled: true`) |
+| 6 | Env `AGENT_PROVIDER_{WORKTYPE}` | `AGENT_PROVIDER_QA=codex` |
+| 7 | Env `AGENT_PROVIDER_{PROJECT}` | `AGENT_PROVIDER_SOCIAL=amp` |
+| 8 | Config `providers.default` | `providers: { default: codex }` in config.yaml |
+| 9 | Env `AGENT_PROVIDER` | `AGENT_PROVIDER=claude` |
+| 10 | Hardcoded | `claude` |
+
+Tiers 1-2 are explicit human overrides. Tiers 3-4 are static config. Tier 5 is learned routing (feature-flagged). Tiers 6-10 are fallbacks. Without MAB routing enabled, tier 5 is skipped (9 tiers total).
+
+**Provider aliases** are supported: `opus` and `sonnet` resolve to `claude`, `gemini` resolves to `a2a`.
+
+### Label-Based Selection
+
+Add a `provider:<name>` label to a Linear issue to override the provider for that specific issue:
 
 ```
-1. AGENT_PROVIDER_{WORKTYPE}   (e.g., AGENT_PROVIDER_QA)
-2. AGENT_PROVIDER_{PROJECT}    (e.g., AGENT_PROVIDER_SOCIAL)
-3. AGENT_PROVIDER              (global default)
-4. 'claude'                    (fallback)
+Labels: provider:codex
 ```
 
-Work type beats project, both beat the global default.
+This is the highest-priority override — it beats all config and environment settings.
+
+### Mention-Based Selection
+
+Include a provider reference in the agent prompt or mention context:
+
+```
+"Use codex for this task"
+"@codex implement this feature"
+"provider:spring-ai"
+```
+
+Matching is case-insensitive and word-boundary aware.
+
+### Config-File Selection
+
+Set provider routing in `.agentfactory/config.yaml`:
+
+```yaml
+providers:
+  default: claude
+  byWorkType:
+    qa: codex
+    acceptance: amp
+  byProject:
+    Backend: codex
+    Social: spring-ai
+```
+
+### MAB Intelligent Routing
+
+When `routing.enabled: true` in config, Thompson Sampling selects the optimal provider based on historical performance. See [Configuration](./configuration.md#routing--mab-intelligent-routing) for parameter details.
 
 ### Programmatic Selection
 
