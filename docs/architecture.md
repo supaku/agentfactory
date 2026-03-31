@@ -98,7 +98,8 @@ The provider system (`packages/core/src/providers/`) abstracts away differences 
 
 ```typescript
 interface AgentProvider {
-  readonly name: 'claude' | 'codex' | 'amp'
+  readonly name: 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a'
+  readonly capabilities: AgentProviderCapabilities
   spawn(config: AgentSpawnConfig): AgentHandle
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle
 }
@@ -154,13 +155,22 @@ Key files:
 
 ### Provider Resolution
 
-Provider is selected dynamically per agent based on environment variables:
+Provider is selected dynamically per agent using a 10-tier resolution cascade:
 
 ```
-Priority: AGENT_PROVIDER_{WORKTYPE} > AGENT_PROVIDER_{PROJECT} > AGENT_PROVIDER > 'claude'
+1. Issue label override (provider:codex)          — explicit human override
+2. Mention context override ("use codex")         — explicit human override
+3. Config providers.byWorkType                    — static config (.agentfactory/config.yaml)
+4. Config providers.byProject                     — static config
+5. MAB-based intelligent routing                  — learned routing (feature-flagged)
+6. Env var AGENT_PROVIDER_{WORKTYPE}              — static fallback
+7. Env var AGENT_PROVIDER_{PROJECT}               — static fallback
+8. Config providers.default                       — static fallback
+9. Env var AGENT_PROVIDER                         — static fallback
+10. Hardcoded 'claude'                            — ultimate fallback
 ```
 
-This allows configurations like "use Claude for development, Codex for QA".
+This allows configurations like "use Claude for development, Codex for QA" with multiple override mechanisms. See [Providers](./providers.md) for details.
 
 ### Linear Integration
 
@@ -190,19 +200,25 @@ Issues flow through work stations based on their Linear status:
 
 | Status | Work Type | Agent Role |
 |--------|-----------|------------|
+| — | `research` | Discovery and analysis phase |
+| — | `backlog-creation` | Create issues from research findings |
 | Backlog | `development` | Implement the feature or fix |
 | Started | `inflight` | Continue in-progress work |
 | Finished | `qa` | Validate the implementation |
 | Delivered | `acceptance` | Final acceptance testing |
 | Rejected | `refinement` | Address feedback and rework |
+| — | `merge` | Handle PR merge operations |
+| — | `security` | Security scanning (SAST, dependency audit) |
 
 Additional coordination types exist for parent issues with sub-issues:
 
 | Work Type | Description |
 |-----------|-------------|
 | `coordination` | Orchestrates sub-issue development in parallel |
+| `inflight-coordination` | Coordinate in-flight sub-issues |
 | `qa-coordination` | Runs QA on all sub-issues, promotes parent if all pass |
 | `acceptance-coordination` | Validates all sub-issues, merges PR |
+| `refinement-coordination` | Coordinate refinement of sub-issues |
 
 ## Crash Recovery
 
@@ -235,9 +251,11 @@ Instead of fixed session timeouts, AgentFactory uses inactivity-based monitoring
 
 This allows long-running agents (large test suites, big refactors) to run as long as they're making progress.
 
-## Workflow Governor
+## Workflow Governor / Workflow Engine
 
 The Workflow Governor (`packages/core/src/governor/`) is the central lifecycle manager. It observes all issues across projects and decides what work to dispatch based on issue status, active sessions, cooldowns, and human overrides.
+
+> **Note:** The internal architecture is migrating from "Decision Engine" to "Workflow Engine" (SUP-1756). The Workflow Engine adds structured workflow graphs, parallelism primitives, and gate-based pause/resume. The governor's external API remains backwards-compatible.
 
 ### Architecture
 
@@ -257,7 +275,7 @@ Platform Webhooks ──► PlatformAdapter.normalizeWebhookEvent()
                     EventDeduplicator
                        (skip if same issue+status within 10s)
                               │
-                    Decision Engine (decideAction)
+                    Workflow Engine (decideAction)
                               │
                     dispatchWork → Redis work queue → Workers
 ```
@@ -271,7 +289,7 @@ Platform Webhooks ──► PlatformAdapter.normalizeWebhookEvent()
 
 Both share the same `decideAction()` pure function and dependency injection interface.
 
-### Decision Engine
+### Workflow Engine (Decision Engine)
 
 For each issue, the governor evaluates:
 
@@ -282,6 +300,27 @@ For each issue, the governor evaluates:
 5. **Hold override** — skip if a human commented `HOLD`
 6. **Priority override** — reorder if `PRIORITY HIGH` / `PRIORITY URGENT`
 7. **Workflow strategy** — considers top-of-funnel phases (research, backlog-creation)
+8. **Stuck agent detection** — NUDGE action to inject redirect messages via `injectMessage()`
+
+### Workflow Parallelism
+
+The Workflow Engine supports structured parallelism patterns (SUP-1231):
+
+- **Fan-out** — spawn multiple agents in parallel (e.g., sub-issue development)
+- **Fan-in** — wait for all parallel agents to complete before proceeding
+- **Race** — proceed when the first of N parallel agents completes
+
+Parallelism is configured with `maxConcurrent` to limit resource usage.
+
+### Workflow Gates
+
+Workflow gates allow pausing and resuming workflows based on external signals (SUP-1229):
+
+- **Signal gate** — pauses until an external event (webhook, API call) is received
+- **Timer gate** — pauses for a configurable duration (e.g., wait 5 minutes before retry)
+- **Webhook gate** — pauses until a specific webhook payload is received
+
+Gates have configurable timeouts — if the signal isn't received within the timeout, the workflow resumes with a timeout status.
 
 ### GovernorDependencies
 
@@ -352,6 +391,85 @@ Users can override the governor by adding Linear comments:
 - `HOLD` — Pause all automated processing
 - `RESUME` — Resume automated processing
 - `PRIORITY HIGH` / `PRIORITY URGENT` — Override priority for next dispatch
+
+## Merge Queue Architecture
+
+The merge queue handles automated PR rebase and merge after agents complete their work:
+
+```
+Agent completes PR
+        │
+        ▼
+  Acceptance passes
+        │
+        ▼
+  ┌─────────────┐
+  │ Merge Queue  │──── Queue entries stored in Redis
+  │  (sorted by  │     with priority, status, retry count
+  │   priority)  │
+  └──────┬──────┘
+         │
+    ┌────▼────┐
+    │ Rebase  │──── git rebase onto main
+    │ + Test  │──── run testCommand
+    └────┬────┘
+         │
+    ┌────▼────────┐
+    │  Mergiraf   │──── Syntax-aware conflict resolution
+    │ (optional)  │     for supported file types
+    └────┬────────┘
+         │
+    ┌────▼────┐
+    │  Merge  │──── strategy: rebase, merge, or squash
+    └────┬────┘
+         │
+    ┌────▼────────┐
+    │  Cleanup    │──── Delete branch, update issue status
+    └─────────────┘
+```
+
+**Providers:** `local` (built-in), `github-native` (GitHub merge queue API), `mergify`, `trunk`.
+
+**Escalation:** Configurable policies for conflicts (`reassign`, `notify`, `park`) and test failures (`notify`, `park`, `retry`).
+
+## Code Intelligence Architecture
+
+The code intelligence system provides codebase navigation tools for agents:
+
+```
+Source Files (.ts, .tsx, .js, .py, .go, .rs)
+        │
+        ▼
+  ┌──────────────────┐
+  │  Tree-sitter AST │──── Language-specific symbol extraction
+  │    Parsing       │     (functions, classes, interfaces, types)
+  └────────┬─────────┘
+           │
+     ┌─────┴──────┐
+     │            │
+┌────▼────┐ ┌────▼──────┐
+│  BM25   │ │ Semantic  │
+│ Index   │ │ Embeddings│
+└────┬────┘ └─────┬─────┘
+     │            │
+     └─────┬──────┘
+           │
+  ┌────────▼─────────┐
+  │  Hybrid Search   │──── BM25 + semantic similarity
+  │  (reranking)     │     with Cohere/Voyage reranking
+  └────────┬─────────┘
+           │
+  ┌────────▼─────────┐
+  │   PageRank       │──── Import graph analysis
+  │   Repo Map       │     for file importance ranking
+  └──────────────────┘
+```
+
+**6 tools:** `af_code_search_code`, `af_code_search_symbols`, `af_code_get_repo_map`, `af_code_find_type_usages`, `af_code_validate_cross_deps`, `af_code_check_duplicate`.
+
+**Deduplication:** xxHash64 exact match + SimHash near-duplicate detection.
+
+See [Code Intelligence](./code-intelligence.md) for tool usage and configuration.
 
 ## Distributed Architecture
 
