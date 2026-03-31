@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { createLinearAgentClient } from '../agent-client.js'
 import { getDefaultTeamName } from '../constants.js'
+import { resolveSDKLabelNames } from '../utils.js'
 import {
   checkPRDeploymentStatus,
   formatDeploymentStatus,
@@ -156,7 +157,7 @@ async function getIssue(client: LinearClient, issueId: string): Promise<unknown>
     status: state?.name,
     team: team?.name,
     project: project?.name,
-    labels: labels.nodes.map((l) => l.name),
+    labels: await resolveSDKLabelNames(labels.nodes),
     createdAt: issue.createdAt,
     updatedAt: issue.updatedAt,
   }
@@ -395,7 +396,7 @@ async function listBacklogIssues(client: LinearClient, projectName: string): Pro
       url: issue.url,
       priority: issue.priority,
       status: state?.name,
-      labels: labels.nodes.map((l) => l.name),
+      labels: await resolveSDKLabelNames(labels.nodes),
     })
   }
 
@@ -469,7 +470,7 @@ async function listUnblockedBacklogIssues(
       url: issue.url,
       priority: issue.priority,
       status: state?.name,
-      labels: labels.nodes.map((l) => l.name),
+      labels: await resolveSDKLabelNames(labels.nodes),
       blocked: blockingIssues.length > 0,
       blockedBy: blockingIssues,
     })
@@ -671,7 +672,7 @@ async function listIssues(
       title: issue.title,
       status: state?.name,
       priority: issue.priority,
-      labels: labels.nodes.map((l) => l.name),
+      labels: await resolveSDKLabelNames(labels.nodes),
       project: project?.name ?? null,
       assignee: assignee?.name ?? null,
       createdAt: issue.createdAt,

@@ -15,6 +15,7 @@
 import type { Issue, Comment } from '@linear/sdk'
 import type { LinearWorkflowStatus, ThoughtActivityContent } from './types.js'
 import type { LinearAgentClient } from './agent-client.js'
+import { resolveSDKLabelNames } from './utils.js'
 
 // ---------------------------------------------------------------------------
 // Abstract types (structurally identical to @renseiai/agentfactory frontend types)
@@ -152,7 +153,7 @@ async function toAbstractIssue(issue: Issue): Promise<AbstractIssue> {
     url: issue.url,
     status,
     priority: issue.priority,
-    labels: labels.nodes.map((l) => l.name),
+    labels: await resolveSDKLabelNames(labels.nodes),
     parentId: parent?.id,
     project: project?.name,
     createdAt: issue.createdAt,

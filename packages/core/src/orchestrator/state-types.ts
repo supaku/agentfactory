@@ -6,6 +6,7 @@
  */
 
 import type { AgentWorkType } from './work-types.js'
+import type { AgentProviderName } from '../providers/index.js'
 
 /**
  * Status of the agent's work in the worktree
@@ -31,6 +32,8 @@ export interface WorktreeState {
   linearSessionId: string | null
   /** Provider CLI session ID for --resume (if available) */
   providerSessionId: string | null
+  /** Name of the provider used for the session (e.g., 'claude', 'codex') */
+  providerName?: AgentProviderName | null
   /** Type of work being performed */
   workType: AgentWorkType
   /** The prompt that was given to the agent */

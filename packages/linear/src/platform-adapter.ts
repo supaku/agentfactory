@@ -14,6 +14,7 @@
 
 import type { Issue } from '@linear/sdk'
 import { LinearFrontendAdapter } from './frontend-adapter.js'
+import { resolveSDKLabelNames } from './utils.js'
 import type { LinearAgentClient } from './agent-client.js'
 import type {
   WebhookIssue,
@@ -180,7 +181,7 @@ async function sdkIssueToGovernorIssue(issue: Issue): Promise<GovernorIssue> {
     title: issue.title,
     description: issue.description ?? undefined,
     status: state?.name ?? 'Backlog',
-    labels: labels.nodes.map((l) => l.name),
+    labels: await resolveSDKLabelNames(labels.nodes),
     createdAt: issue.createdAt.getTime(),
     parentId: parent?.id,
     project: project?.name,

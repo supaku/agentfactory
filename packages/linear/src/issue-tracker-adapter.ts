@@ -10,7 +10,7 @@
 
 import { LinearAgentClient, createLinearAgentClient } from './agent-client.js'
 import { AgentSession, createAgentSession } from './agent-session.js'
-import { buildCompletionComments } from './utils.js'
+import { buildCompletionComments, resolveSDKLabelNames } from './utils.js'
 import type { AgentWorkType } from './types.js'
 import {
   STATUS_WORK_TYPE_MAP,
@@ -178,7 +178,7 @@ export class LinearIssueTrackerClient implements IssueTrackerClient {
       url: issue.url,
       priority: issue.priority,
       status: state?.name,
-      labels: labels.nodes.map((l: { name: string }) => l.name),
+      labels: await resolveSDKLabelNames(labels.nodes),
       teamName: team?.key,
       projectName: project?.name,
     }
@@ -246,7 +246,7 @@ export class LinearIssueTrackerClient implements IssueTrackerClient {
         url: issue.url,
         priority: issue.priority,
         status: state?.name,
-        labels: labels.nodes.map((l: { name: string }) => l.name),
+        labels: await resolveSDKLabelNames(labels.nodes),
         teamName: team?.key,
         projectName: project?.name,
         parentId: parent?.id,

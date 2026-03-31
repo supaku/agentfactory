@@ -1215,39 +1215,36 @@ describe('Approval & Sandbox Policy Resolution (via spawn params)', () => {
     return threadStartReq
   }
 
-  it('autonomous: true resolves approval policy to onRequest', async () => {
+  it('autonomous: true resolves approval policy to on-request', async () => {
     const provider = new CodexAppServerProvider()
     const handle = provider.spawn(makeConfig({ autonomous: true, sandboxEnabled: false }))
 
     const threadStartReq = await driveToThreadStart(handle)
-    expect(threadStartReq.params.approvalPolicy).toBe('onRequest')
+    expect(threadStartReq.params.approvalPolicy).toBe('on-request')
   })
 
-  it('autonomous: false resolves approval policy to unlessTrusted', async () => {
+  it('autonomous: false resolves approval policy to untrusted', async () => {
     const provider = new CodexAppServerProvider()
     const handle = provider.spawn(makeConfig({ autonomous: false }))
 
     const threadStartReq = await driveToThreadStart(handle)
-    expect(threadStartReq.params.approvalPolicy).toBe('unlessTrusted')
+    expect(threadStartReq.params.approvalPolicy).toBe('untrusted')
   })
 
-  it('sandboxEnabled: false resolves sandbox policy to undefined (not sent)', async () => {
+  it('sandboxEnabled: false does not include sandbox on thread/start', async () => {
     const provider = new CodexAppServerProvider()
     const handle = provider.spawn(makeConfig({ sandboxEnabled: false }))
 
     const threadStartReq = await driveToThreadStart(handle)
-    expect(threadStartReq.params.sandboxPolicy).toBeUndefined()
+    expect(threadStartReq.params.sandbox).toBeUndefined()
   })
 
-  it('sandboxEnabled: true resolves sandbox policy with workspaceWrite and writableRoots', async () => {
+  it('sandboxEnabled: true includes sandbox mode string on thread/start', async () => {
     const provider = new CodexAppServerProvider()
     const handle = provider.spawn(makeConfig({ sandboxEnabled: true, cwd: '/my/project' }))
 
     const threadStartReq = await driveToThreadStart(handle)
-    expect(threadStartReq.params.sandboxPolicy).toEqual({
-      type: 'workspaceWrite',
-      writableRoots: ['/my/project'],
-    })
+    expect(threadStartReq.params.sandbox).toBe('workspace-write')
   })
 })
 
@@ -1594,14 +1591,14 @@ describe('normalizeMcpToolName', () => {
 // ---------------------------------------------------------------------------
 
 describe('resolveSandboxPolicy', () => {
-  it('returns readOnly policy for read-only level', () => {
+  it('returns readOnly policy with network access for read-only level', () => {
     const config = { sandboxLevel: 'read-only', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
-    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly', networkAccess: true })
   })
 
-  it('returns workspaceWrite policy with writableRoots for workspace-write level', () => {
+  it('returns workspaceWrite policy with writableRoots and network for workspace-write level', () => {
     const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: '/work' } as unknown as AgentSpawnConfig
-    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'], networkAccess: true })
   })
 
   it('returns dangerFullAccess policy for full-access level', () => {
@@ -1611,7 +1608,7 @@ describe('resolveSandboxPolicy', () => {
 
   it('falls back to sandboxEnabled boolean when no level set', () => {
     const config = { sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
-    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'] })
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'workspaceWrite', writableRoots: ['/work'], networkAccess: true })
   })
 
   it('returns undefined when sandbox disabled and no level set', () => {
@@ -1621,7 +1618,7 @@ describe('resolveSandboxPolicy', () => {
 
   it('sandboxLevel takes precedence over sandboxEnabled boolean', () => {
     const config = { sandboxLevel: 'read-only', sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
-    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly' })
+    expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly', networkAccess: true })
   })
 })
 

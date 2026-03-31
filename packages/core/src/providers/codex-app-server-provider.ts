@@ -57,10 +57,21 @@ interface JsonRpcNotification {
   params?: Record<string, unknown>
 }
 
-type JsonRpcMessage = JsonRpcResponse | JsonRpcNotification
+/** Server request: has both `id` (expects response) and `method` (like approvals) */
+interface JsonRpcServerRequest {
+  id: number | string
+  method: string
+  params?: Record<string, unknown>
+}
+
+type JsonRpcMessage = JsonRpcResponse | JsonRpcNotification | JsonRpcServerRequest
+
+function isServerRequest(msg: JsonRpcMessage): msg is JsonRpcServerRequest {
+  return 'id' in msg && 'method' in msg
+}
 
 function isResponse(msg: JsonRpcMessage): msg is JsonRpcResponse {
-  return 'id' in msg && typeof (msg as JsonRpcResponse).id === 'number'
+  return 'id' in msg && !('method' in msg)
 }
 
 function isNotification(msg: JsonRpcMessage): msg is JsonRpcNotification {
@@ -251,7 +262,11 @@ export class AppServerProcessManager {
         return
       }
 
-      if (isResponse(msg)) {
+      if (isServerRequest(msg)) {
+        // Server requests have both `id` and `method` — Codex expects a response.
+        // Approval requests (commandExecution/requestApproval, etc.) come as server requests.
+        this.handleServerRequest(msg)
+      } else if (isResponse(msg)) {
         this.handleResponse(msg)
       } else if (isNotification(msg)) {
         this.handleNotification(msg)
@@ -360,6 +375,50 @@ export class AppServerProcessManager {
   }
 
   /**
+   * Handle an incoming JSON-RPC server request (has both `id` and `method`).
+   * Codex sends approval requests as server requests that expect a response.
+   * Route to the thread listener (as a notification-like object) and store
+   * the request ID so the handle can respond.
+   */
+  private handleServerRequest(request: JsonRpcServerRequest): void {
+    const threadId = request.params?.threadId as string | undefined
+
+    console.error(`[CodexAppServer] Server request: ${request.method} (id=${request.id}, thread=${threadId ?? 'none'})`)
+
+    // Wrap as a notification-compatible object for the thread listener,
+    // but include the id so the handle can respond.
+    const notificationLike: JsonRpcNotification = {
+      method: request.method,
+      params: { ...request.params, _serverRequestId: request.id },
+    }
+
+    if (threadId) {
+      const listener = this.threadListeners.get(threadId)
+      if (listener) {
+        listener(notificationLike)
+        return
+      }
+    }
+
+    // No thread listener — auto-accept to avoid hanging
+    console.error(`[CodexAppServer] No thread listener for ${request.method} — auto-accepting`)
+    this.respondToServerRequest(request.id, { decision: 'acceptForSession' })
+  }
+
+  /**
+   * Send a JSON-RPC response to a server request.
+   */
+  respondToServerRequest(requestId: number | string, result: unknown): void {
+    if (!this.process?.stdin?.writable) {
+      console.error('[CodexAppServer] Cannot respond to server request: stdin not writable')
+      return
+    }
+    console.error(`[CodexAppServer] Responding to server request ${requestId}: ${JSON.stringify(result)}`)
+    const response = JSON.stringify({ jsonrpc: '2.0', id: requestId, result })
+    this.process.stdin.write(response + '\n')
+  }
+
+  /**
    * Handle an incoming JSON-RPC notification.
    * Routes to the appropriate thread listener based on threadId in params.
    */
@@ -431,8 +490,8 @@ export class AppServerProcessManager {
 
     try {
       await this.request('config/batchWrite', {
-        entries: [
-          { key: 'mcpServers', value: mcpServers },
+        edits: [
+          { keyPath: 'mcpServers', mergeStrategy: 'replace', value: mcpServers },
         ],
       })
       this.mcpConfigured = true
@@ -665,7 +724,7 @@ export function mapAppServerNotification(
 
     // --- Item deltas (streaming) ---
     case 'item/agentMessage/delta': {
-      const text = params.text as string | undefined
+      const text = (params.delta ?? params.text) as string | undefined
       if (text) {
         return [{
           type: 'assistant_text',
@@ -694,7 +753,7 @@ export function mapAppServerNotification(
       return [{
         type: 'system',
         subtype: 'command_progress',
-        message: (params.delta ?? params.output) as string ?? '',
+        message: stripAnsi((params.delta ?? params.output) as string ?? ''),
         raw: notification,
       }]
 
@@ -723,6 +782,18 @@ export function mapAppServerNotification(
         raw: notification,
       }]
   }
+}
+
+/**
+ * Strip ANSI escape codes from text.
+ * Codex shell commands produce raw terminal output with color codes,
+ * cursor movement, etc. that pollute logs and activity tracking.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_PATTERN = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\].*?\x07|\x1b[()][AB012]|\x1b\[[\d;]*m/g
+
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_PATTERN, '')
 }
 
 /**
@@ -776,7 +847,7 @@ export function mapAppServerItemEvent(
           type: 'tool_result',
           toolName: 'shell',
           toolUseId: item.id,
-          content: item.text ?? '',
+          content: stripAnsi(item.text ?? ''),
           isError: item.status === 'failed' || (item.exitCode !== undefined && item.exitCode !== 0),
           raw: { method, params },
         }]
@@ -887,11 +958,12 @@ export function normalizeMcpToolName(server?: string, tool?: string): string {
 // ---------------------------------------------------------------------------
 
 function resolveApprovalPolicy(config: AgentSpawnConfig): string {
-  // SUP-1747: Use 'onRequest' for autonomous agents so all tool executions
+  // SUP-1747: Use 'on-request' for autonomous agents so all tool executions
   // flow through the approval bridge for safety evaluation. The bridge
   // auto-approves safe commands and declines destructive patterns.
-  if (config.autonomous) return 'onRequest'
-  return 'unlessTrusted'
+  // Codex v0.117+ uses kebab-case: 'on-request' | 'untrusted' | 'on-failure' | 'never'
+  if (config.autonomous) return 'on-request'
+  return 'untrusted'
 }
 
 /**
@@ -912,21 +984,50 @@ function resolveApprovalPolicy(config: AgentSpawnConfig): string {
  *   "normal development"     → workspaceWrite
  *   "install/deploy/admin"   → dangerFullAccess
  */
+/**
+ * Resolve sandbox policy as an object for turn/start (supports writableRoots).
+ * Codex v0.117+ turn/start accepts: { type: 'workspaceWrite', writableRoots: [...] }
+ *
+ * Network access is enabled by default for agents because they need to run
+ * commands like `gh`, `curl`, `pnpm install`, etc. The sandbox still restricts
+ * file writes to the workspace root.
+ */
 export function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, unknown> | undefined {
   if (config.sandboxLevel) {
     switch (config.sandboxLevel) {
       case 'read-only':
-        return { type: 'readOnly' }
+        return { type: 'readOnly', networkAccess: true }
       case 'workspace-write':
-        return { type: 'workspaceWrite', writableRoots: [config.cwd] }
+        return { type: 'workspaceWrite', writableRoots: [config.cwd], networkAccess: true }
       case 'full-access':
         return { type: 'dangerFullAccess' }
     }
   }
 
-  // Fallback: boolean sandboxEnabled → workspaceWrite
+  // Fallback: boolean sandboxEnabled → workspaceWrite with network
   if (!config.sandboxEnabled) return undefined
-  return { type: 'workspaceWrite', writableRoots: [config.cwd] }
+  return { type: 'workspaceWrite', writableRoots: [config.cwd], networkAccess: true }
+}
+
+/**
+ * Resolve sandbox mode as a simple string for thread/start.
+ * Codex v0.117+ thread/start accepts: 'read-only' | 'workspace-write' | 'danger-full-access'
+ */
+export function resolveSandboxMode(config: AgentSpawnConfig): string | undefined {
+  if (config.sandboxLevel) {
+    switch (config.sandboxLevel) {
+      case 'read-only':
+        return 'read-only'
+      case 'workspace-write':
+        return 'workspace-write'
+      case 'full-access':
+        return 'danger-full-access'
+    }
+  }
+
+  // Fallback: boolean sandboxEnabled → workspace-write
+  if (!config.sandboxEnabled) return undefined
+  return 'workspace-write'
 }
 
 // ---------------------------------------------------------------------------
@@ -988,6 +1089,8 @@ class AppServerAgentHandle implements AgentHandle {
   private streamEnded = false
   /** True while we're waiting for a possible injected turn between turns */
   private awaitingInjection = false
+  /** Accumulated assistant text for the result message (completion comment) */
+  private accumulatedText = ''
 
   constructor(
     processManager: AppServerProcessManager,
@@ -1051,7 +1154,7 @@ class AppServerAgentHandle implements AgentHandle {
     }
     await this.processManager.request('turn/steer', {
       threadId: this.sessionId,
-      turnId: this.activeTurnId,
+      expectedTurnId: this.activeTurnId,
       input: [{ type: 'text', text }],
     })
   }
@@ -1065,9 +1168,10 @@ class AppServerAgentHandle implements AgentHandle {
    *
    * Returns a system event if the request was declined, for observability.
    */
-  private async handleApprovalRequest(notification: JsonRpcNotification): Promise<AgentEvent | null> {
+  private handleApprovalRequest(notification: JsonRpcNotification): AgentEvent | null {
     const params = notification.params ?? {}
-    const requestId = params.requestId as string
+    // Server requests pass _serverRequestId; fall back to requestId for backwards compat
+    const serverRequestId = params._serverRequestId as number | string | undefined
     const command = params.command as string | undefined
     const filePath = params.filePath as string | undefined
 
@@ -1084,13 +1188,14 @@ class AppServerAgentHandle implements AgentHandle {
       decision = { action: 'acceptForSession' }
     }
 
-    // Respond to the App Server with the approval decision
-    await this.processManager.request('approval/respond', {
-      threadId: this.sessionId,
-      requestId,
-      decision: decision.action,
-      reason: decision.reason,
-    })
+    // Respond to the server request with the approval decision.
+    // Codex sends approval requests as JSON-RPC server requests (with `id`),
+    // expecting a JSON-RPC response matching that id.
+    if (serverRequestId != null) {
+      this.processManager.respondToServerRequest(serverRequestId, {
+        decision: decision.action,
+      })
+    }
 
     // Emit system event for declined approvals (observability)
     if (decision.action === 'decline') {
@@ -1123,10 +1228,6 @@ class AppServerAgentHandle implements AgentHandle {
     }
 
     turnParams.model = resolveCodexModel(this.config)
-
-    if (this.config.maxTurns) {
-      turnParams.maxTurns = this.config.maxTurns
-    }
 
     const sandboxPolicy = resolveSandboxPolicy(this.config)
     if (sandboxPolicy) {
@@ -1161,7 +1262,7 @@ class AppServerAgentHandle implements AgentHandle {
         // Resume existing thread
         const result = await this.processManager.request('thread/resume', {
           threadId: this.resumeThreadId,
-          personality: 'concise',
+          personality: 'pragmatic',
         }) as { thread?: { id: string } }
 
         threadId = result?.thread?.id ?? this.resumeThreadId
@@ -1173,18 +1274,19 @@ class AppServerAgentHandle implements AgentHandle {
           serviceName: 'agentfactory',
         }
 
-        // SUP-1746: Pass persistent system instructions via `instructions` on thread/start.
+        // SUP-1746: Pass persistent system instructions via `baseInstructions` on thread/start.
         // Separates safety rules and project context from per-turn task input.
         const instructions = buildBaseInstructions(this.config)
         if (instructions) {
-          threadParams.instructions = instructions
+          threadParams.baseInstructions = instructions
         }
 
         threadParams.model = resolveCodexModel(this.config)
 
-        const sandboxPolicy = resolveSandboxPolicy(this.config)
-        if (sandboxPolicy) {
-          threadParams.sandboxPolicy = sandboxPolicy
+        // thread/start uses simple string sandbox mode (not object like turn/start)
+        const sandboxMode = resolveSandboxMode(this.config)
+        if (sandboxMode) {
+          threadParams.sandbox = sandboxMode
         }
 
         const result = await this.processManager.request('thread/start', threadParams) as {
@@ -1233,10 +1335,6 @@ class AppServerAgentHandle implements AgentHandle {
 
       turnParams.model = resolveCodexModel(this.config)
 
-      if (this.config.maxTurns) {
-        turnParams.maxTurns = this.config.maxTurns
-      }
-
       const sandboxPolicy = resolveSandboxPolicy(this.config)
       if (sandboxPolicy) {
         turnParams.sandboxPolicy = sandboxPolicy
@@ -1271,9 +1369,11 @@ class AppServerAgentHandle implements AgentHandle {
           const notification = this.notificationQueue.shift()!
 
           // SUP-1747: Intercept approval requests before other processing.
-          // The App Server emits these when approvalPolicy is 'onRequest'.
-          if (notification.method.endsWith('/requestApproval')) {
-            const deniedEvent = await this.handleApprovalRequest(notification)
+          // Codex sends approvals as server requests with methods like:
+          //   item/commandExecution/requestApproval, item/fileChange/requestApproval,
+          //   item/permissions/requestApproval, applyPatchApproval, execCommandApproval
+          if (notification.method.includes('pproval') || notification.method.includes('requestApproval')) {
+            const deniedEvent = this.handleApprovalRequest(notification)
             if (deniedEvent) {
               yield deniedEvent
             }
@@ -1296,17 +1396,30 @@ class AppServerAgentHandle implements AgentHandle {
           const events = mapAppServerNotification(notification, this.mapperState)
 
           for (const event of events) {
-            // Intercept turn/completed result events — convert to system events
-            // so the orchestrator doesn't think the agent is done. Track the last
-            // turn's outcome so we can emit a proper result when the stream ends.
+            // Intercept turn/completed result events.
+            // In autonomous mode (fleet), emit the result directly to end the session.
+            // In interactive mode, convert to system event to keep the stream alive
+            // for potential message injection.
+            // Accumulate assistant text for the result message / completion comment
+            if (event.type === 'assistant_text' && event.text) {
+              this.accumulatedText += event.text
+            }
+
             if (event.type === 'result') {
-              lastTurnSuccess = event.success
-              lastTurnErrors = event.errors
-              yield {
-                type: 'system',
-                subtype: 'turn_result',
-                message: `Turn ${event.success ? 'succeeded' : 'failed'}${event.errors?.length ? ': ' + event.errors[0] : ''}`,
-                raw: event.raw,
+              if (this.config.autonomous) {
+                // Autonomous: emit result with accumulated text and end stream
+                yield { ...event, message: this.accumulatedText.trim() || undefined }
+                this.streamEnded = true
+              } else {
+                // Interactive: keep stream alive for injection
+                lastTurnSuccess = event.success
+                lastTurnErrors = event.errors
+                yield {
+                  type: 'system',
+                  subtype: 'turn_result',
+                  message: `Turn ${event.success ? 'succeeded' : 'failed'}${event.errors?.length ? ': ' + event.errors[0] : ''}`,
+                  raw: event.raw,
+                }
               }
             } else {
               yield event
@@ -1323,10 +1436,11 @@ class AppServerAgentHandle implements AgentHandle {
         // Best effort
       }
 
-      // Emit the final result event when the stream ends
+      // Emit the final result event when the stream ends (interactive mode / stop)
       yield {
         type: 'result',
         success: lastTurnSuccess,
+        message: this.accumulatedText.trim() || undefined,
         errors: lastTurnErrors,
         cost: {
           inputTokens: this.mapperState.totalInputTokens || undefined,

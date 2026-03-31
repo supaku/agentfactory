@@ -32,6 +32,7 @@ import { LinearApiError, LinearStatusTransitionError } from './errors.js'
 import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
 import { TokenBucket, extractRetryAfterMs } from './rate-limiter.js'
 import { CircuitBreaker } from './circuit-breaker.js'
+import { resolveGraphQLLabelNames } from './utils.js'
 
 /**
  * Core Linear Agent Client
@@ -783,7 +784,7 @@ export class LinearAgentClient {
             description
             createdAt
             state { name }
-            labels { nodes { name } }
+            labels { nodes { name parent { name isGroup } } }
             parent { id }
             project { name }
             children { nodes { id } }
@@ -819,7 +820,7 @@ export class LinearAgentClient {
             description?: string | null
             createdAt: string
             state: { name: string } | null
-            labels: { nodes: Array<{ name: string }> }
+            labels: { nodes: Array<{ name: string; parent?: { name: string; isGroup: boolean } | null }> }
             parent: { id: string } | null
             project: { name: string } | null
             children: { nodes: Array<{ id: string }> }
@@ -833,7 +834,7 @@ export class LinearAgentClient {
         title: node.title,
         description: node.description ?? undefined,
         status: node.state?.name ?? 'Backlog',
-        labels: node.labels.nodes.map((l) => l.name),
+        labels: resolveGraphQLLabelNames(node.labels.nodes),
         createdAt: new Date(node.createdAt).getTime(),
         parentId: node.parent?.id ?? undefined,
         project: node.project?.name ?? undefined,
@@ -1038,7 +1039,7 @@ export class LinearAgentClient {
               priority
               url
               state { name }
-              labels(first: 20) { nodes { name } }
+              labels(first: 20) { nodes { name parent { name isGroup } } }
               relations(first: 50) {
                 nodes {
                   type
@@ -1079,7 +1080,7 @@ export class LinearAgentClient {
               priority: number
               url: string
               state: { name: string } | null
-              labels: { nodes: Array<{ name: string }> }
+              labels: { nodes: Array<{ name: string; parent?: { name: string; isGroup: boolean } | null }> }
               relations: {
                 nodes: Array<{
                   type: string
@@ -1133,7 +1134,7 @@ export class LinearAgentClient {
             description: child.description ?? undefined,
             status: child.state?.name,
             priority: child.priority,
-            labels: child.labels.nodes.map((l) => l.name),
+            labels: resolveGraphQLLabelNames(child.labels.nodes),
             url: child.url,
           },
           blockedBy,

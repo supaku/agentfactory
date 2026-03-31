@@ -362,3 +362,50 @@ export function buildCompletionComments(
 function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+// ---------------------------------------------------------------------------
+// Grouped label resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve label names from GraphQL responses that include parent info.
+ * Reconstructs `group:value` format for Linear grouped labels.
+ *
+ * Linear grouped labels (e.g., "provider:codex") are stored as parent/child
+ * relationships where the parent has `isGroup: true`. The API returns child
+ * labels with just `name: "codex"`, so we reconstruct the full key:value name.
+ */
+export function resolveGraphQLLabelNames(
+  labels: Array<{ name: string; parent?: { name: string; isGroup: boolean } | null }>
+): string[] {
+  return labels.map((l) => {
+    if (l.parent?.isGroup && l.parent.name) {
+      return `${l.parent.name}:${l.name}`
+    }
+    return l.name
+  })
+}
+
+/**
+ * Resolve label names from Linear SDK `IssueLabel` objects.
+ * Awaits the lazy `parent` getter to reconstruct `group:value` format.
+ *
+ * @param labels - Array of Linear SDK IssueLabel-like objects with lazy parent
+ */
+export async function resolveSDKLabelNames(
+  labels: Array<{ name: string; parent?: Promise<{ name?: string; isGroup?: boolean } | undefined> | unknown }>
+): Promise<string[]> {
+  return Promise.all(
+    labels.map(async (label) => {
+      try {
+        const parent = await (label as { parent?: Promise<{ name?: string; isGroup?: boolean } | undefined> }).parent
+        if (parent?.isGroup && parent.name) {
+          return `${parent.name}:${label.name}`
+        }
+      } catch {
+        // Parent resolution failed, return plain name
+      }
+      return label.name
+    })
+  )
+}

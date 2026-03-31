@@ -116,6 +116,8 @@ export {
   buildCompletionComment,
   splitContentIntoComments,
   buildCompletionComments,
+  resolveGraphQLLabelNames,
+  resolveSDKLabelNames,
 } from './utils.js'
 export type { CommentChunk } from './utils.js'
 

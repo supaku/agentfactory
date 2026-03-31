@@ -1019,6 +1019,9 @@ export class AgentOrchestrator {
   private readonly contextManagers: Map<string, ContextManager> = new Map()
   // Session output flags for completion contract validation (keyed by issueId)
   private readonly sessionOutputFlags: Map<string, { commentPosted: boolean; issueUpdated: boolean; subIssuesCreated: boolean }> = new Map()
+  // Buffered assistant text for batched logging (keyed by issueId)
+  // Streaming providers (Codex) send one token per event — buffer and flush on sentence boundaries
+  private readonly assistantTextBuffers: Map<string, { text: string; timer: ReturnType<typeof setTimeout> | null }> = new Map()
   // Template registry for configurable workflow prompts
   private readonly templateRegistry: TemplateRegistry | null
   // Allowlisted project names from .agentfactory/config.yaml
@@ -1211,6 +1214,45 @@ export class AgentOrchestrator {
    * @param issueId - The issue ID of the agent
    * @param activityType - Optional description of the activity type
    */
+  /**
+   * Buffer assistant text and flush in batches for readable logging.
+   * Streaming providers (Codex) emit one token per event — this buffers
+   * and flushes after 500ms of silence or on sentence boundaries.
+   */
+  private bufferAssistantText(issueId: string, text: string, log: Logger | undefined): void {
+    let buf = this.assistantTextBuffers.get(issueId)
+    if (!buf) {
+      buf = { text: '', timer: null }
+      this.assistantTextBuffers.set(issueId, buf)
+    }
+
+    buf.text += text
+
+    // Clear existing timer
+    if (buf.timer) clearTimeout(buf.timer)
+
+    // Flush after 500ms of silence
+    buf.timer = setTimeout(() => {
+      this.flushAssistantTextBuffer(issueId, log)
+    }, 500)
+  }
+
+  private flushAssistantTextBuffer(issueId: string, log: Logger | undefined): void {
+    const buf = this.assistantTextBuffers.get(issueId)
+    if (!buf || !buf.text.trim()) return
+
+    const text = buf.text.trim()
+    if (text.length > 0) {
+      log?.info('Agent', { text: text.substring(0, 300) })
+    }
+
+    buf.text = ''
+    if (buf.timer) {
+      clearTimeout(buf.timer)
+      buf.timer = null
+    }
+  }
+
   private updateLastActivity(issueId: string, activityType: string = 'activity'): void {
     const agent = this.activeAgents.get(issueId)
     if (agent) {
@@ -2636,6 +2678,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           workerId: this.config.apiActivityConfig?.workerId ?? null,
           pid: null, // Will be updated when process spawns
         })
+        // Track which provider was used so recovery can detect provider changes
+        initialState.providerName = spawnProviderName
         writeState(worktreePath, initialState)
 
         // Start heartbeat writer for crash detection
@@ -3535,6 +3579,17 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           if (raw.exit_code !== undefined && raw.exit_code !== 0) {
             log?.warn('Hook failed', { hook: raw.hook_name, exitCode: raw.exit_code })
           }
+        } else if (event.subtype === 'reasoning') {
+          // Codex reasoning/thinking events — buffer and log for fleet observability
+          this.updateLastActivity(issueId, 'thinking')
+          if (event.message) {
+            this.bufferAssistantText(issueId, event.message, log)
+          }
+          heartbeatWriter?.recordThinking()
+          // Persist reasoning to Linear session (same pattern as Claude's assistant_text)
+          if (emitter && event.message) {
+            await emitter.emitThought(event.message.substring(0, 200))
+          }
         } else if (event.subtype === 'auth_status') {
           if (event.message?.includes('error') || event.message?.includes('Error')) {
             log?.error('Auth error', { error: event.message })
@@ -3567,6 +3622,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       case 'assistant_text':
         // Assistant text output
         this.updateLastActivity(issueId, 'assistant')
+
+        // Buffer and log agent reasoning for fleet observability.
+        // Streaming providers (Codex) send one token per event — buffer for readability.
+        if (event.text) {
+          this.bufferAssistantText(issueId, event.text, log)
+        }
 
         // Feed to context manager for session intent extraction
         this.contextManagers.get(issueId)?.processEvent(event)
@@ -3633,6 +3694,9 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         break
 
       case 'result':
+        // Flush any buffered assistant text before processing result
+        this.flushAssistantTextBuffer(issueId, log)
+
         if (event.success) {
           log?.success('Agent completed', {
             cost: event.cost?.totalCostUsd ? `$${event.cost.totalCostUsd.toFixed(4)}` : 'N/A',
@@ -3700,8 +3764,13 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           if (agent.worktreePath) {
             try {
               // If the error is a stale session (resume failed), clear providerSessionId
-              // so the next recovery attempt starts fresh instead of hitting the same error
-              const isStaleSession = errorMessage.includes('No conversation found with session ID')
+              // so the next recovery attempt starts fresh instead of hitting the same error.
+              // Claude: "No conversation found with session ID"
+              // Codex: "thread/resume failed" or "thread/resume: ..."
+              const isStaleSession =
+                errorMessage.includes('No conversation found with session ID') ||
+                errorMessage.includes('thread/resume failed') ||
+                errorMessage.includes('thread/resume:')
               updateState(agent.worktreePath, {
                 status: 'failed',
                 errorMessage,
@@ -3975,6 +4044,9 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     this.activityEmitters.delete(issueId)
     this.abortControllers.delete(issueId)
     this.agentLoggers.delete(issueId)
+    const buf = this.assistantTextBuffers.get(issueId)
+    if (buf?.timer) clearTimeout(buf.timer)
+    this.assistantTextBuffers.delete(issueId)
 
     // Stop heartbeat writer
     const heartbeatWriter = this.heartbeatWriters.get(issueId)
@@ -4229,15 +4301,31 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         const recoveryWorkType = workType ?? recoveryCheck.state.workType ?? effectiveWorkType
 
         // Use existing provider session ID for resume if available,
-        // but clear it when the work type has changed (e.g., dev → QA).
-        // A session from a different work type cannot be resumed — attempting
-        // it produces "No conversation found" and wastes the recovery attempt.
+        // but clear it when the work type or provider has changed.
+        // A session from a different work type or provider cannot be resumed —
+        // attempting it produces errors and wastes the recovery attempt.
         const workTypeChanged = recoveryWorkType !== recoveryCheck.state.workType
-        const providerSessionId = workTypeChanged
+
+        // Resolve which provider will handle this recovery to detect provider switches
+        // (e.g., previous run was Claude but labels now route to Codex)
+        const { name: recoveryProviderName } = resolveProviderWithSource({
+          project: projectName,
+          workType: recoveryWorkType,
+          labels: labelNames,
+          configProviders: this.configProviders,
+        })
+        const providerChanged = recoveryCheck.state.providerName != null &&
+          recoveryProviderName !== recoveryCheck.state.providerName
+
+        const shouldClearSession = workTypeChanged || providerChanged
+        const providerSessionId = shouldClearSession
           ? undefined
           : (recoveryCheck.state.providerSessionId ?? undefined)
-        if (workTypeChanged && recoveryCheck.state.providerSessionId) {
-          console.log(`Clearing stale providerSessionId — work type changed from ${recoveryCheck.state.workType} to ${recoveryWorkType}`)
+        if (shouldClearSession && recoveryCheck.state.providerSessionId) {
+          const reason = providerChanged
+            ? `provider changed from ${recoveryCheck.state.providerName} to ${recoveryProviderName}`
+            : `work type changed from ${recoveryCheck.state.workType} to ${recoveryWorkType}`
+          console.log(`Clearing stale providerSessionId — ${reason}`)
           updateState(worktreePath, { providerSessionId: null })
         }
         const effectiveSessionId = sessionId ?? recoveryCheck.state.linearSessionId ?? randomUUID()
@@ -4710,6 +4798,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         if (providerSessionId) {
           initialState.providerSessionId = providerSessionId
         }
+        // Track which provider was used so recovery can detect provider changes
+        initialState.providerName = spawnProviderName
         writeState(worktreePath, initialState)
 
         // Start heartbeat writer for crash detection
@@ -4926,11 +5016,17 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
 
     const fallbackStream = async function* (): AsyncIterable<AgentEvent> {
       for await (const event of currentHandle.stream) {
-        // Detect stale session error: the resume failed because the session no longer exists
+        // Detect stale session error: the resume failed because the session no longer exists.
+        // Claude: "No conversation found with session ID"
+        // Codex: "thread/resume failed" or "thread/resume: ..."
         if (
           event.type === 'result' &&
           !event.success &&
-          event.errors?.some(e => e.includes('No conversation found with session ID'))
+          event.errors?.some(e =>
+            e.includes('No conversation found with session ID') ||
+            e.includes('thread/resume failed') ||
+            e.includes('thread/resume:')
+          )
         ) {
           log?.warn('Stale session detected during resume — falling back to fresh spawn', {
             staleSessionId: providerSessionId,

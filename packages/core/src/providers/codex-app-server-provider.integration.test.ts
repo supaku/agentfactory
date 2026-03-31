@@ -408,13 +408,8 @@ describe('CodexAppServerProvider integration', () => {
         isError: false,
       })
 
-      // turn/completed is intercepted as system turn_result (not a final result)
-      const turnResult = events.find(
-        (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'turn_result',
-      )
-      expect(turnResult).toBeDefined()
-
-      // Final result event should be emitted after stop()
+      // In autonomous mode, turn/completed emits a real result event directly
+      // (stream ends without needing stop()). No turn_result system event.
       const resultEvent = events.find((e) => e.type === 'result')
       expect(resultEvent).toMatchObject({
         type: 'result',
@@ -431,7 +426,7 @@ describe('CodexAppServerProvider integration', () => {
       const threadStartReq = mock.lastRequestByMethod('thread/start')!
       expect(threadStartReq.params).toMatchObject({
         cwd: '/project/workspace',
-        approvalPolicy: 'onRequest',
+        approvalPolicy: 'on-request',
       })
 
       expect(mock.requestsByMethod('turn/start')).toHaveLength(1)
@@ -470,7 +465,7 @@ describe('CodexAppServerProvider integration', () => {
       expect(steerReq).toBeDefined()
       expect(steerReq!.params).toMatchObject({
         threadId: 'thr_steer_001',
-        turnId: 'turn_steer_1',
+        expectedTurnId: 'turn_steer_1',
         input: [{ type: 'text', text: 'additional context for the current task' }],
       })
 
@@ -487,7 +482,7 @@ describe('CodexAppServerProvider integration', () => {
   describe('3. Message Injection — Between-Turn New Turn', () => {
     it('starts a new turn via turn/start when injectMessage() is called after turn completion', async () => {
       const provider = new CodexAppServerProvider()
-      const handle = provider.spawn(makeConfig())
+      const handle = provider.spawn(makeConfig({ autonomous: false }))
 
       const eventsPromise = collectEventsWithTimeout(handle.stream, 5000)
 
@@ -524,7 +519,7 @@ describe('CodexAppServerProvider integration', () => {
         threadId: 'thr_inject_001',
         input: [{ type: 'text', text: 'follow-up question' }],
         cwd: '/project/workspace',
-        approvalPolicy: 'onRequest',
+        approvalPolicy: 'untrusted',
       })
 
       // Respond to the new turn/start
@@ -615,7 +610,7 @@ describe('CodexAppServerProvider integration', () => {
   // -------------------------------------------------------------------------
 
   describe('5. Error Handling — Turn Failure', () => {
-    it('emits a turn_result system event with failure info when turn/completed has status failed', async () => {
+    it('emits result event with failure info when turn/completed has status failed (autonomous)', async () => {
       const provider = new CodexAppServerProvider()
       const handle = provider.spawn(makeConfig())
 
@@ -631,22 +626,10 @@ describe('CodexAppServerProvider integration', () => {
       })
 
       await new Promise((r) => setTimeout(r, 100))
-      await handle.stop()
 
       const events = await eventsPromise
 
-      // turn/completed (failed) is intercepted as a system turn_result
-      const turnResult = events.find(
-        (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'turn_result',
-      )
-      expect(turnResult).toBeDefined()
-      expect(turnResult).toMatchObject({
-        type: 'system',
-        subtype: 'turn_result',
-        message: expect.stringContaining('failed'),
-      })
-
-      // The final result from stream termination should report failure
+      // In autonomous mode, turn failure emits a direct result event
       const resultEvent = events.find((e) => e.type === 'result')
       expect(resultEvent).toMatchObject({
         type: 'result',
@@ -780,7 +763,7 @@ describe('CodexAppServerProvider integration', () => {
       const handle = provider.spawn(makeConfig({ autonomous: true, sandboxEnabled: false }))
 
       const params = await getThreadStartParams(handle)
-      expect(params.approvalPolicy).toBe('onRequest')
+      expect(params.approvalPolicy).toBe('on-request')
     })
 
     it('autonomous: false resolves approvalPolicy to "unlessTrusted"', async () => {
@@ -792,10 +775,10 @@ describe('CodexAppServerProvider integration', () => {
       const handle = provider.spawn(makeConfig({ autonomous: false }))
 
       const params = await getThreadStartParams(handle)
-      expect(params.approvalPolicy).toBe('unlessTrusted')
+      expect(params.approvalPolicy).toBe('untrusted')
     })
 
-    it('sandboxEnabled: true includes sandboxPolicy with workspaceWrite and writableRoots', async () => {
+    it('sandboxEnabled: true includes sandbox mode string on thread/start', async () => {
       const provider = new CodexAppServerProvider()
       mockProc = createMockChildProcess()
       mock = new MockAppServer(mockProc)
@@ -803,13 +786,10 @@ describe('CodexAppServerProvider integration', () => {
       const handle = provider.spawn(makeConfig({ sandboxEnabled: true, cwd: '/my/project' }))
 
       const params = await getThreadStartParams(handle)
-      expect(params.sandboxPolicy).toEqual({
-        type: 'workspaceWrite',
-        writableRoots: ['/my/project'],
-      })
+      expect(params.sandbox).toBe('workspace-write')
     })
 
-    it('sandboxEnabled: false does not include sandboxPolicy', async () => {
+    it('sandboxEnabled: false does not include sandbox on thread/start', async () => {
       const provider = new CodexAppServerProvider()
       mockProc = createMockChildProcess()
       mock = new MockAppServer(mockProc)
@@ -817,7 +797,7 @@ describe('CodexAppServerProvider integration', () => {
       const handle = provider.spawn(makeConfig({ sandboxEnabled: false }))
 
       const params = await getThreadStartParams(handle)
-      expect(params.sandboxPolicy).toBeUndefined()
+      expect(params.sandbox).toBeUndefined()
     })
   })
 
