@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.8.22
+
+### Features
+
+- **Codex app-server schema alignment (v0.117.0)** — Fixed field name mismatches across config/batchWrite, thread/start, turn/start, turn/steer, and approval policy values. Codex agents now operate correctly in fleet mode.
+- **Codex approval bridge** — Handle approval requests as JSON-RPC server requests (not notifications). Auto-approve safe commands, decline destructive patterns via the same safety rules as Claude.
+- **Codex sandbox networking** — Enable `networkAccess: true` for workspace-write sandbox so agents can use `gh`, `curl`, `pnpm install`, etc.
+- **Codex session lifecycle** — Autonomous agents emit result on turn/completed and end cleanly. Accumulated assistant text populates the result message for completion comments.
+- **Codex reasoning observability** — Buffer and log reasoning events (`item/reasoning/textDelta`) for fleet logs. Persist reasoning to Linear sessions as non-ephemeral thoughts.
+- **Linear grouped label support** — Reconstruct `group:value` format for Linear grouped labels (e.g., `provider:codex`). Enables per-issue provider routing via label dropdowns.
+- **Codex model selection & cost tracking tests** — Comprehensive unit tests for App Server provider spawn, event mapping, and approval bridge.
+
+### Fixes
+
+- **Cross-provider recovery** — Track provider name in worktree state. Clear stale session ID when provider changes between recovery attempts (e.g., Claude → Codex).
+- **Provider-agnostic stale session detection** — Match both Claude and Codex error patterns for resume failures.
+- **ANSI escape code stripping** — Strip terminal color codes from Codex shell command output in event stream.
+- **Agent message delta field** — Read `params.delta` (not `params.text`) for Codex agentMessage streaming events.
+
 ## v0.8.21
 
 ### Fixes

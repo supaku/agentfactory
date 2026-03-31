@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-mcp-server",
-  "version": "0.8.21",
+  "version": "0.8.22",
   "type": "module",
   "description": "MCP server exposing AgentFactory fleet capabilities to MCP-aware clients",
   "author": "Rensei AI (https://rensei.ai)",
