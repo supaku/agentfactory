@@ -11,6 +11,9 @@ export type {
   CommentChunk,
 } from './issue-tracker-client.js'
 
+// Null Issue Tracker Client (for platform-delegated workers without LINEAR_API_KEY)
+export { NullIssueTrackerClient } from './null-issue-tracker-client.js'
+
 // Log Analyzer Issue Creator Interface
 export type { IssueCreator } from './log-analyzer.js'
 

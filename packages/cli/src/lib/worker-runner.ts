@@ -13,6 +13,7 @@ import {
   createOrchestrator,
   createLogger,
   loadRepositoryConfig,
+  NullIssueTrackerClient,
   type AgentProcess,
   type OrchestratorIssue,
   type AgentOrchestrator,
@@ -147,10 +148,6 @@ export async function runWorker(
   const dryRun = config.dryRun ?? false
   const gitRoot = config.gitRoot ?? getGitRoot()
   const linearApiKey = config.linearApiKey ?? process.env.LINEAR_API_KEY
-
-  if (!linearApiKey) {
-    throw new Error('LINEAR_API_KEY is required (pass via config.linearApiKey or set env var)')
-  }
 
   // -----------------------------------------------------------------------
   // State (formerly globals)
@@ -648,7 +645,11 @@ export async function runWorker(
       )
 
       // Create orchestrator with API activity proxy
-      const issueTrackerClient = new LinearIssueTrackerClient({ apiKey: linearApiKey! })
+      // Use NullIssueTrackerClient when no LINEAR_API_KEY — all Linear operations
+      // are delegated to the platform API via the ApiActivityEmitter.
+      const issueTrackerClient = linearApiKey
+        ? new LinearIssueTrackerClient({ apiKey: linearApiKey })
+        : new NullIssueTrackerClient()
       const statusMappings = createLinearStatusMappings()
 
       // Create local merge queue storage if configured

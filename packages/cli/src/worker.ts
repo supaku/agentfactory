@@ -20,7 +20,7 @@
  *   WORKER_API_URL        Coordinator API URL (e.g., https://agent.example.com)
  *   WORKER_API_KEY        API key for authentication
  *   WORKER_PROJECTS       Comma-separated project names to accept (e.g., Social,Agent)
- *   LINEAR_API_KEY        Required for agent operations
+ *   LINEAR_API_KEY        Optional — enables direct Linear API access (omit for platform-delegated workers)
  */
 
 import path from 'path'
@@ -102,7 +102,7 @@ Environment (loaded from .env.local in CWD):
   WORKER_API_URL        Coordinator API URL
   WORKER_API_KEY        API key for authentication
   WORKER_PROJECTS       Comma-separated project names to accept
-  LINEAR_API_KEY        Required for agent operations
+  LINEAR_API_KEY        Optional — enables direct Linear API access (omit for platform-delegated workers)
 
 Examples:
   # Start worker with default settings
@@ -126,8 +126,7 @@ if (!cliArgs.apiKey) {
 }
 
 if (!process.env.LINEAR_API_KEY) {
-  console.error('Error: LINEAR_API_KEY environment variable is required')
-  process.exit(1)
+  console.warn('Warning: LINEAR_API_KEY not set — Linear operations will be delegated to the platform API')
 }
 
 // Create AbortController for graceful shutdown

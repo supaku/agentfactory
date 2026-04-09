@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.23
+
+### Features
+
+- **Optional LINEAR_API_KEY for workers** — Workers can now start without `LINEAR_API_KEY`. When absent, a `NullIssueTrackerClient` provides stub data so the orchestrator functions normally, and all Linear operations are delegated to the platform API via the `ApiActivityEmitter`. Workers only need `WORKER_API_KEY` and `WORKER_API_URL` to operate in platform-delegated mode.
+
+### Fixes
+
+- **Guard event.message type before calling substring** — Prevent crash when `event.message` is not a string.
+- **Codex recovery parity** — Graceful shutdown, orphan cleanup, and backstop safety improvements for Codex provider sessions.
+
 ## v0.8.22
 
 ### Features
