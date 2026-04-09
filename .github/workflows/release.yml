@@ -37,6 +37,17 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      # Upgrade npm BEFORE registry auth is configured so setup-node's
+      # .npmrc (OIDC token) isn't clobbered by the new npm binary.
+      # Pin to npm 10.x — npm 11+ has broken promise-retry resolution on GHA runners.
+      - name: Update npm for Trusted Publishers
+        run: npm install -g npm@10
+
+      # Re-run setup-node with registry-url to write .npmrc auth AFTER npm upgrade
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
       - name: Remove deprecated always-auth from .npmrc
@@ -44,11 +55,6 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-
-      # Required for npm Trusted Publishers (OIDC)
-      # Pin to npm 10.x — npm 11+ has broken promise-retry resolution on GHA runners
-      - name: Update npm for Trusted Publishers
-        run: npm install -g npm@10
 
       # Extract version from tag or workflow_dispatch input
       - name: Set version
