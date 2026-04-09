@@ -33,18 +33,18 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      # Node 22 ships with npm 10.9.x which supports OIDC Trusted Publishers.
-      # Do NOT run `npm install -g npm@latest` — npm 11 has a broken
-      # promise-retry dependency on GHA runners, and upgrading npm globally
-      # can break the OIDC auth flow that setup-node configures.
+      # Node 24 ships with npm 11.5.1+ which is REQUIRED for OIDC Trusted Publishers.
+      # Node 20/22 ship with npm 10.x which has broken OIDC support.
+      # See: https://github.com/npm/cli/issues/8730
+      #
+      # Also: do NOT set `registry-url` here. setup-node writes an `_authToken`
+      # line to .npmrc which npm then prioritizes over the OIDC handshake,
+      # causing 404 errors on publish. The default registry is registry.npmjs.org
+      # so no configuration is needed.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
-
-      - name: Remove deprecated always-auth from .npmrc
-        run: sed -i '/always-auth/d' "$NPM_CONFIG_USERCONFIG"
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
@@ -129,7 +129,7 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://npm.pkg.github.com
           scope: '@renseiai'
 
