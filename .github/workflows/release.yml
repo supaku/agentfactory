@@ -46,8 +46,9 @@ jobs:
       - run: pnpm build
 
       # Required for npm Trusted Publishers (OIDC)
+      # Pin to npm 10.x — npm 11+ has broken promise-retry resolution on GHA runners
       - name: Update npm for Trusted Publishers
-        run: npm install -g npm@latest
+        run: npm install -g npm@10
 
       # Extract version from tag or workflow_dispatch input
       - name: Set version
