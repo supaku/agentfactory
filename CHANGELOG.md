@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.24
+
+### Features
+
+- **ProxyIssueTrackerAdapter for remote API workers** — When `LINEAR_API_KEY` is not set but `AGENTFACTORY_API_URL` is available, workers now use a `ProxyIssueTrackerAdapter` that routes issue tracker operations through the centralized API proxy instead of falling back to `NullIssueTrackerClient`. This enables work types that need to create/query issues (backlog-creation, coordination, qa-coordination) to function without direct Linear credentials.
+- **af-linear CLI proxy mode** — The `af-linear` CLI now supports proxy mode when `LINEAR_API_KEY` is absent but `AGENTFACTORY_API_URL` and `WORKER_AUTH_TOKEN` are set. Supports core commands: `get-issue`, `create-issue`, `update-issue`, `create-comment`, `list-sub-issues`, `create-blocker`, and more. Name-to-ID resolution (team, project, state) is handled via proxy calls.
+- **WORKER_AUTH_TOKEN passed to spawned agents** — The orchestrator now sets `WORKER_AUTH_TOKEN` in the agent environment from `apiActivityConfig.apiKey`, enabling spawned agents to authenticate to the proxy via the `af-linear` CLI.
+
 ## v0.8.23
 
 ### Features

@@ -11,6 +11,7 @@
 
 import { readFileSync } from 'node:fs'
 import { createLinearAgentClient } from '../agent-client.js'
+import { ProxyIssueTrackerClient } from '../proxy-client.js'
 import { getDefaultTeamName } from '../constants.js'
 import { resolveSDKLabelNames } from '../utils.js'
 import {
@@ -25,6 +26,10 @@ export interface LinearRunnerConfig {
   args: Record<string, string | string[] | boolean>
   positionalArgs: string[]
   apiKey?: string
+  /** Base URL for the proxy API (used when apiKey is not available) */
+  proxyUrl?: string
+  /** Auth token for the proxy API */
+  proxyAuthToken?: string
 }
 
 export interface LinearRunnerResult {
@@ -855,10 +860,360 @@ function resolveFileArg(
 
 const NO_API_KEY_COMMANDS = new Set(['check-deployment'])
 
+// ── Proxy runner (routes commands through remote API proxy) ────────
+
+/**
+ * Commands supported in proxy mode. Commands that require raw Linear SDK
+ * access (e.g., listIssues with complex filters) are not supported.
+ */
+const PROXY_SUPPORTED_COMMANDS = new Set([
+  'get-issue',
+  'create-issue',
+  'update-issue',
+  'list-comments',
+  'create-comment',
+  'list-sub-issues',
+  'list-sub-issue-statuses',
+  'update-sub-issue',
+  'add-relation',
+  'list-relations',
+  'remove-relation',
+  'list-backlog-issues',
+  'create-blocker',
+  'check-deployment',
+])
+
+/**
+ * Resolve project name → project ID via proxy.
+ * Gets an issue from the project and reads its pre-resolved project.id.
+ */
+async function resolveProjectIdViaProxy(
+  proxy: ProxyIssueTrackerClient,
+  projectName: string,
+): Promise<string | undefined> {
+  try {
+    const issues = await proxy.listProjectIssues(projectName)
+    if (issues.length === 0) return undefined
+    // listProjectIssues returns lightweight items without project ID.
+    // Fetch the first issue's full details to get the resolved project.id.
+    const fullIssue = await proxy.getIssue(issues[0].identifier)
+    return fullIssue.project?.id
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Build a createIssue payload with name → ID resolution via proxy.
+ */
+async function buildProxyCreatePayload(
+  proxy: ProxyIssueTrackerClient,
+  opts: {
+    title: string
+    team: string
+    description?: string
+    project?: string
+    state?: string
+    parentId?: string
+  },
+): Promise<Parameters<ProxyIssueTrackerClient['createIssue']>[0]> {
+  const team = await proxy.getTeam(opts.team)
+  const payload: Parameters<ProxyIssueTrackerClient['createIssue']>[0] = {
+    teamId: team.id,
+    title: opts.title,
+  }
+  if (opts.description) payload.description = opts.description
+  if (opts.parentId) payload.parentId = opts.parentId
+  if (opts.state) {
+    const statuses = await proxy.getTeamStatuses(team.id)
+    const stateId = statuses[opts.state]
+    if (stateId) payload.stateId = stateId
+  }
+  if (opts.project) {
+    const projectId = await resolveProjectIdViaProxy(proxy, opts.project)
+    if (projectId) payload.projectId = projectId
+  }
+  return payload
+}
+
+async function runLinearProxy(
+  config: LinearRunnerConfig,
+  proxy: ProxyIssueTrackerClient,
+): Promise<LinearRunnerResult> {
+  const { command, args, positionalArgs } = config
+
+  function requirePositional(name: string): string {
+    const val = positionalArgs[0]
+    if (!val || val.startsWith('--')) {
+      throw new Error(`Missing required argument: <${name}>`)
+    }
+    return val
+  }
+
+  let output: unknown
+
+  switch (command) {
+    case 'get-issue': {
+      const issue = await proxy.getIssue(requirePositional('issue-id'))
+      output = {
+        id: issue.id,
+        identifier: issue.identifier,
+        title: issue.title,
+        description: issue.description,
+        url: issue.url,
+        status: issue.state?.name,
+        team: issue.team?.name,
+        project: issue.project?.name,
+        labels: issue.labels.map(l => l.name),
+        createdAt: issue.createdAt,
+        updatedAt: issue.updatedAt,
+      }
+      break
+    }
+
+    case 'create-issue': {
+      const teamArg = (args.team as string | undefined) ?? (getDefaultTeamName() || undefined)
+      if (!args.title || !teamArg) {
+        throw new Error(
+          'Usage: af-linear create-issue --title "Title" --team "Team" [--description "..."] [--project "..."] [--labels "Label1,Label2"] [--state "Backlog"] [--parentId "..."]\n' +
+          'Tip: Set LINEAR_TEAM_NAME env var to provide a default team.'
+        )
+      }
+      const description = resolveFileArg(
+        args.description as string | undefined,
+        args['description-file'] as string | undefined,
+      )
+      const createPayload = await buildProxyCreatePayload(proxy, {
+        title: args.title as string,
+        team: teamArg,
+        description,
+        project: args.project as string | undefined,
+        state: args.state as string | undefined,
+        parentId: args.parentId as string | undefined,
+      })
+      const created = await proxy.createIssue(createPayload)
+      output = {
+        id: created.id,
+        identifier: created.identifier,
+        title: created.title,
+        url: created.url,
+      }
+      break
+    }
+
+    case 'update-issue': {
+      const issueId = requirePositional('issue-id')
+      const updateDescription = resolveFileArg(
+        args.description as string | undefined,
+        args['description-file'] as string | undefined,
+      )
+      const updateData: Parameters<ProxyIssueTrackerClient['updateIssue']>[1] = {}
+      if (args.title) updateData.title = args.title as string
+      if (updateDescription) updateData.description = updateDescription
+      if (args.state) {
+        // Resolve state name to ID
+        const issue = await proxy.getIssue(issueId)
+        if (issue.team) {
+          const statuses = await proxy.getTeamStatuses(issue.team.id)
+          const stateId = statuses[args.state as string]
+          if (stateId) updateData.stateId = stateId
+        }
+      }
+      if (args.labels) {
+        // Labels not resolved in proxy mode — would need issueLabels() proxy method
+      }
+      const updated = await proxy.updateIssue(issueId, updateData)
+      output = {
+        id: updated.id,
+        identifier: updated.identifier,
+        title: updated.title,
+        url: updated.url,
+        status: updated.state?.name,
+      }
+      break
+    }
+
+    case 'list-comments': {
+      const comments = await proxy.getIssueComments(requirePositional('issue-id'))
+      output = comments.map(c => ({
+        id: c.id,
+        body: c.body,
+        createdAt: c.createdAt,
+        user: c.user?.name,
+      }))
+      break
+    }
+
+    case 'create-comment': {
+      const issueId = requirePositional('issue-id')
+      const body = resolveFileArg(
+        args.body as string | undefined,
+        args['body-file'] as string | undefined,
+      )
+      if (!body) {
+        throw new Error('Usage: af-linear create-comment <issue-id> --body "Comment text" or --body-file /path/to/file')
+      }
+      const comment = await proxy.createComment(issueId, body)
+      output = { id: comment.id }
+      break
+    }
+
+    case 'list-sub-issues': {
+      const subs = await proxy.getSubIssues(requirePositional('issue-id'))
+      output = subs.map(s => ({
+        id: s.id,
+        identifier: s.identifier,
+        title: s.title,
+        status: s.state?.name,
+        labels: s.labels.map(l => l.name),
+      }))
+      break
+    }
+
+    case 'list-sub-issue-statuses': {
+      output = await proxy.getSubIssueStatuses(requirePositional('issue-id'))
+      break
+    }
+
+    case 'update-sub-issue': {
+      const issueId = requirePositional('issue-id')
+      const updateData: Parameters<ProxyIssueTrackerClient['updateIssue']>[1] = {}
+      if (args.state) {
+        const issue = await proxy.getIssue(issueId)
+        if (issue.team) {
+          const statuses = await proxy.getTeamStatuses(issue.team.id)
+          const stateId = statuses[args.state as string]
+          if (stateId) updateData.stateId = stateId
+        }
+      }
+      await proxy.updateIssue(issueId, updateData)
+      if (args.comment) {
+        await proxy.createComment(issueId, args.comment as string)
+      }
+      output = { success: true }
+      break
+    }
+
+    case 'add-relation': {
+      const issueId = positionalArgs[0]
+      const relatedIssueId = positionalArgs[1]
+      const relationType = args.type as string | undefined
+      if (!issueId || !relatedIssueId || !relationType) {
+        throw new Error('Usage: af-linear add-relation <issue-id> <related-issue-id> --type <related|blocks|duplicate>')
+      }
+      output = await proxy.createIssueRelation({
+        issueId,
+        relatedIssueId,
+        type: relationType as 'related' | 'blocks' | 'duplicate',
+      })
+      break
+    }
+
+    case 'list-relations': {
+      output = await proxy.getIssueRelations(requirePositional('issue-id'))
+      break
+    }
+
+    case 'remove-relation': {
+      output = await proxy.deleteIssueRelation(requirePositional('relation-id'))
+      break
+    }
+
+    case 'list-backlog-issues': {
+      if (!args.project) {
+        throw new Error('Usage: af-linear list-backlog-issues --project "ProjectName"')
+      }
+      output = await proxy.listProjectIssues(args.project as string)
+      break
+    }
+
+    case 'create-blocker': {
+      const sourceIssueId = requirePositional('source-issue-id')
+      if (!args.title) {
+        throw new Error(
+          'Usage: af-linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."]'
+        )
+      }
+
+      // 1. Fetch source issue to resolve team/project
+      const sourceIssue = await proxy.getIssue(sourceIssueId)
+      const teamName = (args.team as string | undefined) ?? sourceIssue.team?.key
+      if (!teamName) {
+        throw new Error('Could not resolve team from source issue. Provide --team explicitly.')
+      }
+      const projectName = (args.project as string | undefined) ?? sourceIssue.project?.name
+
+      // 2. Build create payload with description referencing source
+      const descParts: string[] = []
+      if (args.description) descParts.push(args.description as string)
+      descParts.push(`\n---\n*Source issue: ${sourceIssue.identifier}*`)
+
+      const blockerPayload = await buildProxyCreatePayload(proxy, {
+        title: args.title as string,
+        team: teamName,
+        description: descParts.join('\n\n'),
+        project: projectName,
+        state: 'Icebox',
+      })
+      // Note: "Needs Human" label not set in proxy mode (no label name→ID resolution)
+
+      const blockerIssue = await proxy.createIssue(blockerPayload)
+
+      // 3. Create blocking relation: blocker blocks source
+      await proxy.createIssueRelation({
+        issueId: blockerIssue.id,
+        relatedIssueId: sourceIssue.id,
+        type: 'blocks',
+      })
+
+      // 4. Comment on source issue
+      await proxy.createComment(
+        sourceIssue.id,
+        `\u{1F6A7} Human blocker created: [${blockerIssue.identifier}](${blockerIssue.url}) — ${args.title as string}`
+      )
+
+      output = {
+        id: blockerIssue.id,
+        identifier: blockerIssue.identifier,
+        title: blockerIssue.title,
+        url: blockerIssue.url,
+        sourceIssue: sourceIssue.identifier,
+        relation: 'blocks',
+      }
+      break
+    }
+
+    case 'check-deployment': {
+      const prArg = requirePositional('pr-number')
+      const prNumber = parseInt(prArg, 10)
+      if (isNaN(prNumber)) {
+        throw new Error('PR number must be a valid integer')
+      }
+      const format = (args.format as 'json' | 'markdown') || 'json'
+      output = await checkDeployment(prNumber, format)
+      break
+    }
+
+    default:
+      throw new Error(
+        `Command '${command}' is not supported in proxy mode (no LINEAR_API_KEY). ` +
+        `Supported commands: ${[...PROXY_SUPPORTED_COMMANDS].join(', ')}`
+      )
+  }
+
+  return { output }
+}
+
 // ── Main runner ────────────────────────────────────────────────────
 
 export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunnerResult> {
-  const { command, args, positionalArgs, apiKey } = config
+  const { command, args, positionalArgs, apiKey, proxyUrl, proxyAuthToken } = config
+
+  // Proxy mode: route through remote API when no direct API key
+  if (!apiKey && proxyUrl && proxyAuthToken) {
+    const proxy = new ProxyIssueTrackerClient({ apiUrl: proxyUrl, apiKey: proxyAuthToken })
+    return runLinearProxy(config, proxy)
+  }
 
   // Lazy client — only created for commands that need it
   let _client: LinearClient | null = null
@@ -874,7 +1229,10 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
 
   // Validate API key for commands that need it
   if (!NO_API_KEY_COMMANDS.has(command) && !apiKey) {
-    throw new Error('LINEAR_API_KEY environment variable is required')
+    throw new Error(
+      'LINEAR_API_KEY environment variable is required. ' +
+      'Alternatively, set AGENTFACTORY_API_URL and WORKER_AUTH_TOKEN for proxy mode.'
+    )
   }
 
   // Helper: get first positional or error

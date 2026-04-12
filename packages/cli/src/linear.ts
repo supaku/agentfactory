@@ -105,6 +105,8 @@ async function main(): Promise<void> {
     args,
     positionalArgs,
     apiKey,
+    proxyUrl: process.env.AGENTFACTORY_API_URL,
+    proxyAuthToken: process.env.WORKER_AUTH_TOKEN || process.env.WORKER_API_KEY,
   })
 
   // check-deployment with markdown format outputs a string, not JSON

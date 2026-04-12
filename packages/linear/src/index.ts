@@ -198,6 +198,9 @@ export type { GovernorIssue as LinearGovernorIssue } from './platform-adapter.js
 // Issue tracker adapter (implements core's IssueTrackerClient)
 export { LinearIssueTrackerClient, createLinearStatusMappings } from './issue-tracker-adapter.js'
 
+// Proxy issue tracker adapter (implements IssueTrackerClient via remote proxy)
+export { ProxyIssueTrackerAdapter } from './proxy-issue-tracker-adapter.js'
+
 // Tool plugin and runner (moved from core)
 export { linearPlugin } from './tools/linear-plugin.js'
 export { runLinear, parseLinearArgs } from './tools/linear-runner.js'

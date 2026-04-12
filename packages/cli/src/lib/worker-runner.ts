@@ -22,6 +22,7 @@ import {
 } from '@renseiai/agentfactory'
 import {
   LinearIssueTrackerClient,
+  ProxyIssueTrackerAdapter,
   createLinearStatusMappings,
   linearPlugin,
   type AgentWorkType,
@@ -645,11 +646,18 @@ export async function runWorker(
       )
 
       // Create orchestrator with API activity proxy
-      // Use NullIssueTrackerClient when no LINEAR_API_KEY — all Linear operations
-      // are delegated to the platform API via the ApiActivityEmitter.
-      const issueTrackerClient = linearApiKey
-        ? new LinearIssueTrackerClient({ apiKey: linearApiKey })
-        : new NullIssueTrackerClient()
+      // Priority: direct Linear API → proxy via platform API → null (no-op)
+      let issueTrackerClient
+      if (linearApiKey) {
+        issueTrackerClient = new LinearIssueTrackerClient({ apiKey: linearApiKey })
+      } else if (workerConfig.apiUrl && workerConfig.apiKey) {
+        issueTrackerClient = new ProxyIssueTrackerAdapter({
+          apiUrl: workerConfig.apiUrl,
+          apiKey: workerConfig.apiKey,
+        })
+      } else {
+        issueTrackerClient = new NullIssueTrackerClient()
+      }
       const statusMappings = createLinearStatusMappings()
 
       // Create local merge queue storage if configured

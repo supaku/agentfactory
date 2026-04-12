@@ -2843,6 +2843,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       env.LINEAR_TEAM_NAME = teamName
     }
 
+    // Pass API auth token so af-linear CLI can proxy through the platform API
+    // when LINEAR_API_KEY is not available
+    if (this.config.apiActivityConfig?.apiKey) {
+      env.WORKER_AUTH_TOKEN = this.config.apiActivityConfig.apiKey
+    }
+
     log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
     // Create tool servers from registered plugins
@@ -4939,6 +4945,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       ...(workType && { LINEAR_WORK_TYPE: workType }),
       // Set team name so agents can use `pnpm af-linear create-issue` without --team
       ...(teamName && { LINEAR_TEAM_NAME: teamName }),
+      // Pass API auth token so af-linear CLI can proxy through the platform API
+      ...(this.config.apiActivityConfig?.apiKey && { WORKER_AUTH_TOKEN: this.config.apiActivityConfig.apiKey }),
     }
 
     log.info('Starting agent via provider', {
