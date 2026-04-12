@@ -233,6 +233,18 @@ export class ProxyIssueTrackerClient {
   }
 
   // =========================================================================
+  // Label and member lookups
+  // =========================================================================
+
+  async issueLabels(): Promise<Array<{ id: string; name: string }>> {
+    return this.call('issueLabels', [])
+  }
+
+  async teamMembers(teamId: string): Promise<Array<{ id: string; name: string; email?: string }>> {
+    return this.call('teamMembers', [teamId])
+  }
+
+  // =========================================================================
   // Core RPC method
   // =========================================================================
 

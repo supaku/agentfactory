@@ -360,6 +360,29 @@ export class LinearAgentClient {
   }
 
   /**
+   * Get all issue labels in the workspace.
+   * Returns a flat array of { id, name } objects.
+   */
+  async issueLabels(): Promise<Array<{ id: string; name: string }>> {
+    return this.withRetry(async () => {
+      const result = await this.client.issueLabels({ first: 250 })
+      return result.nodes.map((l) => ({ id: l.id, name: l.name }))
+    })
+  }
+
+  /**
+   * Get members of a team by team ID.
+   * Returns a flat array of { id, name, email } objects.
+   */
+  async teamMembers(teamId: string): Promise<Array<{ id: string; name: string; email?: string }>> {
+    return this.withRetry(async () => {
+      const team = await this.client.team(teamId)
+      const members = await team.members()
+      return members.nodes.map((m) => ({ id: m.id, name: m.name, email: m.email }))
+    })
+  }
+
+  /**
    * Create an agent activity using the native Linear Agent API
    *
    * @param input - The activity input containing session ID, content, and options

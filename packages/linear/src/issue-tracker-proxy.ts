@@ -86,6 +86,9 @@ export type IssueTrackerMethod =
   | 'getTeam'
   // Unassign
   | 'unassignIssue'
+  // Label and member lookups
+  | 'issueLabels'
+  | 'teamMembers'
 
 // ============================================================================
 // Serialized Data Types (plain JSON, no lazy-loaded relations)

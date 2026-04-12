@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.25
+
+### Features
+
+- **`issueLabels` and `teamMembers` proxy methods** — Added two new methods to the issue tracker proxy chain (`LinearAgentClient` → `ProxyIssueTrackerClient` → proxy handler). This closes the "Needs Human" label and assignee resolution gaps in `create-blocker` proxy mode. The proxy runner's `create-issue`, `update-issue`, and `create-blocker` commands now fully resolve label names → IDs and team member names/emails → assignee IDs via the proxy.
+
 ## v0.8.24
 
 ### Features

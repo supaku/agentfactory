@@ -904,6 +904,27 @@ async function resolveProjectIdViaProxy(
 }
 
 /**
+ * Resolve label names → IDs via proxy.
+ */
+async function resolveLabelIdsViaProxy(
+  proxy: ProxyIssueTrackerClient,
+  labelNames: string[],
+): Promise<string[]> {
+  if (labelNames.length === 0) return []
+  try {
+    const allLabels = await proxy.issueLabels()
+    const ids: string[] = []
+    for (const name of labelNames) {
+      const label = allLabels.find(l => l.name.toLowerCase() === name.toLowerCase())
+      if (label) ids.push(label.id)
+    }
+    return ids
+  } catch {
+    return []
+  }
+}
+
+/**
  * Build a createIssue payload with name → ID resolution via proxy.
  */
 async function buildProxyCreatePayload(
@@ -915,6 +936,7 @@ async function buildProxyCreatePayload(
     project?: string
     state?: string
     parentId?: string
+    labels?: string[]
   },
 ): Promise<Parameters<ProxyIssueTrackerClient['createIssue']>[0]> {
   const team = await proxy.getTeam(opts.team)
@@ -932,6 +954,10 @@ async function buildProxyCreatePayload(
   if (opts.project) {
     const projectId = await resolveProjectIdViaProxy(proxy, opts.project)
     if (projectId) payload.projectId = projectId
+  }
+  if (opts.labels && opts.labels.length > 0) {
+    const labelIds = await resolveLabelIdsViaProxy(proxy, opts.labels)
+    if (labelIds.length > 0) payload.labelIds = labelIds
   }
   return payload
 }
@@ -990,6 +1016,7 @@ async function runLinearProxy(
         project: args.project as string | undefined,
         state: args.state as string | undefined,
         parentId: args.parentId as string | undefined,
+        labels: args.labels as string[] | undefined,
       })
       const created = await proxy.createIssue(createPayload)
       output = {
@@ -1020,7 +1047,8 @@ async function runLinearProxy(
         }
       }
       if (args.labels) {
-        // Labels not resolved in proxy mode — would need issueLabels() proxy method
+        const labelIds = await resolveLabelIdsViaProxy(proxy, args.labels as string[])
+        if (labelIds.length > 0) updateData.labelIds = labelIds
       }
       const updated = await proxy.updateIssue(issueId, updateData)
       output = {
@@ -1131,7 +1159,7 @@ async function runLinearProxy(
       const sourceIssueId = requirePositional('source-issue-id')
       if (!args.title) {
         throw new Error(
-          'Usage: af-linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."]'
+          'Usage: af-linear create-blocker <source-issue-id> --title "Title" [--description "..."] [--team "..."] [--project "..."] [--assignee "user@email.com"]'
         )
       }
 
@@ -1154,8 +1182,8 @@ async function runLinearProxy(
         description: descParts.join('\n\n'),
         project: projectName,
         state: 'Icebox',
+        labels: ['Needs Human'],
       })
-      // Note: "Needs Human" label not set in proxy mode (no label name→ID resolution)
 
       const blockerIssue = await proxy.createIssue(blockerPayload)
 
@@ -1171,6 +1199,23 @@ async function runLinearProxy(
         sourceIssue.id,
         `\u{1F6A7} Human blocker created: [${blockerIssue.identifier}](${blockerIssue.url}) — ${args.title as string}`
       )
+
+      // 5. Optionally assign via teamMembers lookup
+      if (args.assignee) {
+        try {
+          const team = await proxy.getTeam(teamName)
+          const members = await proxy.teamMembers(team.id)
+          const assigneeStr = (args.assignee as string).toLowerCase()
+          const member = members.find(
+            m => m.name.toLowerCase() === assigneeStr || m.email?.toLowerCase() === assigneeStr
+          )
+          if (member) {
+            await proxy.updateIssue(blockerIssue.id, { assigneeId: member.id })
+          }
+        } catch {
+          // Non-critical — blocker still created without assignee
+        }
+      }
 
       output = {
         id: blockerIssue.id,

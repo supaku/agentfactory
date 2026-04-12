@@ -59,6 +59,8 @@ const ALLOWED_METHODS: Set<IssueTrackerMethod> = new Set([
   'getViewer',
   'getTeam',
   'unassignIssue',
+  'issueLabels',
+  'teamMembers',
 ])
 
 /**
