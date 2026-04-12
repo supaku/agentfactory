@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.26
+
+### Fixes
+
+- **Cleanup script preserves merge queue directories** — `af-cleanup` no longer deletes `.patches` and `__merge-worker__` directories from the worktree root. These are merge queue infrastructure, not orphaned agent worktrees.
+
 ## v0.8.25
 
 ### Features

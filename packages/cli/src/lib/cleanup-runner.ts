@@ -12,6 +12,15 @@ import { resolve, basename } from 'path'
 /** Delay between worktree removals (ms) to let IDEs process filesystem events. */
 const IDE_SETTLE_DELAY_MS = 1500
 
+/**
+ * Reserved directory names inside the worktree root that are NOT agent worktrees.
+ * These are infrastructure directories used by the merge queue and other subsystems.
+ */
+const RESERVED_WORKTREE_DIRS = new Set([
+  '.patches',
+  '__merge-worker__',
+])
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -174,6 +183,11 @@ function scanWorktrees(options: CleanupOptions): WorktreeInfo[] {
   const entries = readdirSync(worktreesDir)
 
   for (const entry of entries) {
+    // Skip reserved infrastructure directories (merge queue, patches, etc.)
+    if (RESERVED_WORKTREE_DIRS.has(entry)) {
+      continue
+    }
+
     const entryPath = resolve(worktreesDir, entry)
 
     try {
