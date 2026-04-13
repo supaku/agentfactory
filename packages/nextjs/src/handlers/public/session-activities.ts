@@ -43,10 +43,12 @@ async function findSessionByPublicId(publicId: string): Promise<AgentSessionStat
 export interface PublicActivityResponse {
   activities: Array<{
     id: string
-    type: 'thought' | 'action' | 'response' | 'error' | 'progress'
+    type: 'thought' | 'action' | 'response' | 'error' | 'progress' | 'context'
     content: string
     toolName?: string
     timestamp: string
+    contextKey?: string
+    contextValue?: unknown
   }>
   cursor?: string
   sessionStatus: PublicSessionStatus

@@ -8,10 +8,12 @@ const log = createLogger('activity-store')
 
 export interface StoredActivity {
   id: string
-  type: 'thought' | 'action' | 'response' | 'error' | 'progress'
+  type: 'thought' | 'action' | 'response' | 'error' | 'progress' | 'context'
   content: string
   toolName?: string
   timestamp: string
+  contextKey?: string
+  contextValue?: unknown
 }
 
 const MAX_ACTIVITIES_PER_SESSION = 200

@@ -62,13 +62,15 @@ export type ProgressMilestone =
   | 'resumed'
 
 interface QueuedActivity {
-  type: 'thought' | 'action' | 'response' | 'error'
+  type: 'thought' | 'action' | 'response' | 'error' | 'context'
   content: string
   ephemeral: boolean
   toolName?: string
   toolInput?: Record<string, unknown>
   toolOutput?: string
   toolCategory?: ToolCategory
+  contextKey?: string
+  contextValue?: unknown
 }
 
 const DEFAULT_MIN_INTERVAL = 500
@@ -158,7 +160,8 @@ export class ApiActivityEmitter {
   async emitToolUse(
     tool: string,
     input: Record<string, unknown>,
-    ephemeral = true
+    ephemeral = true,
+    context?: { key: string; value: unknown }
   ): Promise<void> {
     const inputSummary = this.summarizeToolInput(tool, input)
     const category = classifyTool(tool)
@@ -169,17 +172,38 @@ export class ApiActivityEmitter {
       toolName: tool,
       toolInput: input,
       toolCategory: category,
+      contextKey: context?.key,
+      contextValue: context?.value,
     })
   }
 
   /**
    * Emit a response activity (persisted)
    */
-  async emitResponse(content: string): Promise<void> {
+  async emitResponse(
+    content: string,
+    context?: { key: string; value: unknown }
+  ): Promise<void> {
     await this.queueActivity({
       type: 'response',
       content,
       ephemeral: false,
+      contextKey: context?.key,
+      contextValue: context?.value,
+    })
+  }
+
+  /**
+   * Emit a context entry (persisted, not forwarded to Linear).
+   * Used by ContextManager to emit artifact summaries, structured state, etc.
+   */
+  async emitContext(key: string, value: unknown): Promise<void> {
+    await this.queueActivity({
+      type: 'context',
+      content: `context:${key}`,
+      ephemeral: false,
+      contextKey: key,
+      contextValue: value,
     })
   }
 
@@ -483,6 +507,8 @@ export class ApiActivityEmitter {
               toolName: activity.toolName,
               toolInput: activity.toolInput,
               toolCategory: activity.toolCategory,
+              contextKey: activity.contextKey,
+              contextValue: activity.contextValue,
             },
           }),
         }

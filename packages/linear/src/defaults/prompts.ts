@@ -160,7 +160,8 @@ Do NOT wait for user approval - create issues automatically.`
       basePrompt = `Continue work on ${identifier}. Resume where you left off.`
       break
     case 'inflight-coordination':
-      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}. Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.`
+      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}. Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.
+${WORK_RESULT_MARKER_INSTRUCTION}`
       break
     case 'qa':
       basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.
@@ -215,7 +216,8 @@ COMMON REWORK FIXES:
 - Missing API fields: Update route handlers to include missing fields
 - Build failures: Run pnpm build, diagnose, fix
 
-If the existing PR branch is checked out, work directly on it. Do not create a new branch or PR.`
+If the existing PR branch is checked out, work directly on it. Do not create a new branch or PR.
+${WORK_RESULT_MARKER_INSTRUCTION}`
       } else {
         basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.
 
@@ -227,7 +229,8 @@ Update sub-issue statuses in Linear as work progresses:
 
 COMPLETION VERIFICATION:
 Before marking the parent issue as complete, verify ALL sub-issues are in Finished status.
-If any sub-issue is not Finished, report the failure and do not mark the parent as complete.`
+If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
+${WORK_RESULT_MARKER_INSTRUCTION}`
       }
       break
     }

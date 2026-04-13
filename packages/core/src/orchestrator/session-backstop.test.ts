@@ -223,6 +223,8 @@ describe('runBackstop', () => {
       .mockReturnValueOnce('' as any)                 // isBranchPushed: ls-remote (not pushed)
       // --- backstopCommitChanges ---
       .mockReturnValueOnce(' M src/foo.ts\n?? src/bar.ts\n' as any) // git status --porcelain
+      .mockReturnValueOnce('Test User\n' as any)     // git config user.name
+      .mockReturnValueOnce('test@example.com\n' as any) // git config user.email
       .mockReturnValueOnce('' as any)                 // git add -A
       .mockReturnValueOnce('' as any)                 // git commit
       // --- backstopPushBranch ---

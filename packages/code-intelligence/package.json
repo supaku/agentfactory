@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-code-intelligence",
-  "version": "0.8.27",
+  "version": "0.8.28",
   "type": "module",
   "description": "Code intelligence for AgentFactory — tree-sitter AST parsing, BM25 search, incremental indexing, memory deduplication",
   "author": "Rensei AI (https://rensei.ai)",

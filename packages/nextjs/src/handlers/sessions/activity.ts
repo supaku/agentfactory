@@ -18,11 +18,13 @@ interface RouteParams {
 }
 
 interface AgentActivity {
-  type: 'thought' | 'action' | 'response'
+  type: 'thought' | 'action' | 'response' | 'context'
   content: string
   toolName?: string
   toolInput?: Record<string, unknown>
   timestamp?: string
+  contextKey?: string
+  contextValue?: unknown
 }
 
 export function createSessionActivityHandler(config: RouteConfig) {
@@ -74,6 +76,8 @@ export function createSessionActivityHandler(config: RouteConfig) {
         content: activity.content,
         toolName: activity.toolName,
         timestamp: activity.timestamp || new Date().toISOString(),
+        contextKey: activity.contextKey,
+        contextValue: activity.contextValue,
       })
 
       // Skip Linear forwarding for governor-generated fake session IDs.
@@ -100,6 +104,15 @@ export function createSessionActivityHandler(config: RouteConfig) {
           sessionId,
           autoTransition: false,
         })
+
+        // Context activities are stored locally but not forwarded to Linear
+        if (activity.type === 'context') {
+          log.debug('Context activity stored (not forwarded to Linear)', {
+            sessionId,
+            contextKey: activity.contextKey,
+          })
+          return NextResponse.json({ forwarded: false, reason: 'context activities are not forwarded to Linear' })
+        }
 
         switch (activity.type) {
           case 'thought':

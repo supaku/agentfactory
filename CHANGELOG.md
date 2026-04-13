@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.8.28
+
+### Features
+
+- **Context fields on activity emissions** — `ApiActivityEmitter` now supports optional `contextKey`/`contextValue` on the activity POST body. New `emitContext(key, value)` method for standalone context entries. `emitToolUse()` and `emitResponse()` accept an optional `context` parameter. Context-type activities are stored server-side but not forwarded to Linear.
+
+### Fixes
+
+- **Coordination WORK_RESULT marker in legacy prompts** — The `coordination` and `inflight-coordination` work types in `defaultGeneratePrompt()` were missing `WORK_RESULT_MARKER_INSTRUCTION`, causing agents to exit without the structured marker and blocking status promotion. The YAML templates already had it; the legacy prompt generator did not.
+- **Backstop test alignment with git config identity** — The `auto-commits uncommitted changes` test was missing mock return values for the two `git config` calls added in v0.8.27, causing the mock sequence to shift and the PR creation assertion to fail.
+
 ## v0.8.27
 
 ### Fixes
