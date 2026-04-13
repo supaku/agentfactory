@@ -1105,12 +1105,16 @@ async function runLinearProxy(
 
     case 'update-sub-issue': {
       const issueId = requirePositional('issue-id')
+      const subState = (args.state ?? args.status) as string | undefined
+      if (!subState && !args.comment) {
+        throw new Error('Usage: af-linear update-sub-issue <issue-id> --state "Finished" [--comment "..."]')
+      }
       const updateData: Parameters<ProxyIssueTrackerClient['updateIssue']>[1] = {}
-      if (args.state) {
+      if (subState) {
         const issue = await proxy.getIssue(issueId)
         if (issue.team) {
           const statuses = await proxy.getTeamStatuses(issue.team.id)
-          const stateId = statuses[args.state as string]
+          const stateId = statuses[subState]
           if (stateId) updateData.stateId = stateId
         }
       }
@@ -1442,8 +1446,12 @@ export async function runLinear(config: LinearRunnerConfig): Promise<LinearRunne
     case 'update-sub-issue': {
       const issueId = requirePositional('issue-id')
       const opts = subArgs()
+      const subIssueState = (opts.state ?? opts.status) as string | undefined
+      if (!subIssueState && !opts.comment) {
+        throw new Error('Usage: af-linear update-sub-issue <issue-id> --state "Finished" [--comment "..."]')
+      }
       output = await updateSubIssue(client(), issueId, {
-        state: opts.state as string | undefined,
+        state: subIssueState,
         comment: opts.comment as string | undefined,
       })
       break

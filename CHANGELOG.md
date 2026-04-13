@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.27
+
+### Fixes
+
+- **Fix worktree setup for monorepo projects** — `findRepoRoot()` now accepts worktree `.git` files (not just directories). Added `resolveMainRepoRoot()` to follow worktree gitdir references back to the main repo. `linkDependencies()`, `syncDependencies()`, `loadAppEnvFiles()`, and `loadSettingsEnv()` now use the main repo root for `node_modules/`, `.env.local`, and `settings.local.json` that only exist in the main repo, not in worktrees.
+- **`update-sub-issue` accepts `--status` as alias for `--state`** — Agents passing `--status Finished` no longer silently fail. Both the direct runner and proxy runner accept either flag. Also throws a usage error when neither `--state`/`--status` nor `--comment` is provided.
+- **Backstop gates push and PR creation on commits existing** — The session backstop no longer pushes empty branches or creates PRs for branches with no commits ahead of main. `branch_pushed` checks `commitsPresent` before pushing, and `pr_url` checks both `commitsPresent` and `branchPushed` before creating a PR.
+
 ## v0.8.26
 
 ### Fixes

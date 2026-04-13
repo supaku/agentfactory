@@ -168,6 +168,16 @@ export function runBackstop(
       }
 
       case 'branch_pushed': {
+        // Only push if there are actually commits ahead of main
+        if (!outputs.commitsPresent) {
+          actions.push({
+            field: 'branch_pushed',
+            action: 'skipped — no commits to push',
+            success: false,
+            detail: 'Branch has no commits ahead of main',
+          })
+          break
+        }
         if (options?.dryRun) {
           actions.push({ field: 'branch_pushed', action: 'would push branch', success: false, detail: 'dry-run' })
           break
@@ -181,7 +191,16 @@ export function runBackstop(
       }
 
       case 'pr_url': {
-        // Can only create PR if branch is pushed (either already or by backstop above)
+        // Can only create PR if there are commits AND the branch is pushed
+        if (!outputs.commitsPresent) {
+          actions.push({
+            field: 'pr_url',
+            action: 'skipped PR creation — no commits on branch',
+            success: false,
+            detail: 'No commits ahead of main — nothing to create a PR for',
+          })
+          break
+        }
         if (!outputs.branchPushed) {
           actions.push({
             field: 'pr_url',

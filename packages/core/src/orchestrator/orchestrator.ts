@@ -7,7 +7,7 @@
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
-import { resolve, dirname, basename } from 'path'
+import { resolve, dirname, basename, isAbsolute } from 'path'
 import { parse as parseDotenv } from 'dotenv'
 import {
   type AgentProvider,
@@ -163,7 +163,34 @@ const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'projec
 /**
  * Load environment variables from .claude/settings.local.json
  */
-function loadSettingsEnv(workDir: string, log?: Logger): Record<string, string> {
+function loadSettingsEnv(workDir: string, log?: Logger, mainRepoRoot?: string): Record<string, string> {
+  // If main repo root is known, check there first (settings.local.json is gitignored,
+  // so it only exists in the main repo, not in worktrees)
+  if (mainRepoRoot) {
+    const settingsPath = resolve(mainRepoRoot, '.claude', 'settings.local.json')
+    if (existsSync(settingsPath)) {
+      try {
+        const content = readFileSync(settingsPath, 'utf-8')
+        const settings = JSON.parse(content)
+        if (settings.env && typeof settings.env === 'object') {
+          const env: Record<string, string> = {}
+          for (const [key, value] of Object.entries(settings.env)) {
+            if (typeof value === 'string') {
+              env[key] = value
+            }
+          }
+          log?.debug('Loaded settings.local.json from main repo', { envVars: Object.keys(env).length })
+          return env
+        }
+      } catch (error) {
+        log?.warn('Failed to load settings.local.json from main repo', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      return {}
+    }
+  }
+
   // Walk up from workDir to find .claude/settings.local.json
   let currentDir = workDir
   let prevDir = ''
@@ -206,8 +233,8 @@ function loadSettingsEnv(workDir: string, log?: Logger): Record<string, string> 
 }
 
 /**
- * Find the repository root by walking up from a directory
- * The repo root is identified by having a .git directory (not file, which worktrees have)
+ * Find the repo root from a starting directory.
+ * Accepts both real .git directories (main repos) and .git files (worktrees).
  */
 function findRepoRoot(startDir: string): string | null {
   let currentDir = startDir
@@ -216,15 +243,55 @@ function findRepoRoot(startDir: string): string | null {
   while (currentDir !== prevDir) {
     const gitPath = resolve(currentDir, '.git')
     if (existsSync(gitPath)) {
-      // Check if it's a directory (main repo) not a file (worktree)
+      return currentDir
+    }
+    prevDir = currentDir
+    currentDir = dirname(currentDir)
+  }
+
+  return null
+}
+
+/**
+ * Resolve the main repo root from any path — works for both regular repos
+ * and worktrees. For worktrees, follows the .git file's gitdir reference
+ * back to the main .git directory.
+ */
+function resolveMainRepoRoot(startDir: string): string | null {
+  let currentDir = startDir
+  let prevDir = ''
+
+  while (currentDir !== prevDir) {
+    const gitPath = resolve(currentDir, '.git')
+    if (existsSync(gitPath)) {
       try {
-        const content = readFileSync(gitPath, 'utf-8')
-        // If it starts with "gitdir:", it's a worktree reference
-        if (!content.startsWith('gitdir:')) {
+        const stat = statSync(gitPath)
+        if (stat.isDirectory()) {
+          // Real .git directory — this is the main repo root
           return currentDir
         }
+        // .git file — worktree reference: "gitdir: /path/to/main/.git/worktrees/BRANCH"
+        const content = readFileSync(gitPath, 'utf-8').trim()
+        if (content.startsWith('gitdir:')) {
+          const gitdir = content.replace('gitdir:', '').trim()
+          const resolved = isAbsolute(gitdir) ? gitdir : resolve(currentDir, gitdir)
+          // Walk up from worktrees/BRANCH → .git → repo root
+          let candidate = resolved
+          while (candidate !== dirname(candidate)) {
+            candidate = dirname(candidate)
+            if (basename(candidate) === '.git') {
+              try {
+                if (statSync(candidate).isDirectory()) {
+                  return dirname(candidate)
+                }
+              } catch {
+                // continue walking up
+              }
+            }
+          }
+        }
       } catch {
-        // If we can't read it as a file, it's a directory (main repo)
+        // If we can't read/stat .git, treat it as the repo root
         return currentDir
       }
     }
@@ -273,10 +340,11 @@ export function resolveWorktreePath(
 function loadAppEnvFiles(
   workDir: string,
   workType: AgentWorkType,
-  log?: Logger
+  log?: Logger,
+  mainRepoRoot?: string,
 ): Record<string, string> {
-  // Find the repo root (worktrees may be in a sibling directory or inside the repo)
-  const repoRoot = findRepoRoot(workDir)
+  // Use provided main repo root, or resolve from workDir (follows worktree .git references)
+  const repoRoot = mainRepoRoot ?? resolveMainRepoRoot(workDir) ?? findRepoRoot(workDir)
   if (!repoRoot) {
     log?.warn('Could not find repo root for env file loading', { startDir: workDir })
     return {}
@@ -2145,7 +2213,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * Falls back to `pnpm install --frozen-lockfile` if symlinking fails.
    */
   linkDependencies(worktreePath: string, identifier: string): void {
-    const repoRoot = findRepoRoot(worktreePath)
+    // Use the main repo root (set at construction from process.cwd()) for node_modules.
+    // Worktrees are sibling directories that don't contain node_modules.
+    const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
     if (!repoRoot) {
       console.warn(`[${identifier}] Could not find repo root, skipping dependency linking`)
       return
@@ -2416,7 +2486,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * updates the main repo's node_modules, then re-links into the worktree.
    */
   syncDependencies(worktreePath: string, identifier: string): void {
-    const repoRoot = findRepoRoot(worktreePath)
+    const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
     if (!repoRoot) {
       this.linkDependencies(worktreePath, identifier)
       return
@@ -2786,13 +2856,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     const abortController = new AbortController()
     this.abortControllers.set(issueId, abortController)
 
-    // Load environment from settings.local.json
+    // Load environment from settings.local.json and app .env files.
+    // Pass the main repo root so these functions can find gitignored files
+    // (settings.local.json, .env.local) that only exist in the main repo.
     const envBaseDir = worktreePath ?? process.cwd()
-    const settingsEnv = loadSettingsEnv(envBaseDir, log)
-
-    // Load app-specific env files based on work type
-    // Development work loads .env.local, QA/acceptance loads .env.test.local
-    const appEnv = loadAppEnvFiles(envBaseDir, workType, log)
+    const settingsEnv = loadSettingsEnv(envBaseDir, log, this.gitRoot)
+    const appEnv = loadAppEnvFiles(envBaseDir, workType, log, this.gitRoot)
 
     // Build environment variables - inherit ALL from process.env (required for node to be found)
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
@@ -4909,14 +4978,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     const abortController = new AbortController()
     this.abortControllers.set(issueId, abortController)
 
-    // Load environment from settings.local.json
+    // Load environment from settings.local.json and app .env files.
+    // Pass the main repo root so these functions can find gitignored files.
     const envBaseDir = worktreePath ?? process.cwd()
-    const settingsEnv = loadSettingsEnv(envBaseDir, log)
-
-    // Load app-specific env files based on work type
-    // Development work loads .env.local, QA/acceptance loads .env.test.local
+    const settingsEnv = loadSettingsEnv(envBaseDir, log, this.gitRoot)
     const effectiveWorkTypeForEnv = workType ?? 'development'
-    const appEnv = loadAppEnvFiles(envBaseDir, effectiveWorkTypeForEnv, log)
+    const appEnv = loadAppEnvFiles(envBaseDir, effectiveWorkTypeForEnv, log, this.gitRoot)
 
     // Build environment variables - inherit ALL from process.env (required for node to be found)
     // Then overlay app env vars, settings.local.json env vars, then our specific vars
