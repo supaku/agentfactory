@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.33
+
+### Fixes
+
+- **Propagate `AGENTFACTORY_API_URL` to agent environment** — The orchestrator now sets `AGENTFACTORY_API_URL` from `apiActivityConfig.baseUrl` in both the primary spawn and resume paths. Without this, agents in proxy mode had `WORKER_AUTH_TOKEN` but no API URL, causing the af-linear CLI and Linear tool plugin to fall back to direct `LinearAgentClient` which fails with 401.
+
 ## v0.8.32
 
 ### Fixes

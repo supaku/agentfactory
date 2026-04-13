@@ -3020,8 +3020,13 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       env.LINEAR_TEAM_NAME = teamName
     }
 
-    // Pass API auth token so af-linear CLI can proxy through the platform API
-    // when LINEAR_API_KEY is not available
+    // Pass API proxy URL and auth token so af-linear CLI can proxy through
+    // the platform API when LINEAR_API_KEY is not available.
+    // Without AGENTFACTORY_API_URL the CLI falls back to direct LinearAgentClient
+    // which requires LINEAR_API_KEY and fails with 401 in platform-delegated setups.
+    if (this.config.apiActivityConfig?.baseUrl) {
+      env.AGENTFACTORY_API_URL = this.config.apiActivityConfig.baseUrl
+    }
     if (this.config.apiActivityConfig?.apiKey) {
       env.WORKER_AUTH_TOKEN = this.config.apiActivityConfig.apiKey
     }
@@ -5198,7 +5203,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       ...(workType && { LINEAR_WORK_TYPE: workType }),
       // Set team name so agents can use `pnpm af-linear create-issue` without --team
       ...(teamName && { LINEAR_TEAM_NAME: teamName }),
-      // Pass API auth token so af-linear CLI can proxy through the platform API
+      // Pass API proxy URL and auth token so af-linear CLI can proxy through the platform API
+      ...(this.config.apiActivityConfig?.baseUrl && { AGENTFACTORY_API_URL: this.config.apiActivityConfig.baseUrl }),
       ...(this.config.apiActivityConfig?.apiKey && { WORKER_AUTH_TOKEN: this.config.apiActivityConfig.apiKey }),
     }
 
