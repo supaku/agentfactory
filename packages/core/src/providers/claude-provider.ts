@@ -200,13 +200,25 @@ export class ClaudeProvider implements AgentProvider {
         ]
       : []
 
+    // Convert stdio server configs to SDK McpStdioServerConfig format.
+    // Stdio servers propagate to sub-agents (in-process servers don't).
+    const mcpServers: Record<string, { type: 'stdio'; command: string; args: string[]; env?: Record<string, string> }> | undefined =
+      config.mcpStdioServers && config.mcpStdioServers.length > 0
+        ? Object.fromEntries(
+            config.mcpStdioServers.map(s => [
+              s.name,
+              { type: 'stdio' as const, command: s.command, args: s.args, env: s.env },
+            ])
+          )
+        : undefined
+
     const agentQuery = query({
       prompt: config.prompt,
       options: {
         cwd: config.cwd,
         env: config.env,
         abortController,
-        mcpServers: config.mcpServers,
+        mcpServers,
         maxTurns: config.maxTurns,
         allowedTools: config.allowedTools ?? defaultAllowedTools,
         // Programmatic permission handler for autonomous agents.

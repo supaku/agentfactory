@@ -3028,14 +3028,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
 
     log.info('Starting agent via provider', { provider: spawnProviderName, source: providerSource, cwd: worktreePath ?? 'repo-root', workType, promptPreview: prompt.substring(0, 50) })
 
-    // Create tool servers from registered plugins
+    // Create stdio MCP server configs for tool plugins.
+    // Stdio servers are used for all providers (Claude + Codex) so that
+    // sub-agents spawned via the Agent tool inherit the tool servers.
+    // In-process servers (createServers) only work for the top-level agent.
     const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
-    const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers(toolPluginContext)
-      : undefined
-
-    // Create stdio MCP server configs for Codex provider (SUP-1744)
-    const stdioServers = spawnProviderName === 'codex'
+    const stdioServers = this.toolRegistry.getPlugins().length > 0
       ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
@@ -3061,8 +3059,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
-      mcpServers: toolServers?.servers,
-      mcpToolNames: toolServers?.toolNames,
+      mcpToolNames: stdioServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       baseInstructions: codexBaseInstructions,
@@ -5213,14 +5210,9 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       workType: workType ?? 'development',
     })
 
-    // Create tool servers from registered plugins
+    // Create stdio MCP server configs for tool plugins (same as spawn path)
     const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
-    const toolServers = spawnProviderName === 'claude'
-      ? this.toolRegistry.createServers(toolPluginContext)
-      : undefined
-
-    // Create stdio MCP server configs for Codex provider (SUP-1744)
-    const stdioServers = spawnProviderName === 'codex'
+    const stdioServers = this.toolRegistry.getPlugins().length > 0
       ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
 
@@ -5245,8 +5237,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       abortController,
       autonomous: true,
       sandboxEnabled: this.config.sandboxEnabled,
-      mcpServers: toolServers?.servers,
-      mcpToolNames: toolServers?.toolNames,
+      mcpToolNames: stdioServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       baseInstructions: codexBaseInstructions,

@@ -92,13 +92,8 @@ export interface AgentSpawnConfig {
    */
   onProcessSpawned?: (pid: number | undefined) => void
   /**
-   * In-process MCP servers providing typed tools to the agent.
-   * Created by ToolRegistry.createServers() from registered plugins.
-   */
-  mcpServers?: Record<string, import('@anthropic-ai/claude-agent-sdk').McpServerConfig>
-  /**
    * Fully-qualified MCP tool names (e.g. 'mcp__af-code-intelligence__af_code_get_repo_map').
-   * Added to the allowedTools list so autonomous agents can use in-process MCP tools.
+   * Added to the allowedTools list so autonomous agents can use MCP tools.
    */
   mcpToolNames?: string[]
   /**
