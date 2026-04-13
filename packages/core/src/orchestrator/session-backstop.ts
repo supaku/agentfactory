@@ -439,6 +439,17 @@ function backstopPushBranch(worktreePath: string): BackstopAction {
   }
 }
 
+/**
+ * Read a git config value, returning undefined if not set.
+ */
+function getGitConfig(key: string, cwd: string): string | undefined {
+  try {
+    return execSync(`git config ${key}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
 function backstopCommitChanges(worktreePath: string, identifier: string): BackstopAction {
   try {
     // Check if there are actually uncommitted changes
@@ -457,6 +468,14 @@ function backstopCommitChanges(worktreePath: string, identifier: string): Backst
       }
     }
 
+    // Resolve git identity: env vars → git config → fallback defaults
+    const authorName = process.env.GIT_AUTHOR_NAME
+      ?? getGitConfig('user.name', worktreePath)
+      ?? 'AgentFactory'
+    const authorEmail = process.env.GIT_AUTHOR_EMAIL
+      ?? getGitConfig('user.email', worktreePath)
+      ?? 'agent@rensei.ai'
+
     // Stage all changes and commit
     execSync('git add -A', {
       cwd: worktreePath,
@@ -472,11 +491,10 @@ function backstopCommitChanges(worktreePath: string, identifier: string): Backst
         timeout: 30000,
         env: {
           ...process.env,
-          // Ensure commit succeeds even without global git config
-          GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME ?? 'AgentFactory Backstop',
-          GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL ?? 'backstop@agentfactory.dev',
-          GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? 'AgentFactory Backstop',
-          GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? 'backstop@agentfactory.dev',
+          GIT_AUTHOR_NAME: authorName,
+          GIT_AUTHOR_EMAIL: authorEmail,
+          GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME ?? authorName,
+          GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL ?? authorEmail,
         },
       },
     )
