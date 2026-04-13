@@ -138,6 +138,8 @@ export interface TemplateContext {
   // Tool plugin mode
   /** When true, agents use in-process af_linear_* tools instead of CLI */
   useToolPlugins?: boolean
+  /** When true, code-intelligence tools (af_code_*) are available via registered plugin */
+  hasCodeIntelligence?: boolean
 
   // Non-Node project support
   /** Command to invoke the Linear CLI (default: "pnpm af-linear") */

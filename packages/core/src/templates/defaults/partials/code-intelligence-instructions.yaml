@@ -5,6 +5,7 @@ metadata:
   description: Code intelligence tool instructions for codebase exploration and search
 content: |
 
+  {{#if hasCodeIntelligence}}
   {{#if useToolPlugins}}
   CODE INTELLIGENCE TOOLS:
   You have access to af_code_* tools for efficient codebase exploration. Use these BEFORE falling
@@ -80,4 +81,5 @@ content: |
   - Adding a member to a union type or enum: find-type-usages to find all switch/case/mapping sites
   - Importing across workspace packages: validate-cross-deps to verify dependency declarations
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
+  {{/if}}
   {{/if}}

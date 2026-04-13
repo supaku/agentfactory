@@ -2698,6 +2698,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         projectPath: perProject?.path ?? this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
         useToolPlugins: spawnProviderName === 'claude',
+        hasCodeIntelligence: this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence'),
         linearCli: this.linearCli ?? 'pnpm af-linear',
         packageManager: perProject?.packageManager ?? this.packageManager ?? 'pnpm',
         buildCommand: perProject?.buildCommand ?? this.buildCommand,

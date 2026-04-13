@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.30
+
+### Features
+
+- **Gate code-intelligence prompt instructions on plugin availability** — The `code-intelligence-instructions` partial now renders only when the `af-code-intelligence` plugin is registered in the tool registry. Added `hasCodeIntelligence` to `TemplateContext`, set by checking `toolRegistry.getPlugins()` at prompt construction time. Previously the instructions rendered unconditionally, either describing MCP tools or CLI commands that might not exist.
+
 ## v0.8.29
 
 ### Features
