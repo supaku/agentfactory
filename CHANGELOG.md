@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.32
+
+### Fixes
+
+- **Linear plugin creates tools in proxy mode** — `createTools()` now checks for `AGENTFACTORY_API_URL`/`WORKER_API_URL` and `WORKER_AUTH_TOKEN`/`WORKER_API_KEY` when `LINEAR_API_KEY` is absent. Fleet agents in proxy mode get Linear tools instead of zero, using the same `ProxyIssueTrackerClient` path that `runLinear()` already supports.
+
 ## v0.8.31
 
 ### Features
