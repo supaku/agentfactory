@@ -30,6 +30,7 @@
     "af-worker": "node --import tsx packages/cli/src/worker.ts",
     "af-worker-fleet": "node --import tsx packages/cli/src/worker-fleet.ts",
     "af-cleanup": "node --import tsx packages/cli/src/cleanup.ts",
+    "af-add-dep": "node --import tsx packages/cli/src/add-dep.ts",
     "af-queue-admin": "node --import tsx packages/cli/src/queue-admin.ts",
     "af-analyze-logs": "node --import tsx packages/cli/src/analyze-logs.ts",
     "af-linear": "node --import tsx packages/cli/src/linear.ts",

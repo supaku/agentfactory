@@ -33,6 +33,7 @@
     "af-worker": "dist/src/worker.js",
     "af-worker-fleet": "dist/src/worker-fleet.js",
     "af-cleanup": "dist/src/cleanup.js",
+    "af-add-dep": "dist/src/add-dep.js",
     "af-queue-admin": "dist/src/queue-admin.js",
     "af-analyze-logs": "dist/src/analyze-logs.js",
     "af-linear": "dist/src/linear.js",

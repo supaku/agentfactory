@@ -2,31 +2,17 @@ import { exec as execCb } from 'child_process'
 import { promisify } from 'util'
 import { readFile, writeFile, access } from 'fs/promises'
 import { join } from 'path'
+import {
+  type PackageManager,
+  LOCK_FILES,
+  GITATTRIBUTES_ENTRIES,
+  getRegenerateCommand,
+} from '../package-manager.js'
 
 const exec = promisify(execCb)
 
-export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun' | 'none'
-
-const LOCK_FILES: Record<string, string> = {
-  pnpm: 'pnpm-lock.yaml',
-  npm: 'package-lock.json',
-  yarn: 'yarn.lock',
-  bun: 'bun.lockb',
-}
-
-const INSTALL_COMMANDS: Record<string, string> = {
-  pnpm: 'pnpm install --no-frozen-lockfile',
-  npm: 'npm install',
-  yarn: 'yarn install',
-  bun: 'bun install',
-}
-
-const GITATTRIBUTES_ENTRIES: Record<string, string> = {
-  pnpm: 'pnpm-lock.yaml merge=ours',
-  npm: 'package-lock.json merge=ours',
-  yarn: 'yarn.lock merge=ours',
-  bun: 'bun.lockb merge=ours',
-}
+// Re-export for backward compatibility
+export type { PackageManager } from '../package-manager.js'
 
 export interface RegenerationResult {
   success: boolean
@@ -41,6 +27,7 @@ export class LockFileRegeneration {
   }
 
   getLockFileName(packageManager: PackageManager): string | null {
+    if (packageManager === 'none') return null
     return LOCK_FILES[packageManager] ?? null
   }
 
@@ -50,7 +37,11 @@ export class LockFileRegeneration {
       return { success: false, lockFile: '', packageManager, error: `Unsupported package manager: ${packageManager}` }
     }
 
-    const installCommand = INSTALL_COMMANDS[packageManager]
+    const installCommand = getRegenerateCommand(packageManager)
+
+    if (!installCommand) {
+      return { success: false, lockFile: '', packageManager, error: `No install command for: ${packageManager}` }
+    }
 
     try {
       // 1. Delete the conflicted lock file (if it exists)
@@ -80,6 +71,7 @@ export class LockFileRegeneration {
   }
 
   async ensureGitAttributes(repoPath: string, packageManager: PackageManager): Promise<void> {
+    if (packageManager === 'none') return
     const entry = GITATTRIBUTES_ENTRIES[packageManager]
     if (!entry) return
 

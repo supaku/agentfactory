@@ -56,6 +56,9 @@ switch (command) {
   case 'cleanup':
     import('./cleanup')
     break
+  case 'add-dep':
+    import('./add-dep')
+    break
   case 'queue-admin':
     import('./queue-admin')
     break

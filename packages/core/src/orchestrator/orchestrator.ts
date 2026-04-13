@@ -59,6 +59,7 @@ import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
+import { getLockFileName, getInstallCommand, getAddCommand, type PackageManager } from '../package-manager.js'
 import { createMergeQueueAdapter } from '../merge-queue/index.js'
 import type {
   OrchestratorConfig,
@@ -1856,10 +1857,24 @@ export class AgentOrchestrator {
 
     console.log(`Creating worktree: ${worktreePath} (branch: ${branchName})`)
 
-    // Determine the base branch for new worktrees
-    // Always base new feature branches on 'main' to avoid HEAD resolution issues
-    // when running from worktrees with deleted branches (e.g., after PR merge in acceptance)
-    const baseBranch = 'main'
+    // Fetch latest main from remote so worktrees start with current deps/lockfiles.
+    // Non-fatal: offline/CI environments may not have network access.
+    let hasRemoteMain = false
+    try {
+      execSync('git fetch origin main', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        timeout: 30_000,
+      })
+      hasRemoteMain = true
+    } catch {
+      console.warn('Failed to fetch origin/main — proceeding with local main')
+    }
+
+    // Base new feature branches on origin/main (latest remote) when available,
+    // falling back to local main for offline environments.
+    const baseBranch = hasRemoteMain ? 'origin/main' : 'main'
 
     // Try to create worktree with new branch
     // Uses a two-attempt strategy: if a branch conflict is detected and the
@@ -1968,6 +1983,9 @@ export class AgentOrchestrator {
     // Configure mergiraf merge driver if enabled
     this.configureMergiraf(worktreePath)
 
+    // Bootstrap lockfile and package.json from origin/main
+    this.bootstrapWorktreeDeps(worktreePath)
+
     // Capture quality baseline for delta checking (runs test/typecheck on main)
     if (this.isQualityBaselineEnabled()) {
       try {
@@ -2039,17 +2057,18 @@ export class AgentOrchestrator {
    *   node_modules first, then running `pnpm add` with the guard bypass.
    */
   private writeWorktreeHelpers(worktreePath: string): void {
-    // Skip helper scripts for non-Node projects (no pnpm/npm available)
-    if (this.packageManager === 'none') {
-      return
-    }
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    // Skip helper scripts for non-Node projects
+    if (pm === 'none') return
+
+    const addCmd = getAddCommand(pm) ?? `${pm} add`
 
     const agentDir = resolve(worktreePath, '.agent')
     const scriptPath = resolve(agentDir, 'add-dep.sh')
 
     const script = `#!/bin/bash
 # Safe dependency addition for agents in worktrees.
-# Removes symlinked node_modules, then runs pnpm add with guard bypass.
+# Removes symlinked node_modules, then runs ${addCmd} with guard bypass.
 # Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]
 set -e
 if [ $# -eq 0 ]; then
@@ -2061,8 +2080,8 @@ rm -rf node_modules
 for subdir in apps packages; do
   [ -d "$subdir" ] && find "$subdir" -maxdepth 2 -name node_modules -type d -exec rm -rf {} + 2>/dev/null || true
 done
-echo "Installing: pnpm add $@"
-ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
+echo "Installing: ${addCmd} $@"
+ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
 `
 
     try {
@@ -2075,6 +2094,47 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.warn(
         `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
       )
+    }
+  }
+
+  /**
+   * Bootstrap worktree dependencies from origin/main.
+   * Ensures the lockfile and root package.json in the worktree match the latest
+   * remote main, not the (potentially stale) local main the worktree branched from.
+   * Framework-neutral: uses getLockFileName() to resolve the correct lockfile.
+   * No-op for packageManager 'none'.
+   */
+  private bootstrapWorktreeDeps(worktreePath: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
+    const lockFile = getLockFileName(pm)
+    if (!lockFile) return
+
+    // Copy lockfile from origin/main into the worktree
+    try {
+      const originLockContent = execSync(`git show origin/main:${lockFile}`, {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      writeFileSync(resolve(worktreePath, lockFile), originLockContent)
+    } catch {
+      // Lockfile may not exist on origin/main (new repo) or fetch failed — skip
+    }
+
+    // Copy root package.json from origin/main
+    try {
+      const originPkgContent = execSync('git show origin/main:package.json', {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      writeFileSync(resolve(worktreePath, 'package.json'), originPkgContent)
+    } catch {
+      // Skip if not found
     }
   }
 
@@ -2210,11 +2270,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * resolving through a directory-level symlink and corrupting the main
    * repo's node_modules when an agent accidentally runs `pnpm install`.
    *
-   * For non-Node repos (no node_modules in main repo), this is a no-op.
+   * For non-Node repos (packageManager 'none' or no node_modules), this is a no-op.
    *
-   * Falls back to `pnpm install --frozen-lockfile` if symlinking fails.
+   * Falls back to install via the configured package manager if symlinking fails.
    */
   linkDependencies(worktreePath: string, identifier: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
     // Use the main repo root (set at construction from process.cwd()) for node_modules.
     // Worktrees are sibling directories that don't contain node_modules.
     const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
@@ -2317,12 +2380,14 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
     // Sentinel packages that should always be present in a Node.js project
     const sentinels = ['typescript']
 
-    // Also check for .modules.yaml (pnpm store metadata) if it exists in main
-    const repoRoot = findRepoRoot(worktreePath)
-    if (repoRoot) {
-      const pnpmMeta = resolve(repoRoot, 'node_modules', '.modules.yaml')
-      if (existsSync(pnpmMeta)) {
-        sentinels.push('.modules.yaml')
+    // Also check for .modules.yaml (pnpm store metadata) if using pnpm
+    if ((this.packageManager ?? 'pnpm') === 'pnpm') {
+      const repoRoot = findRepoRoot(worktreePath)
+      if (repoRoot) {
+        const pnpmMeta = resolve(repoRoot, 'node_modules', '.modules.yaml')
+        if (existsSync(pnpmMeta)) {
+          sentinels.push('.modules.yaml')
+        }
       }
     }
 
@@ -2439,21 +2504,28 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
   }
 
   /**
-   * Fallback: install dependencies via pnpm install.
+   * Fallback: install dependencies via the configured package manager.
    * Only called when symlinking fails.
    */
   private installDependencies(worktreePath: string, identifier: string): void {
-    console.log(`[${identifier}] Installing dependencies via pnpm...`)
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
+    const frozenCmd = getInstallCommand(pm, true)
+    const baseCmd = getInstallCommand(pm, false)
+    if (!baseCmd) return
+
+    console.log(`[${identifier}] Installing dependencies via ${pm}...`)
 
     // Remove any node_modules from a partial linkDependencies attempt
     this.removeWorktreeNodeModules(worktreePath)
 
     // Set ORCHESTRATOR_INSTALL=1 to bypass the preinstall guard script
-    // that blocks pnpm install in worktrees (to prevent symlink corruption).
+    // that blocks installs in worktrees (to prevent symlink corruption).
     const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
 
     try {
-      execSync('pnpm install --frozen-lockfile 2>&1', {
+      execSync(`${frozenCmd ?? baseCmd} 2>&1`, {
         cwd: worktreePath,
         stdio: 'pipe',
         encoding: 'utf-8',
@@ -2463,7 +2535,7 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
       console.log(`[${identifier}] Dependencies installed successfully`)
     } catch {
       try {
-        execSync('pnpm install 2>&1', {
+        execSync(`${baseCmd} 2>&1`, {
           cwd: worktreePath,
           stdio: 'pipe',
           encoding: 'utf-8',
@@ -2488,30 +2560,62 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
    * updates the main repo's node_modules, then re-links into the worktree.
    */
   syncDependencies(worktreePath: string, identifier: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
     const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
     if (!repoRoot) {
       this.linkDependencies(worktreePath, identifier)
       return
     }
 
-    const worktreeLock = resolve(worktreePath, 'pnpm-lock.yaml')
-    const mainLock = resolve(repoRoot, 'pnpm-lock.yaml')
+    const lockFileName = getLockFileName(pm)
+    if (!lockFileName) {
+      this.linkDependencies(worktreePath, identifier)
+      return
+    }
 
-    // Detect lockfile drift: if the worktree has a lockfile that differs from main,
-    // a dev agent added/changed dependencies on the branch
-    let lockfileDrifted = false
+    const worktreeLock = resolve(worktreePath, lockFileName)
+    const mainLock = resolve(repoRoot, lockFileName)
+
+    // Detect behind-drift: worktree lockfile is stale vs origin/main
+    // (main was bumped after this worktree was created or last synced)
+    let behindDrift = false
+    try {
+      const originLock = execSync(`git show origin/main:${lockFileName}`, {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      if (existsSync(worktreeLock)) {
+        const wtContent = readFileSync(worktreeLock, 'utf-8')
+        if (wtContent !== originLock) {
+          console.log(`[${identifier}] Lockfile behind origin/main — updating worktree`)
+          writeFileSync(worktreeLock, originLock)
+          behindDrift = true
+        }
+      }
+    } catch {
+      // git show failed (no remote, no lockfile on main) — skip behind-drift check
+    }
+
+    // Detect ahead-drift: worktree lockfile differs from main repo
+    // (agent added/changed dependencies on the branch)
+    let aheadDrift = false
     if (existsSync(worktreeLock) && existsSync(mainLock)) {
       try {
         const wtContent = readFileSync(worktreeLock, 'utf-8')
         const mainContent = readFileSync(mainLock, 'utf-8')
-        lockfileDrifted = wtContent !== mainContent
+        aheadDrift = wtContent !== mainContent
       } catch {
         // If we can't read either file, proceed without sync
       }
     }
 
-    if (lockfileDrifted) {
-      console.log(`[${identifier}] Lockfile drift detected — syncing main repo dependencies`)
+    if (aheadDrift || behindDrift) {
+      const driftType = behindDrift && aheadDrift ? 'bidirectional' : behindDrift ? 'behind-main' : 'ahead-of-main'
+      console.log(`[${identifier}] Lockfile drift detected (${driftType}) — syncing main repo dependencies`)
       try {
         // Copy the worktree's lockfile to the main repo so install picks up new deps
         copyFileSync(worktreeLock, mainLock)
@@ -2541,8 +2645,9 @@ ORCHESTRATOR_INSTALL=1 exec pnpm add "$@"
         }
 
         // Install in the main repo (not the worktree) to update node_modules
+        const installCmd = getInstallCommand(pm, true) ?? `${pm} install`
         const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
-        execSync('pnpm install --frozen-lockfile 2>&1', {
+        execSync(`${installCmd} 2>&1`, {
           cwd: repoRoot,
           stdio: 'pipe',
           encoding: 'utf-8',
