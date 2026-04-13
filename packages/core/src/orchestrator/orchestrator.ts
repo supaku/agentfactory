@@ -1090,6 +1090,8 @@ export class AgentOrchestrator {
   // Buffered assistant text for batched logging (keyed by issueId)
   // Streaming providers (Codex) send one token per event — buffer and flush on sentence boundaries
   private readonly assistantTextBuffers: Map<string, { text: string; timer: ReturnType<typeof setTimeout> | null }> = new Map()
+  /** Tracks pending tool_use events by issueId→toolUseId for context emission on tool_result */
+  private readonly pendingToolCalls: Map<string, Map<string, { toolName: string; input: Record<string, unknown> }>> = new Map()
   // Flag to prevent promoting agents during fleet shutdown
   private shuttingDown = false
   // Template registry for configurable workflow prompts
@@ -3697,6 +3699,15 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
             await this.updateSessionPullRequest(sessionId, prUrl, agent)
           }
         }
+
+        // Auto-emit structured context for successful tool results
+        if (emitter && !event.isError && event.toolUseId) {
+          const pending = this.pendingToolCalls.get(issueId)?.get(event.toolUseId)
+          if (pending) {
+            this.pendingToolCalls.get(issueId)!.delete(event.toolUseId)
+            this.emitToolContext(emitter, pending.toolName, pending.input)
+          }
+        }
         break
 
       case 'assistant_text':
@@ -3760,6 +3771,17 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
           } catch {
             // Ignore todos persistence errors
           }
+        }
+
+        // Track pending tool call for context emission on tool_result
+        if (event.toolUseId) {
+          if (!this.pendingToolCalls.has(issueId)) {
+            this.pendingToolCalls.set(issueId, new Map())
+          }
+          this.pendingToolCalls.get(issueId)!.set(event.toolUseId, {
+            toolName: event.toolName,
+            input: event.input,
+          })
         }
 
         if (emitter) {
@@ -3989,6 +4011,65 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     }
   }
 
+  /**
+   * Emit structured context entries based on completed tool calls.
+   * Fire-and-forget — errors are silently ignored.
+   */
+  private emitToolContext(
+    emitter: ActivityEmitter | ApiActivityEmitter,
+    toolName: string,
+    input: Record<string, unknown>,
+  ): void {
+    // Only ApiActivityEmitter has emitContext
+    if (!('emitContext' in emitter)) return
+    const api = emitter as ApiActivityEmitter
+
+    const filePath = input.file_path ?? input.path
+
+    switch (toolName) {
+      case 'Read':
+      case 'View':
+      case 'cat':
+        if (filePath) api.emitContext('currentFile', String(filePath))
+        break
+
+      case 'Write':
+      case 'Edit':
+      case 'Create':
+        if (filePath) api.emitContext('lastEditedFile', String(filePath))
+        break
+
+      case 'Grep':
+      case 'Search':
+      case 'Glob':
+      case 'Find':
+        if (input.pattern) {
+          api.emitContext('lastSearch', { tool: toolName, pattern: input.pattern })
+        }
+        break
+
+      case 'Bash': {
+        const command = typeof input.command === 'string' ? input.command : ''
+        if (!command) break
+
+        if (command.startsWith('git ')) {
+          api.emitContext('lastGitOp', command.substring(0, 100))
+        }
+
+        const cdMatch = command.match(/\bcd\s+("[^"]+"|'[^']+'|\S+)/)
+        if (cdMatch) {
+          const dir = cdMatch[1].replace(/^["']|["']$/g, '')
+          api.emitContext('workingDirectory', dir)
+        }
+
+        if (/\b(pnpm\s+test|npm\s+test|yarn\s+test|vitest|jest|mocha)\b/.test(command)) {
+          api.emitContext('lastTestRun', { command: command.substring(0, 200) })
+        }
+        break
+      }
+    }
+  }
+
   private extractPullRequestUrl(text: string): string | null {
     // GitHub PR URL pattern: https://github.com/owner/repo/pull/123
     const prUrlPattern = /https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/g
@@ -4155,6 +4236,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       }
       this.contextManagers.delete(issueId)
     }
+
+    this.pendingToolCalls.delete(issueId)
 
     // Session logger is cleaned up separately (in finalizeSessionLogger)
     // to ensure the final status is captured before cleanup

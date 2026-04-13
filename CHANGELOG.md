@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.29
+
+### Features
+
+- **Auto-emit structured context from tool results** — The orchestrator's event loop now emits structured context entries after successful tool completions via `ApiActivityEmitter.emitContext()`. Covers file reads (`currentFile`), writes/edits (`lastEditedFile`), searches (`lastSearch`), git commands (`lastGitOp`), directory changes (`workingDirectory`), and test runs (`lastTestRun`). Dashboards and TUIs can consume these key-value entries without parsing raw tool call content.
+
 ## v0.8.28
 
 ### Features
