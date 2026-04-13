@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.31
+
+### Features
+
+- **Framework-neutral worktree dependency bootstrap** — Extracted shared package-manager constants (`LOCK_FILES`, `INSTALL_COMMANDS`, `ADD_COMMANDS`) into `packages/core/src/package-manager.ts`. Worktrees now fetch `origin/main` before branching and bootstrap lockfile + `package.json` from the latest remote via `git show`. `syncDependencies`, `installDependencies`, `linkDependencies`, and `writeWorktreeHelpers` are now framework-neutral, using `packageManager` config instead of hardcoding pnpm. Added behind-drift detection (worktree vs `origin/main`). New `af-add-dep` CLI command for safe dependency addition in worktrees.
+
+### Fixes
+
+- **Propagate MCP tool servers to sub-agents via stdio transport** — The Claude provider used in-process MCP servers (`McpSdkServerConfigWithInstance`) which only work for the top-level agent — sub-agents spawned via the Agent tool couldn't see them. Switched all providers to use `createStdioServerConfigs()` uniformly. Stdio configs are serializable and propagate through the SDK's transport layer, making `af_code_*` tools available to sub-agents for the first time.
+
 ## v0.8.30
 
 ### Features
