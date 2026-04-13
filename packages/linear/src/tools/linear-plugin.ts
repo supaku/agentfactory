@@ -30,10 +30,10 @@ export interface ToolPluginContext {
   cwd: string
 }
 
-function makeTools(apiKey: string, teamName?: string): SdkMcpToolDefinition<any>[] {
+function makeTools(apiKey?: string, teamName?: string, proxyUrl?: string, proxyAuthToken?: string): SdkMcpToolDefinition<any>[] {
   async function run(command: string, args: Record<string, string | string[] | boolean> = {}, positionalArgs: string[] = []) {
     try {
-      const result = await runLinear({ command, args, positionalArgs, apiKey })
+      const result = await runLinear({ command, args, positionalArgs, apiKey, proxyUrl, proxyAuthToken })
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result.output, null, 2) }],
       }
@@ -265,9 +265,13 @@ export const linearPlugin: ToolPlugin = {
   description: 'Linear project management operations',
   createTools(context: ToolPluginContext): SdkMcpToolDefinition<any>[] {
     const apiKey = context.env.LINEAR_API_KEY
-    if (!apiKey) {
+    const proxyUrl = context.env.AGENTFACTORY_API_URL || context.env.WORKER_API_URL
+    const proxyAuthToken = context.env.WORKER_AUTH_TOKEN || context.env.WORKER_API_KEY
+
+    if (!apiKey && !(proxyUrl && proxyAuthToken)) {
       return []
     }
-    return makeTools(apiKey, context.env.LINEAR_TEAM_NAME)
+
+    return makeTools(apiKey, context.env.LINEAR_TEAM_NAME, proxyUrl, proxyAuthToken)
   },
 }
