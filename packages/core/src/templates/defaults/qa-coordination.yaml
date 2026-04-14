@@ -30,6 +30,14 @@ prompt: |
   - If ALL pass: Emit <!-- WORK_RESULT:passed --> in your final message. The orchestrator will promote to Delivered.
   - If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed --> in your final message. The orchestrator will move the issue to Rejected for coordinated refinement (the refinement-coordination agent will triage failures back to the specific failing sub-issues).
 
+  AUTONOMOUS OPERATION:
+  You are running autonomously — NEVER ask the user a question or wait for input. If you encounter
+  ambiguity or an unexpected state:
+  - Post a comment on the parent issue describing the situation
+  - If a sub-issue is in an unexpected state, post a comment and skip it
+  - If you cannot proceed at all, create a blocker issue and mark as failed
+  - Always prefer making a reasonable autonomous decision over stopping to ask
+
   IMPORTANT CONSTRAINTS:
   - This is READ-ONLY validation — do NOT create PRs, make git commits, or fix issues yourself.
   - If you find problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
