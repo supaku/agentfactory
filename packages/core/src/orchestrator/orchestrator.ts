@@ -3056,6 +3056,18 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       ? this.buildCodexPermissionConfig(workType)
       : undefined
 
+    // Build code intelligence enforcement config.
+    // Triple-guard: config opts in + plugin registered + Claude provider (only one with canUseTool).
+    const hasCodeIntel = this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence')
+    const codeIntelEnforcement = (
+      this.repoConfig?.codeIntelligence?.enforceUsage &&
+      hasCodeIntel &&
+      spawnProviderName === 'claude'
+    ) ? {
+      enforceUsage: true,
+      fallbackAfterAttempt: this.repoConfig.codeIntelligence.fallbackAfterAttempt ?? true,
+    } : undefined
+
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -3069,6 +3081,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       maxTurns,
       baseInstructions: codexBaseInstructions,
       permissionConfig: codexPermissionConfig,
+      codeIntelligenceEnforcement: codeIntelEnforcement,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -3104,6 +3117,10 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     // the agent may have emitted the marker in an earlier turn.
     const assistantTextChunks: string[] = []
 
+    // Code intelligence adoption telemetry
+    let codeIntelToolCalls = 0
+    let grepGlobToolCalls = 0
+
     try {
       for await (const event of handle.stream) {
         if (event.type === 'assistant_text') {
@@ -3118,6 +3135,11 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
             assistantTextChunks.push(inputStr)
           }
         }
+        // Track code intelligence vs legacy search tool usage
+        if (event.type === 'tool_use') {
+          if (event.toolName.includes('af_code_')) codeIntelToolCalls++
+          if (event.toolName === 'Grep' || event.toolName === 'Glob') grepGlobToolCalls++
+        }
         await this.handleAgentEvent(issueId, sessionId, event, emitter, agent, handle)
       }
 
@@ -3131,6 +3153,16 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         agent.status = 'completed'
       }
       agent.completedAt = new Date()
+
+      // Log code intelligence adoption telemetry
+      if (this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence')) {
+        const total = codeIntelToolCalls + grepGlobToolCalls
+        log?.info('Code intelligence adoption', {
+          codeIntelCalls: codeIntelToolCalls,
+          grepGlobCalls: grepGlobToolCalls,
+          ratio: total > 0 ? (codeIntelToolCalls / total).toFixed(2) : 'N/A',
+        })
+      }
 
       // Update state file to completed (only for worktree-based agents)
       if (agent.worktreePath) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.34
+
+### Features
+
+- **Force code-intelligence tool adoption via `canUseTool` interception** — When `codeIntelligence.enforceUsage` is enabled in `.agentfactory/config.yaml`, the Claude provider denies Grep/Glob calls with a redirect message pointing agents to `af_code_*` tools. After the agent uses any code-intelligence tool, Grep/Glob are unlocked as fallback (configurable via `fallbackAfterAttempt`). Replaced the stateless `autonomousCanUseTool` const with a per-session `createAutonomousCanUseTool()` factory that tracks which code-intelligence categories have been attempted.
+
+- **Code intelligence adoption telemetry** — The orchestrator now counts `af_code_*` vs Grep/Glob tool calls per session and logs the ratio at session end when the code-intelligence plugin is registered.
+
+- **Worktree creation script for isolated Claude sessions** — Added `scripts/create-worktree.sh` to bootstrap interactive Claude sessions into isolated git worktrees at `../agentfactory.wt/<name>`. Updated `.vscode/agentfactory.code-workspace` to use worktrees for all Claude terminals (expanded from 2 to 4 sessions).
+
 ## v0.8.33
 
 ### Fixes

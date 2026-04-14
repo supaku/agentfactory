@@ -180,6 +180,16 @@ export const RepositoryConfigSchema = z.object({
    * Quality gate configuration.
    * Controls baseline-diff quality checks and ratchet enforcement.
    */
+  /**
+   * Code intelligence enforcement configuration.
+   * Controls whether agents are required to use af_code_* tools before Grep/Glob.
+   */
+  codeIntelligence: z.object({
+    /** Require agents to attempt af_code_* tools before Grep/Glob are allowed */
+    enforceUsage: z.boolean().default(false),
+    /** Allow Grep/Glob fallback after agent has tried at least one af_code_* tool */
+    fallbackAfterAttempt: z.boolean().default(true),
+  }).optional(),
   quality: z.object({
     /** Enable quality baseline capture at worktree creation and post-session delta check */
     baselineEnabled: z.boolean().default(false),

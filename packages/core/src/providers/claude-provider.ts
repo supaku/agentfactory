@@ -21,7 +21,26 @@ import type {
 } from './types.js'
 
 /**
- * Programmatic permission handler for autonomous agents.
+ * Code intelligence enforcement configuration.
+ * Passed from the orchestrator via AgentSpawnConfig.
+ */
+export interface CodeIntelEnforcementConfig {
+  enforceUsage: boolean
+  fallbackAfterAttempt: boolean
+}
+
+/**
+ * Extract the code-intelligence category from an MCP tool name.
+ * e.g. 'mcp__af-code-intelligence__af_code_search_symbols' → 'search_symbols'
+ */
+function getCodeIntelCategory(toolName: string): string | null {
+  if (!toolName.includes('af_code_')) return null
+  const match = toolName.match(/af_code_(\w+)/)
+  return match ? match[1] : null
+}
+
+/**
+ * Factory that creates a per-session CanUseTool callback for autonomous agents.
  *
  * Filesystem-based hooks (.claude/hooks/auto-approve.js) may not load
  * correctly in git worktrees where .git is a file (not a directory),
@@ -29,86 +48,129 @@ import type {
  *
  * This callback acts as a reliable fallback — it evaluates permissions
  * in-process without filesystem dependencies.
+ *
+ * When code intelligence enforcement is configured, Grep and Glob calls
+ * are denied with a redirect message until the agent has tried at least
+ * one af_code_* tool. This forces agents to use the higher-quality
+ * code-intelligence search tools before falling back to raw search.
  */
-const autonomousCanUseTool: CanUseTool = async (toolName, input) => {
-  // Read-only tools: always allow
-  if (['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'].includes(toolName)) {
-    return { behavior: 'allow', updatedInput: input }
-  }
+export function createAutonomousCanUseTool(enforcement?: CodeIntelEnforcementConfig): CanUseTool {
+  // Per-session state: which code-intelligence categories have been attempted
+  const codeIntelAttempted = new Set<string>()
 
-  // File write tools: always allow (permissionMode: 'acceptEdits' should
-  // handle these, but be explicit as a safety net)
-  if (['Write', 'Edit', 'NotebookEdit'].includes(toolName)) {
-    return { behavior: 'allow', updatedInput: input }
-  }
-
-  // Agent tool: always force foreground execution.
-  // Coordinators that spawn sub-agents with run_in_background=true exit
-  // before sub-agents finish, orphaning work. Strip the flag so the Agent
-  // tool blocks until the sub-agent completes.
-  if (toolName === 'Agent') {
-    if (input.run_in_background) {
-      const { run_in_background: _, ...rest } = input
-      return { behavior: 'allow', updatedInput: rest }
+  return async (toolName, input) => {
+    // --- Code intelligence enforcement ---
+    // Track af_code_* usage so fallback can be unlocked
+    const category = getCodeIntelCategory(toolName)
+    if (category) {
+      codeIntelAttempted.add(category)
     }
-    return { behavior: 'allow', updatedInput: input }
-  }
 
-  // Task management and planning
-  if (['Task', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
-       'EnterPlanMode', 'ExitPlanMode', 'Skill'].includes(toolName)) {
-    return { behavior: 'allow', updatedInput: input }
-  }
-
-  // Bash: evaluate command safety
-  if (toolName === 'Bash') {
-    const cmd = (typeof input.command === 'string' ? input.command : '').trim()
-    if (!cmd) return { behavior: 'allow', updatedInput: input }
-
-    // Deny destructive patterns
-    if (/rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/.test(cmd)) {
-      return { behavior: 'deny', message: 'rm of filesystem root blocked' }
-    }
-    if (/git\s+worktree\s+(remove|prune)/.test(cmd)) {
-      return { behavior: 'deny', message: 'worktree remove/prune blocked per project rules' }
-    }
-    if (/git\s+reset\s+--hard/.test(cmd)) {
-      return { behavior: 'deny', message: 'reset --hard blocked' }
-    }
-    if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
-      // Allow --force-with-lease on feature branches (safe: won't overwrite others' work)
-      if (/--force-with-lease/.test(cmd)) {
-        if (/\b(main|master)\b/.test(cmd)) {
-          return { behavior: 'deny', message: 'force push to main/master blocked' }
+    // Redirect Grep/Glob when enforcement is active and agent hasn't tried code-intel yet
+    if (
+      enforcement?.enforceUsage &&
+      (toolName === 'Grep' || toolName === 'Glob')
+    ) {
+      const fallbackUnlocked = enforcement.fallbackAfterAttempt && codeIntelAttempted.size > 0
+      if (!fallbackUnlocked) {
+        return {
+          behavior: 'deny',
+          message: [
+            `${toolName} is temporarily blocked. You have af_code_* tools available that provide better code intelligence.`,
+            'Try one of these first:',
+            '- mcp__af-code-intelligence__af_code_get_repo_map — Get a ranked map of important files',
+            '- mcp__af-code-intelligence__af_code_search_symbols — Find symbol definitions (functions, classes, types)',
+            '- mcp__af-code-intelligence__af_code_search_code — BM25 keyword search with code-aware tokenization',
+            '',
+            enforcement.fallbackAfterAttempt
+              ? `After using any af_code_* tool, ${toolName} will be unlocked as a fallback.`
+              : `${toolName} is disabled for this session. Use af_code_* tools instead.`,
+          ].join('\n'),
         }
-        return { behavior: 'allow', updatedInput: input }
       }
-      return { behavior: 'deny', message: 'force push blocked — use --force-with-lease for safety' }
-    }
-    if (/git\s+(checkout|switch)\b/.test(cmd)) {
-      return { behavior: 'deny', message: 'git checkout/switch blocked — agents must not change the checked-out branch' }
     }
 
-    // Allow everything else — autonomous agents run in isolated worktrees
-    // managed by the orchestrator, with guardrails at the process level.
+    // --- Existing permission logic ---
+
+    // Read-only tools: always allow
+    if (['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'].includes(toolName)) {
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // File write tools: always allow (permissionMode: 'acceptEdits' should
+    // handle these, but be explicit as a safety net)
+    if (['Write', 'Edit', 'NotebookEdit'].includes(toolName)) {
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // Agent tool: always force foreground execution.
+    // Coordinators that spawn sub-agents with run_in_background=true exit
+    // before sub-agents finish, orphaning work. Strip the flag so the Agent
+    // tool blocks until the sub-agent completes.
+    if (toolName === 'Agent') {
+      if (input.run_in_background) {
+        const { run_in_background: _, ...rest } = input
+        return { behavior: 'allow', updatedInput: rest }
+      }
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // Task management and planning
+    if (['Task', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
+         'EnterPlanMode', 'ExitPlanMode', 'Skill'].includes(toolName)) {
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // Bash: evaluate command safety
+    if (toolName === 'Bash') {
+      const cmd = (typeof input.command === 'string' ? input.command : '').trim()
+      if (!cmd) return { behavior: 'allow', updatedInput: input }
+
+      // Deny destructive patterns
+      if (/rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/.test(cmd)) {
+        return { behavior: 'deny', message: 'rm of filesystem root blocked' }
+      }
+      if (/git\s+worktree\s+(remove|prune)/.test(cmd)) {
+        return { behavior: 'deny', message: 'worktree remove/prune blocked per project rules' }
+      }
+      if (/git\s+reset\s+--hard/.test(cmd)) {
+        return { behavior: 'deny', message: 'reset --hard blocked' }
+      }
+      if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
+        // Allow --force-with-lease on feature branches (safe: won't overwrite others' work)
+        if (/--force-with-lease/.test(cmd)) {
+          if (/\b(main|master)\b/.test(cmd)) {
+            return { behavior: 'deny', message: 'force push to main/master blocked' }
+          }
+          return { behavior: 'allow', updatedInput: input }
+        }
+        return { behavior: 'deny', message: 'force push blocked — use --force-with-lease for safety' }
+      }
+      if (/git\s+(checkout|switch)\b/.test(cmd)) {
+        return { behavior: 'deny', message: 'git checkout/switch blocked — agents must not change the checked-out branch' }
+      }
+
+      // Allow everything else — autonomous agents run in isolated worktrees
+      // managed by the orchestrator, with guardrails at the process level.
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // MCP tools: block Linear (agents must use `pnpm af-linear` CLI instead)
+    if (toolName.startsWith('mcp__') && toolName.includes('Linear')) {
+      return {
+        behavior: 'deny',
+        message: 'Linear MCP tools are not available. Use `pnpm af-linear` CLI instead. See CLAUDE.md for the full command reference.',
+      }
+    }
+
+    // MCP tools: allow others (Vercel, Gmail, etc.)
+    if (toolName.startsWith('mcp__')) {
+      return { behavior: 'allow', updatedInput: input }
+    }
+
+    // Default: allow — autonomous agents should not be blocked by prompts
     return { behavior: 'allow', updatedInput: input }
   }
-
-  // MCP tools: block Linear (agents must use `pnpm af-linear` CLI instead)
-  if (toolName.startsWith('mcp__') && toolName.includes('Linear')) {
-    return {
-      behavior: 'deny',
-      message: 'Linear MCP tools are not available. Use `pnpm af-linear` CLI instead. See CLAUDE.md for the full command reference.',
-    }
-  }
-
-  // MCP tools: allow others (Vercel, Gmail, etc.)
-  if (toolName.startsWith('mcp__')) {
-    return { behavior: 'allow', updatedInput: input }
-  }
-
-  // Default: allow — autonomous agents should not be blocked by prompts
-  return { behavior: 'allow', updatedInput: input }
 }
 
 export class ClaudeProvider implements AgentProvider {
@@ -224,7 +286,7 @@ export class ClaudeProvider implements AgentProvider {
         // Programmatic permission handler for autonomous agents.
         // Filesystem hooks may not resolve in worktrees — this callback
         // ensures headless agents are never blocked by permission prompts.
-        canUseTool: config.autonomous ? autonomousCanUseTool : undefined,
+        canUseTool: config.autonomous ? createAutonomousCanUseTool(config.codeIntelligenceEnforcement) : undefined,
         permissionMode: 'acceptEdits',
         disallowedTools: config.autonomous
           ? [

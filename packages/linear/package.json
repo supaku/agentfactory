@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/plugin-linear",
-  "version": "0.8.33",
+  "version": "0.8.34",
   "type": "module",
   "description": "Linear issue tracker integration for AgentFactory — status transitions, agent sessions, work routing",
   "author": "Rensei AI (https://rensei.ai)",

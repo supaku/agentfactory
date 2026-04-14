@@ -128,6 +128,15 @@ export interface AgentSpawnConfig {
    */
   permissionConfig?: import('../templates/adapters.js').CodexPermissionConfig
   /**
+   * Code intelligence enforcement config.
+   * When set, the provider's canUseTool callback redirects Grep/Glob
+   * calls to af_code_* tools until the agent has attempted code intelligence.
+   */
+  codeIntelligenceEnforcement?: {
+    enforceUsage: boolean
+    fallbackAfterAttempt: boolean
+  }
+  /**
    * Model identifier to use for the agent session.
    * When omitted, the provider resolves the model from environment variables or defaults.
    */
