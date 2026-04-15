@@ -863,8 +863,8 @@ const NO_API_KEY_COMMANDS = new Set(['check-deployment'])
 // ── Proxy runner (routes commands through remote API proxy) ────────
 
 /**
- * Commands supported in proxy mode. Commands that require raw Linear SDK
- * access (e.g., listIssues with complex filters) are not supported.
+ * Commands supported in proxy mode. Some commands use client-side filtering
+ * on proxy results instead of raw Linear SDK filter syntax.
  */
 const PROXY_SUPPORTED_COMMANDS = new Set([
   'get-issue',
@@ -879,6 +879,9 @@ const PROXY_SUPPORTED_COMMANDS = new Set([
   'list-relations',
   'remove-relation',
   'list-backlog-issues',
+  'list-issues',
+  'list-unblocked-backlog',
+  'check-blocked',
   'create-blocker',
   'check-deployment',
 ])
@@ -922,6 +925,35 @@ async function resolveLabelIdsViaProxy(
   } catch {
     return []
   }
+}
+
+/**
+ * Check which issues are blocking a given issue, via proxy.
+ * Mirrors getBlockingIssues() but uses proxy client methods.
+ */
+async function getBlockingIssuesViaProxy(
+  proxy: ProxyIssueTrackerClient,
+  issueId: string,
+): Promise<Array<{ identifier: string; title: string; status: string }>> {
+  const relations = await proxy.getIssueRelations(issueId)
+  const blockingIssues: Array<{ identifier: string; title: string; status: string }> = []
+
+  for (const relation of relations.inverseRelations) {
+    if (relation.type === 'blocks') {
+      const blockingIssue = await proxy.getIssue(relation.issueId)
+      const statusName = blockingIssue.state?.name ?? 'Unknown'
+
+      if (statusName !== 'Accepted') {
+        blockingIssues.push({
+          identifier: blockingIssue.identifier,
+          title: blockingIssue.title,
+          status: statusName,
+        })
+      }
+    }
+  }
+
+  return blockingIssues
 }
 
 /**
@@ -1229,6 +1261,92 @@ async function runLinearProxy(
         sourceIssue: sourceIssue.identifier,
         relation: 'blocks',
       }
+      break
+    }
+
+    case 'list-issues': {
+      if (!args.project) {
+        throw new Error(
+          'list-issues in proxy mode requires --project. ' +
+          'Usage: af-linear list-issues --project "ProjectName" [--status "..."] [--label "..."] [--limit N]'
+        )
+      }
+      const allIssues = await proxy.listProjectIssues(args.project as string)
+      let filtered = allIssues
+
+      // Client-side filtering on the proxy result set
+      const statusFilter = (args.status ?? args.state) as string | undefined
+      if (statusFilter) {
+        filtered = filtered.filter(i => i.status.toLowerCase() === statusFilter.toLowerCase())
+      }
+      if (args.label) {
+        const labelFilter = (args.label as string).toLowerCase()
+        filtered = filtered.filter(i => i.labels.some(l => l.toLowerCase() === labelFilter))
+      }
+      if (args.priority != null) {
+        // listProjectIssues doesn't return priority — skip filter silently
+      }
+      if (args.query) {
+        const q = (args.query as string).toLowerCase()
+        filtered = filtered.filter(i =>
+          i.title.toLowerCase().includes(q) ||
+          (i.description?.toLowerCase().includes(q) ?? false)
+        )
+      }
+
+      // Apply limit
+      const limit = args.limit ? Number(args.limit) : 50
+      filtered = filtered.slice(0, limit)
+
+      output = filtered.map(i => ({
+        id: i.identifier,
+        title: i.title,
+        status: i.status,
+        labels: i.labels,
+        project: i.project ?? args.project,
+        assignee: null, // Not available in listProjectIssues
+        createdAt: new Date(i.createdAt).toISOString(),
+      }))
+      break
+    }
+
+    case 'check-blocked': {
+      const issueId = requirePositional('issue-id')
+      const blockingIssues = await getBlockingIssuesViaProxy(proxy, issueId)
+      output = {
+        issueId,
+        blocked: blockingIssues.length > 0,
+        blockedBy: blockingIssues,
+      }
+      break
+    }
+
+    case 'list-unblocked-backlog': {
+      if (!args.project) {
+        throw new Error('Usage: af-linear list-unblocked-backlog --project "ProjectName"')
+      }
+      const projectIssues = await proxy.listProjectIssues(args.project as string)
+      const backlogIssues = projectIssues.filter(
+        i => i.status.toLowerCase() === 'backlog'
+      )
+
+      const results = []
+      for (const issue of backlogIssues) {
+        const blockingIssues = await getBlockingIssuesViaProxy(proxy, issue.id)
+        results.push({
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+          description: issue.description,
+          status: issue.status,
+          labels: issue.labels,
+          blocked: blockingIssues.length > 0,
+          blockedBy: blockingIssues,
+        })
+      }
+
+      const unblockedResults = results.filter(r => !r.blocked)
+      output = unblockedResults
       break
     }
 
