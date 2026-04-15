@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.35
+
+### Fixes
+
+- **Add autonomous operation instructions to coordination templates** — `acceptance-coordination`, `qa-coordination`, and `refinement-coordination` templates were missing the `AUTONOMOUS OPERATION` prompt block, allowing agents to output conversational questions instead of making headless decisions. Aligns with the pattern already in `coordination` and `inflight-coordination` templates.
+
+- **Add list-issues, check-blocked, list-unblocked-backlog to proxy mode** — These three Linear CLI commands were unsupported in proxy mode, causing failures when agents operate without a direct `LINEAR_API_KEY`. Implements them using existing proxy client methods with client-side filtering.
+
 ## v0.8.34
 
 ### Features
