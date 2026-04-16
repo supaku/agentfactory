@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.36
+
+### Features
+
+- **File reservation system for parallel agents** — Per-file mutex coordination (Redis SET NX) prevents merge conflicts when multiple agents work in separate git worktrees. Includes per-session file index, TTL-based expiration with refresh for crash recovery, and bulk release on session end. Exposed to agents via `af_code_reserve_files` / `af_code_check_reservation` tools through the code-intelligence plugin. The merge worker clears reservations after successful merge. Server, orchestrator, CLI worker, and code-intelligence plugin all wired up.
+
 ## v0.8.35
 
 ### Fixes
