@@ -121,6 +121,12 @@ export interface OrchestratorConfig {
   mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
   /** Storage backend for the local merge queue adapter (required when provider is 'local') */
   mergeQueueStorage?: import('../merge-queue/adapters/local.js').LocalMergeQueueStorage
+  /**
+   * File reservation delegate for per-file coordination across parallel sessions.
+   * When provided, injected into ToolPluginContext so code-intelligence tools
+   * can reserve/release files and check for conflicts.
+   */
+  fileReservation?: import('../tools/types.js').ToolPluginContext['fileReservation']
 }
 
 export interface OrchestratorIssue {

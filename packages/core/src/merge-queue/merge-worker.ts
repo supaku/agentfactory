@@ -64,6 +64,14 @@ export interface MergeWorkerDeps {
     set(key: string, value: string): Promise<void>
     expire(key: string, seconds: number): Promise<void>
   }
+  /** Optional file reservation checker for pre-merge conflict detection */
+  fileReservation?: {
+    checkFileConflicts(
+      repoId: string,
+      sessionId: string,
+      filePaths: string[],
+    ): Promise<Array<{ filePath: string; heldBy: { sessionId: string } }>>
+  }
 }
 
 export interface MergeProcessResult {
@@ -191,6 +199,34 @@ export class MergeWorker {
       const prepareResult = await strategy.prepare(ctx)
       if (!prepareResult.success) {
         return { prNumber: entry.prNumber, status: 'error', message: `Prepare failed: ${prepareResult.error}` }
+      }
+
+      // 1.5 Optional: check if modified files are reserved by active sessions
+      if (this.deps.fileReservation) {
+        try {
+          const { stdout } = await exec(
+            `git diff --name-only ${ctx.remote}/${ctx.targetBranch}...${ctx.sourceBranch}`,
+            { cwd: ctx.repoPath },
+          )
+          const modifiedFiles = stdout.trim().split('\n').filter(Boolean)
+          if (modifiedFiles.length > 0) {
+            const conflicts = await this.deps.fileReservation.checkFileConflicts(
+              this.config.repoId,
+              `merge-worker-${entry.prNumber}`,
+              modifiedFiles,
+            )
+            if (conflicts.length > 0) {
+              const conflictList = conflicts.map(c => `${c.filePath} (held by ${c.heldBy.sessionId})`).join(', ')
+              return {
+                prNumber: entry.prNumber,
+                status: 'conflict',
+                message: `Files reserved by active sessions: ${conflictList}`,
+              }
+            }
+          }
+        } catch {
+          // File reservation check is best-effort; don't block merge on check failure
+        }
       }
 
       // 2. Execute merge strategy (rebase/merge/squash)

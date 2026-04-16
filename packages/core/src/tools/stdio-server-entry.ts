@@ -35,6 +35,44 @@ async function loadMcpSdk() {
 }
 
 // ---------------------------------------------------------------------------
+// File Reservation Delegate Reconstruction
+// ---------------------------------------------------------------------------
+
+/**
+ * Reconstruct the file reservation delegate in the child process.
+ * When the orchestrator serializes ToolPluginContext over stdin, function
+ * references on fileReservation are lost. If REDIS_URL is available we can
+ * dynamically import the server package and create a fresh delegate.
+ */
+async function reconstructFileReservationDelegate(
+  env: Record<string, string>,
+): Promise<Record<string, Function> | null> {
+  try {
+    // Dynamic import — server package is available at runtime but is NOT a compile-time
+    // dependency of core. Use a variable to prevent TypeScript module resolution.
+    const serverPkg = '@renseiai/agentfactory-server'
+    const serverMod = await import(serverPkg)
+    const { reserveFiles, checkFileConflicts, releaseFiles } = serverMod
+    // Derive repoId from the working directory name (same convention as CLI runners)
+    const { basename } = await import('node:path')
+    const repoId = basename(process.cwd())
+
+    return {
+      reserveFiles: (sessionId: string, filePaths: string[], reason?: string) =>
+        reserveFiles(repoId, sessionId, filePaths, reason),
+      checkFileConflicts: (sessionId: string, filePaths: string[]) =>
+        checkFileConflicts(repoId, sessionId, filePaths),
+      releaseFiles: (sessionId: string, filePaths: string[]) =>
+        releaseFiles(repoId, sessionId, filePaths),
+    }
+  } catch {
+    // Server package not available in this process — skip file reservation
+    console.error('[stdio-server] Could not reconstruct file reservation delegate (server package unavailable)')
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 
@@ -52,6 +90,21 @@ async function main(): Promise<void> {
 
   // Load the actual plugin to get real tool handlers
   const plugin = await loadPlugin(bootstrap.pluginName)
+
+  // Reconstruct file reservation delegate for code-intelligence in stdio servers.
+  // The delegate has function references that don't survive JSON serialization
+  // from the parent process. When REDIS_URL is available, we can recreate it
+  // by dynamically importing the server package.
+  if (
+    bootstrap.pluginName === 'af-code-intelligence' &&
+    !bootstrap.context.fileReservation &&
+    process.env.REDIS_URL
+  ) {
+    const delegate = await reconstructFileReservationDelegate(bootstrap.context.env)
+    if (delegate) {
+      ;(bootstrap.context as any).fileReservation = delegate
+    }
+  }
 
   if (plugin) {
     // We have the actual plugin — register real tool handlers
@@ -97,7 +150,7 @@ async function main(): Promise<void> {
 
 interface ToolPluginLike {
   name: string
-  createTools(context: { env: Record<string, string>; cwd: string }): any[]
+  createTools(context: { env: Record<string, string>; cwd: string; fileReservation?: unknown }): any[]
 }
 
 async function loadPlugin(name: string): Promise<ToolPluginLike | null> {

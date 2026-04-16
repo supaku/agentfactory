@@ -9,6 +9,7 @@ import { HybridSearchEngine } from '../search/hybrid-search.js'
 import { RepoMapGenerator } from '../repo-map/repo-map-generator.js'
 import { DedupPipeline } from '../memory/dedup-pipeline.js'
 import { InMemoryStore } from '../memory/memory-store.js'
+import type { FileReservationDelegate } from './file-reservation-delegate.js'
 
 // ---------------------------------------------------------------------------
 // Tool plugin types (structurally identical to @renseiai/agentfactory)
@@ -26,6 +27,8 @@ export interface ToolPlugin {
 export interface ToolPluginContext {
   env: Record<string, string>
   cwd: string
+  /** Optional file reservation delegate. When absent, reservation tools are not registered. */
+  fileReservation?: FileReservationDelegate
 }
 
 // ── Shared constants for file discovery ─────────────────────────────────────
@@ -339,7 +342,7 @@ export const codeIntelligencePlugin: ToolPlugin = {
     const dedupStore = new InMemoryStore()
     const dedupPipeline = new DedupPipeline(dedupStore)
 
-    return [
+    const tools: SdkMcpToolDefinition<any>[] = [
       tool(
         'af_code_search_symbols',
         'Search for code symbols (functions, classes, types, etc.) by name or query',
@@ -482,5 +485,79 @@ export const codeIntelligencePlugin: ToolPlugin = {
         }
       ),
     ]
+
+    // Conditionally add file reservation tools when delegate is available
+    if (context.fileReservation) {
+      const delegate = context.fileReservation
+      const sessionId = context.env.LINEAR_SESSION_ID ?? 'unknown'
+
+      tools.push(
+        tool(
+          'af_code_reserve_files',
+          'Reserve files before modifying them to prevent merge conflicts with other agents working in parallel. Call this BEFORE editing files that other agents might also need to modify. Returns which files were successfully reserved and any conflicts.',
+          {
+            file_paths: z.array(z.string()).describe('Relative file paths to reserve (from repo root)'),
+            reason: z.string().optional().describe('Why you are reserving these files'),
+          },
+          async (args) => {
+            try {
+              const result = await delegate.reserveFiles(sessionId, args.file_paths, args.reason)
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+              }
+            } catch (err) {
+              return {
+                content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+                isError: true,
+              }
+            }
+          }
+        ),
+
+        tool(
+          'af_code_check_conflicts',
+          'Check if files are currently reserved by other agent sessions. Use this before starting work on files to avoid merge conflicts. Files you already reserved are not reported as conflicts.',
+          {
+            file_paths: z.array(z.string()).describe('Relative file paths to check'),
+          },
+          async (args) => {
+            try {
+              const conflicts = await delegate.checkFileConflicts(sessionId, args.file_paths)
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify({ conflicts, hasConflicts: conflicts.length > 0 }, null, 2) }],
+              }
+            } catch (err) {
+              return {
+                content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+                isError: true,
+              }
+            }
+          }
+        ),
+
+        tool(
+          'af_code_release_files',
+          'Release file reservations after you are done modifying files. Always release files when your work on them is complete so other agents can modify them.',
+          {
+            file_paths: z.array(z.string()).describe('Relative file paths to release'),
+          },
+          async (args) => {
+            try {
+              const released = await delegate.releaseFiles(sessionId, args.file_paths)
+              return {
+                content: [{ type: 'text' as const, text: JSON.stringify({ released, filePaths: args.file_paths }, null, 2) }],
+              }
+            } catch (err) {
+              return {
+                content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+                isError: true,
+              }
+            }
+          }
+        ),
+      )
+    }
+
+    return tools
   },
 }

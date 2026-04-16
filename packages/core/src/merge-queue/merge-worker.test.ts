@@ -1057,4 +1057,123 @@ describe('MergeWorker', () => {
       expect(deps.storage.markBlocked).toHaveBeenCalledWith('repo-1', 42, expect.any(String))
     })
   })
+
+  // -------------------------------------------------------------------------
+  // processEntry: file reservation checks
+  // -------------------------------------------------------------------------
+
+  describe('file reservation pre-check', () => {
+    it('skips file reservation check when deps.fileReservation is undefined', async () => {
+      vi.useRealTimers()
+      const config = makeConfig()
+      const deps = makeDeps() // no fileReservation
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn(),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+      }) as any)
+      mockExecSuccess()
+
+      const result = await worker.processEntry(entry)
+
+      expect(result.status).toBe('merged')
+    })
+
+    it('returns conflict when files are reserved by other sessions', async () => {
+      vi.useRealTimers()
+      const config = makeConfig()
+      const mockFileReservation = {
+        checkFileConflicts: vi.fn().mockResolvedValue([
+          { filePath: 'src/index.ts', heldBy: { sessionId: 'other-session' } },
+        ]),
+      }
+      const deps = makeDeps({ fileReservation: mockFileReservation })
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn(),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+      }) as any)
+
+      // Mock exec for git diff --name-only to return file list
+      mockExecByCommand({
+        'git diff --name-only': { stdout: 'src/index.ts\nsrc/app.ts\n' },
+        'git fetch': {},
+        'git checkout': {},
+      })
+
+      const result = await worker.processEntry(entry)
+
+      expect(result.status).toBe('conflict')
+      expect(result.message).toContain('src/index.ts')
+      expect(result.message).toContain('other-session')
+      expect(mockFileReservation.checkFileConflicts).toHaveBeenCalledWith(
+        'repo-1',
+        'merge-worker-42',
+        ['src/index.ts', 'src/app.ts'],
+      )
+    })
+
+    it('proceeds normally when file reservation check fails (best-effort)', async () => {
+      vi.useRealTimers()
+      const config = makeConfig()
+      const mockFileReservation = {
+        checkFileConflicts: vi.fn().mockRejectedValue(new Error('Redis down')),
+      }
+      const deps = makeDeps({ fileReservation: mockFileReservation })
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn(),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+      }) as any)
+      mockExecSuccess()
+
+      const result = await worker.processEntry(entry)
+
+      // Should still succeed despite file reservation check failure
+      expect(result.status).toBe('merged')
+    })
+
+    it('proceeds when no file conflicts found', async () => {
+      vi.useRealTimers()
+      const config = makeConfig()
+      const mockFileReservation = {
+        checkFileConflicts: vi.fn().mockResolvedValue([]), // no conflicts
+      }
+      const deps = makeDeps({ fileReservation: mockFileReservation })
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn(),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+      }) as any)
+      mockExecSuccess()
+
+      const result = await worker.processEntry(entry)
+
+      expect(result.status).toBe('merged')
+    })
+  })
 })

@@ -137,7 +137,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -1055,13 +1055,14 @@ export function detectWorkType(statusName: string, isParent: boolean, statusToWo
 }
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
     apiActivityConfig?: OrchestratorConfig['apiActivityConfig']
     workTypeTimeouts?: OrchestratorConfig['workTypeTimeouts']
     maxSessionTimeoutMs?: number
+    fileReservation?: OrchestratorConfig['fileReservation']
   }
   private readonly client: IssueTrackerClient
   private readonly statusMappings: WorkTypeStatusMappings
@@ -3037,7 +3038,11 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     // Stdio servers are used for all providers (Claude + Codex) so that
     // sub-agents spawned via the Agent tool inherit the tool servers.
     // In-process servers (createServers) only work for the top-level agent.
-    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
+    const toolPluginContext = {
+      env,
+      cwd: worktreePath ?? process.cwd(),
+      ...(this.config.fileReservation ? { fileReservation: this.config.fileReservation } : {}),
+    }
     const stdioServers = this.toolRegistry.getPlugins().length > 0
       ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined
@@ -5249,7 +5254,11 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     })
 
     // Create stdio MCP server configs for tool plugins (same as spawn path)
-    const toolPluginContext = { env, cwd: worktreePath ?? process.cwd() }
+    const toolPluginContext = {
+      env,
+      cwd: worktreePath ?? process.cwd(),
+      ...(this.config.fileReservation ? { fileReservation: this.config.fileReservation } : {}),
+    }
     const stdioServers = this.toolRegistry.getPlugins().length > 0
       ? this.toolRegistry.createStdioServerConfigs(toolPluginContext)
       : undefined

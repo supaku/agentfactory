@@ -114,6 +114,9 @@ export * from './gate-storage.js'
 // Webhook gate endpoint handler (framework-agnostic)
 export * from './webhook-gate-handler.js'
 
+// File reservation (per-file coordination across parallel agent sessions)
+export * from './file-reservation.js'
+
 // Merge queue storage (Redis-backed sorted set + state tracking)
 export * from './merge-queue-storage.js'
 

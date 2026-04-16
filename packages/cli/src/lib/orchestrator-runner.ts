@@ -21,7 +21,14 @@ import {
   createLinearStatusMappings,
   linearPlugin,
 } from '@renseiai/plugin-linear'
-import { MergeQueueStorage, createLocalMergeQueueStorage } from '@renseiai/agentfactory-server'
+import {
+  MergeQueueStorage,
+  createLocalMergeQueueStorage,
+  reserveFiles as serverReserveFiles,
+  checkFileConflicts as serverCheckFileConflicts,
+  releaseFiles as serverReleaseFiles,
+  isRedisConfigured,
+} from '@renseiai/agentfactory-server'
 
 let codeIntelligencePlugin: ToolPlugin | undefined
 try {
@@ -163,6 +170,18 @@ export async function runOrchestrator(
     ? createLocalMergeQueueStorage(new MergeQueueStorage())
     : undefined
 
+  // Create file reservation delegate when Redis is available.
+  // The delegate captures repoId so agents don't need to know it.
+  const repoId = path.basename(gitRoot)
+  const fileReservation = isRedisConfigured() ? {
+    reserveFiles: (sessionId: string, filePaths: string[], reason?: string) =>
+      serverReserveFiles(repoId, sessionId, filePaths, reason),
+    checkFileConflicts: (sessionId: string, filePaths: string[]) =>
+      serverCheckFileConflicts(repoId, sessionId, filePaths),
+    releaseFiles: (sessionId: string, filePaths: string[]) =>
+      serverReleaseFiles(repoId, sessionId, filePaths),
+  } : undefined
+
   const orchestratorConfig: Record<string, unknown> = {
     project: config.project,
     maxConcurrent,
@@ -171,6 +190,7 @@ export async function runOrchestrator(
     issueTrackerClient,
     statusMappings,
     mergeQueueStorage,
+    fileReservation,
     toolPlugins: [linearPlugin, codeIntelligencePlugin].filter(Boolean) as ToolPlugin[],
   }
   if (config.templateDir) {

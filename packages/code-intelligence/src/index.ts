@@ -84,3 +84,4 @@ export { VoyageReranker } from './reranking/voyage-reranker.js'
 
 // Plugin
 export { codeIntelligencePlugin } from './plugin/code-intelligence-plugin.js'
+export type { FileReservationDelegate } from './plugin/file-reservation-delegate.js'

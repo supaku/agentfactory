@@ -16,4 +16,28 @@ export interface ToolPluginContext {
   env: Record<string, string>
   /** Working directory */
   cwd: string
+  /** Optional delegate for file reservation operations across parallel sessions */
+  fileReservation?: {
+    reserveFiles(
+      sessionId: string,
+      filePaths: string[],
+      reason?: string,
+    ): Promise<{
+      reserved: string[]
+      conflicts: Array<{
+        filePath: string
+        heldBy: { sessionId: string; reservedAt: number }
+      }>
+    }>
+    checkFileConflicts(
+      sessionId: string,
+      filePaths: string[],
+    ): Promise<
+      Array<{
+        filePath: string
+        heldBy: { sessionId: string; reservedAt: number }
+      }>
+    >
+    releaseFiles(sessionId: string, filePaths: string[]): Promise<number>
+  }
 }
