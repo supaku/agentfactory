@@ -35,6 +35,7 @@ import {
   releaseFiles as serverReleaseFiles,
   isRedisConfigured,
 } from '@renseiai/agentfactory-server'
+import { createProxyFileReservationDelegate } from '@renseiai/agentfactory'
 
 let codeIntelligencePlugin: ToolPlugin | undefined
 try {
@@ -675,7 +676,8 @@ export async function runWorker(
         ? createLocalMergeQueueStorage(new MergeQueueStorage())
         : undefined
 
-      // Create file reservation delegate when Redis is available
+      // Create file reservation delegate.
+      // Priority: direct Redis (OSS) → platform API proxy (SaaS) → disabled
       const repoId = path.basename(gitRoot)
       const fileReservation = isRedisConfigured() ? {
         reserveFiles: (sessionId: string, filePaths: string[], reason?: string) =>
@@ -684,7 +686,9 @@ export async function runWorker(
           serverCheckFileConflicts(repoId, sessionId, filePaths),
         releaseFiles: (sessionId: string, filePaths: string[]) =>
           serverReleaseFiles(repoId, sessionId, filePaths),
-      } : undefined
+      } : (workerConfig.apiUrl && workerConfig.apiKey)
+        ? createProxyFileReservationDelegate({ apiUrl: workerConfig.apiUrl, apiKey: workerConfig.apiKey })
+        : undefined
 
       const orchestrator = createOrchestrator(
         {

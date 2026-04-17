@@ -29,6 +29,7 @@ import {
   releaseFiles as serverReleaseFiles,
   isRedisConfigured,
 } from '@renseiai/agentfactory-server'
+import { createProxyFileReservationDelegate } from '@renseiai/agentfactory'
 
 let codeIntelligencePlugin: ToolPlugin | undefined
 try {
@@ -171,7 +172,7 @@ export async function runOrchestrator(
     : undefined
 
   // Create file reservation delegate when Redis is available.
-  // The delegate captures repoId so agents don't need to know it.
+  // Platform workers use worker-runner which supports API proxy fallback.
   const repoId = path.basename(gitRoot)
   const fileReservation = isRedisConfigured() ? {
     reserveFiles: (sessionId: string, filePaths: string[], reason?: string) =>

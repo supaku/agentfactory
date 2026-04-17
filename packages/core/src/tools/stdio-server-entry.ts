@@ -93,16 +93,24 @@ async function main(): Promise<void> {
 
   // Reconstruct file reservation delegate for code-intelligence in stdio servers.
   // The delegate has function references that don't survive JSON serialization
-  // from the parent process. When REDIS_URL is available, we can recreate it
-  // by dynamically importing the server package.
+  // from the parent process. Try Redis first (OSS), then platform API proxy (SaaS).
   if (
     bootstrap.pluginName === 'af-code-intelligence' &&
-    !bootstrap.context.fileReservation &&
-    process.env.REDIS_URL
+    !bootstrap.context.fileReservation
   ) {
-    const delegate = await reconstructFileReservationDelegate(bootstrap.context.env)
-    if (delegate) {
-      ;(bootstrap.context as any).fileReservation = delegate
+    if (process.env.REDIS_URL) {
+      const delegate = await reconstructFileReservationDelegate(bootstrap.context.env)
+      if (delegate) {
+        ;(bootstrap.context as any).fileReservation = delegate
+      }
+    } else if (process.env.AGENTFACTORY_API_URL && process.env.WORKER_AUTH_TOKEN) {
+      // Platform-proxied mode: use HTTP delegate
+      const { createProxyFileReservationDelegate } = await import('../file-reservation/index.js')
+      ;(bootstrap.context as any).fileReservation = createProxyFileReservationDelegate({
+        apiUrl: process.env.AGENTFACTORY_API_URL,
+        apiKey: process.env.WORKER_AUTH_TOKEN,
+      })
+      console.error('[stdio-server] Reconstructed file reservation delegate via platform API proxy')
     }
   }
 
