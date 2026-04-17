@@ -215,10 +215,14 @@ export interface SpawnAgentOptions {
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string
-  /** Issue labels (used for provider resolution via "provider:<name>" labels) */
+  /** Issue labels (used for provider resolution via "provider:<name>" labels and model resolution via "model:<id>" labels) */
   labels?: string[]
   /** Mention/prompt context text (used for provider resolution via "use <provider>" patterns) */
   mentionContext?: string
+  /** Model override from platform dispatch (QueuedWork.model). Highest priority in model resolution cascade. */
+  dispatchModel?: string
+  /** Sub-agent model override from platform dispatch (QueuedWork.subAgentModel) */
+  dispatchSubAgentModel?: string
 }
 
 export interface OrchestratorStreamConfig {
@@ -275,8 +279,12 @@ export interface SpawnAgentWithResumeOptions {
   teamName?: string
   /** Project name for path scoping in monorepos */
   projectName?: string
-  /** Issue labels (used for provider resolution via "provider:<name>" labels) */
+  /** Issue labels (used for provider resolution via "provider:<name>" labels and model resolution via "model:<id>" labels) */
   labels?: string[]
   /** Mention/prompt context text (used for provider resolution via "use <provider>" patterns) */
   mentionContext?: string
+  /** Model override from platform dispatch (QueuedWork.model). Highest priority in model resolution cascade. */
+  dispatchModel?: string
+  /** Sub-agent model override from platform dispatch (QueuedWork.subAgentModel) */
+  dispatchSubAgentModel?: string
 }

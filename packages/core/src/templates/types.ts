@@ -163,6 +163,12 @@ export interface TemplateContext {
   /** Linear project name for creating agent-improvement issues (from AGENT_BUG_BACKLOG env var) */
   agentBugBacklog?: string
 
+  // Model selection (for sub-agent control in coordination templates)
+  /** Resolved model ID for the primary agent (e.g., 'claude-sonnet-4-6'). Informational — already applied to provider. */
+  model?: string
+  /** Model ID for Task sub-agents spawned by coordinators. Templates can pass this to sub-agent prompts. */
+  subAgentModel?: string
+
   // Merge queue awareness
   /** When true, a merge queue (local or GitHub-native) handles rebase/merge — QA should not hard-fail on merge conflicts */
   mergeQueueEnabled?: boolean
@@ -305,6 +311,9 @@ export const TemplateContextSchema = z.object({
   phaseOutputs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   // Agent improvement backlog
   agentBugBacklog: z.string().optional(),
+  // Model selection (for sub-agent control in coordination templates)
+  model: z.string().optional(),
+  subAgentModel: z.string().optional(),
   // Merge queue awareness
   mergeQueueEnabled: z.boolean().optional(),
   // Quality baseline (captured from main before agent starts)

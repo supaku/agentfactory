@@ -1587,6 +1587,11 @@ export class CodexAppServerProvider implements AgentProvider {
   readonly capabilities = {
     supportsMessageInjection: true,
     supportsSessionResume: true,
+    supportsToolPlugins: true,
+    needsBaseInstructions: true,
+    needsPermissionConfig: true,
+    supportsCodeIntelligenceEnforcement: false,
+    toolPermissionFormat: 'codex' as const,
   } as const
 
   /** Shared process manager — one app-server process serves all threads */

@@ -17,9 +17,13 @@ import {
   createProvider,
   resolveProviderName,
   resolveProviderWithSource,
+  resolveModelWithSource,
+  resolveSubAgentModel,
   type AgentProviderName,
   type ProvidersConfig,
+  type ModelsConfig,
 } from '../providers/index.js'
+import { buildSafetyInstructions } from '../providers/safety-rules.js'
 import {
   initializeAgentDir,
   writeState,
@@ -54,7 +58,7 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, CodexToolPermissionAdapter, createToolPermissionAdapter } from '../templates/index.js'
-import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig } from '../config/index.js'
+import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig, getModelsConfig } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
@@ -1072,6 +1076,7 @@ export class AgentOrchestrator {
   private provider: AgentProvider
   private readonly providerCache: Map<AgentProviderName, AgentProvider> = new Map()
   private configProviders?: ProvidersConfig
+  private configModels?: ModelsConfig
   private readonly agentSessions: Map<string, IssueTrackerSession> = new Map()
   private readonly activityEmitters: Map<string, ActivityEmitter | ApiActivityEmitter> = new Map()
   // Track session ID to issue ID mapping for stop signal handling
@@ -1186,7 +1191,7 @@ export class AgentOrchestrator {
         useBuiltinDefaults: true,
         frontend: 'linear',
       })
-      this.templateRegistry.setToolPermissionAdapter(createToolPermissionAdapter(this.provider.name))
+      this.templateRegistry.setToolPermissionAdapter(createToolPermissionAdapter(this.provider.capabilities.toolPermissionFormat ?? 'claude'))
     } catch {
       // If template loading fails, fall back to hardcoded prompts
       this.templateRegistry = null
@@ -1241,6 +1246,8 @@ export class AgentOrchestrator {
           }
           // Store providers config for per-spawn resolution
           this.configProviders = getProvidersConfig(repoConfig)
+          // Store models config for per-spawn model resolution
+          this.configModels = getModelsConfig(repoConfig)
 
           // Initialize merge queue adapter from repository config
           if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
@@ -2682,26 +2689,16 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
    * Returns a cached provider instance (creating one if needed) and the resolved name.
    */
   /**
-   * Build base instructions for Codex App Server agents (SUP-1746).
+   * Build base instructions for providers that need persistent system instructions.
    *
    * Assembles safety rules and project-specific instructions (AGENTS.md / CLAUDE.md)
-   * into a persistent system prompt passed via `instructions` on `thread/start`.
+   * into a persistent system prompt. Used by providers with `needsBaseInstructions: true`.
    */
-  private buildCodexBaseInstructions(workType?: AgentWorkType, worktreePath?: string): string {
+  private buildBaseInstructions(workType?: AgentWorkType, worktreePath?: string): string {
     const sections: string[] = []
 
-    // Safety rules — mirrors autonomousCanUseTool deny patterns as natural-language rules
-    sections.push(`# Safety Rules
-
-You are running in an AgentFactory-managed worktree. Follow these rules strictly:
-
-1. NEVER run: rm -rf / (or any rm of the filesystem root)
-2. NEVER run: git worktree remove, git worktree prune
-3. NEVER run: git reset --hard
-4. NEVER run: git push --force (use --force-with-lease on feature branches if needed)
-5. NEVER run: git checkout <branch>, git switch <branch> (do not change the checked-out branch)
-6. NEVER modify files in the .git directory
-7. Commit changes with descriptive messages before reporting completion`)
+    // Safety rules — uses shared module so rules stay in sync across providers
+    sections.push(buildSafetyInstructions())
 
     // Project-specific instructions — load AGENTS.md or CLAUDE.md from worktree root
     if (worktreePath) {
@@ -2725,12 +2722,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
   }
 
   /**
-   * Build Codex permission config from template permissions (SUP-1748).
+   * Build structured permission config from template permissions.
    *
    * Translates abstract template `tools.allow` / `tools.disallow` into
-   * structured regex patterns for the Codex approval bridge.
+   * structured regex patterns for providers with `needsPermissionConfig: true`.
    */
-  private buildCodexPermissionConfig(workType?: AgentWorkType): import('../templates/adapters.js').CodexPermissionConfig | undefined {
+  private buildPermissionConfig(workType?: AgentWorkType): import('../templates/adapters.js').CodexPermissionConfig | undefined {
     if (!this.templateRegistry || !workType) return undefined
 
     const { allow, disallow } = this.templateRegistry.getRawToolPermissions(workType)
@@ -2781,11 +2778,31 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       projectName,
       labels,
       mentionContext,
+      dispatchModel,
+      dispatchSubAgentModel,
     } = options
 
     // Resolve provider for this specific spawn (may differ from default)
     const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
       this.resolveProviderForSpawn({ workType, projectName, labels, mentionContext })
+
+    // Resolve model for this spawn
+    const { model: resolvedModel, source: modelSource } = resolveModelWithSource({
+      dispatchModel,
+      labels,
+      workType,
+      project: projectName,
+      configModels: this.configModels,
+    })
+    const resolvedSubAgentModel = resolveSubAgentModel({
+      dispatchSubAgentModel,
+      configModels: this.configModels,
+    })
+
+    if (resolvedModel) {
+      const log = createLogger({ issueIdentifier: identifier })
+      log.info('Model resolved', { model: resolvedModel, source: modelSource })
+    }
 
     // Generate prompt based on work type, or use custom prompt if provided
     // Try template registry first, fall back to hardcoded prompts
@@ -2803,7 +2820,7 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         repository: this.config.repository,
         projectPath: perProject?.path ?? this.projectPaths?.[projectName ?? ''],
         sharedPaths: this.sharedPaths,
-        useToolPlugins: spawnProviderName === 'claude',
+        useToolPlugins: (spawnProvider.capabilities.supportsToolPlugins ?? false) && this.toolRegistry.getPlugins().length > 0,
         hasCodeIntelligence: this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence'),
         linearCli: this.linearCli ?? 'pnpm af-linear',
         packageManager: perProject?.packageManager ?? this.packageManager ?? 'pnpm',
@@ -2813,6 +2830,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
         agentBugBacklog: process.env.AGENT_BUG_BACKLOG || undefined,
         mergeQueueEnabled: !!this.mergeQueueAdapter,
         qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
+        model: resolvedModel,
+        subAgentModel: resolvedSubAgentModel,
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
@@ -3053,21 +3072,22 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
-    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
-    const codexBaseInstructions = spawnProviderName === 'codex'
-      ? this.buildCodexBaseInstructions(workType, worktreePath)
+    // Build base instructions and permission config for providers that need them.
+    // Capability-driven: any provider declaring needsBaseInstructions/needsPermissionConfig gets them.
+    const baseInstructions = (spawnProvider.capabilities.needsBaseInstructions ?? false)
+      ? this.buildBaseInstructions(workType, worktreePath)
       : undefined
-    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
-      ? this.buildCodexPermissionConfig(workType)
+    const permissionConfig = (spawnProvider.capabilities.needsPermissionConfig ?? false) && this.templateRegistry
+      ? this.buildPermissionConfig(workType)
       : undefined
 
     // Build code intelligence enforcement config.
-    // Triple-guard: config opts in + plugin registered + Claude provider (only one with canUseTool).
+    // Only providers with canUseTool-style enforcement (supportsCodeIntelligenceEnforcement) can use this.
     const hasCodeIntel = this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence')
     const codeIntelEnforcement = (
       this.repoConfig?.codeIntelligence?.enforceUsage &&
       hasCodeIntel &&
-      spawnProviderName === 'claude'
+      (spawnProvider.capabilities.supportsCodeIntelligenceEnforcement ?? false)
     ) ? {
       enforceUsage: true,
       fallbackAfterAttempt: this.repoConfig.codeIntelligence.fallbackAfterAttempt ?? true,
@@ -3084,8 +3104,9 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       mcpToolNames: stdioServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
-      baseInstructions: codexBaseInstructions,
-      permissionConfig: codexPermissionConfig,
+      model: resolvedModel,
+      baseInstructions,
+      permissionConfig,
       codeIntelligenceEnforcement: codeIntelEnforcement,
       onProcessSpawned: (pid) => {
         agent.pid = pid
@@ -4490,7 +4511,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     issueIdOrIdentifier: string,
     sessionId?: string,
     workType?: AgentWorkType,
-    prompt?: string
+    prompt?: string,
+    extra?: { dispatchModel?: string; dispatchSubAgentModel?: string }
   ): Promise<AgentProcess> {
     console.log(`Fetching issue:`, issueIdOrIdentifier)
     const issue = await this.client.getIssue(issueIdOrIdentifier)
@@ -4688,6 +4710,8 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       teamName,
       projectName,
       labels: labelNames,
+      dispatchModel: extra?.dispatchModel,
+      dispatchSubAgentModel: extra?.dispatchSubAgentModel,
     })
   }
 
@@ -5041,15 +5065,28 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
    * If autoTransition is enabled, also transitions the issue status to the appropriate working state
    */
   async spawnAgentWithResume(options: SpawnAgentWithResumeOptions): Promise<AgentProcess> {
-    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName, labels, mentionContext } = options
+    const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName, labels, mentionContext, dispatchModel, dispatchSubAgentModel } = options
 
     // Resolve provider for this specific spawn (may differ from default)
     const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
       this.resolveProviderForSpawn({ workType, projectName: options.projectName, labels, mentionContext })
 
+    // Resolve model for this spawn
+    const { model: resolvedModel, source: modelSource } = resolveModelWithSource({
+      dispatchModel,
+      labels,
+      workType,
+      project: options.projectName,
+      configModels: this.configModels,
+    })
+
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
     this.agentLoggers.set(issueId, log)
+
+    if (resolvedModel) {
+      log.info('Model resolved for resume', { model: resolvedModel, source: modelSource })
+    }
 
     // Use the work type to determine if we need to transition on start
     // Only certain work types trigger a start transition
@@ -5268,12 +5305,12 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
     const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
-    // SUP-1746/SUP-1748: Build Codex-specific base instructions and permission config
-    const codexBaseInstructions = spawnProviderName === 'codex'
-      ? this.buildCodexBaseInstructions(workType, worktreePath)
+    // Build base instructions and permission config for providers that need them (capability-driven)
+    const baseInstructions = (spawnProvider.capabilities.needsBaseInstructions ?? false)
+      ? this.buildBaseInstructions(workType, worktreePath)
       : undefined
-    const codexPermissionConfig = spawnProviderName === 'codex' && this.templateRegistry
-      ? this.buildCodexPermissionConfig(workType)
+    const permissionConfig = (spawnProvider.capabilities.needsPermissionConfig ?? false) && this.templateRegistry
+      ? this.buildPermissionConfig(workType)
       : undefined
 
     // Spawn agent via provider interface (with resume if session ID available)
@@ -5287,8 +5324,9 @@ You are running in an AgentFactory-managed worktree. Follow these rules strictly
       mcpToolNames: stdioServers?.toolNames,
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
-      baseInstructions: codexBaseInstructions,
-      permissionConfig: codexPermissionConfig,
+      model: resolvedModel,
+      baseInstructions,
+      permissionConfig,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })

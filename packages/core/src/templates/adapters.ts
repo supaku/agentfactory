@@ -5,7 +5,7 @@
  */
 
 import type { ToolPermission, ToolPermissionAdapter } from './types.js'
-import type { AgentProviderName } from '../providers/types.js'
+import type { AgentProviderName, ToolPermissionFormat } from '../providers/types.js'
 
 // ---------------------------------------------------------------------------
 // Codex Permission Config (SUP-1748)
@@ -201,18 +201,22 @@ export class SpringAiToolPermissionAdapter implements ToolPermissionAdapter {
 }
 
 /**
- * Create a tool permission adapter for the given provider.
+ * Create a tool permission adapter for the given format.
+ *
+ * Accepts either a ToolPermissionFormat (capability-based) or an AgentProviderName
+ * (legacy) for backward compatibility.
  */
-export function createToolPermissionAdapter(provider: AgentProviderName): ToolPermissionAdapter {
-  switch (provider) {
+export function createToolPermissionAdapter(format: ToolPermissionFormat | AgentProviderName): ToolPermissionAdapter {
+  switch (format) {
     case 'claude':
       return new ClaudeToolPermissionAdapter()
     case 'codex':
       return new CodexToolPermissionAdapter()
-    case 'amp':
-      return new ClaudeToolPermissionAdapter()
     case 'spring-ai':
       return new SpringAiToolPermissionAdapter()
+    case 'amp':
+    case 'a2a':
+      return new ClaudeToolPermissionAdapter()
     default:
       return new ClaudeToolPermissionAdapter()
   }

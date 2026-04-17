@@ -22,6 +22,10 @@ export class AmpProvider implements AgentProvider {
   readonly capabilities = {
     supportsMessageInjection: false,
     supportsSessionResume: false,
+    supportsToolPlugins: false,
+    needsBaseInstructions: false,
+    needsPermissionConfig: false,
+    supportsCodeIntelligenceEnforcement: false,
   } as const
 
   spawn(_config: AgentSpawnConfig): AgentHandle {

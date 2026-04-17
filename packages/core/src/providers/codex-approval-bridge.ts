@@ -16,6 +16,11 @@
  */
 
 import type { CodexPermissionConfig } from '../templates/adapters.js'
+import { evaluateCommandSafety, SAFETY_DENY_PATTERNS } from './safety-rules.js'
+export type { SafetyDenyPattern } from './safety-rules.js'
+
+// Re-export for backward compatibility — existing consumers may import from here
+export { SAFETY_DENY_PATTERNS }
 
 // ---------------------------------------------------------------------------
 // Approval Decision
@@ -25,32 +30,6 @@ export interface ApprovalDecision {
   action: 'accept' | 'decline' | 'acceptForSession'
   reason?: string
 }
-
-// ---------------------------------------------------------------------------
-// Safety Deny Patterns (ported from claude-provider.ts:33-112)
-// ---------------------------------------------------------------------------
-
-interface DenyPattern {
-  pattern: RegExp
-  reason: string
-}
-
-/**
- * Hardcoded safety deny patterns — always active regardless of template config.
- * These mirror the deny-list in Claude's `autonomousCanUseTool` callback.
- */
-export const SAFETY_DENY_PATTERNS: DenyPattern[] = [
-  // 1. rm of filesystem root
-  { pattern: /rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/, reason: 'rm of filesystem root blocked' },
-  // 2. worktree remove/prune — orchestrator manages worktree lifecycle
-  { pattern: /git\s+worktree\s+(remove|prune)/, reason: 'worktree remove/prune blocked per project rules' },
-  // 3. hard reset
-  { pattern: /git\s+reset\s+--hard/, reason: 'reset --hard blocked' },
-  // 4. force push (evaluated separately for --force-with-lease exception)
-  // Handled in evaluateCommandApproval directly
-  // 5. branch switching — agents must not change the checked-out branch
-  { pattern: /git\s+(checkout|switch)\b/, reason: 'git checkout/switch blocked — agents must not change the checked-out branch' },
-]
 
 // ---------------------------------------------------------------------------
 // Command Approval
@@ -73,26 +52,10 @@ export function evaluateCommandApproval(
   const cmd = command.trim()
   if (!cmd) return { action: 'acceptForSession' }
 
-  // --- Safety deny patterns (always enforced) ---
-
-  // Check basic deny patterns
-  for (const { pattern, reason } of SAFETY_DENY_PATTERNS) {
-    if (pattern.test(cmd)) {
-      return { action: 'decline', reason }
-    }
-  }
-
-  // Force push — special handling for --force-with-lease exception
-  if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
-    if (/--force-with-lease/.test(cmd)) {
-      // --force-with-lease to main/master is still blocked
-      if (/\b(main|master)\b/.test(cmd)) {
-        return { action: 'decline', reason: 'force push to main/master blocked' }
-      }
-      // --force-with-lease on feature branches is allowed
-      return { action: 'acceptForSession', reason: '--force-with-lease on feature branch allowed' }
-    }
-    return { action: 'decline', reason: 'force push blocked — use --force-with-lease for safety' }
+  // --- Shared safety deny patterns (always enforced) ---
+  const safety = evaluateCommandSafety(cmd)
+  if (safety.denied) {
+    return { action: 'decline', reason: safety.reason }
   }
 
   // --- Template deny patterns (from tools.disallow) ---
@@ -156,5 +119,6 @@ export function evaluateFileChangeApproval(
   return { action: 'acceptForSession' }
 }
 
-/** Exported for testing */
+/** @deprecated Use SafetyDenyPattern from safety-rules.ts */
+type DenyPattern = import('./safety-rules.js').SafetyDenyPattern
 export type { DenyPattern }

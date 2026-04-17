@@ -20,7 +20,13 @@ export class ToolRegistry {
     return [...this.plugins]
   }
 
-  /** Create in-process MCP servers for Claude provider */
+  /**
+   * Create in-process MCP servers for Claude provider.
+   *
+   * @deprecated Use {@link createStdioServerConfigs} instead. In-process servers
+   * don't propagate to sub-agents spawned via the Agent tool. Stdio servers
+   * are used for all providers since v0.8.30.
+   */
   createServers(context: ToolPluginContext): CreateServersResult {
     const servers: Record<string, McpSdkServerConfigWithInstance> = {}
     const toolNames: string[] = []
@@ -37,8 +43,8 @@ export class ToolRegistry {
   }
 
   /**
-   * Create stdio MCP server configurations for Codex provider (SUP-1743).
-   * Returns server configs that can be passed to Codex app-server via config/batchWrite.
+   * Create stdio MCP server configurations for all providers.
+   * Returns server configs that propagate to sub-agents via stdio transport.
    */
   createStdioServerConfigs(context: ToolPluginContext): CreateStdioServersResult {
     return createStdioServerConfigs(this.plugins, context)

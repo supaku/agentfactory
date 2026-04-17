@@ -28,7 +28,6 @@ Commands:
   linear          Linear issue tracker operations
   sync-routes     Generate missing route and page files from manifest
   setup           Configure development tools (mergiraf, etc.)
-  status          Show fleet status (inline one-line summary)
   help            Show this help message
 
 Run 'agentfactory <command> --help' for command-specific options.
@@ -76,9 +75,6 @@ switch (command) {
     break
   case 'setup':
     import('./setup')
-    break
-  case 'status':
-    import('./status')
     break
   case 'help':
   case '--help':

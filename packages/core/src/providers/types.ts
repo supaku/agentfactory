@@ -29,11 +29,23 @@ export type AgentProviderName = 'claude' | 'codex' | 'amp' | 'spring-ai' | 'a2a'
  * - All providers get the post-session backstop (provider-agnostic)
  * - Providers with `supportsSessionResume` get stop → resume as fallback
  */
+export type ToolPermissionFormat = 'claude' | 'codex' | 'spring-ai'
+
 export interface AgentProviderCapabilities {
   /** Whether injectMessage() works (stateful providers: Claude, A2A) */
   supportsMessageInjection: boolean
   /** Whether resume() can continue a prior session */
   supportsSessionResume: boolean
+  /** Provider can use MCP tool plugins delivered via stdio servers (af_linear_*, af_code_*) */
+  supportsToolPlugins?: boolean
+  /** Provider needs persistent base instructions via AgentSpawnConfig.baseInstructions */
+  needsBaseInstructions?: boolean
+  /** Provider needs structured permission config via AgentSpawnConfig.permissionConfig */
+  needsPermissionConfig?: boolean
+  /** Provider supports canUseTool-style code intelligence enforcement */
+  supportsCodeIntelligenceEnforcement?: boolean
+  /** Tool permission format this provider uses (default: 'claude') */
+  toolPermissionFormat?: ToolPermissionFormat
 }
 
 export interface AgentProvider {

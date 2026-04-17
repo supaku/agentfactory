@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.38
+
+### Features
+
+- **Fine-grained model selection** — New 9-level resolution cascade for controlling which model each agent uses: platform dispatch → issue label (`model:<id>`) → config `models.byWorkType` → config `models.byProject` → env `AGENT_MODEL_{WORKTYPE}` → env `AGENT_MODEL_{PROJECT}` → config `models.default` → env `AGENT_MODEL` → provider default. Sub-agent model controlled separately via `QueuedWork.subAgentModel`, config `models.subAgent`, or `AGENT_SUB_MODEL`. Claude provider now passes the resolved model to the SDK `query()` options (previously silently ignored). Template context exposes `{{model}}` and `{{subAgentModel}}` for coordinator sub-agent control.
+
+- **Capability-driven provider dispatch** — `AgentProviderCapabilities` expanded with `supportsToolPlugins`, `needsBaseInstructions`, `needsPermissionConfig`, `supportsCodeIntelligenceEnforcement`, and `toolPermissionFormat`. Orchestrator now uses capability flags instead of hardcoded provider name checks, enabling new providers to opt into features declaratively.
+
+- **Shared safety rules module** — Destructive command deny patterns (rm root, worktree management, hard reset, force push, branch switching) extracted from `claude-provider.ts` and `codex-approval-bridge.ts` into `safety-rules.ts`. Single source of truth — adding a pattern automatically enforces it across all providers. Includes `buildSafetyInstructions()` for providers that need natural-language safety rules.
+
+### Chores
+
+- **Remove TUI package** — Deleted the Go-based `packages/tui` terminal UI and associated `af-status` CLI command. Functionality superseded by the dashboard.
+
 ## v0.8.37
 
 ### Features

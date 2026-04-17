@@ -36,7 +36,6 @@
     "af-linear": "node --import tsx packages/cli/src/linear.ts",
     "af-governor": "node --import tsx packages/cli/src/governor.ts",
     "af-sync-routes": "node --import tsx packages/cli/src/sync-routes.ts",
-    "af-status": "node --import tsx packages/cli/src/status.ts",
     "af-setup": "node --import tsx packages/cli/src/setup.ts",
     "af-migrate-worktrees": "node --import tsx packages/cli/src/migrate-worktrees.ts",
     "af-code": "node --import tsx packages/cli/src/code.ts",

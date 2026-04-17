@@ -28,7 +28,7 @@
  * 10. Hardcoded 'claude'                            — ultimate fallback
  */
 
-export type { AgentProviderName, AgentProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent } from './types.js'
+export type { AgentProviderName, AgentProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent, ToolPermissionFormat } from './types.js'
 export type {
   AgentInitEvent,
   AgentSystemEvent,
@@ -59,6 +59,8 @@ export type {
   WebhookRegistration,
 } from './plugin-types.js'
 
+export { evaluateCommandSafety, buildSafetyInstructions, SAFETY_DENY_PATTERNS } from './safety-rules.js'
+export type { SafetyDenyPattern, SafetyEvaluation } from './safety-rules.js'
 export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'
 export { CodexProvider, createCodexProvider } from './codex-provider.js'
 export { CodexAppServerProvider, createCodexAppServerProvider } from './codex-app-server-provider.js'
@@ -88,6 +90,18 @@ export interface ProvidersConfig {
   byWorkType?: Record<string, AgentProviderName>
   /** Provider overrides by project name (e.g., { Social: 'codex' }) */
   byProject?: Record<string, AgentProviderName>
+}
+
+/** Model selection configuration from .agentfactory/config.yaml */
+export interface ModelsConfig {
+  /** Default model for all agents (e.g., 'claude-sonnet-4-6') */
+  default?: string
+  /** Model overrides by work type (e.g., { development: 'claude-opus-4-6' }) */
+  byWorkType?: Record<string, string>
+  /** Model overrides by project name (e.g., { Agent: 'claude-opus-4-6' }) */
+  byProject?: Record<string, string>
+  /** Default model for Task sub-agents spawned by coordinators */
+  subAgent?: string
 }
 
 /** Context for resolving which provider to use for a specific spawn */
@@ -462,6 +476,156 @@ export async function resolveProviderNameAsync(
   options?: AsyncProviderResolutionContext,
 ): Promise<AgentProviderName> {
   return (await resolveProviderWithSourceAsync(options)).name
+}
+
+// ---------------------------------------------------------------------------
+// Model resolution
+// ---------------------------------------------------------------------------
+
+/** Context for resolving which model to use for a specific spawn */
+export interface ModelResolutionContext {
+  /** Project name (e.g., "Social") */
+  project?: string
+  /** Work type (e.g., "qa", "development") */
+  workType?: string
+  /** Issue labels (scanned for "model:<id>") */
+  labels?: string[]
+  /** Platform-dispatched model override (from QueuedWork.model) — highest priority */
+  dispatchModel?: string
+  /** Config-driven model settings from .agentfactory/config.yaml */
+  configModels?: ModelsConfig
+}
+
+/** Result of model resolution with source for logging */
+export interface ModelResolutionResult {
+  /** Model ID or undefined if no override (use provider default) */
+  model: string | undefined
+  source: string
+}
+
+/**
+ * Extract model ID from issue labels.
+ * Looks for labels matching "model:<id>" pattern.
+ */
+export function extractModelFromLabels(labels: string[]): string | null {
+  for (const label of labels) {
+    const match = label.match(/^model:(\S+)$/i)
+    if (match) {
+      return match[1]
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve which model to use with full priority cascade.
+ *
+ * Resolution order (highest → lowest):
+ * 1. Platform dispatch override (dispatchModel from QueuedWork.model)
+ * 2. Issue label override (model:<id>)
+ * 3. Config models.byWorkType
+ * 4. Config models.byProject
+ * 5. Env var AGENT_MODEL_{WORKTYPE}
+ * 6. Env var AGENT_MODEL_{PROJECT}
+ * 7. Config models.default
+ * 8. Env var AGENT_MODEL
+ * 9. No override (provider default)
+ *
+ * @param context - Full resolution context
+ * @returns The resolved model ID (or undefined) and its source
+ */
+export function resolveModelWithSource(context?: ModelResolutionContext): ModelResolutionResult {
+  // 1. Platform dispatch override (highest priority — central cost control)
+  if (context?.dispatchModel) {
+    return { model: context.dispatchModel, source: 'dispatch' }
+  }
+
+  // 2. Issue label override
+  if (context?.labels?.length) {
+    const fromLabel = extractModelFromLabels(context.labels)
+    if (fromLabel) {
+      return { model: fromLabel, source: `label model:${fromLabel}` }
+    }
+  }
+
+  // 3. Config byWorkType
+  if (context?.workType && context?.configModels?.byWorkType) {
+    const configModel = context.configModels.byWorkType[context.workType]
+    if (configModel) {
+      return { model: configModel, source: `config models.byWorkType.${context.workType}` }
+    }
+  }
+
+  // 4. Config byProject
+  if (context?.project && context?.configModels?.byProject) {
+    const configModel = context.configModels.byProject[context.project]
+    if (configModel) {
+      return { model: configModel, source: `config models.byProject.${context.project}` }
+    }
+  }
+
+  // 5. Env var AGENT_MODEL_{WORKTYPE}
+  if (context?.workType) {
+    const workTypeKey = `AGENT_MODEL_${context.workType.toUpperCase().replace(/-/g, '_')}`
+    const envModel = process.env[workTypeKey]
+    if (envModel) {
+      return { model: envModel, source: `env ${workTypeKey}` }
+    }
+  }
+
+  // 6. Env var AGENT_MODEL_{PROJECT}
+  if (context?.project) {
+    const projectKey = `AGENT_MODEL_${context.project.toUpperCase()}`
+    const envModel = process.env[projectKey]
+    if (envModel) {
+      return { model: envModel, source: `env ${projectKey}` }
+    }
+  }
+
+  // 7. Config models.default
+  if (context?.configModels?.default) {
+    return { model: context.configModels.default, source: 'config models.default' }
+  }
+
+  // 8. Env var AGENT_MODEL
+  const globalModel = process.env.AGENT_MODEL
+  if (globalModel) {
+    return { model: globalModel, source: 'env AGENT_MODEL' }
+  }
+
+  // 9. No override — provider uses its own default
+  return { model: undefined, source: 'provider-default' }
+}
+
+/**
+ * Resolve which model to use based on context.
+ * Convenience wrapper around resolveModelWithSource().
+ *
+ * @param context - Model resolution context
+ * @returns The resolved model ID, or undefined for provider default
+ */
+export function resolveModel(context?: ModelResolutionContext): string | undefined {
+  return resolveModelWithSource(context).model
+}
+
+/**
+ * Resolve the sub-agent model for coordinators.
+ *
+ * Resolution order:
+ * 1. Platform dispatch override (dispatchSubAgentModel from QueuedWork.subAgentModel)
+ * 2. Config models.subAgent
+ * 3. Env var AGENT_SUB_MODEL
+ * 4. No override (sub-agents inherit parent model or use provider default)
+ */
+export function resolveSubAgentModel(context?: {
+  dispatchSubAgentModel?: string
+  configModels?: ModelsConfig
+}): string | undefined {
+  if (context?.dispatchSubAgentModel) return context.dispatchSubAgentModel
+  if (context?.configModels?.subAgent) return context.configModels.subAgent
+  const envModel = process.env.AGENT_SUB_MODEL
+  if (envModel) return envModel
+  return undefined
 }
 
 // ---------------------------------------------------------------------------

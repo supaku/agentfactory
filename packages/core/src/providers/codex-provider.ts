@@ -33,6 +33,7 @@ import { spawn, type ChildProcess } from 'child_process'
 import { createInterface } from 'readline'
 import type {
   AgentProvider,
+  AgentProviderCapabilities,
   AgentSpawnConfig,
   AgentHandle,
   AgentEvent,
@@ -375,10 +376,33 @@ function isAppServerEnabled(config?: AgentSpawnConfig): boolean {
 
 export class CodexProvider implements AgentProvider {
   readonly name = 'codex' as const
-  readonly capabilities = {
-    supportsMessageInjection: false,
-    supportsSessionResume: true,
-  } as const
+
+  /**
+   * Dynamic capabilities that reflect the actual runtime mode.
+   * App Server mode supports message injection and tool plugins;
+   * exec fallback mode does not.
+   */
+  get capabilities(): AgentProviderCapabilities {
+    if (this.appServerProvider || isAppServerEnabled()) {
+      return {
+        supportsMessageInjection: true,
+        supportsSessionResume: true,
+        supportsToolPlugins: true,
+        needsBaseInstructions: true,
+        needsPermissionConfig: true,
+        supportsCodeIntelligenceEnforcement: false,
+        toolPermissionFormat: 'codex' as const,
+      }
+    }
+    return {
+      supportsMessageInjection: false,
+      supportsSessionResume: true,
+      supportsToolPlugins: false,
+      needsBaseInstructions: false,
+      needsPermissionConfig: false,
+      supportsCodeIntelligenceEnforcement: false,
+    }
+  }
 
   /** App Server delegate — created lazily when App Server mode is enabled */
   private appServerProvider: CodexAppServerProvider | null = null

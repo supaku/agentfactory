@@ -88,6 +88,10 @@ interface WorkItem {
   prompt?: string
   providerSessionId?: string
   workType?: AgentWorkType
+  /** Model override from platform dispatch (e.g., 'claude-sonnet-4-6') */
+  model?: string
+  /** Sub-agent model override from platform dispatch */
+  subAgentModel?: string
 }
 
 interface InboxMessage {
@@ -800,6 +804,7 @@ export async function runWorker(
               work.sessionId,
               work.workType,
               work.prompt,
+              { dispatchModel: work.model, dispatchSubAgentModel: work.subAgentModel },
             )
             break
           } catch (err) {

@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import YAML from 'yaml'
-import type { ProvidersConfig } from '../providers/index.js'
+import type { ProvidersConfig, ModelsConfig } from '../providers/index.js'
 import type { RoutingConfig } from '../routing/types.js'
 
 // ---------------------------------------------------------------------------
@@ -51,6 +51,35 @@ export const ProvidersConfigSchema = z.object({
   byWorkType: z.record(z.string(), AgentProviderNameSchema).optional(),
   /** Provider overrides by project name (e.g., { Social: 'codex' }) */
   byProject: z.record(z.string(), AgentProviderNameSchema).optional(),
+})
+
+/**
+ * Model selection configuration.
+ *
+ * Controls which model ID is passed to providers. Model IDs are free-form strings
+ * (e.g., 'claude-sonnet-4-6', 'claude-opus-4-6', 'gpt-5-codex') and are passed
+ * through to the provider SDK without validation — each provider interprets them.
+ *
+ * Resolution cascade (highest priority wins):
+ * 1. Platform dispatch override (QueuedWork.model)
+ * 2. Issue label (model:<id>)
+ * 3. Config models.byWorkType
+ * 4. Config models.byProject
+ * 5. Env var AGENT_MODEL_{WORKTYPE}
+ * 6. Env var AGENT_MODEL_{PROJECT}
+ * 7. Config models.default
+ * 8. Env var AGENT_MODEL
+ * 9. Provider default (no override)
+ */
+export const ModelsConfigSchema = z.object({
+  /** Default model for all agents (e.g., 'claude-sonnet-4-6') */
+  default: z.string().optional(),
+  /** Model overrides by work type (e.g., { development: 'claude-opus-4-6', qa: 'claude-sonnet-4-6' }) */
+  byWorkType: z.record(z.string(), z.string()).optional(),
+  /** Model overrides by project name (e.g., { Agent: 'claude-opus-4-6' }) */
+  byProject: z.record(z.string(), z.string()).optional(),
+  /** Default model for Task sub-agents spawned by coordinators (e.g., 'claude-sonnet-4-6') */
+  subAgent: z.string().optional(),
 })
 
 /** Routing configuration for MAB-based provider selection */
@@ -117,6 +146,11 @@ export const RepositoryConfigSchema = z.object({
    * Allows routing agents to different providers by work type or project.
    */
   providers: ProvidersConfigSchema.optional(),
+  /**
+   * Model selection configuration.
+   * Controls which model ID agents use, with per-work-type and per-project overrides.
+   */
+  models: ModelsConfigSchema.optional(),
   /**
    * Routing configuration for MAB-based intelligent provider selection.
    * When enabled, Thompson Sampling is used to learn optimal provider routing.
@@ -274,6 +308,14 @@ export function getProvidersConfig(config: RepositoryConfig): ProvidersConfig | 
  */
 export function getRoutingConfig(config: RepositoryConfig): RoutingConfig | undefined {
   return config.routing as RoutingConfig | undefined
+}
+
+/**
+ * Returns the models config from a RepositoryConfig, if present.
+ * Convenience helper for passing to model resolution.
+ */
+export function getModelsConfig(config: RepositoryConfig): ModelsConfig | undefined {
+  return config.models as ModelsConfig | undefined
 }
 
 // ---------------------------------------------------------------------------

@@ -503,6 +503,10 @@ export class A2aProvider implements AgentProvider {
   readonly capabilities = {
     supportsMessageInjection: true,
     supportsSessionResume: true,
+    supportsToolPlugins: false,
+    needsBaseInstructions: false,
+    needsPermissionConfig: false,
+    supportsCodeIntelligenceEnforcement: false,
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {

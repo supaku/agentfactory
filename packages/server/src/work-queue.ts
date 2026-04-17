@@ -76,6 +76,10 @@ export interface QueuedWork {
   workType?: AgentWorkType // Type of work (defaults to 'development')
   sourceSessionId?: string // For QA: the dev session that completed this work
   projectName?: string // Linear project name, for worker routing
+  /** Model override for the primary agent (e.g., 'claude-sonnet-4-6'). Highest priority in resolution cascade. */
+  model?: string
+  /** Model override for Task sub-agents spawned by coordinators (e.g., 'claude-sonnet-4-6') */
+  subAgentModel?: string
 }
 
 /**

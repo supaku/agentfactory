@@ -207,6 +207,11 @@ export class SpringAiProvider implements AgentProvider {
   readonly capabilities = {
     supportsMessageInjection: false,
     supportsSessionResume: true,
+    supportsToolPlugins: false,
+    needsBaseInstructions: false,
+    needsPermissionConfig: false,
+    supportsCodeIntelligenceEnforcement: false,
+    toolPermissionFormat: 'spring-ai' as const,
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {

@@ -6,10 +6,14 @@ import {
   resolveProviderNameAsync,
   extractProviderFromLabels,
   extractProviderFromMention,
+  extractModelFromLabels,
+  resolveModelWithSource,
+  resolveModel,
+  resolveSubAgentModel,
   PROVIDER_ALIASES,
   isValidProviderName,
 } from './index.js'
-import type { AsyncProviderResolutionContext } from './index.js'
+import type { AsyncProviderResolutionContext, ModelsConfig } from './index.js'
 import type { PosteriorStore } from '../routing/posterior-store.js'
 import type { RoutingConfig, RoutingDecision } from '../routing/types.js'
 
@@ -659,5 +663,202 @@ describe('resolveProviderNameAsync — backwards compatibility', () => {
       },
     })
     expect(result).toBe('amp')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Model resolution
+// ---------------------------------------------------------------------------
+
+describe('extractModelFromLabels', () => {
+  it('extracts model from "model:<id>" label', () => {
+    expect(extractModelFromLabels(['Bug', 'model:claude-sonnet-4-6', 'Feature'])).toBe('claude-sonnet-4-6')
+  })
+
+  it('returns null when no model label present', () => {
+    expect(extractModelFromLabels(['Bug', 'Feature'])).toBeNull()
+  })
+
+  it('is case-insensitive', () => {
+    expect(extractModelFromLabels(['Model:claude-opus-4-6'])).toBe('claude-opus-4-6')
+  })
+
+  it('handles empty array', () => {
+    expect(extractModelFromLabels([])).toBeNull()
+  })
+
+  it('returns first match when multiple model labels exist', () => {
+    expect(extractModelFromLabels(['model:claude-opus-4-6', 'model:claude-sonnet-4-6'])).toBe('claude-opus-4-6')
+  })
+})
+
+describe('resolveModelWithSource — full cascade', () => {
+  const envBackup: Record<string, string | undefined> = {}
+
+  beforeEach(() => {
+    for (const key of ['AGENT_MODEL', 'AGENT_MODEL_QA', 'AGENT_MODEL_DEVELOPMENT', 'AGENT_MODEL_SOCIAL', 'AGENT_MODEL_AGENT']) {
+      envBackup[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(envBackup)) {
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  })
+
+  it('returns undefined (provider default) when no context provided', () => {
+    const result = resolveModelWithSource()
+    expect(result).toEqual({ model: undefined, source: 'provider-default' })
+  })
+
+  it('1. dispatch model overrides everything', () => {
+    process.env.AGENT_MODEL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      dispatchModel: 'claude-opus-4-6',
+      labels: ['model:claude-sonnet-4-6'],
+      workType: 'qa',
+      project: 'Social',
+      configModels: {
+        default: 'claude-haiku-4-5',
+        byWorkType: { qa: 'claude-haiku-4-5' },
+        byProject: { Social: 'claude-haiku-4-5' },
+      },
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('dispatch')
+  })
+
+  it('2. label overrides config and env', () => {
+    process.env.AGENT_MODEL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      labels: ['model:claude-opus-4-6'],
+      workType: 'qa',
+      configModels: { byWorkType: { qa: 'claude-haiku-4-5' } },
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toContain('label')
+  })
+
+  it('3. config byWorkType overrides env and config defaults', () => {
+    process.env.AGENT_MODEL_QA = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      workType: 'qa',
+      configModels: { byWorkType: { qa: 'claude-opus-4-6' }, default: 'claude-haiku-4-5' },
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toContain('config models.byWorkType.qa')
+  })
+
+  it('4. config byProject overrides env vars', () => {
+    process.env.AGENT_MODEL_SOCIAL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      project: 'Social',
+      configModels: { byProject: { Social: 'claude-opus-4-6' } },
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toContain('config models.byProject.Social')
+  })
+
+  it('5. env AGENT_MODEL_{WORKTYPE} overrides env project and defaults', () => {
+    process.env.AGENT_MODEL_QA = 'claude-opus-4-6'
+    process.env.AGENT_MODEL_SOCIAL = 'claude-haiku-4-5'
+    process.env.AGENT_MODEL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      workType: 'qa',
+      project: 'Social',
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('env AGENT_MODEL_QA')
+  })
+
+  it('6. env AGENT_MODEL_{PROJECT} overrides global default', () => {
+    process.env.AGENT_MODEL_SOCIAL = 'claude-opus-4-6'
+    process.env.AGENT_MODEL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      project: 'Social',
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('env AGENT_MODEL_SOCIAL')
+  })
+
+  it('7. config models.default overrides env AGENT_MODEL', () => {
+    process.env.AGENT_MODEL = 'claude-haiku-4-5'
+    const result = resolveModelWithSource({
+      configModels: { default: 'claude-opus-4-6' },
+    })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('config models.default')
+  })
+
+  it('8. env AGENT_MODEL overrides provider default', () => {
+    process.env.AGENT_MODEL = 'claude-opus-4-6'
+    const result = resolveModelWithSource()
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('env AGENT_MODEL')
+  })
+
+  it('normalizes work type with hyphens to env var format', () => {
+    process.env.AGENT_MODEL_QA_COORDINATION = 'claude-opus-4-6'
+    const result = resolveModelWithSource({ workType: 'qa-coordination' })
+    expect(result.model).toBe('claude-opus-4-6')
+    expect(result.source).toBe('env AGENT_MODEL_QA_COORDINATION')
+    delete process.env.AGENT_MODEL_QA_COORDINATION
+  })
+})
+
+describe('resolveModel — convenience wrapper', () => {
+  it('returns undefined by default', () => {
+    expect(resolveModel()).toBeUndefined()
+  })
+
+  it('returns model from dispatch', () => {
+    expect(resolveModel({ dispatchModel: 'claude-opus-4-6' })).toBe('claude-opus-4-6')
+  })
+})
+
+describe('resolveSubAgentModel', () => {
+  const envBackup: Record<string, string | undefined> = {}
+
+  beforeEach(() => {
+    envBackup.AGENT_SUB_MODEL = process.env.AGENT_SUB_MODEL
+    delete process.env.AGENT_SUB_MODEL
+  })
+
+  afterEach(() => {
+    if (envBackup.AGENT_SUB_MODEL === undefined) {
+      delete process.env.AGENT_SUB_MODEL
+    } else {
+      process.env.AGENT_SUB_MODEL = envBackup.AGENT_SUB_MODEL
+    }
+  })
+
+  it('returns undefined when no context provided', () => {
+    expect(resolveSubAgentModel()).toBeUndefined()
+  })
+
+  it('1. dispatch override wins', () => {
+    process.env.AGENT_SUB_MODEL = 'claude-haiku-4-5'
+    expect(resolveSubAgentModel({
+      dispatchSubAgentModel: 'claude-sonnet-4-6',
+      configModels: { subAgent: 'claude-haiku-4-5' },
+    })).toBe('claude-sonnet-4-6')
+  })
+
+  it('2. config models.subAgent overrides env', () => {
+    process.env.AGENT_SUB_MODEL = 'claude-haiku-4-5'
+    expect(resolveSubAgentModel({
+      configModels: { subAgent: 'claude-sonnet-4-6' },
+    })).toBe('claude-sonnet-4-6')
+  })
+
+  it('3. env AGENT_SUB_MODEL as fallback', () => {
+    process.env.AGENT_SUB_MODEL = 'claude-sonnet-4-6'
+    expect(resolveSubAgentModel()).toBe('claude-sonnet-4-6')
   })
 })

@@ -19,6 +19,7 @@ import type {
   AgentHandle,
   AgentEvent,
 } from './types.js'
+import { evaluateCommandSafety } from './safety-rules.js'
 
 /**
  * Code intelligence enforcement configuration.
@@ -121,33 +122,14 @@ export function createAutonomousCanUseTool(enforcement?: CodeIntelEnforcementCon
       return { behavior: 'allow', updatedInput: input }
     }
 
-    // Bash: evaluate command safety
+    // Bash: evaluate command safety via shared rules
     if (toolName === 'Bash') {
       const cmd = (typeof input.command === 'string' ? input.command : '').trim()
       if (!cmd) return { behavior: 'allow', updatedInput: input }
 
-      // Deny destructive patterns
-      if (/rm\s+(-[a-z]*f[a-z]*\s+)?\/\s*$/.test(cmd)) {
-        return { behavior: 'deny', message: 'rm of filesystem root blocked' }
-      }
-      if (/git\s+worktree\s+(remove|prune)/.test(cmd)) {
-        return { behavior: 'deny', message: 'worktree remove/prune blocked per project rules' }
-      }
-      if (/git\s+reset\s+--hard/.test(cmd)) {
-        return { behavior: 'deny', message: 'reset --hard blocked' }
-      }
-      if (/git\s+push\b/.test(cmd) && /(--force\b|-f\b)/.test(cmd)) {
-        // Allow --force-with-lease on feature branches (safe: won't overwrite others' work)
-        if (/--force-with-lease/.test(cmd)) {
-          if (/\b(main|master)\b/.test(cmd)) {
-            return { behavior: 'deny', message: 'force push to main/master blocked' }
-          }
-          return { behavior: 'allow', updatedInput: input }
-        }
-        return { behavior: 'deny', message: 'force push blocked — use --force-with-lease for safety' }
-      }
-      if (/git\s+(checkout|switch)\b/.test(cmd)) {
-        return { behavior: 'deny', message: 'git checkout/switch blocked — agents must not change the checked-out branch' }
+      const safety = evaluateCommandSafety(cmd)
+      if (safety.denied) {
+        return { behavior: 'deny', message: safety.reason ?? 'command blocked by safety rules' }
       }
 
       // Allow everything else — autonomous agents run in isolated worktrees
@@ -178,6 +160,11 @@ export class ClaudeProvider implements AgentProvider {
   readonly capabilities = {
     supportsMessageInjection: true,
     supportsSessionResume: true,
+    supportsToolPlugins: true,
+    needsBaseInstructions: false,
+    needsPermissionConfig: false,
+    supportsCodeIntelligenceEnforcement: true,
+    toolPermissionFormat: 'claude' as const,
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
@@ -282,6 +269,7 @@ export class ClaudeProvider implements AgentProvider {
         abortController,
         mcpServers,
         maxTurns: config.maxTurns,
+        ...(config.model ? { model: config.model } : {}),
         allowedTools: config.allowedTools ?? defaultAllowedTools,
         // Programmatic permission handler for autonomous agents.
         // Filesystem hooks may not resolve in worktrees — this callback
