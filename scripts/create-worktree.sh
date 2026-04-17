@@ -56,5 +56,6 @@ done
 # Install dependencies
 echo "Installing dependencies in $WT_PATH..." >&2
 (cd "$WT_PATH" && pnpm install --frozen-lockfile --prefer-offline) >&2
+(cd "$WT_PATH" && touch "$(git rev-parse --git-dir)/.refresh-worktree-deps-marker") 2>/dev/null || true
 
 echo "$WT_PATH"

@@ -27,7 +27,8 @@ npm-debug.log*
 coverage/
 
 # Claude Code
-.claude/
+.claude/*
+!.claude/settings.json
 
 # Runtime
 .worktrees/

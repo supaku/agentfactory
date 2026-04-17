@@ -269,6 +269,10 @@ When multiple sub-agents run concurrently in the same worktree:
 - Commit changes with descriptive messages before reporting completion
 - Prefix every sub-agent prompt with: "SHARED WORKTREE — DO NOT MODIFY GIT STATE"
 
+### Auto-Refresh Hook
+
+`.claude/settings.json` registers a `SessionStart` hook running `scripts/refresh-worktree.sh` — active only on linked worktrees, it auto-rebases onto upstream and reinstalls deps when stale.
+
 ## Dependency Installation
 
 Dependencies are pre-installed by the orchestrator. Do NOT run `pnpm install` unless you encounter a specific missing module error. If you must run it, run it **synchronously** (never with `run_in_background`). Never use sleep or polling loops.
