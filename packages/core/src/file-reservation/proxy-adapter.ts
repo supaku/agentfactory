@@ -37,6 +37,7 @@ export interface ProxyFileReservationDelegate {
     }>
   >
   releaseFiles(sessionId: string, filePaths: string[]): Promise<number>
+  releaseAllSessionFiles(sessionId: string): Promise<number>
 }
 
 /**
@@ -113,6 +114,27 @@ export function createProxyFileReservationDelegate(
         return data.released ?? 0
       } catch (err) {
         console.error('[file-reservation-proxy] release error:', err)
+        return 0
+      }
+    },
+
+    async releaseAllSessionFiles(sessionId) {
+      try {
+        const res = await fetch(
+          `${config.apiUrl}/api/sessions/${sessionId}/files/release-all`,
+          {
+            method: 'POST',
+            headers,
+          },
+        )
+        if (!res.ok) {
+          console.error(`[file-reservation-proxy] release-all failed: ${res.status} ${res.statusText}`)
+          return 0
+        }
+        const data = await res.json() as { released?: number }
+        return data.released ?? 0
+      } catch (err) {
+        console.error('[file-reservation-proxy] release-all error:', err)
         return 0
       }
     },

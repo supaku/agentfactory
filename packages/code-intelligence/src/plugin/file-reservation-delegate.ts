@@ -44,4 +44,12 @@ export interface FileReservationDelegate {
    * @returns Number of files released
    */
   releaseFiles(sessionId: string, filePaths: string[]): Promise<number>
+
+  /**
+   * Release ALL file reservations for a session.
+   * Called by the orchestrator on agent completion to prevent stale reservations
+   * from blocking other agents. TTL provides fallback if this call fails.
+   * @returns Number of files released
+   */
+  releaseAllSessionFiles(sessionId: string): Promise<number>
 }

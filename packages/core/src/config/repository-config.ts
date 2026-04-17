@@ -190,6 +190,8 @@ export const RepositoryConfigSchema = z.object({
     }).optional(),
     /** Delete PR branch after successful merge */
     deleteBranchOnMerge: z.boolean().default(true),
+    /** Maximum concurrent merge operations (default 1 for backward compat) */
+    concurrency: z.number().min(1).default(1),
   }).optional(),
   /**
    * Worktree configuration.

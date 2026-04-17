@@ -53,6 +53,12 @@ export interface LocalMergeQueueStorage {
   /** Get failed/blocked status for a PR */
   getFailedReason(repoId: string, prNumber: number): Promise<string | null>
   getBlockedReason(repoId: string, prNumber: number): Promise<string | null>
+
+  /** Peek all queued entries without removing (for conflict graph building) */
+  peekAll(repoId: string): Promise<Array<{ prNumber: number; sourceBranch: string }>>
+
+  /** Atomically dequeue multiple PRs for parallel processing */
+  dequeueBatch(repoId: string, prNumbers: number[]): Promise<Array<{ prNumber: number }>>
 }
 
 // ---------------------------------------------------------------------------

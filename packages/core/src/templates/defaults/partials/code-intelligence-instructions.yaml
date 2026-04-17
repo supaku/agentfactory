@@ -37,6 +37,12 @@ content: |
     workspace packages to catch missing dependencies before they cause CI failures.
     Params: path? (string — optional directory to scope the check)
 
+  - af_code_reserve_files — Reserve files before editing them to prevent merge conflicts
+    with other agents working in parallel. If a file is already reserved by another session,
+    choose a different approach that avoids the conflicting file, or wait and retry.
+    Files are automatically released when your session ends.
+    Params: file_paths (string[]), reason? (string)
+
   WHEN TO USE THESE TOOLS:
   - Starting a new task: af_code_get_repo_map first, then af_code_search_symbols for specific targets
   - Looking for a function/class/type: af_code_search_symbols (faster and more precise than Grep)
@@ -44,6 +50,7 @@ content: |
   - Before writing new utility code: af_code_check_duplicate to avoid reinventing existing helpers
   - Adding a member to a union type or enum: af_code_find_type_usages to find all switch/case/mapping sites
   - Importing across workspace packages: af_code_validate_cross_deps to verify dependency declarations
+  - Before editing files: af_code_reserve_files to prevent merge conflicts with parallel agents
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
   {{else}}
   CODE INTELLIGENCE CLI:
@@ -70,6 +77,10 @@ content: |
     Check cross-package imports have package.json dependency declarations.
     Run after adding imports from other workspace packages.
 
+  - pnpm af-code reserve-files <path1> <path2> [--reason "description"]
+    Reserve files before editing to prevent merge conflicts with parallel agents.
+    If a file is already reserved by another session, choose a different approach.
+
   All commands output JSON to stdout. First invocation builds the index (~5-10s); subsequent
   calls reuse the persisted index from .agentfactory/code-index/.
 
@@ -80,6 +91,7 @@ content: |
   - Before writing new utility code: check-duplicate to avoid reinventing existing helpers
   - Adding a member to a union type or enum: find-type-usages to find all switch/case/mapping sites
   - Importing across workspace packages: validate-cross-deps to verify dependency declarations
+  - Before editing files: reserve-files to prevent merge conflicts with parallel agents
   - Fall back to Grep/Glob for: exact string matching, regex patterns, or file path discovery
   {{/if}}
   {{/if}}

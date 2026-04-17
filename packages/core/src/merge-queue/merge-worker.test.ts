@@ -62,6 +62,8 @@ function makeDeps(overrides: Partial<MergeWorkerDeps> = {}): MergeWorkerDeps {
       markCompleted: vi.fn().mockResolvedValue(undefined),
       markFailed: vi.fn().mockResolvedValue(undefined),
       markBlocked: vi.fn().mockResolvedValue(undefined),
+      peekAll: vi.fn().mockResolvedValue([]),
+      dequeueBatch: vi.fn().mockResolvedValue([]),
     },
     redis: {
       setNX: vi.fn().mockResolvedValue(true),

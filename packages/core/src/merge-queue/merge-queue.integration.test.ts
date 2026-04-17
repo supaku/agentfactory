@@ -23,6 +23,8 @@ describe('merge queue integration', () => {
         remove: vi.fn(),
         getFailedReason: vi.fn(),
         getBlockedReason: vi.fn(),
+        peekAll: vi.fn().mockResolvedValue([]),
+        dequeueBatch: vi.fn().mockResolvedValue([]),
       }
       const adapter = createMergeQueueAdapter('local', { storage: mockStorage })
       expect(adapter).toBeInstanceOf(LocalMergeQueueAdapter)

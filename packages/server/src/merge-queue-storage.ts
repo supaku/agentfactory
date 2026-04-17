@@ -265,6 +265,81 @@ export class MergeQueueStorage {
   }
 
   /**
+   * Peek all: View all queued items without removing, ordered by priority.
+   * Used by the merge pool to build a conflict graph before batch dequeuing.
+   */
+  async peekAll(repoId: string): Promise<MergeQueueEntry[]> {
+    if (!isRedisConfigured()) {
+      return []
+    }
+
+    try {
+      const members = await redisZRangeByScore(queueKey(repoId), '-inf', '+inf')
+
+      if (members.length === 0) {
+        return []
+      }
+
+      const entries: MergeQueueEntry[] = []
+      for (const prNumber of members) {
+        const entryJson = await redisHGet(itemsKey(repoId), prNumber)
+        if (entryJson) {
+          entries.push(JSON.parse(entryJson) as MergeQueueEntry)
+        }
+      }
+
+      return entries
+    } catch (error) {
+      log.error('Failed to peekAll', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+      })
+      return []
+    }
+  }
+
+  /**
+   * Dequeue batch: Atomically remove multiple PRs from queue for parallel processing.
+   * Returns entries in the same order as the input PR numbers.
+   */
+  async dequeueBatch(repoId: string, prNumbers: number[]): Promise<MergeQueueEntry[]> {
+    if (!isRedisConfigured() || prNumbers.length === 0) {
+      return []
+    }
+
+    try {
+      const entries: MergeQueueEntry[] = []
+
+      for (const prNumber of prNumbers) {
+        const member = String(prNumber)
+        const entryJson = await redisHGet(itemsKey(repoId), member)
+
+        if (entryJson) {
+          // Remove from sorted set and hash
+          await redisZRem(queueKey(repoId), member)
+          await redisHDel(itemsKey(repoId), member)
+          entries.push(JSON.parse(entryJson) as MergeQueueEntry)
+        }
+      }
+
+      log.info('Batch dequeued for parallel processing', {
+        repoId,
+        count: entries.length,
+        prNumbers: entries.map(e => e.prNumber),
+      })
+
+      return entries
+    } catch (error) {
+      log.error('Failed to dequeue batch', {
+        error: error instanceof Error ? error.message : String(error),
+        repoId,
+        prNumbers,
+      })
+      return []
+    }
+  }
+
+  /**
    * Reorder: Update score for a PR with a new priority.
    */
   async reorder(repoId: string, prNumber: number, newPriority: number): Promise<void> {

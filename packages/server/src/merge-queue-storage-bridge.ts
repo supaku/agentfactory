@@ -60,5 +60,15 @@ export function createLocalMergeQueueStorage(storage: MergeQueueStorage): LocalM
     async getBlockedReason(repoId, prNumber) {
       return storage.getBlockedReason(repoId, prNumber)
     },
+
+    async peekAll(repoId) {
+      const entries = await storage.peekAll(repoId)
+      return entries.map(e => ({ prNumber: e.prNumber, sourceBranch: e.sourceBranch }))
+    },
+
+    async dequeueBatch(repoId, prNumbers) {
+      const entries = await storage.dequeueBatch(repoId, prNumbers)
+      return entries.map(e => ({ prNumber: e.prNumber }))
+    },
   }
 }

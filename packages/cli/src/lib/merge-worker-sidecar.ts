@@ -184,6 +184,8 @@ export function startMergeWorkerSidecar(
       markCompleted: (id, pr) => storage.markCompleted(id, pr),
       markFailed: (id, pr, reason) => storage.markFailed(id, pr, reason),
       markBlocked: (id, pr, reason) => storage.markBlocked(id, pr, reason),
+      peekAll: (id) => storage.peekAll(id),
+      dequeueBatch: (id, prs) => storage.dequeueBatch(id, prs),
     },
     redis: {
       setNX: async (key, value, ttl) => {

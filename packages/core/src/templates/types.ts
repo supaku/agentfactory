@@ -173,6 +173,10 @@ export interface TemplateContext {
   /** When true, a merge queue (local or GitHub-native) handles rebase/merge — QA should not hard-fail on merge conflicts */
   mergeQueueEnabled?: boolean
 
+  // Conflict prediction
+  /** Pre-flight conflict warning when in-flight PRs overlap with this issue's scope */
+  conflictWarning?: string
+
   // Quality baseline (captured from main before agent starts)
   /** Quality metrics baseline for delta checking. Injected by orchestrator when quality gates are enabled. */
   qualityBaseline?: {
@@ -316,6 +320,7 @@ export const TemplateContextSchema = z.object({
   subAgentModel: z.string().optional(),
   // Merge queue awareness
   mergeQueueEnabled: z.boolean().optional(),
+  conflictWarning: z.string().optional(),
   // Quality baseline (captured from main before agent starts)
   qualityBaseline: z.object({
     tests: z.object({

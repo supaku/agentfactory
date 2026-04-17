@@ -18,6 +18,7 @@ describe('codeIntelligencePlugin', () => {
       reserveFiles: vi.fn().mockResolvedValue({ reserved: [], conflicts: [] }),
       checkFileConflicts: vi.fn().mockResolvedValue([]),
       releaseFiles: vi.fn().mockResolvedValue(0),
+      releaseAllSessionFiles: vi.fn().mockResolvedValue(0),
     }
     const tools = codeIntelligencePlugin.createTools({
       env: { LINEAR_SESSION_ID: 'test-session' },
@@ -43,6 +44,7 @@ describe('codeIntelligencePlugin', () => {
       reserveFiles: vi.fn().mockResolvedValue({ reserved: [], conflicts: [] }),
       checkFileConflicts: vi.fn().mockResolvedValue([]),
       releaseFiles: vi.fn().mockResolvedValue(0),
+      releaseAllSessionFiles: vi.fn().mockResolvedValue(0),
     }
     const tools = codeIntelligencePlugin.createTools({
       env: {},
@@ -92,6 +94,7 @@ describe('codeIntelligencePlugin', () => {
       reserveFiles: vi.fn().mockResolvedValue({ reserved: ['src/a.ts'], conflicts: [] }),
       checkFileConflicts: vi.fn().mockResolvedValue([]),
       releaseFiles: vi.fn().mockResolvedValue(0),
+      releaseAllSessionFiles: vi.fn().mockResolvedValue(0),
     }
     const tools = codeIntelligencePlugin.createTools({
       env: { LINEAR_SESSION_ID: 'test-session-123' },
@@ -113,6 +116,7 @@ describe('codeIntelligencePlugin', () => {
         { filePath: 'src/a.ts', heldBy: { sessionId: 'other', reservedAt: 123 } },
       ]),
       releaseFiles: vi.fn().mockResolvedValue(0),
+      releaseAllSessionFiles: vi.fn().mockResolvedValue(0),
     }
     const tools = codeIntelligencePlugin.createTools({
       env: { LINEAR_SESSION_ID: 'my-session' },
@@ -133,6 +137,7 @@ describe('codeIntelligencePlugin', () => {
       reserveFiles: vi.fn().mockResolvedValue({ reserved: [], conflicts: [] }),
       checkFileConflicts: vi.fn().mockResolvedValue([]),
       releaseFiles: vi.fn().mockResolvedValue(2),
+      releaseAllSessionFiles: vi.fn().mockResolvedValue(0),
     }
     const tools = codeIntelligencePlugin.createTools({
       env: { LINEAR_SESSION_ID: 'my-session' },

@@ -39,5 +39,6 @@ export interface ToolPluginContext {
       }>
     >
     releaseFiles(sessionId: string, filePaths: string[]): Promise<number>
+    releaseAllSessionFiles(sessionId: string): Promise<number>
   }
 }

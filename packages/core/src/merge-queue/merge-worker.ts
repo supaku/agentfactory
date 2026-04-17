@@ -56,6 +56,10 @@ export interface MergeWorkerDeps {
     markCompleted(repoId: string, prNumber: number): Promise<void>
     markFailed(repoId: string, prNumber: number, reason: string): Promise<void>
     markBlocked(repoId: string, prNumber: number, reason: string): Promise<void>
+    /** Peek all queued entries without removing (used by MergePool) */
+    peekAll(repoId: string): Promise<Array<{ prNumber: number; sourceBranch: string }>>
+    /** Atomically dequeue multiple PRs for parallel processing (used by MergePool) */
+    dequeueBatch(repoId: string, prNumbers: number[]): Promise<Array<{ prNumber: number }>>
   }
   redis: {
     setNX(key: string, value: string, ttlSeconds?: number): Promise<boolean>

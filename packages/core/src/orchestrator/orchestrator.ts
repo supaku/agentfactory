@@ -1884,6 +1884,24 @@ export class AgentOrchestrator {
     // falling back to local main for offline environments.
     const baseBranch = hasRemoteMain ? 'origin/main' : 'main'
 
+    // Non-committing work types use detached HEAD to avoid creating stale branches.
+    // Research/BC only read the codebase and never commit. Creating named branches
+    // for them pollutes the branch namespace and causes stale-base issues when
+    // development later reuses the branch without rebasing.
+    const NON_COMMITTING_WORK_TYPES = new Set([
+      'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security',
+    ])
+
+    if (NON_COMMITTING_WORK_TYPES.has(workType)) {
+      execSync(`git worktree add --detach "${worktreePath}" ${baseBranch}`, {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+      })
+      console.log(`Created detached worktree for ${workType}: ${worktreePath}`)
+      return { worktreePath, worktreeIdentifier }
+    }
+
     // Try to create worktree with new branch
     // Uses a two-attempt strategy: if a branch conflict is detected and the
     // conflicting worktree's agent is no longer alive, clean it up and retry once.
@@ -1927,6 +1945,30 @@ export class AgentOrchestrator {
               encoding: 'utf-8',
               cwd: this.gitRoot,
             })
+
+            // If this is a code-producing work type and the branch has no unique
+            // commits (e.g., created by a prior research/BC phase that used named
+            // branches before the detached HEAD fix), reset to current origin/main
+            // to prevent working on a stale codebase.
+            const CODE_PRODUCING_TYPES = new Set([
+              'development', 'inflight', 'coordination', 'inflight-coordination',
+            ])
+            if (CODE_PRODUCING_TYPES.has(workType)) {
+              try {
+                const aheadCount = execSync(
+                  `git -C "${worktreePath}" rev-list --count ${baseBranch}..HEAD`,
+                  { stdio: 'pipe', encoding: 'utf-8' }
+                ).trim()
+                if (aheadCount === '0') {
+                  execSync(`git -C "${worktreePath}" reset --hard ${baseBranch}`, {
+                    stdio: 'pipe', encoding: 'utf-8',
+                  })
+                  console.log(`Reset stale branch ${branchName} to ${baseBranch} (was 0 commits ahead)`)
+                }
+              } catch {
+                console.warn(`Failed to check/reset branch freshness for ${branchName}`)
+              }
+            }
           } catch (innerError) {
             const innerMsg = this.getExecSyncErrorMessage(innerError)
 
@@ -2015,7 +2057,7 @@ export class AgentOrchestrator {
    *
    * @param worktreeIdentifier - Worktree identifier with work type suffix (e.g., "SUP-294-QA")
    */
-  removeWorktree(worktreeIdentifier: string): void {
+  removeWorktree(worktreeIdentifier: string, deleteBranchName?: string): void {
     const worktreePath = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), worktreeIdentifier)
 
     if (existsSync(worktreePath)) {
@@ -2053,6 +2095,21 @@ export class AgentOrchestrator {
         }
       } catch {
         // Best-effort cleanup
+      }
+    }
+
+    // Delete the branch for non-code-producing work types to prevent stale branches
+    // from polluting the namespace and being accidentally reused by future work types.
+    if (deleteBranchName) {
+      try {
+        execSync(`git branch -D ${deleteBranchName}`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          cwd: this.gitRoot,
+        })
+        console.log(`Deleted branch ${deleteBranchName} (non-code-producing work type)`)
+      } catch {
+        // Branch may not exist (detached HEAD) or may be in use by another worktree — ignore
       }
     }
   }
@@ -3557,6 +3614,17 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         await this.postCompletionComment(issueId, sessionId, agent.resultMessage, log)
       }
 
+      // Release file reservations held by this session.
+      // Must happen before worktree cleanup so other agents can immediately use the files.
+      // TTL provides fallback if this call fails.
+      if (this.config.fileReservation && sessionId) {
+        try {
+          await this.config.fileReservation.releaseAllSessionFiles(sessionId)
+        } catch {
+          // Best-effort — TTL handles eventual release
+        }
+      }
+
       // Clean up worktree for completed agents
       // NOTE: This must happen AFTER the agent exits to avoid breaking its shell session
       // Agents should NEVER clean up their own worktree - this is the orchestrator's job
@@ -3644,7 +3712,13 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
 
         if (shouldCleanup && agent.worktreeIdentifier) {
           try {
-            this.removeWorktree(agent.worktreeIdentifier)
+            // For non-code-producing work types, also delete the branch to prevent
+            // stale branches from being accidentally reused by development agents.
+            const shouldDeleteBranch = !isCodeProducingAgent
+            this.removeWorktree(
+              agent.worktreeIdentifier,
+              shouldDeleteBranch ? (agent.identifier ?? undefined) : undefined
+            )
             log?.info('Worktree cleaned up', { worktreePath: agent.worktreePath })
           } catch (error) {
             log?.warn('Failed to clean up worktree', {
@@ -3747,7 +3821,13 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
 
         if (shouldCleanup && agent.worktreeIdentifier) {
           try {
-            this.removeWorktree(agent.worktreeIdentifier)
+            const failedAgentWorkType = agent.workType ?? 'development'
+            const failedCodeProducing = new Set(['development', 'inflight', 'coordination', 'inflight-coordination'])
+            const shouldDeleteBranch = !failedCodeProducing.has(failedAgentWorkType)
+            this.removeWorktree(
+              agent.worktreeIdentifier,
+              shouldDeleteBranch ? (agent.identifier ?? undefined) : undefined
+            )
             log?.info('Worktree cleaned up after failure', { worktreePath: agent.worktreePath })
           } catch (cleanupError) {
             log?.warn('Failed to clean up worktree after failure', {

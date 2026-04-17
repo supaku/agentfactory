@@ -13,6 +13,11 @@ export type { LocalMergeQueueStorage } from './adapters/local.js'
 export { LocalMergeQueueAdapter } from './adapters/local.js'
 export { MergeWorker } from './merge-worker.js'
 export type { MergeWorkerConfig, MergeWorkerDeps, MergeProcessResult } from './merge-worker.js'
+export { MergePool } from './merge-pool.js'
+export type { MergePoolConfig } from './merge-pool.js'
+export { buildFileManifest, buildFileManifests } from './file-manifest.js'
+export type { PRFileManifest } from './file-manifest.js'
+export { ConflictGraph, buildConflictGraph } from './conflict-graph.js'
 
 /** Optional dependencies for adapter construction */
 export interface MergeQueueAdapterDeps {

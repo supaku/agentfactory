@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.8.39
+
+### Features
+
+- **Parallel merge queue** — New `MergePool` replaces the single-instance `MergeWorker` when `mergeQueue.concurrency > 1`. Uses a `ConflictGraph` (greedy graph coloring) to find independent sets of non-conflicting PRs that can rebase and test concurrently. Includes `buildFileManifest()` for per-PR file change lists, `peekAll()`/`dequeueBatch()` storage methods, and falls back to the original sequential worker when concurrency is 1.
+
+- **Conflict predictor and main tracker** — `ConflictPredictor` checks open PRs for file overlap before spawning development agents, injecting a `{{conflictWarning}}` into the template context. `MainTracker` monitors `origin/main` for new commits and identifies which active agents have overlapping file changes.
+
+### Fixes
+
+- **Stale branches from icebox phase** — Research, backlog-creation, refinement, and security work types now use `git worktree add --detach` instead of creating named branches. Previously, branches created during icebox (days before development) persisted and were reused by development without rebasing, causing agents to work on stale code. Branches for non-code work types are also deleted on cleanup.
+
+- **Stale branch reset on development start** — When `createWorktree()` encounters an existing branch with zero unique commits (leftover from a prior phase), it now resets to current `origin/main` instead of using the stale base.
+
+- **QA hard-fail on merge conflicts unconditionally** — Removed the `{{#if mergeQueueEnabled}}` exemption that let QA pass conflicting PRs as "informational only." Merge conflicts now always fail QA, preventing wasted acceptance sessions on PRs that will predictably fail at merge time.
+
+- **File reservation instructions for agents** — `af_code_reserve_files` tool (and CLI equivalent) now documented in the `code-intelligence-instructions` partial. Previously the tool existed in the plugin but no template mentioned it.
+
+- **Session file reservation cleanup** — Added `releaseAllSessionFiles()` to the `FileReservationDelegate` interface and proxy adapter. Orchestrator now releases all file reservations on agent completion, preventing stale reservations from blocking other agents.
+
+- **Pre-development rebase instruction** — Development template now includes a mandatory `git fetch origin main && git rebase origin/main` step before agents begin writing code.
+
 ## v0.8.38
 
 ### Features

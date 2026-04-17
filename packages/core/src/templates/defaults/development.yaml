@@ -18,6 +18,18 @@ tools:
 prompt: |
   Start work on {{identifier}}.
   Implement the feature/fix as specified in the issue description.
+
+  BEFORE YOU START — ENSURE FRESH MAIN:
+  Run these commands before writing any code to ensure your branch is current:
+    git fetch origin main && git rebase origin/main
+  If rebase produces conflicts, resolve them first. This prevents working on stale code
+  that will cause merge conflicts later.
+
+  {{#if conflictWarning}}
+  PARALLEL WORK CONFLICT WARNING:
+  {{conflictWarning}}
+  {{/if}}
+
   {{> partials/repo-validation}}
   {{> partials/path-scoping}}
   {{> partials/quality-baseline}}

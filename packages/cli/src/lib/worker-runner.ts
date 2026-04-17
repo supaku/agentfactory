@@ -33,6 +33,7 @@ import {
   reserveFiles as serverReserveFiles,
   checkFileConflicts as serverCheckFileConflicts,
   releaseFiles as serverReleaseFiles,
+  releaseAllSessionFiles as serverReleaseAllSessionFiles,
   isRedisConfigured,
 } from '@renseiai/agentfactory-server'
 import { createProxyFileReservationDelegate } from '@renseiai/agentfactory'
@@ -690,6 +691,8 @@ export async function runWorker(
           serverCheckFileConflicts(repoId, sessionId, filePaths),
         releaseFiles: (sessionId: string, filePaths: string[]) =>
           serverReleaseFiles(repoId, sessionId, filePaths),
+        releaseAllSessionFiles: (sessionId: string) =>
+          serverReleaseAllSessionFiles(repoId, sessionId),
       } : (workerConfig.apiUrl && workerConfig.apiKey)
         ? createProxyFileReservationDelegate({ apiUrl: workerConfig.apiUrl, apiKey: workerConfig.apiKey })
         : undefined

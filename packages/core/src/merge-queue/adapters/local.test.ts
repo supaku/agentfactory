@@ -52,6 +52,8 @@ function createMockStorage(overrides: Partial<LocalMergeQueueStorage> = {}): Loc
     remove: vi.fn().mockResolvedValue(undefined),
     getFailedReason: vi.fn().mockResolvedValue(null),
     getBlockedReason: vi.fn().mockResolvedValue(null),
+    peekAll: vi.fn().mockResolvedValue([]),
+    dequeueBatch: vi.fn().mockResolvedValue([]),
     ...overrides,
   }
 }

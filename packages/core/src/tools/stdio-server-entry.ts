@@ -52,7 +52,7 @@ async function reconstructFileReservationDelegate(
     // dependency of core. Use a variable to prevent TypeScript module resolution.
     const serverPkg = '@renseiai/agentfactory-server'
     const serverMod = await import(serverPkg)
-    const { reserveFiles, checkFileConflicts, releaseFiles } = serverMod
+    const { reserveFiles, checkFileConflicts, releaseFiles, releaseAllSessionFiles } = serverMod
     // Derive repoId from the working directory name (same convention as CLI runners)
     const { basename } = await import('node:path')
     const repoId = basename(process.cwd())
@@ -64,6 +64,8 @@ async function reconstructFileReservationDelegate(
         checkFileConflicts(repoId, sessionId, filePaths),
       releaseFiles: (sessionId: string, filePaths: string[]) =>
         releaseFiles(repoId, sessionId, filePaths),
+      releaseAllSessionFiles: (sessionId: string) =>
+        releaseAllSessionFiles(repoId, sessionId),
     }
   } catch {
     // Server package not available in this process — skip file reservation

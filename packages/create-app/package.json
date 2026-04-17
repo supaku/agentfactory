@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/create-agentfactory-app",
-  "version": "0.8.38",
+  "version": "0.8.39",
   "type": "module",
   "description": "Create an AgentFactory app — multi-agent fleet management for coding agents",
   "author": "Rensei AI (https://rensei.ai)",
