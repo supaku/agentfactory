@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.37
+
+### Features
+
+- **HTTP proxy adapter for file reservation** — Platform-managed workers without direct Redis access can now use file reservation through the platform API proxy. Decision tree: Redis (OSS) → platform API proxy (SaaS) → disabled. Adds `createProxyFileReservationDelegate()` in core, with worker-runner fallback and stdio-server-entry env var reconstruction.
+
 ## v0.8.36
 
 ### Features
