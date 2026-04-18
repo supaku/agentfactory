@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.40
+
+### Fixes
+
+- **Critical: Claude Code spawn failure (exit code 9)** — The `ClaudeProvider.spawnClaudeCodeProcess` override was using `process.execPath` (Node.js) to spawn Claude Code with CLI-specific flags (`--output-format`, `--input-format`, etc.). Node.js does not recognize these flags and immediately exits with code 9 ("bad option"). This broke when upstream Claude Code transitioned from a Node.js package to a native binary — the SDK stopped including a JS entry point in the spawn args, leaving only CLI flags that Node.js cannot parse. Now uses `CLAUDE_CODE_EXECPATH` from the SDK environment (set to the actual Claude binary path) with `process.execPath` as a fallback for legacy installs. All agents on affected systems were failing instantly on spawn.
+
 ## v0.8.39
 
 ### Features
