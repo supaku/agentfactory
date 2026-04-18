@@ -300,6 +300,7 @@ mergeQueue:
   autoMerge: true           # Auto-add approved PRs
   testCommand: "pnpm test"  # Run after rebase
   mergiraf: true            # Syntax-aware conflict resolution
+  concurrency: 2            # Parallel merge operations (default: 1)
   escalation:
     onConflict: reassign    # reassign, notify, park
     onTestFailure: notify   # notify, park, retry
@@ -309,7 +310,7 @@ The local provider handles the full rebase-test-merge cycle within the orchestra
 
 ### Code Intelligence
 
-The `@renseiai/agentfactory-code-intelligence` package provides 6 tools for codebase navigation:
+The `@renseiai/agentfactory-code-intelligence` package provides 6 core tools for codebase navigation (plus 3 optional file reservation tools for parallel agent safety):
 
 | Tool | Description |
 |------|-------------|

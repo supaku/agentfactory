@@ -166,8 +166,11 @@ Variables available for interpolation in templates (`{{variableName}}`):
 | Variable | Type | Description |
 |----------|------|-------------|
 | `useToolPlugins` | boolean | When true, use in-process `af_linear_*` tools instead of CLI |
+| `hasCodeIntelligence` | boolean | Whether code intelligence tools (`af_code_*`) are available |
 | `linearCli` | string | Command to invoke the Linear CLI (default: "pnpm af-linear") |
 | `packageManager` | string | Package manager: pnpm, npm, yarn, bun, none |
+| `model` | string | Resolved model ID for the agent (e.g., "claude-sonnet-4-20250514") |
+| `subAgentModel` | string | Model ID for sub-agents spawned via the Task tool |
 
 ### Build / Test Commands
 
@@ -184,6 +187,7 @@ Variables available for interpolation in templates (`{{variableName}}`):
 | `phaseOutputs` | Record | Outputs from upstream phases, keyed by phase then output key |
 | `agentBugBacklog` | string | Linear project for agent-improvement issues |
 | `mergeQueueEnabled` | boolean | Whether a merge queue handles rebase/merge |
+| `conflictWarning` | string | File conflict prediction warning (set when reserved files overlap) |
 | `qualityBaseline` | object | Quality metrics baseline: `{ tests: { total, passed, failed }, typecheckErrors, lintErrors }` |
 
 ## Customizing Templates

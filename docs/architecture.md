@@ -465,7 +465,9 @@ Source Files (.ts, .tsx, .js, .py, .go, .rs)
   └──────────────────┘
 ```
 
-**6 tools:** `af_code_search_code`, `af_code_search_symbols`, `af_code_get_repo_map`, `af_code_find_type_usages`, `af_code_validate_cross_deps`, `af_code_check_duplicate`.
+**6 core tools:** `af_code_search_code`, `af_code_search_symbols`, `af_code_get_repo_map`, `af_code_find_type_usages`, `af_code_validate_cross_deps`, `af_code_check_duplicate`.
+
+**3 optional file reservation tools** (active during parallel coordination): `af_code_reserve_files`, `af_code_check_conflicts`, `af_code_release_files`.
 
 **Deduplication:** xxHash64 exact match + SimHash near-duplicate detection.
 

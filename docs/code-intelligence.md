@@ -1,6 +1,6 @@
 # Code Intelligence
 
-The `@renseiai/agentfactory-code-intelligence` package provides 6 tools for codebase navigation, search, and analysis. These tools help agents understand large codebases quickly and make informed implementation decisions.
+The `@renseiai/agentfactory-code-intelligence` package provides 6 core tools for codebase navigation, search, and analysis, plus 3 optional file reservation tools for parallel agent safety. These tools help agents understand large codebases quickly and make informed implementation decisions.
 
 ## Tools
 
@@ -84,6 +84,43 @@ Check for duplicates of: function in utils.ts:50-80
 
 **When to use:** Before writing new utility functions, during code review, or to identify consolidation opportunities.
 
+## File Reservation Tools (Optional)
+
+When agents run in parallel (e.g., coordination workflows), file reservation tools prevent merge conflicts by letting agents claim files before modifying them. These 3 tools are only available when the orchestrator provides a `FileReservationDelegate`.
+
+### `af_code_reserve_files` — Reserve Files
+
+Claim exclusive access to files before modification. Other agents will see these files as reserved.
+
+```
+Reserve: ["src/utils.ts", "src/helpers.ts"]
+→ Returns: reservation confirmed (or conflict if already reserved)
+```
+
+**When to use:** Before modifying shared files in a parallel coordination workflow.
+
+### `af_code_check_conflicts` — Check File Conflicts
+
+Check whether files you plan to modify are reserved by another agent.
+
+```
+Check: ["src/utils.ts"]
+→ Returns: { conflicting: [], available: ["src/utils.ts"] }
+```
+
+**When to use:** Before starting work, to see if another agent is already modifying a file.
+
+### `af_code_release_files` — Release File Reservations
+
+Release previously reserved files so other agents can modify them.
+
+```
+Release: ["src/utils.ts"]
+→ Returns: reservation released
+```
+
+**When to use:** After committing changes, to unblock other agents waiting on those files.
+
 ## Supported Languages
 
 | Language | Extensions | Symbol Extraction | Search |
@@ -118,9 +155,11 @@ When configured, search results are reranked using a dedicated model for improve
 Set the appropriate environment variables to enable:
 
 ```bash
-COHERE_API_KEY=your-key        # Enable Cohere reranking
-VOYAGE_API_KEY=your-key        # Enable Voyage reranking
+VOYAGE_AI_API_KEY=your-key     # Enable semantic vector embeddings (hybrid BM25 + vector mode)
+COHERE_API_KEY=your-key        # Enable Cohere cross-encoder reranking
 ```
+
+Without these keys, agents still get full BM25 keyword search, symbol search, repo maps, and duplicate detection.
 
 ### PageRank Repo Map
 
@@ -150,23 +189,24 @@ af_code_get_repo_map({ maxFiles: 20 })
 For non-Claude providers or standalone usage:
 
 ```bash
-# Search code
-pnpm af-code search "createOrchestrator" --max 10
+# BM25 keyword search
+pnpm af-code search-code "createOrchestrator" --max-results 10
 
 # Search symbols
-pnpm af-code symbols "AgentProvider" --kind interface
+pnpm af-code search-symbols "AgentProvider" --kinds interface --file-pattern "*.ts"
 
 # Generate repo map
-pnpm af-code repo-map --max-files 20
+pnpm af-code get-repo-map --max-files 20
 
 # Find type usages
-pnpm af-code type-usages "AgentWorkType"
+pnpm af-code find-type-usages "AgentWorkType" --max-results 50
 
 # Validate cross-deps
-pnpm af-code validate-deps
+pnpm af-code validate-cross-deps
 
 # Check duplicates
-pnpm af-code check-dup --file utils.ts --start 50 --end 80
+pnpm af-code check-duplicate --content "function myHelper() { ... }"
+pnpm af-code check-duplicate --content-file /tmp/snippet.ts
 ```
 
 ## Configuration
@@ -183,4 +223,4 @@ Files larger than 512 KB are skipped during indexing.
 
 ### Incremental Indexing
 
-The `IncrementalIndexer` tracks file modification times and only re-indexes changed files. This makes subsequent searches fast even in large codebases.
+The `IncrementalIndexer` persists its index to `.agentfactory/code-index/` (add to `.gitignore`). First invocation builds the full index (~5-10s); subsequent runs re-index only changed files via Merkle tree diffing. This makes searches fast even in large codebases.

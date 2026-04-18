@@ -98,7 +98,7 @@ curl http://localhost:3100/health
 
 ### Work Types for `submit-task`
 
-`research`, `backlog-creation`, `development`, `inflight`, `inflight-coordination`, `qa`, `acceptance`, `refinement`, `coordination`, `qa-coordination`, `acceptance-coordination`
+`research`, `backlog-creation`, `development`, `inflight`, `inflight-coordination`, `qa`, `acceptance`, `refinement`, `refinement-coordination`, `coordination`, `qa-coordination`, `acceptance-coordination`, `merge`, `security`
 
 ### Session Statuses for `get-task-status`
 

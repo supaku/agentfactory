@@ -132,6 +132,7 @@ mergeQueue:
   pollInterval: 10000                # Queue polling interval in ms (default: 10000)
   maxRetries: 2                      # Max retries for failed merges (default: 2)
   deleteBranchOnMerge: true          # Delete branch after merge (default: true)
+  concurrency: 1                     # Max concurrent merge operations (default: 1)
   requiredChecks:                    # CI checks that must pass (provider-specific)
     - "ci/build"
     - "ci/test"
@@ -154,6 +155,7 @@ mergeQueue:
 | `maxRetries` | number | `2` | Max retries for failed merges |
 | `deleteBranchOnMerge` | boolean | `true` | Delete PR branch after successful merge |
 | `requiredChecks` | string[] | — | CI checks required before merge |
+| `concurrency` | number | `1` | Max concurrent merge operations (>1 enables parallel merge pool) |
 | `escalation.onConflict` | string | `reassign` | Policy for merge conflicts |
 | `escalation.onTestFailure` | string | `notify` | Policy for test failures after rebase |
 
@@ -175,6 +177,23 @@ quality:
 | `tddWorkflow` | boolean | `true` | Include TDD workflow instructions in agent prompts |
 
 See [Quality Gates](./quality-gates.md) for details on baseline capture and ratchet enforcement.
+
+### `codeIntelligence:` — Code Intelligence Enforcement
+
+Control how agents use code intelligence tools:
+
+```yaml
+codeIntelligence:
+  enforceUsage: false           # Require agents to use af_code_* tools before Grep/Glob (default: false)
+  fallbackAfterAttempt: true    # Allow Grep/Glob after at least one af_code_* tool call (default: true)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enforceUsage` | boolean | `false` | When true, agents must use `af_code_*` tools before falling back to Grep/Glob |
+| `fallbackAfterAttempt` | boolean | `true` | Allow traditional search tools after at least one code intelligence tool call |
+
+When `enforceUsage` is enabled, the orchestrator includes prompt instructions directing agents to prefer `af_code_search_code` over `Grep` and `af_code_search_symbols` over `Glob` for initial codebase exploration.
 
 ### `mergeDriver:` — Git Merge Driver
 
