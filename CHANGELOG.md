@@ -1,10 +1,16 @@
 # Changelog
 
-## v0.8.40
+## v0.8.41
 
 ### Fixes
 
-- **Critical: Claude Code spawn failure (exit code 9)** — The `ClaudeProvider.spawnClaudeCodeProcess` override was using `process.execPath` (Node.js) to spawn Claude Code with CLI-specific flags (`--output-format`, `--input-format`, etc.). Node.js does not recognize these flags and immediately exits with code 9 ("bad option"). This broke when upstream Claude Code transitioned from a Node.js package to a native binary — the SDK stopped including a JS entry point in the spawn args, leaving only CLI flags that Node.js cannot parse. Now uses `CLAUDE_CODE_EXECPATH` from the SDK environment (set to the actual Claude binary path) with `process.execPath` as a fallback for legacy installs. All agents on affected systems were failing instantly on spawn.
+- **Critical: Claude Code spawn failure (exit code 9)** — The `ClaudeProvider.spawnClaudeCodeProcess` override was using `process.execPath` (Node.js binary) to spawn Claude Code with CLI-specific flags (`--output-format`, `--input-format`, etc.). Node.js does not recognize these flags and immediately exits with code 9 ("bad option"). This broke when upstream Claude Code transitioned from a Node.js package to a native binary — the SDK stopped including a JS entry point in the spawn args, leaving only CLI flags that Node.js cannot parse. Now uses `spawnOptions.command` provided by the SDK, which points to the SDK's bundled platform-specific Claude binary (`claude-agent-sdk-darwin-arm64/claude`). All agents on affected systems were failing instantly on spawn.
+
+- **Diagnostic stderr capture** — `spawnClaudeCodeProcess` now captures stderr and logs it alongside non-zero exit codes for faster future debugging.
+
+## v0.8.40
+
+(Superseded by v0.8.41 — incomplete fix for the spawn failure)
 
 ## v0.8.39
 
