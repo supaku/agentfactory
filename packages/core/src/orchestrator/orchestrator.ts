@@ -1666,6 +1666,7 @@ export class AgentOrchestrator {
         const patchName = `${branchName}-preserved-${timestamp}.patch`
         const patchPath = resolve(patchDir, patchName)
 
+        // Capture tracked changes (staged + unstaged)
         const diff = execSync('git diff HEAD', {
           cwd: conflictPath,
           encoding: 'utf-8',
@@ -1674,6 +1675,30 @@ export class AgentOrchestrator {
         if (diff.trim().length > 0) {
           writeFileSync(patchPath, diff)
           console.log(`Saved preserved worktree patch: ${patchPath}`)
+        }
+
+        // Capture untracked files — git diff HEAD misses these entirely.
+        // Without this, new files the agent created but never committed are lost.
+        const untrackedFiles = execSync(
+          'git ls-files --others --exclude-standard',
+          { cwd: conflictPath, encoding: 'utf-8', timeout: 10000 }
+        ).trim()
+
+        if (untrackedFiles.length > 0) {
+          const untrackedPatchName = `${branchName}-preserved-${timestamp}-untracked.patch`
+          const untrackedPatchPath = resolve(patchDir, untrackedPatchName)
+          // Use git diff --no-index to create a patch for untracked files
+          // by diffing /dev/null against each file
+          const untrackedDiff = execSync(
+            'git diff --no-index /dev/null -- ' +
+              untrackedFiles.split('\n').map(f => `"${f}"`).join(' ') +
+              ' || true',
+            { cwd: conflictPath, encoding: 'utf-8', timeout: 10000, shell: '/bin/bash' }
+          )
+          if (untrackedDiff.trim().length > 0) {
+            writeFileSync(untrackedPatchPath, untrackedDiff)
+            console.log(`Saved untracked files patch: ${untrackedPatchPath} (${untrackedFiles.split('\n').length} file(s))`)
+          }
         }
       } catch (patchError) {
         console.warn(
@@ -2015,6 +2040,29 @@ export class AgentOrchestrator {
     }
 
     console.log(`Worktree created successfully: ${worktreePath}`)
+
+    // Clear stale stashes. Git stashes are repo-scoped (stored in refs/stash in the
+    // shared git directory), so stashes from prior sessions in ANY worktree are visible
+    // here. If an agent runs `git stash pop`, it may apply a stale stash from an
+    // unrelated session, causing conflicts and potential work loss.
+    try {
+      const stashList = execSync('git stash list', {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim()
+      if (stashList.length > 0) {
+        const stashCount = stashList.split('\n').length
+        execSync('git stash clear', {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 5000,
+        })
+        console.log(`Cleared ${stashCount} stale stash(es) to prevent cross-session contamination`)
+      }
+    } catch {
+      // Non-fatal — stash clearing is defensive
+    }
 
     // Initialize .agent/ directory for state persistence
     try {

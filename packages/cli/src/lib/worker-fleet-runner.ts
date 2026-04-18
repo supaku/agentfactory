@@ -80,6 +80,27 @@ function timestamp(): string {
   return new Date().toLocaleTimeString('en-US', { hour12: false })
 }
 
+/**
+ * Sanitize child process output for re-printing with a prefix.
+ *
+ * Child processes (Claude CLI, git, etc.) may emit:
+ * - \r carriage returns (spinners, progress bars)
+ * - ANSI cursor-position sequences (\x1b[nG, \x1b[nC, \x1b[K, etc.)
+ *
+ * When we re-print each line with a [W##] prefix, leftover \r causes the
+ * prefix to be overwritten and cursor-position escapes shift text to random
+ * columns. Strip these so each line renders cleanly at column 0.
+ */
+function sanitizeWorkerOutput(raw: string): string {
+  return raw
+    // For lines containing \r (spinner updates), keep only the last segment
+    .replace(/[^\n]*\r(?!\n)/g, '')
+    // Strip ANSI cursor-position sequences: CSI n G (absolute), CSI n C (forward),
+    // CSI n D (backward), CSI K (erase line), CSI n J (erase display)
+    .replace(/\x1b\[\d*[GCDKJ]/g, '')
+    .trim()
+}
+
 function fleetLog(
   workerId: number | null,
   color: string,
@@ -277,25 +298,25 @@ ${colors.cyan}================================================================${
     this.workers.set(id, workerInfo)
 
     // Handle stdout — prefix with worker ID
+    // Child processes (especially Claude CLI) may emit \r for spinners/progress
+    // and ANSI cursor-position sequences. Strip these so each line starts clean
+    // at column 0 when re-printed with the [W##] prefix.
+    const workerPrefix = `${color}[W${id.toString().padStart(2, '0')}]${colors.reset}`
     workerProcess.stdout?.on('data', (data: Buffer) => {
-      const lines = data.toString().trim().split('\n')
+      const lines = sanitizeWorkerOutput(data.toString()).split('\n')
       for (const line of lines) {
         if (line.trim()) {
-          console.log(
-            `${color}[W${id.toString().padStart(2, '0')}]${colors.reset} ${line}`,
-          )
+          console.log(`${workerPrefix} ${line}`)
         }
       }
     })
 
     // Handle stderr
     workerProcess.stderr?.on('data', (data: Buffer) => {
-      const lines = data.toString().trim().split('\n')
+      const lines = sanitizeWorkerOutput(data.toString()).split('\n')
       for (const line of lines) {
         if (line.trim()) {
-          console.log(
-            `${color}[W${id.toString().padStart(2, '0')}]${colors.reset} ${colors.red}${line}${colors.reset}`,
-          )
+          console.log(`${workerPrefix} ${colors.red}${line}${colors.reset}`)
         }
       }
     })

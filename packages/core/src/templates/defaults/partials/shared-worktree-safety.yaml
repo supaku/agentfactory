@@ -12,9 +12,10 @@ content: |
   1. NEVER run: git worktree remove, git worktree prune
   2. NEVER run: git checkout, git switch (to a different branch)
   3. NEVER run: git reset --hard, git clean -fd, git restore .
-  4. NEVER delete or modify the .git file in the worktree root
-  5. Only the orchestrator manages worktree lifecycle
-  6. Work only on files relevant to your sub-issue to minimize conflicts
-  7. Commit changes with descriptive messages before reporting completion
+  4. NEVER run: git stash (stashes leak across worktrees and corrupt index state)
+  5. NEVER delete or modify the .git file in the worktree root
+  6. Only the orchestrator manages worktree lifecycle
+  7. Work only on files relevant to your sub-issue to minimize conflicts
+  8. Commit changes with descriptive messages before reporting completion
 
   Prefix every sub-agent prompt with: "SHARED WORKTREE — DO NOT MODIFY GIT STATE"
