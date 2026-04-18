@@ -293,8 +293,20 @@ export function createRealDependencies(
       try {
         let workType = actionToWorkType(action)
 
-        // Parent issues use coordination variants for development, QA, acceptance, and refinement
-        if (parentIssueIds.has(issueId)) {
+        // Parent issues use coordination variants for development, QA, acceptance, and refinement.
+        // Use a fresh API call instead of the parentIssueIds cache — the cache can be stale
+        // if children were deleted/moved between scan cycles, leading to false coordination dispatch.
+        let isParent = false
+        try {
+          isParent = await config.linearClient.isParentIssue(issueId)
+        } catch (err) {
+          // Fall back to cache on API failure
+          isParent = parentIssueIds.has(issueId)
+          log.warn('isParentIssue API call failed in dispatchWork, using cached value', {
+            issueId, isParent, error: err instanceof Error ? err.message : String(err),
+          })
+        }
+        if (isParent) {
           if (workType === 'development') workType = 'coordination'
           else if (workType === 'inflight') workType = 'inflight-coordination'
           else if (workType === 'qa') workType = 'qa-coordination'

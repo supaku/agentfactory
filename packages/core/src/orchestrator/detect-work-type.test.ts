@@ -73,6 +73,31 @@ describe('detectWorkType', () => {
     })
   })
 
+  describe('downgrade when isParent becomes false (REN-1080 bug)', () => {
+    // Regression: if a queued work type was 'coordination' but the issue
+    // no longer has children (deleted/moved between queue and dispatch),
+    // re-validation must downgrade back to the base work type.
+    it('downgrades coordination to development when isParent=false', () => {
+      expect(detectWorkType('Backlog', false, STATUS_TO_WORK_TYPE)).toBe('development')
+    })
+
+    it('downgrades qa-coordination to qa when isParent=false', () => {
+      expect(detectWorkType('Finished', false, STATUS_TO_WORK_TYPE)).toBe('qa')
+    })
+
+    it('downgrades acceptance-coordination to acceptance when isParent=false', () => {
+      expect(detectWorkType('Delivered', false, STATUS_TO_WORK_TYPE)).toBe('acceptance')
+    })
+
+    it('downgrades inflight-coordination to inflight when isParent=false', () => {
+      expect(detectWorkType('Started', false, STATUS_TO_WORK_TYPE)).toBe('inflight')
+    })
+
+    it('downgrades refinement-coordination to refinement when isParent=false', () => {
+      expect(detectWorkType('Rejected', false, STATUS_TO_WORK_TYPE)).toBe('refinement')
+    })
+  })
+
   describe('post-refinement rework scenario (SUP-1116 bug)', () => {
     it('parent issue returning to Backlog after refinement gets coordination, not development', () => {
       // This is the exact scenario that caused SUP-1116 to fail:

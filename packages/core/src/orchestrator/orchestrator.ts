@@ -4650,19 +4650,18 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       const statusName = issue.status ?? 'Backlog'
       effectiveWorkType = await this.detectWorkType(issueId, statusName)
     } else {
-      // Re-validate: upgrade to coordination variant if this is a parent issue
+      // Re-validate: upgrade OR downgrade coordination variant based on fresh parent check.
       // The caller may have a stale work type from before the session was queued
+      // (e.g., children deleted between queueing and processing).
       try {
         const isParent = await this.client.isParentIssue(issueId)
-        if (isParent) {
-          const upgraded = detectWorkType(issue.status ?? 'Backlog', isParent, this.statusMappings.statusToWorkType)
-          if (upgraded !== effectiveWorkType) {
-            console.log(`Upgrading work type from ${effectiveWorkType} to ${upgraded} (parent issue detected)`)
-            effectiveWorkType = upgraded
-          }
+        const revalidated = detectWorkType(issue.status ?? 'Backlog', isParent, this.statusMappings.statusToWorkType)
+        if (revalidated !== effectiveWorkType) {
+          console.log(`Re-validated work type from ${effectiveWorkType} to ${revalidated} (isParent=${isParent})`)
+          effectiveWorkType = revalidated
         }
       } catch (err) {
-        console.warn(`Failed to check parent status for coordination upgrade:`, err)
+        console.warn(`Failed to check parent status for work type re-validation:`, err)
       }
     }
 
