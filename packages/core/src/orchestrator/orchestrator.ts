@@ -357,7 +357,6 @@ function loadAppEnvFiles(
 
   const appsDir = resolve(repoRoot, 'apps')
   if (!existsSync(appsDir)) {
-    log?.warn('Apps directory not found', { appsDir })
     return {}
   }
 
@@ -389,12 +388,10 @@ function loadAppEnvFiles(
     }
 
     if (loadedCount > 0) {
-      log?.info(`Loaded ${envFileName} from ${loadedCount} app(s)`, {
+      log?.info(`Monorepo detected — loaded ${envFileName} from ${loadedCount} app(s)`, {
         workType,
         totalVars: Object.keys(env).length,
       })
-    } else {
-      log?.warn(`No ${envFileName} files found in apps/`, { workType })
     }
   } catch (error) {
     log?.warn('Failed to load app env files', {
