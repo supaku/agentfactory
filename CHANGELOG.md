@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.8.42
+
+### Fixes
+
+- **Agent work loss prevention** — Ban `git stash` in all agent templates (stashes are repo-scoped and leak across worktrees, causing index corruption). Backstop auto-commit now handles conflicted index state by running `git reset HEAD` before staging. Preserved worktree patch backup now captures untracked files via `git diff --no-index`. Stale stashes are cleared when creating worktrees.
+
+- **Duplicate session prevention** — Workers now detect session ownership loss within 5 seconds and stop the duplicate agent. Session ownership transfers complete before updating the worker ID during re-registration, eliminating the race window where in-flight API calls used a mismatched worker ID.
+
+- **Fleet output formatting** — Worker subprocess output is sanitized to strip `\r` (carriage returns from spinners) and ANSI cursor-position sequences before re-printing with the `[W##]` prefix, fixing garbled/misaligned log output.
+
+- **False coordination dispatch** — Prevented coordination dispatch when an issue has no sub-issues.
+
+- **Monorepo warning noise** — Silenced spurious monorepo detection warnings for single-repo projects.
+
+- **Credential leak in logs** — Removed verbose spawn log that leaked env vars and credentials.
+
+- **LINEAR_API_KEY warning** — Downgraded to info level for platform-delegated setups where the key is intentionally absent.
+
+### Docs
+
+- Comprehensive documentation update across 8 files including file reservation tools, config gaps, and CLI commands.
+
 ## v0.8.41
 
 ### Fixes
