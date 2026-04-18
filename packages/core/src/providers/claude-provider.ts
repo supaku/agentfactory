@@ -330,9 +330,9 @@ export class ClaudeProvider implements AgentProvider {
             }
           : { enabled: false },
         spawnClaudeCodeProcess: (spawnOptions) => {
-          // Use the Claude Code binary path from the SDK env, falling back to
-          // process.execPath only if not set (legacy Node.js-based installs).
-          const claudePath = spawnOptions.env?.CLAUDE_CODE_EXECPATH || process.execPath
+          // Use the command provided by the SDK — it points to the bundled
+          // Claude Code binary (e.g., claude-agent-sdk-darwin-arm64/claude).
+          const claudePath = spawnOptions.command
           const args = spawnOptions.args || []
           const child = spawn(claudePath, args, {
             cwd: spawnOptions.cwd,
@@ -340,10 +340,27 @@ export class ClaudeProvider implements AgentProvider {
             stdio: ['pipe', 'pipe', 'pipe'],
           })
 
+          console.error(`[ClaudeProvider] Spawning: ${claudePath} ${args.join(' ')}`)
+
           config.onProcessSpawned?.(child.pid)
+
+          // Capture stderr for diagnostics on unexpected exits
+          let stderrBuffer = ''
+          child.stderr?.on('data', (data: Buffer) => {
+            stderrBuffer += data.toString()
+          })
 
           child.on('error', (err) => {
             console.error('[ClaudeProvider] Child process error:', err.message)
+          })
+
+          child.on('exit', (code, signal) => {
+            if (code !== 0 && code !== null) {
+              console.error(`[ClaudeProvider] Process exited with code ${code}${signal ? ` signal ${signal}` : ''}`)
+              if (stderrBuffer.trim()) {
+                console.error(`[ClaudeProvider] stderr: ${stderrBuffer.trim().substring(0, 2000)}`)
+              }
+            }
           })
 
           if (spawnOptions.signal) {
