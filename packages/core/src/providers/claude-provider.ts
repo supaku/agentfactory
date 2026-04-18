@@ -330,9 +330,11 @@ export class ClaudeProvider implements AgentProvider {
             }
           : { enabled: false },
         spawnClaudeCodeProcess: (spawnOptions) => {
-          const nodePath = process.execPath
+          // Use the Claude Code binary path from the SDK env, falling back to
+          // process.execPath only if not set (legacy Node.js-based installs).
+          const claudePath = spawnOptions.env?.CLAUDE_CODE_EXECPATH || process.execPath
           const args = spawnOptions.args || []
-          const child = spawn(nodePath, args, {
+          const child = spawn(claudePath, args, {
             cwd: spawnOptions.cwd,
             env: spawnOptions.env,
             stdio: ['pipe', 'pipe', 'pipe'],
