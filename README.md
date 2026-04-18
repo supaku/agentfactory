@@ -171,13 +171,34 @@ interface AgentHandle {
 
 Spring AI support means enterprise Java teams can orchestrate Spring AI-based agents in the same fleet as Claude and Codex agents, with the same pipeline, governance, and cost tracking.
 
-Provider is selected via environment variables:
+Provider is selected via a 9-tier resolution cascade — issue labels, mentions, config file, environment variables, and a hardcoded fallback:
 
 ```bash
 AGENT_PROVIDER=claude            # Global default
 AGENT_PROVIDER_QA=codex          # Per-work-type override
 AGENT_PROVIDER_SOCIAL=spring-ai  # Per-project override
 ```
+
+You can also select providers dynamically:
+- **Issue labels:** Add `provider:codex` to a Linear issue
+- **Mentions:** Include "use codex" or "@codex" in the agent prompt
+- **Config file:** Set `providers.byWorkType` or `providers.byProject` in `.agentfactory/config.yaml`
+
+### Intelligent Routing (MAB)
+
+When multiple providers are available, AgentFactory can learn which provider works best for each work type using Thompson Sampling (Multi-Armed Bandit):
+
+```yaml
+# .agentfactory/config.yaml
+routing:
+  enabled: true
+  explorationRate: 0.1          # 10% exploration
+  windowSize: 100               # Observation window
+  discountFactor: 0.99          # Discount older observations
+  minObservationsForExploit: 5  # Min data before exploiting
+```
+
+The routing engine tracks task completion, PR creation, QA pass rates, cost, and wall-clock time per (provider, workType) pair. It builds Beta distribution posteriors and samples to balance exploration vs. exploitation. MAB routing slots in at tier 5 of the resolution cascade — after explicit human overrides and config, before env var fallbacks.
 
 ### Agent-to-Agent Protocol (A2A)
 
@@ -223,11 +244,25 @@ Issues flow through work stations based on their status:
 
 | Status | Work Type | Agent Role |
 |--------|-----------|------------|
+| — | `research` | Discovery and analysis phase |
+| — | `backlog-creation` | Create issues from research findings |
 | Backlog | `development` | Implement the feature/fix |
 | Started | `inflight` | Continue in-progress work |
 | Finished | `qa` | Validate implementation |
 | Delivered | `acceptance` | Final acceptance testing |
 | Rejected | `refinement` | Address feedback |
+| — | `merge` | Handle PR merge operations |
+| — | `security` | Security scanning (SAST, dependency audit) |
+
+**Coordination types** (for parent issues with sub-issues):
+
+| Work Type | Agent Role |
+|-----------|------------|
+| `coordination` | Orchestrate parallel sub-issue development |
+| `inflight-coordination` | Coordinate in-flight sub-issues |
+| `qa-coordination` | Run QA across all sub-issues |
+| `acceptance-coordination` | Validate and merge all sub-issues |
+| `refinement-coordination` | Coordinate refinement of sub-issues |
 
 ### Crash Recovery
 
@@ -251,6 +286,65 @@ const orchestrator = createOrchestrator({
   },
 })
 ```
+
+### Merge Queue
+
+AgentFactory includes a built-in merge queue that automatically rebases and merges agent PRs:
+
+```yaml
+# .agentfactory/config.yaml
+mergeQueue:
+  enabled: true
+  provider: local           # local, github-native, mergify, trunk
+  strategy: rebase          # rebase, merge, squash
+  autoMerge: true           # Auto-add approved PRs
+  testCommand: "pnpm test"  # Run after rebase
+  mergiraf: true            # Syntax-aware conflict resolution
+  concurrency: 2            # Parallel merge operations (default: 1)
+  escalation:
+    onConflict: reassign    # reassign, notify, park
+    onTestFailure: notify   # notify, park, retry
+```
+
+The local provider handles the full rebase-test-merge cycle within the orchestrator. External providers (GitHub-native, Mergify, Trunk) delegate to their respective services. The merge queue CLI (`af-merge-queue`) provides status, list, retry, skip, pause, and resume commands.
+
+### Code Intelligence
+
+The `@renseiai/agentfactory-code-intelligence` package provides 6 core tools for codebase navigation (plus 3 optional file reservation tools for parallel agent safety):
+
+| Tool | Description |
+|------|-------------|
+| `af_code_search_code` | Full-text search with BM25 ranking |
+| `af_code_search_symbols` | Find functions, classes, interfaces by name |
+| `af_code_get_repo_map` | PageRank-based repository overview |
+| `af_code_find_type_usages` | Find all usages of a type (switch cases, mappings, imports) |
+| `af_code_validate_cross_deps` | Validate cross-package dependencies |
+| `af_code_check_duplicate` | Detect duplicate or near-duplicate code |
+
+These tools are available as in-process MCP tools (Claude provider) or via the `af-code` CLI. They support TypeScript, JavaScript, Python, Go, and Rust. See [Code Intelligence](./docs/code-intelligence.md) for details.
+
+### Quality Gates
+
+Quality gates prevent regressions by capturing metrics before agents start and verifying them after:
+
+```yaml
+quality:
+  baselineEnabled: true     # Capture test counts, typecheck/lint errors from main
+  ratchetEnabled: true      # Block PRs that regress metrics
+  boyscoutRule: true        # Instruct agents to leave code better than found
+  tddWorkflow: true         # Include TDD workflow in agent prompts
+```
+
+See [Quality Gates](./docs/quality-gates.md) for baseline capture, ratchet enforcement, and CI integration.
+
+### Workflow Governor Top-of-Funnel
+
+The Workflow Governor supports automated top-of-funnel phases before development begins:
+
+- **Research** — agents analyze requirements, explore the codebase, and produce findings
+- **Backlog creation** — agents transform research findings into structured Linear issues with acceptance criteria
+
+These phases are triggered by the governor's workflow strategy. The governor checks `isResearchCompleted()` and `isBacklogCreationCompleted()` before dispatching development work, ensuring issues are well-defined before agents start coding.
 
 ## Distributed Workers
 
@@ -282,6 +376,40 @@ This requires the `@renseiai/agentfactory-server` package and a Redis instance.
 | `REDIS_URL` | For distributed | Redis connection URL |
 
 > **Note:** Set both `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` to the same value, or see [Configuration](./docs/configuration.md) for details.
+
+### Repository Config (`.agentfactory/config.yaml`)
+
+Declarative configuration for repository-level settings:
+
+```yaml
+apiVersion: v1
+kind: RepositoryConfig
+repository: github.com/yourorg/yourrepo
+
+projectPaths:
+  MyProject: "."
+  Backend:
+    path: "apps/api"
+    packageManager: npm
+    testCommand: "npm test"
+
+providers:
+  default: claude
+  byWorkType: { qa: codex }
+
+routing:
+  enabled: true
+
+mergeQueue:
+  enabled: true
+  provider: local
+
+quality:
+  baselineEnabled: true
+  ratchetEnabled: true
+```
+
+See [Configuration](./docs/configuration.md) for the full reference.
 
 ### Orchestrator Config
 
