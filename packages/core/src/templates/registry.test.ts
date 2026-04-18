@@ -191,6 +191,13 @@ describe('TemplateRegistry', () => {
       const result = fullRegistry.renderPrompt('coordination', { identifier: 'SUP-1' })
       expect(result).toContain('SHARED WORKTREE')
       expect(result).toContain('git worktree remove')
+      expect(result).toContain('git stash')
+    })
+
+    it('built-in development template bans git stash', () => {
+      const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
+      const result = fullRegistry.renderPrompt('development', { identifier: 'SUP-1' })
+      expect(result).toContain('NEVER run `git stash`')
     })
 
     it('built-in templates handle mentionContext', () => {

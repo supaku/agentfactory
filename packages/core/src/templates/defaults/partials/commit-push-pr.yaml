@@ -5,6 +5,12 @@ metadata:
   description: Mandatory commit, push, and PR creation instructions for code-producing work types
 content: |
 
+  GIT SAFETY (non-negotiable):
+  - NEVER run `git stash` or `git stash pop` — stashes are repo-scoped and leak
+    across worktrees, corrupting index state and causing work loss.
+  - NEVER run `git checkout -- .`, `git reset --hard`, or `git clean -fd`.
+  - If you need to undo local changes to specific files, use `git checkout HEAD -- <file>`.
+
   MANDATORY — VALIDATE THEN PERSIST YOUR WORK (non-negotiable):
   Your work is NOT done until all four steps are complete:
 

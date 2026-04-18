@@ -468,6 +468,22 @@ function backstopCommitChanges(worktreePath: string, identifier: string): Backst
       }
     }
 
+    // Clear any conflicted index state left by failed stash pop / merge / rebase.
+    // Without this, `git add -A` may fail on unmerged entries.
+    const hasConflicts = status.split('\n').some(line => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+    if (hasConflicts) {
+      try {
+        // Reset the index to HEAD to clear unmerged entries, then re-detect changes
+        execSync('git reset HEAD', {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+      } catch {
+        // If reset fails, proceed anyway — git add -A may still work
+      }
+    }
+
     // Resolve git identity: env vars → git config → fallback defaults
     const authorName = process.env.GIT_AUTHOR_NAME
       ?? getGitConfig('user.name', worktreePath)
@@ -502,16 +518,30 @@ function backstopCommitChanges(worktreePath: string, identifier: string): Backst
     const changedFiles = status.split('\n').length
     return {
       field: 'commits_present',
-      action: `auto-committed ${changedFiles} file(s)`,
+      action: `auto-committed ${changedFiles} file(s)${hasConflicts ? ' (resolved conflicted index)' : ''}`,
       success: true,
       detail: `${changedFiles} file(s) committed for ${identifier}`,
     }
   } catch (error) {
+    const errorDetail = error instanceof Error ? error.message : String(error)
+    // Capture git status for diagnostics so the failure comment has actionable info
+    let gitState = ''
+    try {
+      gitState = execSync('git status --short', {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim()
+    } catch {
+      // ignore
+    }
     return {
       field: 'commits_present',
       action: 'failed to auto-commit changes',
       success: false,
-      detail: error instanceof Error ? error.message : String(error),
+      detail: gitState
+        ? `${errorDetail}\nGit state at failure:\n${gitState}`
+        : errorDetail,
     }
   }
 }

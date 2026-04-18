@@ -176,6 +176,9 @@ export async function runWorker(
   let reregistrationInProgress = false
   let claimFailureCount = 0
   const activeOrchestrators = new Map<string, AgentOrchestrator>()
+  // Sessions whose ownership transfer failed during re-registration.
+  // The stop checker in executeWork uses this to kill duplicate agents.
+  const lostSessions = new Set<string>()
 
   // Logger — will be re-created after registration with worker context
   let log: Logger = createLogger({}, { showTimestamp: true })
@@ -349,12 +352,11 @@ export async function runWorker(
       const registration = await register()
       if (registration) {
         const newWid = registration.workerId
-        workerId = newWid
-        workerShortId = newWid.substring(4, 8) // Skip 'wkr_' prefix
-        consecutiveHeartbeatFailures = 0
-        log.status('re-registered', `New Worker ID: ${workerShortId}`)
+        const newShortId = newWid.substring(4, 8) // Skip 'wkr_' prefix
 
-        // Transfer ownership of active sessions to the new worker ID
+        // Transfer ownership of active sessions BEFORE updating workerId.
+        // This prevents in-flight API calls from executeWork from using the
+        // new worker ID before the server knows about the transfer.
         if (oldWorkerId && activeOrchestrators.size > 0) {
           log.info('Transferring ownership of active sessions', {
             sessionCount: activeOrchestrators.size,
@@ -377,13 +379,33 @@ export async function runWorker(
             failed: results.length - successCount,
           })
 
-          // Update worker ID in all active orchestrators' activity emitters
-          for (const [sessionId, orchestrator] of activeOrchestrators.entries()) {
-            orchestrator.updateWorkerId(newWid)
-            log.debug('Updated orchestrator worker ID', {
-              sessionId: sessionId.substring(0, 8),
-            })
+          // If any transfers failed, the sessions may have been reclaimed
+          // by another worker. Mark those for ownership-loss detection so
+          // the stop checker in executeWork can kill the duplicate agent.
+          const sessionIds = Array.from(activeOrchestrators.keys())
+          for (let i = 0; i < results.length; i++) {
+            if (!results[i]) {
+              lostSessions.add(sessionIds[i])
+              log.warn('Session ownership lost — another worker may have claimed it', {
+                sessionId: sessionIds[i].substring(0, 8),
+              })
+            }
           }
+        }
+
+        // NOW update workerId — transfers are done, so in-flight API calls
+        // from executeWork will use the correct (new) ID going forward.
+        workerId = newWid
+        workerShortId = newShortId
+        consecutiveHeartbeatFailures = 0
+        log.status('re-registered', `New Worker ID: ${workerShortId}`)
+
+        // Update worker ID in all active orchestrators' activity emitters
+        for (const [sessionId, orchestrator] of activeOrchestrators.entries()) {
+          orchestrator.updateWorkerId(newWid)
+          log.debug('Updated orchestrator worker ID', {
+            sessionId: sessionId.substring(0, 8),
+          })
         }
 
         return true
@@ -622,6 +644,8 @@ export async function runWorker(
     // Two-phase completion: set in try/catch, read in finally
     let finalStatus: 'completed' | 'failed' | 'stopped' = 'failed'
     let statusPayload: { providerSessionId?: string; worktreePath?: string; error?: { message: string }; totalCostUsd?: number; inputTokens?: number; outputTokens?: number } | undefined
+    // Tracks whether the agent was stopped due to ownership loss or user request
+    let stopRequested = false
 
     // Issue lock TTL refresher
     let lockRefresher: ReturnType<typeof setInterval> | null = null
@@ -876,12 +900,37 @@ export async function runWorker(
         agentLog.warn('Agent has no PID - spawn may have failed')
       }
 
-      // Start a stop signal checker
-      let stopRequested = false
+      // Start a stop signal checker (also detects ownership loss)
       const stopChecker = setInterval(async () => {
         try {
+          // Fast path: check if re-registration flagged this session as lost
+          if (lostSessions.has(work.sessionId)) {
+            lostSessions.delete(work.sessionId)
+            agentLog.warn('Session ownership lost during re-registration — stopping agent to prevent duplicate work')
+            stopRequested = true
+            clearInterval(stopChecker)
+            await orchestrator.stopAgent(work.issueId, false)
+            return
+          }
+
+          // Check for explicit stop signal
           if (await checkSessionStopped(work.sessionId)) {
             agentLog.warn('Stop signal received')
+            stopRequested = true
+            clearInterval(stopChecker)
+            await orchestrator.stopAgent(work.issueId, false)
+            return
+          }
+
+          // Periodic ownership check: verify the server still considers us the owner.
+          // This catches cases where the server re-queued the session to another worker
+          // during a heartbeat gap without an explicit stop signal.
+          const ownerStatus = await checkSessionOwnership(work.sessionId)
+          if (ownerStatus?.workerId && ownerStatus.workerId !== workerId) {
+            agentLog.warn('Session owned by another worker — stopping agent to prevent duplicate work', {
+              ourWorkerId: workerId?.substring(0, 8),
+              ownerWorkerId: ownerStatus.workerId.substring(0, 8),
+            })
             stopRequested = true
             clearInterval(stopChecker)
             await orchestrator.stopAgent(work.issueId, false)
@@ -903,9 +952,13 @@ export async function runWorker(
       // Determine final status
       if (stopRequested || agent?.stopReason === 'user_request') {
         finalStatus = 'stopped'
-        await reportStatus(work.sessionId, 'finalizing')
-        await postProgress(work.sessionId, 'stopped', `Work stopped by user request`)
-        agentLog.status('stopped', 'Work stopped by user request')
+        // Don't report status if we lost ownership — another worker owns this session
+        const ownershipLost = agent?.stopReason !== 'user_request' && stopRequested
+        if (!ownershipLost) {
+          await reportStatus(work.sessionId, 'finalizing')
+          await postProgress(work.sessionId, 'stopped', `Work stopped by user request`)
+        }
+        agentLog.status('stopped', ownershipLost ? 'Ownership lost — yielded to another worker' : 'Work stopped by user request')
       } else if (agent?.stopReason === 'timeout') {
         finalStatus = 'failed'
         statusPayload = { error: { message: 'Agent timed out' } }
@@ -946,18 +999,27 @@ export async function runWorker(
     } finally {
       if (lockRefresher) clearInterval(lockRefresher)
 
+      // Clean up lost session marker if present
+      lostSessions.delete(work.sessionId)
+
       activeOrchestrators.delete(work.sessionId)
       agentLog.debug('Orchestrator unregistered for session', {
         sessionId: work.sessionId.substring(0, 8),
       })
       activeCount--
 
-      // Report true terminal status AFTER all cleanup
-      await reportStatus(work.sessionId, finalStatus, statusPayload).catch((err) => {
-        agentLog.error('Failed to report final status', {
-          error: err instanceof Error ? err.message : String(err),
+      // Report true terminal status AFTER all cleanup.
+      // Skip if we lost ownership — the session belongs to another worker now,
+      // and sending status updates would just produce 403 errors.
+      if (finalStatus === 'stopped' && stopRequested) {
+        agentLog.debug('Skipping final status report — session ownership was yielded')
+      } else {
+        await reportStatus(work.sessionId, finalStatus, statusPayload).catch((err) => {
+          agentLog.error('Failed to report final status', {
+            error: err instanceof Error ? err.message : String(err),
+          })
         })
-      })
+      }
     }
   }
 
