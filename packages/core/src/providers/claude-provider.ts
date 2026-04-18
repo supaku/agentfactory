@@ -340,8 +340,6 @@ export class ClaudeProvider implements AgentProvider {
             stdio: ['pipe', 'pipe', 'pipe'],
           })
 
-          console.error(`[ClaudeProvider] Spawning: ${claudePath} ${args.join(' ')}`)
-
           config.onProcessSpawned?.(child.pid)
 
           // Capture stderr for diagnostics on unexpected exits
