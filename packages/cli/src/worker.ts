@@ -126,7 +126,7 @@ if (!cliArgs.apiKey) {
 }
 
 if (!process.env.LINEAR_API_KEY) {
-  console.warn('Warning: LINEAR_API_KEY not set — Linear operations will be delegated to the platform API')
+  console.log('Linear operations will be delegated to the platform API')
 }
 
 // Create AbortController for graceful shutdown
