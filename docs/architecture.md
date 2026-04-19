@@ -302,6 +302,42 @@ For each issue, the governor evaluates:
 7. **Workflow strategy** — considers top-of-funnel phases (research, backlog-creation)
 8. **Stuck agent detection** — NUDGE action to inject redirect messages via `injectMessage()`
 
+### WorkflowRegistry and Transition Engine
+
+The Workflow Engine is built on two key components in `packages/core/src/workflow/`:
+
+**WorkflowRegistry** — an in-memory registry that manages `WorkflowDefinition` resolution with layered overrides, following the same pattern as `TemplateRegistry`. Definitions are loaded from up to four layers (later overrides earlier):
+
+1. Built-in default (`workflow/defaults/workflow.yaml`)
+2. Project-level override (`.agentfactory/workflow.yaml`)
+3. External store (Redis-backed, for distributed hot-reload)
+4. Inline config override (programmatic, highest priority)
+
+The registry provides escalation strategy resolution (mapping cycle count to strategy via the escalation ladder), parallelism group lookup, and circuit breaker limits. It supports hot-reload — an external `WorkflowRegistryWatcher` can push updated definitions at runtime via `setWorkflow()`.
+
+**Transition Engine** (`evaluateTransitions()`) — a pure function that replaces the hard-coded switch statement in the legacy decision engine. It evaluates the workflow definition's transition table against the current issue status and context:
+
+1. Filter transitions whose `from` status matches the issue's current status
+2. Sort by priority (higher first), then by definition order
+3. Pick the first matching transition (unconditional, or whose condition expression evaluates to true)
+4. Check escalation strategy for override actions (`decompose`, `escalate-human`)
+5. Map the target phase name to a `GovernorAction` (e.g., phase `qa` → action `trigger-qa`)
+
+Condition expressions use a built-in expression evaluator with access to issue properties, phase completion state, and sub-issue metadata. For parent issues, the engine also checks parallelism groups — if the target phase belongs to a group, it returns a `trigger-parallel-group` action instead.
+
+```
+WorkflowRegistry                      Transition Engine
+  │                                      │
+  │  getWorkflow() ───────────────────►  evaluateTransitions(ctx)
+  │  getEscalationStrategy(cycle) ──►      │
+  │  getParallelismGroup(phase) ───►       │ 1. Match transitions by status
+  │                                        │ 2. Evaluate condition expressions
+  │                                        │ 3. Apply escalation overrides
+  │                                        │ 4. Map phase → GovernorAction
+  │                                        ▼
+  │                                   TransitionResult { action, reason }
+```
+
 ### Workflow Parallelism
 
 The Workflow Engine supports structured parallelism patterns (SUP-1231):
