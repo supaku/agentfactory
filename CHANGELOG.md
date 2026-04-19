@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.45
+
+### Features
+
+- **Proxy client retry logic** — `ProxyIssueTrackerClient` now retries transient network errors (`fetch failed`, `ECONNREFUSED`, `ETIMEDOUT`, etc.) and server 5xx/429 responses with exponential backoff (3 retries, 1s→2s→4s). Previously a single network blip during the ~4 minute quality baseline window would kill the entire agent session. The direct `LinearAgentClient` already had this resilience via `withRetry`; the proxy client now uses the same mechanism.
+
+- **Autonomous agent system prompt** — Replaced the interactive system prompt with autonomous agent instructions for headless operation.
+
 ## v0.8.44
 
 ### Features

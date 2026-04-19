@@ -1,6 +1,6 @@
 {
   "name": "@renseiai/agentfactory-server",
-  "version": "0.8.44",
+  "version": "0.8.45",
   "type": "module",
   "description": "Webhook server and distributed worker pool for AgentFactory — Redis queues, issue locks, session management",
   "author": "Rensei AI (https://rensei.ai)",
