@@ -8,7 +8,9 @@
 # Design rules:
 #   - Only act inside a linked git worktree. The main checkout is never touched,
 #     so the primary clone where humans do most work is protected.
-#   - Never mutate anything if the working tree is dirty (skip rebase, skip deps).
+#   - On "clear": hard-reset to upstream, remove untracked files, force deps
+#     install. The new conversation starts with a pristine worktree.
+#   - On "startup"/"resume": preserve dirty state (stash-rebase if behind).
 #   - Never leave a broken git state: conflicting rebases are aborted.
 #   - All diagnostics go to stdout so Claude sees them as session context.
 #
@@ -22,6 +24,18 @@
 # Source: https://github.com/markkropf/agent-scripts (canonical: ~/Developer/agent-scripts/worktree-refresh/lib/refresh-worktree.sh)
 
 set -uo pipefail
+
+# --- Parse event source from stdin (Claude Code passes JSON) ----------------
+EVENT_SOURCE=""
+if [ ! -t 0 ]; then
+  INPUT="$(cat)"
+  if command -v jq >/dev/null 2>&1; then
+    EVENT_SOURCE="$(echo "$INPUT" | jq -r '.source // empty' 2>/dev/null || echo '')"
+  else
+    # Fallback: extract source with sed if jq is not available
+    EVENT_SOURCE="$(echo "$INPUT" | sed -n 's/.*"source"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+fi
 
 REPO="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 cd "$REPO" 2>/dev/null || { echo "[refresh-worktree] cannot cd into $REPO"; exit 0; }
@@ -63,7 +77,54 @@ if ! git fetch origin --quiet 2>/dev/null; then
   add_status "fetch: failed (offline?) — continuing with local state"
 fi
 
-# --- 2. Rebase -------------------------------------------------------------
+# --- 2. Clear mode: hard-reset to upstream ---------------------------------
+# On /clear the previous conversation is gone — any uncommitted work is orphaned.
+# Reset to upstream so the new conversation starts clean.
+if [ "$EVENT_SOURCE" = "clear" ]; then
+  # Resolve upstream before using it
+  CLEAR_UPSTREAM="${REFRESH_UPSTREAM:-}"
+  if [ -z "$CLEAR_UPSTREAM" ]; then
+    for candidate in origin/main origin/master origin/HEAD; do
+      if git rev-parse --verify --quiet "$candidate" >/dev/null; then
+        CLEAR_UPSTREAM="$candidate"
+        break
+      fi
+    done
+  fi
+
+  if [ -n "$CLEAR_UPSTREAM" ]; then
+    DIRTY_COUNT="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    UNTRACKED_COUNT="$(git status --porcelain 2>/dev/null | grep -c '^??' || true)"
+
+    # Abort any in-progress git operations
+    git rebase --abort 2>/dev/null || true
+    git merge --abort 2>/dev/null || true
+    git cherry-pick --abort 2>/dev/null || true
+
+    # Hard-reset tracked files to upstream
+    git reset --hard "$CLEAR_UPSTREAM" >/dev/null 2>&1
+
+    # Remove untracked files and directories (but respect .gitignore)
+    git clean -fd >/dev/null 2>&1
+
+    add_status "clear: reset to $CLEAR_UPSTREAM, discarded $DIRTY_COUNT dirty files ($UNTRACKED_COUNT untracked)"
+
+    # Force deps reinstall after clear (lockfile may have changed)
+    MARKER="$GIT_DIR_ABS/.refresh-worktree-deps-marker"
+    rm -f "$MARKER" 2>/dev/null
+  else
+    add_status "clear: no upstream branch resolvable — skipping reset"
+  fi
+
+  # Report and exit — no need for the stash-rebase path after a hard reset
+  BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'detached')"
+
+  # Still run deps install after clear
+  # (fall through to deps section below)
+fi
+
+# --- 3. Rebase (startup/resume only) --------------------------------------
+if [ "$EVENT_SOURCE" != "clear" ]; then
 UPSTREAM="${REFRESH_UPSTREAM:-}"
 if [ -z "$UPSTREAM" ]; then
   for candidate in origin/main origin/master origin/HEAD; do
@@ -92,7 +153,18 @@ else
   elif [ "$BEHIND" = "0" ]; then
     add_status "rebase: up-to-date with $UPSTREAM"
   elif [ -n "$DIRTY" ]; then
-    add_status "rebase: $BEHIND commit(s) behind $UPSTREAM but tree is dirty — skipping"
+    if git stash push -q -m "refresh-worktree auto-stash" 2>/dev/null; then
+      if git rebase "$UPSTREAM" >/dev/null 2>&1; then
+        git stash pop -q 2>/dev/null || true
+        add_status "rebase: stashed, rebased $BEHIND commit(s) onto $UPSTREAM, restored"
+      else
+        git rebase --abort >/dev/null 2>&1 || true
+        git stash pop -q 2>/dev/null || true
+        add_status "rebase: conflict against $UPSTREAM — aborted, stash restored"
+      fi
+    else
+      add_status "rebase: $BEHIND commit(s) behind $UPSTREAM but stash failed — skipping"
+    fi
   else
     if git rebase "$UPSTREAM" >/dev/null 2>&1; then
       add_status "rebase: rebased $BEHIND commit(s) onto $UPSTREAM"
@@ -102,8 +174,9 @@ else
     fi
   fi
 fi
+fi  # end startup/resume rebase block
 
-# --- 3. Dependencies -------------------------------------------------------
+# --- 4. Dependencies -------------------------------------------------------
 if [ "${REFRESH_SKIP_INSTALL:-0}" = "1" ]; then
   add_status "deps: skipped (REFRESH_SKIP_INSTALL=1)"
 else
@@ -151,7 +224,7 @@ else
   fi
 fi
 
-# --- 4. Report -------------------------------------------------------------
+# --- 5. Report -------------------------------------------------------------
 echo "[refresh-worktree] $BRANCH"
 for line in "${STATUS_LINES[@]}"; do
   echo "  - $line"
