@@ -98,6 +98,22 @@ export const RoutingConfigSectionSchema = z.object({
   changeDetectionThreshold: z.number().min(0).default(0.2),
 })
 
+/** Deployment provider configuration */
+export const DeploymentConfigSchema = z.object({
+  /** Deployment provider to use for status checks */
+  provider: z.enum(['vercel', 'none']).default('vercel'),
+  /** Provider-specific options */
+  options: z.record(z.string(), z.any()).optional(),
+})
+
+/** Git identity configuration for backstop commits */
+export const GitConfigSchema = z.object({
+  /** Git author name override */
+  authorName: z.string().optional(),
+  /** Git author email override */
+  authorEmail: z.string().email().optional(),
+})
+
 export const RepositoryConfigSchema = z.object({
   apiVersion: z.string(),
   kind: z.literal('RepositoryConfig'),
@@ -236,6 +252,16 @@ export const RepositoryConfigSchema = z.object({
     /** Include TDD workflow instructions in agent prompts */
     tddWorkflow: z.boolean().default(true),
   }).optional(),
+  /**
+   * Deployment provider configuration.
+   * Controls which deployment platform is used for status checks.
+   */
+  deployment: DeploymentConfigSchema.optional(),
+  /**
+   * Git identity configuration for backstop commits.
+   * Overrides git config user.name/email for agent-authored commits.
+   */
+  git: GitConfigSchema.optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },
@@ -318,6 +344,20 @@ export function getRoutingConfig(config: RepositoryConfig): RoutingConfig | unde
  */
 export function getModelsConfig(config: RepositoryConfig): ModelsConfig | undefined {
   return config.models as ModelsConfig | undefined
+}
+
+/**
+ * Returns the deployment config from a RepositoryConfig, if present.
+ */
+export function getDeploymentConfig(config: RepositoryConfig): z.infer<typeof DeploymentConfigSchema> | undefined {
+  return config.deployment
+}
+
+/**
+ * Returns the git config from a RepositoryConfig, if present.
+ */
+export function getGitIdentityConfig(config: RepositoryConfig): z.infer<typeof GitConfigSchema> | undefined {
+  return config.git
 }
 
 // ---------------------------------------------------------------------------

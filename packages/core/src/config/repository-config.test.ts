@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath, getProvidersConfig, getRoutingConfig, ProvidersConfigSchema, RoutingConfigSectionSchema } from './repository-config.js'
+import { loadRepositoryConfig, RepositoryConfigSchema, getEffectiveAllowedProjects, getProjectConfig, getProjectPath, getProvidersConfig, getRoutingConfig, GitConfigSchema, getGitIdentityConfig, ProvidersConfigSchema, RoutingConfigSectionSchema } from './repository-config.js'
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -1007,5 +1007,86 @@ mergeQueue:
     expect(result!.mergeQueue!.maxRetries).toBe(2)
     expect(result!.mergeQueue!.escalation).toBeUndefined()
     expect(result!.mergeQueue!.deleteBranchOnMerge).toBe(true)
+  })
+})
+
+describe('GitConfigSchema', () => {
+  it('validates git config with both fields', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      git: {
+        authorName: 'Rensei Agent',
+        authorEmail: 'agent@example.com',
+      },
+    })
+    expect(result.git).toEqual({
+      authorName: 'Rensei Agent',
+      authorEmail: 'agent@example.com',
+    })
+  })
+
+  it('validates git config with only authorName', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      git: { authorName: 'Custom Agent' },
+    })
+    expect(result.git?.authorName).toBe('Custom Agent')
+    expect(result.git?.authorEmail).toBeUndefined()
+  })
+
+  it('validates git config with only authorEmail', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+      git: { authorEmail: 'custom@example.com' },
+    })
+    expect(result.git?.authorEmail).toBe('custom@example.com')
+    expect(result.git?.authorName).toBeUndefined()
+  })
+
+  it('rejects invalid email format', () => {
+    expect(() =>
+      RepositoryConfigSchema.parse({
+        apiVersion: 'v1',
+        kind: 'RepositoryConfig',
+        git: { authorEmail: 'not-an-email' },
+      })
+    ).toThrow()
+  })
+
+  it('allows omitting git section entirely', () => {
+    const result = RepositoryConfigSchema.parse({
+      apiVersion: 'v1',
+      kind: 'RepositoryConfig',
+    })
+    expect(result.git).toBeUndefined()
+  })
+})
+
+describe('loadRepositoryConfig with git config', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('parses config with git identity section', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+git:
+  authorName: "Rensei Agent"
+  authorEmail: "agent@example.com"
+`)
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result?.git).toEqual({
+      authorName: 'Rensei Agent',
+      authorEmail: 'agent@example.com',
+    })
   })
 })

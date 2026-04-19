@@ -18,6 +18,7 @@
 import { execSync } from 'node:child_process'
 import type { AgentProcess } from './types.js'
 import type { AgentWorkType } from './work-types.js'
+import type { RepositoryConfig } from '../config/repository-config.js'
 import type {
   BackstopAction,
   BackstopResult,
@@ -94,6 +95,8 @@ export interface BackstopOptions {
   prTitleTemplate?: string
   /** PR body template. {identifier} is replaced with the issue key */
   prBodyTemplate?: string
+  /** Repository config for git identity overrides */
+  repoConfig?: RepositoryConfig
 }
 
 /**
@@ -159,7 +162,7 @@ export function runBackstop(
           actions.push({ field: 'commits_present', action: 'would auto-commit uncommitted changes', success: false, detail: 'dry-run' })
           break
         }
-        const commitResult = backstopCommitChanges(ctx.agent.worktreePath, ctx.agent.identifier)
+        const commitResult = backstopCommitChanges(ctx.agent.worktreePath, ctx.agent.identifier, options?.repoConfig)
         actions.push(commitResult)
         if (commitResult.success) {
           outputs.commitsPresent = true
@@ -450,7 +453,7 @@ function getGitConfig(key: string, cwd: string): string | undefined {
   }
 }
 
-function backstopCommitChanges(worktreePath: string, identifier: string): BackstopAction {
+function backstopCommitChanges(worktreePath: string, identifier: string, repoConfig?: RepositoryConfig): BackstopAction {
   try {
     // Check if there are actually uncommitted changes
     const status = execSync('git status --porcelain', {
@@ -484,11 +487,13 @@ function backstopCommitChanges(worktreePath: string, identifier: string): Backst
       }
     }
 
-    // Resolve git identity: env vars → git config → fallback defaults
+    // Resolve git identity: env vars → repo config → git config → fallback defaults
     const authorName = process.env.GIT_AUTHOR_NAME
+      ?? repoConfig?.git?.authorName
       ?? getGitConfig('user.name', worktreePath)
       ?? 'AgentFactory'
     const authorEmail = process.env.GIT_AUTHOR_EMAIL
+      ?? repoConfig?.git?.authorEmail
       ?? getGitConfig('user.email', worktreePath)
       ?? 'agent@rensei.ai'
 
