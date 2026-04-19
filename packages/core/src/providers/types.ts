@@ -149,6 +149,12 @@ export interface AgentSpawnConfig {
     fallbackAfterAttempt: boolean
   }
   /**
+   * Custom instructions to append to the system prompt.
+   * Sourced from RepositoryConfig.systemPrompt (append + byWorkType merged).
+   * Appended after standard instruction sections and before AGENTS.md/CLAUDE.md.
+   */
+  systemPromptAppend?: string
+  /**
    * Model identifier to use for the agent session.
    * When omitted, the provider resolves the model from environment variables or defaults.
    */

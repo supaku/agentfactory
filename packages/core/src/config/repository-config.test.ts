@@ -1090,3 +1090,93 @@ git:
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// systemPrompt config
+// ---------------------------------------------------------------------------
+
+describe('RepositoryConfigSchema systemPrompt', () => {
+  const base = { apiVersion: 'v1', kind: 'RepositoryConfig' as const }
+
+  it('accepts systemPrompt with append only', () => {
+    const result = RepositoryConfigSchema.parse({
+      ...base,
+      systemPrompt: {
+        append: 'Always run pnpm verify before pushing.',
+      },
+    })
+    expect(result.systemPrompt!.append).toBe('Always run pnpm verify before pushing.')
+    expect(result.systemPrompt!.byWorkType).toBeUndefined()
+  })
+
+  it('accepts systemPrompt with byWorkType only', () => {
+    const result = RepositoryConfigSchema.parse({
+      ...base,
+      systemPrompt: {
+        byWorkType: {
+          'qa-coordination': 'Validate all sub-issues individually.',
+          development: 'Follow TDD workflow.',
+        },
+      },
+    })
+    expect(result.systemPrompt!.append).toBeUndefined()
+    expect(result.systemPrompt!.byWorkType!['qa-coordination']).toBe('Validate all sub-issues individually.')
+    expect(result.systemPrompt!.byWorkType!['development']).toBe('Follow TDD workflow.')
+  })
+
+  it('accepts systemPrompt with both append and byWorkType', () => {
+    const result = RepositoryConfigSchema.parse({
+      ...base,
+      systemPrompt: {
+        append: '# Global rules',
+        byWorkType: {
+          qa: '# QA rules',
+        },
+      },
+    })
+    expect(result.systemPrompt!.append).toBe('# Global rules')
+    expect(result.systemPrompt!.byWorkType!['qa']).toBe('# QA rules')
+  })
+
+  it('accepts empty systemPrompt object', () => {
+    const result = RepositoryConfigSchema.parse({
+      ...base,
+      systemPrompt: {},
+    })
+    expect(result.systemPrompt).toBeDefined()
+    expect(result.systemPrompt!.append).toBeUndefined()
+    expect(result.systemPrompt!.byWorkType).toBeUndefined()
+  })
+
+  it('omits systemPrompt when not provided', () => {
+    const result = RepositoryConfigSchema.parse(base)
+    expect(result.systemPrompt).toBeUndefined()
+  })
+
+  it('accepts multiline append strings', () => {
+    const multiline = '# Rules\n- Always verify\n- Never skip tests'
+    const result = RepositoryConfigSchema.parse({
+      ...base,
+      systemPrompt: { append: multiline },
+    })
+    expect(result.systemPrompt!.append).toBe(multiline)
+  })
+
+  it('parses systemPrompt from YAML via loadRepositoryConfig', () => {
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(
+      `apiVersion: v1
+kind: RepositoryConfig
+systemPrompt:
+  append: |
+    Always run verify.
+  byWorkType:
+    qa: |
+      Check all sub-issues.
+`)
+    const result = loadRepositoryConfig('/some/repo')
+    expect(result).not.toBeNull()
+    expect(result!.systemPrompt!.append).toContain('Always run verify.')
+    expect(result!.systemPrompt!.byWorkType!['qa']).toContain('Check all sub-issues.')
+  })
+})

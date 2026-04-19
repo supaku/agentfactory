@@ -20,6 +20,7 @@ import type {
   AgentEvent,
 } from './types.js'
 import { evaluateCommandSafety } from './safety-rules.js'
+import { buildAutonomousSystemPrompt } from './autonomous-system-prompt.js'
 
 /**
  * Code intelligence enforcement configuration.
@@ -315,7 +316,17 @@ export class ClaudeProvider implements AgentProvider {
             ]
           : [],
         settingSources: config.autonomous ? [] : ['project'],
-        systemPrompt: { type: 'preset', preset: 'claude_code' },
+        systemPrompt: config.autonomous
+          ? buildAutonomousSystemPrompt({
+              worktreePath: config.cwd,
+              hasCodeIntelligence: (config.mcpToolNames ?? []).some(n => n.includes('af_code_')),
+              codeIntelToolNames: config.mcpToolNames?.filter(n => n.includes('af_code_')),
+              codeIntelEnforced: config.codeIntelligenceEnforcement?.enforceUsage ?? false,
+              useToolPlugins: (config.mcpToolNames ?? []).length > 0,
+              linearCli: 'pnpm af-linear',
+              systemPromptAppend: config.systemPromptAppend,
+            })
+          : { type: 'preset' as const, preset: 'claude_code' as const },
         resume: resumeSessionId,
         sandbox: config.sandboxEnabled
           ? {

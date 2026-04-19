@@ -24,6 +24,7 @@ import {
   type ModelsConfig,
 } from '../providers/index.js'
 import { buildSafetyInstructions } from '../providers/safety-rules.js'
+import { buildBaseInstructionsFromShared } from '../providers/agent-instructions.js'
 import {
   initializeAgentDir,
   writeState,
@@ -2795,34 +2796,36 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
   /**
    * Build base instructions for providers that need persistent system instructions.
    *
-   * Assembles safety rules and project-specific instructions (AGENTS.md / CLAUDE.md)
-   * into a persistent system prompt. Used by providers with `needsBaseInstructions: true`.
+   * Uses shared instruction builders from agent-instructions.ts so all providers
+   * (Claude, Codex, etc.) receive the same instruction content: autonomy preamble,
+   * tool usage guidance, code editing philosophy, safety rules, git workflow,
+   * code intelligence instructions, Linear tool instructions, and project instructions.
    */
-  private buildBaseInstructions(workType?: AgentWorkType, worktreePath?: string): string {
-    const sections: string[] = []
-
-    // Safety rules — uses shared module so rules stay in sync across providers
-    sections.push(buildSafetyInstructions())
-
-    // Project-specific instructions — load AGENTS.md or CLAUDE.md from worktree root
-    if (worktreePath) {
-      for (const filename of ['AGENTS.md', 'CLAUDE.md']) {
-        const instrPath = resolve(worktreePath, filename)
-        if (existsSync(instrPath)) {
-          try {
-            const content = readFileSync(instrPath, 'utf-8')
-            if (content.trim()) {
-              sections.push(`# Project Instructions (${filename})\n\n${content.trim()}`)
-              break // Only load one: AGENTS.md takes priority
-            }
-          } catch {
-            // Ignore read errors — project instructions are optional
-          }
-        }
-      }
+  private buildBaseInstructions(options: {
+    workType?: AgentWorkType
+    worktreePath?: string
+    hasCodeIntelligence?: boolean
+    codeIntelEnforced?: boolean
+    useToolPlugins?: boolean
+  }): string {
+    // Resolve systemPrompt append from RepositoryConfig
+    const appendSections: string[] = []
+    if (this.repoConfig?.systemPrompt?.append) {
+      appendSections.push(this.repoConfig.systemPrompt.append.trim())
     }
+    if (options.workType && this.repoConfig?.systemPrompt?.byWorkType?.[options.workType]) {
+      appendSections.push(this.repoConfig.systemPrompt.byWorkType[options.workType].trim())
+    }
+    const systemPromptAppend = appendSections.length > 0 ? appendSections.join('\n\n') : undefined
 
-    return sections.join('\n\n')
+    return buildBaseInstructionsFromShared(buildSafetyInstructions(), {
+      worktreePath: options.worktreePath,
+      hasCodeIntelligence: options.hasCodeIntelligence,
+      codeIntelEnforced: options.codeIntelEnforced,
+      useToolPlugins: options.useToolPlugins,
+      linearCli: this.linearCli,
+      systemPromptAppend,
+    })
   }
 
   /**
@@ -3176,18 +3179,10 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
-    // Build base instructions and permission config for providers that need them.
-    // Capability-driven: any provider declaring needsBaseInstructions/needsPermissionConfig gets them.
-    const baseInstructions = (spawnProvider.capabilities.needsBaseInstructions ?? false)
-      ? this.buildBaseInstructions(workType, worktreePath)
-      : undefined
-    const permissionConfig = (spawnProvider.capabilities.needsPermissionConfig ?? false) && this.templateRegistry
-      ? this.buildPermissionConfig(workType)
-      : undefined
-
     // Build code intelligence enforcement config.
     // Only providers with canUseTool-style enforcement (supportsCodeIntelligenceEnforcement) can use this.
     const hasCodeIntel = this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence')
+    const supportsToolPlugins = (spawnProvider.capabilities.supportsToolPlugins ?? false) && this.toolRegistry.getPlugins().length > 0
     const codeIntelEnforcement = (
       this.repoConfig?.codeIntelligence?.enforceUsage &&
       hasCodeIntel &&
@@ -3196,6 +3191,33 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       enforceUsage: true,
       fallbackAfterAttempt: this.repoConfig.codeIntelligence.fallbackAfterAttempt ?? true,
     } : undefined
+
+    // Build base instructions and permission config for providers that need them.
+    // Capability-driven: any provider declaring needsBaseInstructions/needsPermissionConfig gets them.
+    const baseInstructions = (spawnProvider.capabilities.needsBaseInstructions ?? false)
+      ? this.buildBaseInstructions({
+          workType,
+          worktreePath,
+          hasCodeIntelligence: hasCodeIntel,
+          codeIntelEnforced: this.repoConfig?.codeIntelligence?.enforceUsage ?? false,
+          useToolPlugins: supportsToolPlugins,
+        })
+      : undefined
+    const permissionConfig = (spawnProvider.capabilities.needsPermissionConfig ?? false) && this.templateRegistry
+      ? this.buildPermissionConfig(workType)
+      : undefined
+
+    // Resolve systemPrompt append from RepositoryConfig for Claude provider
+    const systemPromptAppendSections: string[] = []
+    if (this.repoConfig?.systemPrompt?.append) {
+      systemPromptAppendSections.push(this.repoConfig.systemPrompt.append.trim())
+    }
+    if (workType && this.repoConfig?.systemPrompt?.byWorkType?.[workType]) {
+      systemPromptAppendSections.push(this.repoConfig.systemPrompt.byWorkType[workType].trim())
+    }
+    const systemPromptAppend = systemPromptAppendSections.length > 0
+      ? systemPromptAppendSections.join('\n\n')
+      : undefined
 
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
@@ -3212,6 +3234,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       baseInstructions,
       permissionConfig,
       codeIntelligenceEnforcement: codeIntelEnforcement,
+      systemPromptAppend,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })
@@ -5431,12 +5454,34 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
+    // Build code intelligence and tool plugin flags
+    const hasCodeIntel = this.toolRegistry.getPlugins().some(p => p.name === 'af-code-intelligence')
+    const supportsToolPlugins = (spawnProvider.capabilities.supportsToolPlugins ?? false) && this.toolRegistry.getPlugins().length > 0
+
     // Build base instructions and permission config for providers that need them (capability-driven)
     const baseInstructions = (spawnProvider.capabilities.needsBaseInstructions ?? false)
-      ? this.buildBaseInstructions(workType, worktreePath)
+      ? this.buildBaseInstructions({
+          workType,
+          worktreePath,
+          hasCodeIntelligence: hasCodeIntel,
+          codeIntelEnforced: this.repoConfig?.codeIntelligence?.enforceUsage ?? false,
+          useToolPlugins: supportsToolPlugins,
+        })
       : undefined
     const permissionConfig = (spawnProvider.capabilities.needsPermissionConfig ?? false) && this.templateRegistry
       ? this.buildPermissionConfig(workType)
+      : undefined
+
+    // Resolve systemPrompt append from RepositoryConfig for Claude provider
+    const systemPromptAppendSections: string[] = []
+    if (this.repoConfig?.systemPrompt?.append) {
+      systemPromptAppendSections.push(this.repoConfig.systemPrompt.append.trim())
+    }
+    if (workType && this.repoConfig?.systemPrompt?.byWorkType?.[workType]) {
+      systemPromptAppendSections.push(this.repoConfig.systemPrompt.byWorkType[workType].trim())
+    }
+    const systemPromptAppend = systemPromptAppendSections.length > 0
+      ? systemPromptAppendSections.join('\n\n')
       : undefined
 
     // Spawn agent via provider interface (with resume if session ID available)
@@ -5453,6 +5498,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       model: resolvedModel,
       baseInstructions,
       permissionConfig,
+      systemPromptAppend,
       onProcessSpawned: (pid) => {
         agent.pid = pid
         log.info('Agent process spawned', { pid })

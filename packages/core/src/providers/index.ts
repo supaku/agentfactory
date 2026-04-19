@@ -59,6 +59,22 @@ export type {
   WebhookRegistration,
 } from './plugin-types.js'
 
+export {
+  buildAutonomyPreamble,
+  buildToolUsageGuidance,
+  buildCodeEditingPhilosophy,
+  buildGitWorkflow,
+  buildLargeFileHandling,
+  buildCodeIntelligenceMcpTools,
+  buildCodeIntelligenceCli,
+  buildLinearMcpTools,
+  buildLinearCli,
+  loadProjectInstructions,
+  buildBaseInstructionsFromShared,
+} from './agent-instructions.js'
+export type { BaseInstructionsOptions } from './agent-instructions.js'
+export { buildAutonomousSystemPrompt } from './autonomous-system-prompt.js'
+export type { AutonomousSystemPromptOptions } from './autonomous-system-prompt.js'
 export { evaluateCommandSafety, buildSafetyInstructions, SAFETY_DENY_PATTERNS } from './safety-rules.js'
 export type { SafetyDenyPattern, SafetyEvaluation } from './safety-rules.js'
 export { ClaudeProvider, createClaudeProvider } from './claude-provider.js'

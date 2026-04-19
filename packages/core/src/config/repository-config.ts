@@ -242,6 +242,17 @@ export const RepositoryConfigSchema = z.object({
     /** Allow Grep/Glob fallback after agent has tried at least one af_code_* tool */
     fallbackAfterAttempt: z.boolean().default(true),
   }).optional(),
+  /**
+   * System prompt customization.
+   * Allows appending project-specific instructions to the agent system prompt.
+   * These are added after the standard instruction sections and before AGENTS.md/CLAUDE.md.
+   */
+  systemPrompt: z.object({
+    /** Instructions appended to the system prompt for ALL work types */
+    append: z.string().optional(),
+    /** Per-work-type instructions (merged with append, not replacing) */
+    byWorkType: z.record(z.string(), z.string()).optional(),
+  }).optional(),
   quality: z.object({
     /** Enable quality baseline capture at worktree creation and post-session delta check */
     baselineEnabled: z.boolean().default(false),
