@@ -241,7 +241,7 @@ function loadSettingsEnv(workDir: string, log?: Logger, mainRepoRoot?: string): 
  * Find the repo root from a starting directory.
  * Accepts both real .git directories (main repos) and .git files (worktrees).
  */
-function findRepoRoot(startDir: string): string | null {
+export function findRepoRoot(startDir: string): string | null {
   let currentDir = startDir
   let prevDir = ''
 
@@ -262,7 +262,7 @@ function findRepoRoot(startDir: string): string | null {
  * and worktrees. For worktrees, follows the .git file's gitdir reference
  * back to the main .git directory.
  */
-function resolveMainRepoRoot(startDir: string): string | null {
+export function resolveMainRepoRoot(startDir: string): string | null {
   let currentDir = startDir
   let prevDir = ''
 
@@ -1154,8 +1154,10 @@ export class AgentOrchestrator {
       inactivityTimeoutMs: config.inactivityTimeoutMs ?? envInactivityTimeout ?? DEFAULT_CONFIG.inactivityTimeoutMs,
       maxSessionTimeoutMs: config.maxSessionTimeoutMs ?? envMaxSessionTimeout ?? DEFAULT_CONFIG.maxSessionTimeoutMs,
     }
-    // Resolve git root from cwd (worktreePath may be a sibling directory outside the repo)
-    this.gitRoot = findRepoRoot(process.cwd()) ?? process.cwd()
+    // Resolve git root from cwd — use resolveMainRepoRoot first so that when the
+    // orchestrator runs inside a linked worktree we follow the .git file back to
+    // the main repo instead of treating the worktree itself as the repo root.
+    this.gitRoot = resolveMainRepoRoot(process.cwd()) ?? findRepoRoot(process.cwd()) ?? process.cwd()
 
     // Validate git remote matches configured repository (if set)
     if (this.config.repository) {

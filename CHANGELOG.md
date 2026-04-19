@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.43
+
+### Fixes
+
+- **Worktree path resolution when orchestrator runs from a linked worktree** — `gitRoot` in the orchestrator constructor used `findRepoRoot()` which matches `.git` files (worktrees) as well as `.git` directories (main repos). When `process.cwd()` is a linked worktree, `gitRoot` resolved to the worktree path instead of the main repo root, causing `resolveWorktreePath` to compute wrong sibling directories. `git worktree add` then ran with incorrect cwd, producing directories with only `.agent/artifacts.json` and no actual worktree. Agents fell back to the parent process's working directory, causing cross-session file contamination. Fixed by using `resolveMainRepoRoot()` first, which follows the `.git` file's `gitdir:` reference back to the main repo.
+
+- **Fleet output staircase formatting** — Use explicit `\r\n` line endings in fleet worker output to prevent staircase formatting in terminals.
+
 ## v0.8.42
 
 ### Fixes
