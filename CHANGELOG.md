@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.44
+
+### Features
+
+- **Configurable git author identity and API-driven deploy support** — Agents can now use custom git author name/email via configuration, and deploy operations can be triggered through the platform API.
+
+### Fixes
+
+- **Millisecond timestamps in session-storage** — Session timestamps (`createdAt`, `updatedAt`, `claimedAt`, `queuedAt`) were stored in seconds (`Math.floor(Date.now() / 1000)`) while consumers (orphan cleanup, health probes, phase metrics) compared them against `Date.now()` in milliseconds. The 1000x magnitude mismatch made every session appear ~54 years old, causing orphan cleanup to systematically re-queue active sessions on every sweep. This produced repeated agent invocations and duplicate work on the same issue. All session-storage timestamps now use `Date.now()` (milliseconds) to match consumers.
+
+- **Worktree refresh hard-resets on `/clear`** — The refresh-worktree hook now performs a hard reset when triggered by `/clear`, ensuring pristine state for new conversations.
+
 ## v0.8.43
 
 ### Fixes
