@@ -113,8 +113,10 @@ function fleetLog(
       : '[FLEET]'
   const levelColor =
     level === 'ERR' ? colors.red : level === 'WRN' ? colors.yellow : colors.gray
-  console.log(
-    `${colors.gray}${timestamp()}${colors.reset} ${color}${prefix}${colors.reset} ${levelColor}${level}${colors.reset} ${message}`,
+  // Use \r\n explicitly — child processes (Claude CLI) can disable the
+  // terminal's onlcr setting via /dev/tty, causing bare \n to LF without CR.
+  process.stdout.write(
+    `${colors.gray}${timestamp()}${colors.reset} ${color}${prefix}${colors.reset} ${levelColor}${level}${colors.reset} ${message}\r\n`,
   )
 }
 
@@ -172,29 +174,15 @@ class WorkerFleet {
     const totalCapacity = workers * capacity
     const version = getVersion()
 
-    console.log(`
-${colors.cyan}================================================================${colors.reset}
-${colors.cyan}  AgentFactory Worker Fleet Manager${colors.reset} ${colors.gray}v${version}${colors.reset}
-${colors.cyan}================================================================${colors.reset}
-  Workers:         ${colors.green}${workers}${colors.reset}
-  Capacity/Worker: ${colors.green}${capacity}${colors.reset}
-  Total Capacity:  ${colors.green}${totalCapacity}${colors.reset} concurrent agents
-  Projects:        ${colors.green}${this.fleetConfig.projects?.length ? this.fleetConfig.projects.join(', ') : 'all'}${colors.reset}
-  Auto-update:     ${isAutoUpdateEnabled(this.autoUpdateFlag) ? `${colors.green}enabled${colors.reset}` : `${colors.gray}disabled${colors.reset}`}
-
-  System:
-    CPU Cores:    ${os.cpus().length}
-    Total RAM:    ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB
-    Free RAM:     ${Math.round(os.freemem() / 1024 / 1024 / 1024)} GB
-${colors.cyan}================================================================${colors.reset}
-`)
+    // Use \r\n throughout — child processes can disable onlcr via /dev/tty
+    process.stdout.write(`\r\n${colors.cyan}================================================================${colors.reset}\r\n${colors.cyan}  AgentFactory Worker Fleet Manager${colors.reset} ${colors.gray}v${version}${colors.reset}\r\n${colors.cyan}================================================================${colors.reset}\r\n  Workers:         ${colors.green}${workers}${colors.reset}\r\n  Capacity/Worker: ${colors.green}${capacity}${colors.reset}\r\n  Total Capacity:  ${colors.green}${totalCapacity}${colors.reset} concurrent agents\r\n  Projects:        ${colors.green}${this.fleetConfig.projects?.length ? this.fleetConfig.projects.join(', ') : 'all'}${colors.reset}\r\n  Auto-update:     ${isAutoUpdateEnabled(this.autoUpdateFlag) ? `${colors.green}enabled${colors.reset}` : `${colors.gray}disabled${colors.reset}`}\r\n\r\n  System:\r\n    CPU Cores:    ${os.cpus().length}\r\n    Total RAM:    ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB\r\n    Free RAM:     ${Math.round(os.freemem() / 1024 / 1024 / 1024)} GB\r\n${colors.cyan}================================================================${colors.reset}\r\n`)
 
     // Update check
     const updateCheck = await checkForUpdate()
     printUpdateNotification(updateCheck)
 
     if (dryRun) {
-      console.log(`${colors.yellow}Dry run mode - not starting workers${colors.reset}`)
+      process.stdout.write(`${colors.yellow}Dry run mode - not starting workers${colors.reset}\r\n`)
       return
     }
 
@@ -306,7 +294,7 @@ ${colors.cyan}================================================================${
       const lines = sanitizeWorkerOutput(data.toString()).split('\n')
       for (const line of lines) {
         if (line.trim()) {
-          console.log(`${workerPrefix} ${line}`)
+          process.stdout.write(`${workerPrefix} ${line}\r\n`)
         }
       }
     })
@@ -316,7 +304,7 @@ ${colors.cyan}================================================================${
       const lines = sanitizeWorkerOutput(data.toString()).split('\n')
       for (const line of lines) {
         if (line.trim()) {
-          console.log(`${workerPrefix} ${colors.red}${line}${colors.reset}`)
+          process.stdout.write(`${workerPrefix} ${colors.red}${line}${colors.reset}\r\n`)
         }
       }
     })
@@ -356,8 +344,8 @@ ${colors.cyan}================================================================${
     if (this.shuttingDown) return
     this.shuttingDown = true
 
-    console.log(
-      `\n${colors.yellow}Received ${reason} - shutting down fleet...${colors.reset}`,
+    process.stdout.write(
+      `\r\n${colors.yellow}Received ${reason} - shutting down fleet...${colors.reset}\r\n`,
     )
 
     for (const [id, worker] of this.workers) {
@@ -367,8 +355,8 @@ ${colors.cyan}================================================================${
 
     // Wait for workers to exit (max 30 seconds)
     const forceKillTimeout = setTimeout(() => {
-      console.log(
-        `${colors.red}Timeout waiting for workers - force killing${colors.reset}`,
+      process.stdout.write(
+        `${colors.red}Timeout waiting for workers - force killing${colors.reset}\r\n`,
       )
       for (const worker of this.workers.values()) {
         worker.process.kill('SIGKILL')
@@ -393,7 +381,7 @@ ${colors.cyan}================================================================${
       await this.mergeWorkerHandle.done
       fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar stopped')
     }
-    console.log(`${colors.green}All workers stopped${colors.reset}`)
+    process.stdout.write(`${colors.green}All workers stopped${colors.reset}\r\n`)
 
     // Resolve the running promise so start() returns
     this.resolveRunning?.()
