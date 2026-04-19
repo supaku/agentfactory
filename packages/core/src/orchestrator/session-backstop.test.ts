@@ -214,6 +214,12 @@ describe('runBackstop', () => {
   })
 
   it('auto-commits uncommitted changes for development work type', () => {
+    // Clear git identity env vars so the mock sequence for getGitConfig is consumed
+    const origName = process.env.GIT_AUTHOR_NAME
+    const origEmail = process.env.GIT_AUTHOR_EMAIL
+    delete process.env.GIT_AUTHOR_NAME
+    delete process.env.GIT_AUTHOR_EMAIL
+
     // collectSessionOutputs: no commits ahead of main, branch not pushed
     mockExecSync
       // --- collectSessionOutputs ---
@@ -255,6 +261,10 @@ describe('runBackstop', () => {
     const prAction = result.backstop.actions.find(a => a.field === 'pr_url')
     expect(prAction).toBeDefined()
     expect(prAction!.success).toBe(true)
+
+    // Restore env vars
+    if (origName !== undefined) process.env.GIT_AUTHOR_NAME = origName
+    if (origEmail !== undefined) process.env.GIT_AUTHOR_EMAIL = origEmail
   })
 
   it('does not auto-commit for non-code-producing work types', () => {
@@ -295,6 +305,65 @@ describe('runBackstop', () => {
     })
     const result = runBackstop(ctx)
     expect(result.validation!.satisfied).toBe(true)
+  })
+
+  it('uses repository config git identity when env vars are not set', () => {
+    const origName = process.env.GIT_AUTHOR_NAME
+    const origEmail = process.env.GIT_AUTHOR_EMAIL
+    delete process.env.GIT_AUTHOR_NAME
+    delete process.env.GIT_AUTHOR_EMAIL
+
+    mockExecSync
+      // --- collectSessionOutputs ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // hasCommits: git branch
+      .mockReturnValueOnce('0\n' as any)             // hasCommits: rev-list (no commits)
+      .mockReturnValueOnce('SUP-123\n' as any)     // isBranchPushed: git branch
+      .mockReturnValueOnce('' as any)                 // isBranchPushed: ls-remote (not pushed)
+      // --- backstopCommitChanges ---
+      .mockReturnValueOnce(' M src/foo.ts\n' as any) // git status --porcelain
+      .mockReturnValueOnce('' as any)                 // git add -A
+      .mockReturnValueOnce('' as any)                 // git commit
+      // --- backstopPushBranch ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
+      .mockReturnValueOnce('' as any)                 // git push
+      // --- backstopCreatePR ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
+      .mockReturnValueOnce('[]' as any)               // gh pr list
+      .mockReturnValueOnce('https://github.com/org/repo/pull/99\n' as any) // gh pr create
+
+    const ctx = createSessionContext({
+      agent: createMockAgent({
+        workType: 'development',
+        worktreePath: '/tmp/worktree',
+      }),
+    })
+    const result = runBackstop(ctx, {
+      repoConfig: {
+        apiVersion: 'v1',
+        kind: 'RepositoryConfig' as const,
+        git: {
+          authorName: 'Rensei Agent',
+          authorEmail: 'agent@custom.com',
+        },
+      },
+    })
+
+    const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
+    expect(commitAction).toBeDefined()
+    expect(commitAction!.success).toBe(true)
+
+    // Verify git commit was called with the right env vars
+    const commitCall = mockExecSync.mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('git commit')
+    )
+    expect(commitCall).toBeDefined()
+    const commitEnv = (commitCall![1] as any)?.env
+    expect(commitEnv.GIT_AUTHOR_NAME).toBe('Rensei Agent')
+    expect(commitEnv.GIT_AUTHOR_EMAIL).toBe('agent@custom.com')
+
+    // Restore
+    if (origName !== undefined) process.env.GIT_AUTHOR_NAME = origName
+    if (origEmail !== undefined) process.env.GIT_AUTHOR_EMAIL = origEmail
   })
 })
 

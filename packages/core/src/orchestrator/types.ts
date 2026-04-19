@@ -6,6 +6,7 @@ import type { AgentWorkType, WorkTypeStatusMappings } from './work-types.js'
 import type { AgentProvider, AgentProviderName } from '../providers/types.js'
 import type { IssueTrackerClient } from './issue-tracker-client.js'
 import type { ToolPlugin } from '../tools/types.js'
+import type { DeployProvider } from '../deployment/types.js'
 
 /**
  * Result of parsing an agent's output to determine pass/fail
@@ -127,6 +128,11 @@ export interface OrchestratorConfig {
    * can reserve/release files and check for conflicts.
    */
   fileReservation?: import('../tools/types.js').ToolPluginContext['fileReservation']
+  /**
+   * Optional deployment provider for checking deployment status.
+   * When provided, enables deployment status checking for QA/acceptance workflows.
+   */
+  deployProvider?: DeployProvider
 }
 
 export interface OrchestratorIssue {

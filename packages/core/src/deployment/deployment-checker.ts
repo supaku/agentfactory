@@ -10,51 +10,22 @@ import { promisify } from 'util'
 
 const execAsync = promisify(exec)
 
-/**
- * Individual deployment status for a Vercel app
- */
-export interface DeploymentStatus {
-  /** The app name (e.g., "renseiai-social") */
-  app: string
-  /** Deployment state */
-  state: 'success' | 'pending' | 'error' | 'failure'
-  /** Status description (e.g., "Deployment has completed") */
-  description: string
-  /** Vercel preview URL if available */
-  targetUrl: string | null
-  /** Full context string from GitHub */
-  context: string
-}
+// Re-export shared types from types.ts for backwards compatibility
+export type {
+  DeploymentStatus,
+  DeploymentCheckResult,
+  DeploymentCheckOptions,
+  IssuePRInfo,
+} from './types.js'
 
-/**
- * Result of checking deployment status for a commit
- */
-export interface DeploymentCheckResult {
-  /** Whether all deployments succeeded */
-  allSucceeded: boolean
-  /** Whether any deployment failed */
-  anyFailed: boolean
-  /** Whether any deployment is still pending */
-  anyPending: boolean
-  /** Individual deployment statuses */
-  statuses: DeploymentStatus[]
-  /** The commit SHA that was checked */
-  commitSha: string
-  /** Overall state from GitHub */
-  overallState: string
-}
+import type {
+  DeploymentStatus,
+  DeploymentCheckResult,
+  DeploymentCheckOptions,
+  IssuePRInfo,
+} from './types.js'
 
-/**
- * Options for checking deployment status
- */
-export interface DeploymentCheckOptions {
-  /** GitHub repository owner */
-  owner?: string
-  /** GitHub repository name */
-  repo?: string
-  /** Timeout for GitHub API call in milliseconds */
-  timeout?: number
-}
+import { VercelDeployProvider } from './vercel-provider.js'
 
 const DEFAULT_OPTIONS: Required<DeploymentCheckOptions> = {
   owner: 'renseiai',
@@ -147,9 +118,7 @@ export async function getPRHeadSha(
   }
 }
 
-/**
- * Check deployment status for a specific commit SHA
- */
+/** @deprecated Use VercelDeployProvider.checkDeployment() instead */
 export async function checkDeploymentStatus(
   commitSha: string,
   options: DeploymentCheckOptions = {}
@@ -202,10 +171,7 @@ export async function checkDeploymentStatus(
   }
 }
 
-/**
- * Check deployment status for a PR number
- * Convenience function that gets the commit SHA and checks status
- */
+/** @deprecated Use VercelDeployProvider.checkPRDeployment() instead */
 export async function checkPRDeploymentStatus(
   prNumber: number,
   options: DeploymentCheckOptions = {}
@@ -298,22 +264,6 @@ export function formatFailedDeployments(result: DeploymentCheckResult): string {
 }
 
 /**
- * PR information found for an issue
- */
-export interface IssuePRInfo {
-  /** PR number */
-  number: number
-  /** Head commit SHA */
-  headSha: string
-  /** Branch name */
-  branch: string
-  /** PR title */
-  title: string
-  /** PR URL */
-  url: string
-}
-
-/**
  * Find open PRs associated with a Linear issue identifier
  * Searches for PRs with the issue identifier in the branch name or title
  *
@@ -364,14 +314,7 @@ export async function findPRsForIssue(
   }
 }
 
-/**
- * Check deployment status for an issue by finding associated PRs
- * Returns the first PR's deployment status, or null if no PRs found
- *
- * @param issueIdentifier - The Linear issue identifier (e.g., "SUP-123")
- * @param options - Options for the search and check
- * @returns Deployment check result with PR info, or null if no PR found
- */
+/** @deprecated Use VercelDeployProvider.checkIssueDeployment() instead */
 export async function checkIssueDeploymentStatus(
   issueIdentifier: string,
   options: DeploymentCheckOptions = {}
