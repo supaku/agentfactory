@@ -25,6 +25,7 @@ import type {
   IssueRelationResult,
   IssueRelationsResult,
   LinearWorkflowStatus,
+  RetryConfig,
   StatusMapping,
   SubIssueGraph,
   SubIssueStatus,
@@ -38,6 +39,8 @@ import type {
   SerializedViewer,
   SerializedTeam,
 } from './issue-tracker-proxy.js'
+import { withRetry, DEFAULT_RETRY_CONFIG } from './retry.js'
+import { isRetryableError } from './errors.js'
 
 export interface ProxyClientConfig {
   /** Base URL of the dashboard (e.g., 'https://my-dashboard.vercel.app') */
@@ -48,6 +51,8 @@ export interface ProxyClientConfig {
   organizationId?: string
   /** Request timeout in ms (default: 30_000) */
   timeoutMs?: number
+  /** Retry configuration for transient network errors */
+  retry?: RetryConfig
 }
 
 /**
@@ -63,12 +68,14 @@ export class ProxyIssueTrackerClient {
   private readonly apiKey: string
   private readonly organizationId?: string
   private readonly timeoutMs: number
+  private readonly retryConfig: Required<RetryConfig>
 
   constructor(config: ProxyClientConfig) {
     this.apiUrl = config.apiUrl.replace(/\/$/, '')
     this.apiKey = config.apiKey
     this.organizationId = config.organizationId
     this.timeoutMs = config.timeoutMs ?? 30_000
+    this.retryConfig = { ...DEFAULT_RETRY_CONFIG, ...config.retry }
   }
 
   // =========================================================================
@@ -249,6 +256,27 @@ export class ProxyIssueTrackerClient {
   // =========================================================================
 
   private async call<T>(method: IssueTrackerMethod, args: unknown[]): Promise<T> {
+    return withRetry(
+      () => this.callOnce<T>(method, args),
+      {
+        config: this.retryConfig,
+        shouldRetry: (error) => {
+          // Retry network errors and server-flagged retryable errors
+          if (error instanceof Error && 'retryable' in error && (error as { retryable: boolean }).retryable) {
+            return true
+          }
+          return isRetryableError(error, this.retryConfig.retryableStatusCodes)
+        },
+        onRetry: ({ attempt, maxRetries, delay }) => {
+          console.warn(
+            `[ProxyClient] Retry ${attempt + 1}/${maxRetries} for ${method} in ${delay}ms`
+          )
+        },
+      }
+    )
+  }
+
+  private async callOnce<T>(method: IssueTrackerMethod, args: unknown[]): Promise<T> {
     const body: ProxyRequest = {
       method,
       args,
