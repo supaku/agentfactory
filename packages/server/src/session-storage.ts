@@ -44,17 +44,17 @@ export interface AgentSessionState {
   worktreePath: string
   /** Current agent status */
   status: AgentSessionStatus
-  /** Unix timestamp when session was created */
+  /** Unix timestamp in milliseconds when session was created */
   createdAt: number
-  /** Unix timestamp of last update */
+  /** Unix timestamp in milliseconds of last update */
   updatedAt: number
 
   // Worker pool fields
   /** Worker ID handling this session (null if pending) */
   workerId?: string | null
-  /** Unix timestamp when added to work queue */
+  /** Unix timestamp in milliseconds when added to work queue */
   queuedAt?: number | null
-  /** Unix timestamp when claimed by worker */
+  /** Unix timestamp in milliseconds when claimed by worker */
   claimedAt?: number | null
   /** Priority in queue (1-5, lower is higher priority) */
   priority?: number
@@ -125,7 +125,7 @@ export async function storeSessionState(
 ): Promise<AgentSessionState> {
   if (!isRedisConfigured()) {
     log.warn('Redis not configured, session state will not be persisted')
-    const now = Math.floor(Date.now() / 1000)
+    const now = Date.now()
     return {
       ...state,
       linearSessionId,
@@ -134,7 +134,7 @@ export async function storeSessionState(
     }
   }
 
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
   const key = buildSessionKey(linearSessionId)
 
   // Check for existing session to preserve createdAt
@@ -210,7 +210,7 @@ export async function updateProviderSessionId(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -247,7 +247,7 @@ export async function updateSessionStatus(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -284,7 +284,7 @@ export async function updateSessionCostData(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -336,7 +336,7 @@ export async function resetSessionForRequeue(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -452,7 +452,7 @@ export async function claimSession(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -492,7 +492,7 @@ export async function startSession(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
@@ -587,7 +587,7 @@ export async function transferSessionOwnership(
   }
 
   const key = buildSessionKey(linearSessionId)
-  const now = Math.floor(Date.now() / 1000)
+  const now = Date.now()
 
   const updated: AgentSessionState = {
     ...existing,
