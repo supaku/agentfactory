@@ -18,8 +18,16 @@ import {
   isWebhookProcessed,
 } from '@renseiai/agentfactory-server'
 import type { ResolvedWebhookConfig } from '../../types.js'
-import { handleStopSignal, emitActivity } from '../utils.js'
+import { handleStopSignal, emitActivity, determineWorkType } from '../utils.js'
 import type { createLogger } from '@renseiai/agentfactory-server'
+
+/**
+ * Strip @mention triggers from comment body to extract actual user instructions.
+ * Returns empty string if the comment is only @mentions with no real content.
+ */
+export function stripMentionTriggers(text: string): string {
+  return text.replace(/@\w+/g, '').trim()
+}
 
 export async function handleSessionPrompted(
   config: ResolvedWebhookConfig,
@@ -158,25 +166,59 @@ export async function handleSessionPrompted(
     (issue?.identifier as string) ||
     issueId.slice(0, 8)
 
-  // Determine effective prompt with cascading fallbacks
+  // Determine effective prompt with cascading fallbacks.
+  // Key: strip @mention triggers from comment body so bare mentions (e.g., "@rensei")
+  // fall through to generatePrompt instead of being treated as instructions.
   let effectivePrompt = promptText.trim()
 
   if (!effectivePrompt && commentBody.trim()) {
-    effectivePrompt = commentBody.trim()
-    promptLog.info('Using comment body as prompt fallback')
+    const strippedComment = stripMentionTriggers(commentBody)
+    if (strippedComment) {
+      effectivePrompt = strippedComment
+      promptLog.info('Using comment body (stripped) as prompt fallback')
+    }
   }
 
   if (!effectivePrompt) {
-    if (existingSession) {
-      effectivePrompt = config.generatePrompt(
-        issueIdentifier,
-        existingSession.workType || 'inflight'
-      )
-      promptLog.info('Generated continue prompt for empty prompt')
-    } else {
-      promptLog.warn('Empty prompt with no existing session, skipping')
-      return NextResponse.json({ success: true, skipped: true, reason: 'empty_prompt_no_session' })
+    // No user instructions — derive work type from current issue status
+    // (not the stale session work type) and generate a proper work prompt.
+    let derivedWorkType: AgentWorkType = existingSession?.workType || 'inflight'
+
+    try {
+      const linearClient = await config.linearClient.getClient(payload.organizationId)
+      const issueDetails = await linearClient.getIssue(issueId)
+      const currentState = await issueDetails.state
+      const currentStatus = currentState?.name
+
+      if (currentStatus) {
+        derivedWorkType = determineWorkType(currentStatus)
+
+        // Upgrade to coordination variant if parent issue
+        const coordinationUpgradeable =
+          derivedWorkType === 'development' || derivedWorkType === 'refinement' ||
+          derivedWorkType === 'qa' || derivedWorkType === 'acceptance'
+        if (coordinationUpgradeable) {
+          const isParent = await linearClient.isParentIssue(issueId)
+          if (isParent) {
+            if (derivedWorkType === 'development') derivedWorkType = 'coordination'
+            else if (derivedWorkType === 'qa') derivedWorkType = 'qa-coordination'
+            else if (derivedWorkType === 'acceptance') derivedWorkType = 'acceptance-coordination'
+            else if (derivedWorkType === 'refinement') derivedWorkType = 'refinement-coordination'
+          }
+        }
+
+        promptLog.info('Derived work type from current issue status', {
+          currentStatus,
+          derivedWorkType,
+          previousWorkType: existingSession?.workType,
+        })
+      }
+    } catch (err) {
+      promptLog.warn('Failed to derive work type from issue status, using session fallback', { error: err })
     }
+
+    effectivePrompt = config.generatePrompt(issueIdentifier, derivedWorkType)
+    promptLog.info('Generated work prompt for bare mention', { derivedWorkType })
   }
 
   // If session is running, publish as urgent directive to agent inbox
