@@ -184,6 +184,10 @@ export interface TemplateContext {
     typecheckErrors: number
     lintErrors: number
   }
+
+  // Session memory (cross-session context injection)
+  /** Pre-built context from past observations, injected by the context builder */
+  sessionMemoryContext?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +335,8 @@ export const TemplateContextSchema = z.object({
     typecheckErrors: z.number().int().nonnegative(),
     lintErrors: z.number().int().nonnegative(),
   }).optional(),
+  // Session memory (cross-session context injection)
+  sessionMemoryContext: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------

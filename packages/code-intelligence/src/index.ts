@@ -95,6 +95,13 @@ export { createSessionSummaryHook, buildSessionSummary } from './memory/session-
 export type { SessionOutcome, SessionEndEvent, SessionSummaryHookConfig } from './memory/session-summary.js'
 export { createMemoryPlugin } from './memory/memory-plugin.js'
 export type { MemoryToolPlugin, MemoryToolPluginContext, MemoryPluginConfig } from './memory/memory-plugin.js'
+export { buildSessionMemoryContext, DEFAULT_CONTEXT_BUDGET } from './memory/context-builder.js'
+export type {
+  ContextBudgetConfig,
+  ContextInjectionLog,
+  ContextBuilderOptions,
+  ContextBuildRequest,
+} from './memory/context-builder.js'
 
 // Embedding
 export type { EmbeddingProvider } from './embedding/embedding-provider.js'
