@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.8.46
+
+### Features
+
+- **Scope completion enforcement** — New `scope-completion-audit` partial forces agents to self-audit against the issue description before committing. Agents can no longer defer in-scope requirements to "follow-up" comments and emit `WORK_RESULT:passed`. The work-result marker now includes a scope attestation contract. Coordination templates add scope coverage verification ensuring sub-issue deliverables cover the full parent issue.
+
+- **Agent Memory Foundation (OSS Phase 1)** — Session memory partial and persistence layer for agent context across retries.
+
+- **A2A Server Foundation (OSS Phase 1)** — Agent-to-Agent protocol server scaffolding.
+
+### Fixes
+
+- **Sub-agent model config now works** — The `models.subAgent` config (e.g., `claude-sonnet-4-6`) was resolved but never passed to coordination sub-agents. The `task-lifecycle` partial now emits a mandatory `model` parameter on every Agent tool call. Full model IDs are mapped to Claude Code's required short aliases (`sonnet`/`opus`/`haiku`) via new `toAgentToolModelAlias()` utility.
+
+- **Push+PR instructions in fallback prompts** — The legacy `generatePromptForWorkType()` fallback (used when template registry is unavailable) was missing push and PR creation instructions for `development` and `inflight` work types, causing the session backstop to fire on every session.
+
+- **Bare @mention prompt generation** — Session-prompted handler now generates proper work prompts for bare @mentions without explicit commands.
+
+### Docs
+
+- Added WorkflowRegistry and Transition Engine to architecture docs.
+
 ## v0.8.45
 
 ### Features
