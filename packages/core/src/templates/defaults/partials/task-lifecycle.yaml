@@ -21,11 +21,11 @@ content: |
      {{#if subAgentModel}}
 
      SUB-AGENT MODEL (MANDATORY):
-     Every Agent tool call MUST include: model: "{{subAgentModel}}"
+     Every Agent tool call you spawn MUST include the parameter: model: "{{subAgentModel}}"
+     The Agent tool accepts short aliases: "sonnet", "opus", "haiku".
      This is a cost/performance optimization — sub-agents use a lighter model while
      you (the coordinator) use the heavier model for orchestration decisions.
-     Do NOT omit this parameter. Example:
-       Agent(prompt: "...", model: "{{subAgentModel}}", description: "...")
+     Do NOT omit this parameter. Do NOT use a different value.
      {{/if}}
 
   2. WAVE-BASED EXECUTION:

@@ -10,6 +10,7 @@ import {
   resolveModelWithSource,
   resolveModel,
   resolveSubAgentModel,
+  toAgentToolModelAlias,
   PROVIDER_ALIASES,
   isValidProviderName,
 } from './index.js'
@@ -860,5 +861,25 @@ describe('resolveSubAgentModel', () => {
   it('3. env AGENT_SUB_MODEL as fallback', () => {
     process.env.AGENT_SUB_MODEL = 'claude-sonnet-4-6'
     expect(resolveSubAgentModel()).toBe('claude-sonnet-4-6')
+  })
+})
+
+describe('toAgentToolModelAlias', () => {
+  it('maps full model IDs to short aliases', () => {
+    expect(toAgentToolModelAlias('claude-sonnet-4-6')).toBe('sonnet')
+    expect(toAgentToolModelAlias('claude-opus-4-6')).toBe('opus')
+    expect(toAgentToolModelAlias('claude-haiku-4-5')).toBe('haiku')
+    expect(toAgentToolModelAlias('claude-haiku-4-5-20251001')).toBe('haiku')
+  })
+
+  it('passes through short aliases unchanged', () => {
+    expect(toAgentToolModelAlias('sonnet')).toBe('sonnet')
+    expect(toAgentToolModelAlias('opus')).toBe('opus')
+    expect(toAgentToolModelAlias('haiku')).toBe('haiku')
+  })
+
+  it('returns undefined for unmappable or missing values', () => {
+    expect(toAgentToolModelAlias(undefined)).toBeUndefined()
+    expect(toAgentToolModelAlias('gpt-4o')).toBeUndefined()
   })
 })

@@ -644,6 +644,22 @@ export function resolveSubAgentModel(context?: {
   return undefined
 }
 
+/**
+ * Map a full model ID to the short alias used by Claude Code's Agent tool.
+ * The Agent tool only accepts: "sonnet", "opus", "haiku".
+ * Returns undefined if the model cannot be mapped.
+ */
+export function toAgentToolModelAlias(modelId: string | undefined): string | undefined {
+  if (!modelId) return undefined
+  const lower = modelId.toLowerCase()
+  if (lower.includes('opus')) return 'opus'
+  if (lower.includes('sonnet')) return 'sonnet'
+  if (lower.includes('haiku')) return 'haiku'
+  // Already a short alias?
+  if (['opus', 'sonnet', 'haiku'].includes(lower)) return lower
+  return undefined
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

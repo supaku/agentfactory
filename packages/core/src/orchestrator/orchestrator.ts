@@ -19,6 +19,7 @@ import {
   resolveProviderWithSource,
   resolveModelWithSource,
   resolveSubAgentModel,
+  toAgentToolModelAlias,
   type AgentProviderName,
   type ProvidersConfig,
   type ModelsConfig,
@@ -2952,7 +2953,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         mergeQueueEnabled: !!this.mergeQueueAdapter,
         qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
         model: resolvedModel,
-        subAgentModel: resolvedSubAgentModel,
+        subAgentModel: toAgentToolModelAlias(resolvedSubAgentModel),
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
