@@ -115,3 +115,9 @@ export { createFactoryEventsHandler } from './handlers/factory/events.js'
 
 // Workflow handlers
 export { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'
+
+// A2A handlers (Agent-to-Agent protocol)
+export { createAgentCardHandler } from './handlers/a2a/agent-card.js'
+export type { AgentCardRouteConfig } from './handlers/a2a/agent-card.js'
+export { createA2aRpcHandler } from './handlers/a2a/rpc.js'
+export type { A2aRpcRouteConfig } from './handlers/a2a/rpc.js'
