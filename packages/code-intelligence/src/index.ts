@@ -91,6 +91,8 @@ export { createObservationHook, extractObservation } from './memory/observation-
 export type { ToolEvent, ObservationHookConfig } from './memory/observation-hook.js'
 export { ObservationStore } from './memory/observation-store.js'
 export type { ObservationRetrievalOptions, ObservationRetrievalResult } from './memory/observation-store.js'
+export { createSessionSummaryHook, buildSessionSummary } from './memory/session-summary.js'
+export type { SessionOutcome, SessionEndEvent, SessionSummaryHookConfig } from './memory/session-summary.js'
 
 // Embedding
 export type { EmbeddingProvider } from './embedding/embedding-provider.js'
