@@ -692,6 +692,8 @@ Do NOT wait for user approval - create issues automatically.${LINEAR_CLI_INSTRUC
     case 'development':
       basePrompt = `Start work on ${identifier}.
 Implement the feature/fix as specified in the issue description.
+You MUST deliver 100% of the documented scope. Do NOT defer, punt, or list
+"follow-ups" for requirements described in this issue.
 
 DEPENDENCY INSTALLATION:
 Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
@@ -702,7 +704,13 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.
+
+MANDATORY — PUSH AND CREATE PR (non-negotiable):
+When your work is complete and validated (typecheck, build, test all pass):
+1. git push -u origin $(git branch --show-current)
+2. gh pr create --title "<type>: <description>" --body "<summary of changes>"
+If you skip these steps, your work will be LOST. The orchestrator marks work as FAILED if no PR is detected.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'inflight':
@@ -718,7 +726,13 @@ IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading 
 - Use Grep to search for specific code patterns instead of reading entire files
 - Use Read with offset/limit parameters to paginate through large files
 - Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
+See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.
+
+MANDATORY — PUSH AND CREATE PR (non-negotiable):
+When your work is complete and validated (typecheck, build, test all pass):
+1. git push -u origin $(git branch --show-current)
+2. gh pr create --title "<type>: <description>" --body "<summary of changes>"
+If you skip these steps, your work will be LOST. The orchestrator marks work as FAILED if no PR is detected.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'inflight-coordination':
