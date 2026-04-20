@@ -73,6 +73,12 @@ import { createFactoryEventsHandler } from './handlers/factory/events.js'
 // Workflow handlers
 import { createWorkflowDeployHandler } from './handlers/workflows/deploy.js'
 
+// A2A handlers
+import { createAgentCardHandler } from './handlers/a2a/agent-card.js'
+import type { AgentCardRouteConfig } from './handlers/a2a/agent-card.js'
+import { createA2aRpcHandler } from './handlers/a2a/rpc.js'
+import type { A2aRpcRouteConfig } from './handlers/a2a/rpc.js'
+
 export interface AllRoutes {
   workers: {
     register: { POST: RouteHandler }
@@ -118,6 +124,10 @@ export interface AllRoutes {
   workflows: {
     deploy: { POST: RouteHandler }
   }
+  a2a?: {
+    agentCard: { GET: RouteHandler }
+    rpc: { POST: RouteHandler }
+  }
 }
 
 /**
@@ -127,6 +137,8 @@ export interface AllRoutes {
 export interface AllRoutesConfig extends WebhookConfig, CronConfig {
   /** OAuth configuration for the callback handler */
   oauth?: OAuthConfig
+  /** A2A agent-card configuration. When provided, A2A routes are mounted. */
+  a2a?: AgentCardRouteConfig & { callbacks: A2aRpcRouteConfig['callbacks']; verifyAuth?: A2aRpcRouteConfig['verifyAuth']; onStreamRequest?: A2aRpcRouteConfig['onStreamRequest'] }
 }
 
 /**
@@ -224,5 +236,17 @@ export function createAllRoutes(config: AllRoutesConfig): AllRoutes {
     workflows: {
       deploy: { POST: createWorkflowDeployHandler() },
     },
+    ...(config.a2a && {
+      a2a: {
+        agentCard: { GET: createAgentCardHandler({ a2aConfig: config.a2a.a2aConfig }) },
+        rpc: {
+          POST: createA2aRpcHandler({
+            callbacks: config.a2a.callbacks,
+            verifyAuth: config.a2a.verifyAuth,
+            onStreamRequest: config.a2a.onStreamRequest,
+          }),
+        },
+      },
+    }),
   }
 }

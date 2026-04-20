@@ -79,6 +79,12 @@ export * from './a2a-types.js'
 // A2A Server (AgentCard + JSON-RPC handlers)
 export * from './a2a-server.js'
 
+// A2A Callback Bridge (work queue ↔ A2A protocol)
+export * from './a2a-callback-bridge.js'
+
+// A2A SSE Streaming (session events → A2A SSE events)
+export * from './a2a-sse-stream.js'
+
 // Fleet quotas (Kueue-inspired per-project budgets)
 export * from './fleet-quota-types.js'
 export * from './fleet-quota-storage.js'
