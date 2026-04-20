@@ -18,6 +18,15 @@ content: |
      You can spawn multiple foreground tasks in parallel by including multiple Agent
      tool calls in a single message — they will run concurrently and you will receive
      all results together when the last one finishes.
+     {{#if subAgentModel}}
+
+     SUB-AGENT MODEL (MANDATORY):
+     Every Agent tool call MUST include: model: "{{subAgentModel}}"
+     This is a cost/performance optimization — sub-agents use a lighter model while
+     you (the coordinator) use the heavier model for orchestration decisions.
+     Do NOT omit this parameter. Example:
+       Agent(prompt: "...", model: "{{subAgentModel}}", description: "...")
+     {{/if}}
 
   2. WAVE-BASED EXECUTION:
      Group sub-issues into waves based on their dependency graph:
