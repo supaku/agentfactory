@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: session-memory
+  description: Cross-session memory context injection — relevant past observations from agent memory
+content: |
+  {{#if sessionMemoryContext}}
+
+  PAST SESSION CONTEXT:
+  The following observations from previous sessions may be relevant to your current task.
+  Use this context to avoid repeating past mistakes and build on prior discoveries.
+
+  {{{sessionMemoryContext}}}
+
+  ---
+  {{/if}}
