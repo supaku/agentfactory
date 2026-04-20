@@ -447,6 +447,7 @@ pnpm orchestrator --project MyProject --templates /path/to/templates
 | `{{> partials/ios-build-validation}}` | iOS/Xcode build validation for native mobile projects |
 | `{{> partials/code-intelligence-instructions}}` | Code intelligence tool instructions (af_code_* tools, conditional on useToolPlugins) |
 | `{{> partials/task-lifecycle}}` | Task spawning and waiting rules for coordination workflows |
+| `{{> partials/scope-completion-audit}}` | Mandatory scope self-audit — prevents agents from deferring in-scope work to follow-ups |
 
 ### Tool Permissions
 

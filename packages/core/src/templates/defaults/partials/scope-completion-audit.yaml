@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: scope-completion-audit
+  description: Forces agents to verify full scope delivery before finalizing work
+content: |
+
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  SCOPE COMPLETION AUDIT — MANDATORY, NON-NEGOTIABLE             ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  BEFORE committing, you MUST re-read the issue description for {{identifier}} and
+  verify that EVERY requirement, acceptance criterion, and deliverable has been addressed.
+
+  For each requirement in the issue description, it must be one of:
+  1. ✅ DELIVERED — implemented in code with appropriate test coverage
+  2. ❌ BLOCKED — a genuine technical blocker prevents delivery (create a blocker issue)
+
+  "It's complex", "time constraints", or "can be done later" are NOT valid blockers.
+
+  If ANY item is ❌ BLOCKED:
+  - Create a blocker issue: {{linearCli}} create-blocker {{identifier}} --title "..." --description "..."
+  - Include full technical detail on WHY it cannot be delivered in this session
+  - Do NOT list it in a comment as a "follow-up" or "future work"
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  PROHIBITED BEHAVIORS (violating these = automatic FAIL):       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  • Listing undelivered scope items as "follow-ups" in comments  │
+  │  • Deferring requirements to "future work" without a blocker    │
+  │  • Completing a subset of the issue and calling it done         │
+  │  • Using "out of scope for this PR" for items IN the issue      │
+  │  • Using "can be addressed later" / "punting to follow-up"      │
+  │  • Creating comments that list TODOs for work described here    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  If the issue scope is genuinely too large to complete in a single session:
+  - Post a comment explaining exactly what was completed vs. what remains
+  - Emit WORK_RESULT:failed (NOT passed)
+  - The orchestrator will retry with a focused prompt on the remaining scope
+
+  THE RULE: If it's in the issue description, it ships in this PR — or the work FAILS.
+  Partial delivery with WORK_RESULT:passed is NEVER acceptable.

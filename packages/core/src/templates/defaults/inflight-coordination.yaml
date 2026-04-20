@@ -53,6 +53,15 @@ prompt: |
   Sub-issues intentionally in Icebox (e.g., post-GA / future roadmap items) should be detached
   from the parent before marking coordination as complete, or coordination should fail.
 
+  SCOPE COVERAGE VERIFICATION:
+  After all sub-issues are Finished, re-read the PARENT issue description for {{identifier}}.
+  Verify that the union of all sub-issue deliverables covers EVERY requirement in the parent.
+  If gaps exist between what the parent describes and what sub-issues delivered:
+  - Create additional sub-issues to cover the gaps
+  - Execute them before proceeding to commit/push/PR
+  - Do NOT document gaps as "follow-up" comments — fill them
+  Partial scope delivery with WORK_RESULT:passed is NEVER acceptable.
+
   AUTONOMOUS OPERATION:
   You are running autonomously — NEVER ask the user a question or wait for input. If you encounter
   ambiguity or an unexpected state:
