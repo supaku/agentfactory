@@ -89,6 +89,8 @@ export type {
 } from './memory/observations.js'
 export { createObservationHook, extractObservation } from './memory/observation-hook.js'
 export type { ToolEvent, ObservationHookConfig } from './memory/observation-hook.js'
+export { ObservationStore } from './memory/observation-store.js'
+export type { ObservationRetrievalOptions, ObservationRetrievalResult } from './memory/observation-store.js'
 
 // Embedding
 export type { EmbeddingProvider } from './embedding/embedding-provider.js'
