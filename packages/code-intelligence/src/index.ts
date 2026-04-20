@@ -68,6 +68,28 @@ export { DedupPipeline } from './memory/dedup-pipeline.js'
 export type { MemoryStore } from './memory/memory-store.js'
 export { InMemoryStore } from './memory/memory-store.js'
 
+// Observations (agent memory)
+export {
+  ObservationTypeSchema,
+  FileOperationTypeSchema,
+  ObservationSchema,
+  InMemoryObservationSink,
+  NoopObservationSink,
+} from './memory/observations.js'
+export type {
+  ObservationType,
+  FileOperationType,
+  Observation,
+  ObservationSink,
+  FileOperationDetail,
+  DecisionDetail,
+  PatternDetail,
+  ErrorDetail,
+  SessionSummaryDetail,
+} from './memory/observations.js'
+export { createObservationHook, extractObservation } from './memory/observation-hook.js'
+export type { ToolEvent, ObservationHookConfig } from './memory/observation-hook.js'
+
 // Embedding
 export type { EmbeddingProvider } from './embedding/embedding-provider.js'
 export { VoyageCodeProvider } from './embedding/voyage-provider.js'
