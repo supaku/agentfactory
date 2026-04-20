@@ -5,7 +5,7 @@ import {
   resetSummaryIdCounter,
 } from '../session-summary.js'
 import { InMemoryObservationSink } from '../observations.js'
-import type { Observation } from '../observations.js'
+import type { Observation, SessionSummaryDetail } from '../observations.js'
 import type { SessionEndEvent } from '../session-summary.js'
 
 function makeFileObs(overrides: Partial<Observation> = {}): Observation {
