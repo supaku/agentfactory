@@ -18,6 +18,9 @@ tools:
 prompt: |
   Start work on {{identifier}}.
   Implement the feature/fix as specified in the issue description.
+  You MUST deliver 100% of the documented scope. Do NOT defer, punt, or list
+  "follow-ups" for requirements described in this issue. If scope cannot be
+  fully delivered, emit WORK_RESULT:failed — never mark partial work as complete.
 
   BEFORE YOU START — ENSURE FRESH MAIN:
   Run these commands before writing any code to ensure your branch is current:
@@ -35,6 +38,7 @@ prompt: |
   {{> partials/quality-baseline}}
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
+  {{> partials/scope-completion-audit}}
   {{> partials/commit-push-pr}}
   {{#if mentionContext}}
 

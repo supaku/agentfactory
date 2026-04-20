@@ -42,6 +42,7 @@ prompt: |
   {{> partials/dependency-instructions}}
   {{> partials/code-intelligence-instructions}}
   {{> partials/cli-instructions}}
+  {{> partials/scope-completion-audit}}
   {{> partials/commit-push-pr}}
 
   {{> partials/work-result-marker}}

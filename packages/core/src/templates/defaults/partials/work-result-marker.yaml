@@ -23,3 +23,11 @@ content: |
   - Place the marker as the LAST line of your final message, after all other content
   - NEVER manually change the issue status via {{linearCli}} update-issue --state
   - The orchestrator manages ALL status transitions based on this marker
+
+  SCOPE ATTESTATION:
+  By emitting WORK_RESULT:passed, you are ATTESTING that:
+  - Every requirement in the issue description has been implemented
+  - No scope items were deferred to comments, follow-ups, or future work
+  - All acceptance criteria (if any) are satisfied
+  If you cannot honestly make this attestation, you MUST emit WORK_RESULT:failed.
+  Partial delivery with a "passed" marker is a contract violation.
