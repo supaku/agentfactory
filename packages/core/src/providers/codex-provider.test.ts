@@ -489,10 +489,10 @@ async function collectEvents(stream: AsyncIterable<AgentEvent>): Promise<AgentEv
 }
 
 describe('Early process death detection', () => {
-  let stderrSpy: ReturnType<typeof vi.spyOn>
+  let stderrSpy: { mockRestore: () => void }
 
   beforeEach(() => {
-    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never)
   })
 
   afterEach(() => {
