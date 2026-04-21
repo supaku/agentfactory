@@ -59,7 +59,8 @@ import { createActivityEmitter, type ActivityEmitter } from './activity-emitter.
 import { createApiActivityEmitter, type ApiActivityEmitter } from './api-activity-emitter.js'
 import { createLogger, type Logger } from '../logger.js'
 import { TemplateRegistry, CodexToolPermissionAdapter, createToolPermissionAdapter } from '../templates/index.js'
-import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig, getModelsConfig } from '../config/index.js'
+import { loadRepositoryConfig, getProjectConfig, getProjectPath, getProvidersConfig, getModelsConfig, getProfilesConfig, getDispatchConfig, resolveProfileForSpawn } from '../config/index.js'
+import type { ProfileConfig, DispatchConfig, ResolvedProfile } from '../config/index.js'
 import type { RepositoryConfig } from '../config/index.js'
 import { ToolRegistry } from '../tools/index.js'
 import type { ToolPlugin } from '../tools/index.js'
@@ -1089,6 +1090,8 @@ export class AgentOrchestrator {
   private readonly providerCache: Map<AgentProviderName, AgentProvider> = new Map()
   private configProviders?: ProvidersConfig
   private configModels?: ModelsConfig
+  private profiles?: Record<string, ProfileConfig>
+  private dispatchConfig?: DispatchConfig
   private readonly agentSessions: Map<string, IssueTrackerSession> = new Map()
   private readonly activityEmitters: Map<string, ActivityEmitter | ApiActivityEmitter> = new Map()
   // Track session ID to issue ID mapping for stop signal handling
@@ -1258,10 +1261,18 @@ export class AgentOrchestrator {
           if (repoConfig.worktree?.directory && !config.worktreePath) {
             this.config.worktreePath = repoConfig.worktree.directory
           }
-          // Store providers config for per-spawn resolution
-          this.configProviders = getProvidersConfig(repoConfig)
-          // Store models config for per-spawn model resolution
-          this.configModels = getModelsConfig(repoConfig)
+          // Profile-based config takes precedence over legacy providers/models
+          const profilesConfig = getProfilesConfig(repoConfig)
+          const dispatchCfg = getDispatchConfig(repoConfig)
+          if (profilesConfig && dispatchCfg) {
+            this.profiles = profilesConfig
+            this.dispatchConfig = dispatchCfg
+            // Legacy providers/models sections are silently ignored
+          } else {
+            // Legacy path: flat providers + models
+            this.configProviders = getProvidersConfig(repoConfig)
+            this.configModels = getModelsConfig(repoConfig)
+          }
 
           // Initialize merge queue adapter from repository config
           if (repoConfig.mergeQueue?.enabled && !config.mergeQueueAdapter) {
@@ -2863,7 +2874,32 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     projectName?: string
     labels?: string[]
     mentionContext?: string
-  }): { provider: AgentProvider; providerName: AgentProviderName; source: string } {
+    dispatchModel?: string
+    dispatchSubAgentModel?: string
+  }): { provider: AgentProvider; providerName: AgentProviderName; source: string; resolvedProfile?: ResolvedProfile } {
+    // Profile-based path: resolve full profile (provider + model + effort + config)
+    if (this.profiles && this.dispatchConfig) {
+      const resolved = resolveProfileForSpawn({
+        profiles: this.profiles,
+        dispatch: this.dispatchConfig,
+        workType: context.workType,
+        project: context.projectName,
+        labels: context.labels,
+        mentionContext: context.mentionContext,
+        dispatchModel: context.dispatchModel,
+        dispatchSubAgentModel: context.dispatchSubAgentModel,
+      })
+
+      let provider = this.providerCache.get(resolved.provider)
+      if (!provider) {
+        provider = createProvider(resolved.provider)
+        this.providerCache.set(resolved.provider, provider)
+      }
+
+      return { provider, providerName: resolved.provider, source: resolved.source, resolvedProfile: resolved }
+    }
+
+    // Legacy path: flat providers config
     const { name, source } = resolveProviderWithSource({
       project: context.projectName,
       workType: context.workType,
@@ -2903,26 +2939,49 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       dispatchSubAgentModel,
     } = options
 
-    // Resolve provider for this specific spawn (may differ from default)
-    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
-      this.resolveProviderForSpawn({ workType, projectName, labels, mentionContext })
+    // Resolve provider (and full profile when profiles are configured)
+    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource, resolvedProfile } =
+      this.resolveProviderForSpawn({ workType, projectName, labels, mentionContext, dispatchModel, dispatchSubAgentModel })
 
-    // Resolve model for this spawn
-    const { model: resolvedModel, source: modelSource } = resolveModelWithSource({
-      dispatchModel,
-      labels,
-      workType,
-      project: projectName,
-      configModels: this.configModels,
-    })
-    const resolvedSubAgentModel = resolveSubAgentModel({
-      dispatchSubAgentModel,
-      configModels: this.configModels,
-    })
+    // Extract model, effort, and sub-agent config from profile or legacy resolution
+    let resolvedModel: string | undefined
+    let resolvedSubAgentModel: string | undefined
+    let resolvedEffort: import('../config/profiles.js').EffortLevel | undefined
+    let resolvedProviderConfig: Record<string, unknown> | undefined
+    let resolvedSubAgentProvider: AgentProviderName | undefined
+    let resolvedSubAgentEffort: string | undefined
+
+    if (resolvedProfile) {
+      // Profile-based path
+      resolvedModel = resolvedProfile.model
+      resolvedEffort = resolvedProfile.effort
+      resolvedProviderConfig = resolvedProfile.providerConfig
+      resolvedSubAgentModel = resolvedProfile.subAgent?.model
+      resolvedSubAgentProvider = resolvedProfile.subAgent?.provider
+      resolvedSubAgentEffort = resolvedProfile.subAgent?.effort
+    } else {
+      // Legacy path
+      const { model, source: modelSource } = resolveModelWithSource({
+        dispatchModel,
+        labels,
+        workType,
+        project: projectName,
+        configModels: this.configModels,
+      })
+      resolvedModel = model
+      resolvedSubAgentModel = resolveSubAgentModel({
+        dispatchSubAgentModel,
+        configModels: this.configModels,
+      })
+      if (resolvedModel) {
+        const log = createLogger({ issueIdentifier: identifier })
+        log.info('Model resolved (legacy)', { model: resolvedModel, source: modelSource })
+      }
+    }
 
     if (resolvedModel) {
       const log = createLogger({ issueIdentifier: identifier })
-      log.info('Model resolved', { model: resolvedModel, source: modelSource })
+      log.info('Model resolved', { model: resolvedModel, source: providerSource, effort: resolvedEffort })
     }
 
     // Generate prompt based on work type, or use custom prompt if provided
@@ -2953,6 +3012,9 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         qualityBaseline: this.loadQualityBaselineForContext(worktreePath),
         model: resolvedModel,
         subAgentModel: resolvedSubAgentModel,
+        effort: resolvedEffort,
+        subAgentEffort: resolvedSubAgentEffort,
+        subAgentProvider: resolvedSubAgentProvider,
       }
       const rendered = this.templateRegistry.renderPrompt(workType, context)
       prompt = rendered ?? generatePromptForWorkType(identifier, workType)
@@ -3245,6 +3307,9 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       model: resolvedModel,
+      effort: resolvedEffort,
+      providerConfig: resolvedProviderConfig,
+      subAgentProvider: resolvedSubAgentProvider,
       baseInstructions,
       permissionConfig,
       codeIntelligenceEnforcement: codeIntelEnforcement,
@@ -5230,25 +5295,36 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
   async spawnAgentWithResume(options: SpawnAgentWithResumeOptions): Promise<AgentProcess> {
     const { issueId, identifier, worktreeIdentifier, sessionId, worktreePath, prompt, providerSessionId, workType, teamName, labels, mentionContext, dispatchModel, dispatchSubAgentModel } = options
 
-    // Resolve provider for this specific spawn (may differ from default)
-    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource } =
-      this.resolveProviderForSpawn({ workType, projectName: options.projectName, labels, mentionContext })
+    // Resolve provider (and full profile when profiles are configured)
+    const { provider: spawnProvider, providerName: spawnProviderName, source: providerSource, resolvedProfile } =
+      this.resolveProviderForSpawn({ workType, projectName: options.projectName, labels, mentionContext, dispatchModel, dispatchSubAgentModel })
 
-    // Resolve model for this spawn
-    const { model: resolvedModel, source: modelSource } = resolveModelWithSource({
-      dispatchModel,
-      labels,
-      workType,
-      project: options.projectName,
-      configModels: this.configModels,
-    })
+    // Extract model and effort from profile or legacy resolution
+    let resolvedModel: string | undefined
+    let resolvedEffort: import('../config/profiles.js').EffortLevel | undefined
+    let resolvedProviderConfig: Record<string, unknown> | undefined
+
+    if (resolvedProfile) {
+      resolvedModel = resolvedProfile.model
+      resolvedEffort = resolvedProfile.effort
+      resolvedProviderConfig = resolvedProfile.providerConfig
+    } else {
+      const { model, source: modelSource } = resolveModelWithSource({
+        dispatchModel,
+        labels,
+        workType,
+        project: options.projectName,
+        configModels: this.configModels,
+      })
+      resolvedModel = model
+    }
 
     // Create logger for this agent
     const log = createLogger({ issueIdentifier: identifier })
     this.agentLoggers.set(issueId, log)
 
     if (resolvedModel) {
-      log.info('Model resolved for resume', { model: resolvedModel, source: modelSource })
+      log.info('Model resolved for resume', { model: resolvedModel, source: providerSource, effort: resolvedEffort })
     }
 
     // Use the work type to determine if we need to transition on start
@@ -5510,6 +5586,8 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       model: resolvedModel,
+      effort: resolvedEffort,
+      providerConfig: resolvedProviderConfig,
       baseInstructions,
       permissionConfig,
       systemPromptAppend,

@@ -13,6 +13,7 @@ import { resolve } from 'path'
 import YAML from 'yaml'
 import type { ProvidersConfig, ModelsConfig } from '../providers/index.js'
 import type { RoutingConfig } from '../routing/types.js'
+import type { ProfileConfig, DispatchConfig } from './profiles.js'
 
 // ---------------------------------------------------------------------------
 // Zod Schema
@@ -42,6 +43,35 @@ const ProjectPathValueSchema = z.union([z.string(), ProjectConfigSchema])
 
 /** Valid agent provider names */
 const AgentProviderNameSchema = z.enum(['claude', 'codex', 'amp', 'spring-ai', 'a2a'])
+
+/** Normalized effort levels (provider-agnostic) */
+export const EffortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh'])
+
+/** Sub-agent configuration within a profile */
+const SubAgentProfileSchema = z.object({
+  provider: AgentProviderNameSchema.optional(),
+  model: z.string().optional(),
+  effort: EffortLevelSchema.optional(),
+})
+
+/** Named profile: bundles provider + model + effort + provider-specific config */
+export const ProfileConfigSchema = z.object({
+  provider: AgentProviderNameSchema,
+  model: z.string().optional(),
+  effort: EffortLevelSchema.optional(),
+  subAgent: SubAgentProfileSchema.optional(),
+  openai: z.record(z.string(), z.any()).optional(),
+  anthropic: z.record(z.string(), z.any()).optional(),
+  codex: z.record(z.string(), z.any()).optional(),
+  gemini: z.record(z.string(), z.any()).optional(),
+})
+
+/** Dispatch config: maps work types and projects to profile names */
+export const DispatchConfigSchema = z.object({
+  default: z.string(),
+  byWorkType: z.record(z.string(), z.string()).optional(),
+  byProject: z.record(z.string(), z.string()).optional(),
+})
 
 /** Provider selection configuration */
 export const ProvidersConfigSchema = z.object({
@@ -273,9 +303,48 @@ export const RepositoryConfigSchema = z.object({
    * Overrides git config user.name/email for agent-authored commits.
    */
   git: GitConfigSchema.optional(),
+  /**
+   * Named profiles bundling provider + model + effort + provider-specific config.
+   * When present with `dispatch`, replaces the flat `providers` and `models` sections.
+   */
+  profiles: z.record(z.string(), ProfileConfigSchema).optional(),
+  /**
+   * Dispatch configuration mapping work types and projects to profile names.
+   * Required when `profiles` is set.
+   */
+  dispatch: DispatchConfigSchema.optional(),
 }).refine(
   (data) => !(data.allowedProjects && data.projectPaths),
   { message: 'allowedProjects and projectPaths are mutually exclusive — use one or the other' },
+).refine(
+  (data) => {
+    // profiles and dispatch must both be present or both absent
+    if (data.profiles && !data.dispatch) return false
+    if (data.dispatch && !data.profiles) return false
+    return true
+  },
+  { message: 'profiles and dispatch must both be present — cannot use one without the other' },
+).refine(
+  (data) => {
+    if (!data.profiles || !data.dispatch) return true
+    const profileNames = new Set(Object.keys(data.profiles))
+    // Validate dispatch.default references an existing profile
+    if (!profileNames.has(data.dispatch.default)) return false
+    // Validate byWorkType references
+    if (data.dispatch.byWorkType) {
+      for (const name of Object.values(data.dispatch.byWorkType)) {
+        if (!profileNames.has(name)) return false
+      }
+    }
+    // Validate byProject references
+    if (data.dispatch.byProject) {
+      for (const name of Object.values(data.dispatch.byProject)) {
+        if (!profileNames.has(name)) return false
+      }
+    }
+    return true
+  },
+  { message: 'dispatch references a profile name that does not exist in profiles' },
 )
 
 // ---------------------------------------------------------------------------
@@ -355,6 +424,20 @@ export function getRoutingConfig(config: RepositoryConfig): RoutingConfig | unde
  */
 export function getModelsConfig(config: RepositoryConfig): ModelsConfig | undefined {
   return config.models as ModelsConfig | undefined
+}
+
+/**
+ * Returns the profiles config from a RepositoryConfig, if present.
+ */
+export function getProfilesConfig(config: RepositoryConfig): Record<string, ProfileConfig> | undefined {
+  return config.profiles as Record<string, ProfileConfig> | undefined
+}
+
+/**
+ * Returns the dispatch config from a RepositoryConfig, if present.
+ */
+export function getDispatchConfig(config: RepositoryConfig): DispatchConfig | undefined {
+  return config.dispatch as DispatchConfig | undefined
 }
 
 /**

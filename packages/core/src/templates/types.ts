@@ -168,6 +168,12 @@ export interface TemplateContext {
   model?: string
   /** Model ID for Task sub-agents spawned by coordinators. Templates can pass this to sub-agent prompts. */
   subAgentModel?: string
+  /** Normalized effort level for the primary agent (e.g., 'low', 'medium', 'high', 'xhigh') */
+  effort?: string
+  /** Effort level for sub-agents spawned by coordinators */
+  subAgentEffort?: string
+  /** Provider name for sub-agents when different from parent (e.g., 'codex' when parent uses 'claude') */
+  subAgentProvider?: string
 
   // Merge queue awareness
   /** When true, a merge queue (local or GitHub-native) handles rebase/merge — QA should not hard-fail on merge conflicts */

@@ -1432,6 +1432,11 @@ class AppServerAgentHandle implements AgentHandle {
 
       turnParams.model = resolveCodexModel(this.config)
 
+      // Pass effort level as reasoning effort (from profile config)
+      if (this.config.effort) {
+        turnParams.reasoningEffort = this.config.effort
+      }
+
       const sandboxPolicy = resolveSandboxPolicy(this.config)
       if (sandboxPolicy) {
         turnParams.sandboxPolicy = sandboxPolicy

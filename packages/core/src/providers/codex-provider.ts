@@ -368,6 +368,9 @@ export function mapCodexItemEvent(event: CodexItemEvent): AgentEvent[] {
  * The env var can be set globally or per-spawn via config.env.
  */
 function isAppServerEnabled(config?: AgentSpawnConfig): boolean {
+  // Check providerConfig.useAppServer from profile config first
+  if (config?.providerConfig?.useAppServer === true) return true
+  if (config?.providerConfig?.useAppServer === false) return false
   const envVal = config?.env?.CODEX_USE_APP_SERVER
     ?? process.env.CODEX_USE_APP_SERVER
     ?? ''
@@ -472,6 +475,9 @@ export class CodexProvider implements AgentProvider {
       }
       const model = resolveCodexModel(config)
       if (model) args.push('--model', model)
+      if (config.effort) {
+        args.push('--config', `model_reasoning_effort="${config.effort}"`)
+      }
       args.push(resumeSessionId)
       // Prompt is the final positional arg
       if (config.prompt) {
@@ -498,6 +504,10 @@ export class CodexProvider implements AgentProvider {
       }
       const model = resolveCodexModel(config)
       if (model) args.push('--model', model)
+      // Pass effort level as reasoning_effort config override
+      if (config.effort) {
+        args.push('--config', `model_reasoning_effort="${config.effort}"`)
+      }
       // Working directory
       args.push('-C', config.cwd)
       // Prompt is the final positional arg

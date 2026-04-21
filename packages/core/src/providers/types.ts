@@ -159,6 +159,25 @@ export interface AgentSpawnConfig {
    * When omitted, the provider resolves the model from environment variables or defaults.
    */
   model?: string
+  /**
+   * Normalized effort level for reasoning depth.
+   * Providers map this to their specific mechanism:
+   * - Claude: effort level string
+   * - Codex/OpenAI: reasoning_effort
+   * - Gemini: thinkingBudget
+   */
+  effort?: import('../config/profiles.js').EffortLevel
+  /**
+   * Provider-specific configuration from the matched profile block.
+   * Contains settings like { serviceTier: 'fast' } for OpenAI or
+   * { speed: 'fast' } for Anthropic.
+   */
+  providerConfig?: Record<string, unknown>
+  /**
+   * Provider name for sub-agents when different from the parent agent's provider.
+   * Used by coordination templates to instruct sub-agents.
+   */
+  subAgentProvider?: import('../providers/index.js').AgentProviderName
 }
 
 /**
