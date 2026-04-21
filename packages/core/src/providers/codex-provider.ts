@@ -527,6 +527,8 @@ export class CodexProvider implements AgentProvider {
 
     child.on('error', (err) => {
       console.error('[CodexProvider] Child process error:', err.message)
+      // Destroy stdout so the readline-based event stream terminates
+      child.stdout?.destroy()
     })
 
     return new CodexAgentHandle(child, abortController, resolveCodexModel(config))
@@ -594,6 +596,18 @@ class CodexAgentHandle implements AgentHandle {
     // Parse JSONL lines from stdout
     const rl = createInterface({ input: stdout })
     let hasResult = false
+
+    // Force-close readline when the process exits so `for await` terminates
+    // even if the child never wrote to stdout (e.g., invalid model, binary crash).
+    this.child.once('exit', () => {
+      rl.close()
+    })
+
+    // Also handle spawn errors (e.g., binary not found) — the 'error' handler
+    // in createExecHandle destroys stdout, but belt-and-suspenders here too.
+    this.child.once('error', () => {
+      rl.close()
+    })
 
     for await (const line of rl) {
       const trimmed = line.trim()
