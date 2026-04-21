@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.48
+
+### Features
+
+- **Profile-based config system** — Added provider/model/effort configuration bundles, allowing named profiles to set agent provider, model, and effort level in a single config switch.
+
 ## v0.8.47
 
 ### Fixes
