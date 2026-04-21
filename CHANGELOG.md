@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.47
+
+### Fixes
+
+- **Codex exec stdin hang** — Close stdin on codex exec spawn to prevent "Reading additional input" hang that blocked agent sessions.
+
+- **Codex exec early death detection** — Added early process death detection for codex exec provider, preventing silent failures when the process exits unexpectedly.
+
+- **Codex exec stream hang** — Prevent codex exec mode stream hang when process exits without producing stdout output.
+
+### Chores
+
+- Updated Turborepo configuration.
+
 ## v0.8.46
 
 ### Features
