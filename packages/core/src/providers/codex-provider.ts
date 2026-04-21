@@ -514,6 +514,10 @@ export class CodexProvider implements AgentProvider {
       stdio: ['pipe', 'pipe', 'pipe'],
     })
 
+    // Log the resolved command for operator diagnostics
+    const debugCmd = `${codexBin} ${args.join(' ')}`
+    console.error(`[CodexProvider] Spawning: ${debugCmd.substring(0, 200)}${debugCmd.length > 200 ? '...' : ''}`)
+
     config.onProcessSpawned?.(child.pid)
 
     // Wire up abort
@@ -592,6 +596,26 @@ class CodexAgentHandle implements AgentHandle {
     this.child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
     })
+
+    // Early death detection: if the process already exited before we start
+    // reading, it died immediately (e.g., invalid model name, missing binary).
+    // Give a brief moment for stderr to drain, then report the failure.
+    if (this.child.exitCode !== null) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      yield {
+        type: 'error',
+        message: `Codex process exited immediately (code ${this.child.exitCode}): ${stderr.trim() || 'no error output'}`,
+        raw: { exitCode: this.child.exitCode, stderr },
+      }
+      yield {
+        type: 'result',
+        success: false,
+        errors: [stderr.trim() || `Codex process exited immediately with code ${this.child.exitCode}`],
+        errorSubtype: 'spawn_failure',
+        raw: { exitCode: this.child.exitCode, stderr },
+      }
+      return
+    }
 
     // Parse JSONL lines from stdout
     const rl = createInterface({ input: stdout })

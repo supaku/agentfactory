@@ -1,11 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   mapCodexEvent,
   mapCodexItemEvent,
+  CodexProvider,
   type CodexEvent,
   type CodexItemEvent,
   type CodexEventMapperState,
 } from './codex-provider.js'
+import type { AgentSpawnConfig, AgentEvent } from './types.js'
 
 function freshState(): CodexEventMapperState {
   return {
@@ -459,6 +461,151 @@ describe('CodexProvider', () => {
     const { createCodexProvider } = await import('./codex-provider.js')
     const provider = createCodexProvider()
     expect(provider.name).toBe('codex')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Early process death detection tests
+// ---------------------------------------------------------------------------
+
+function makeSpawnConfig(overrides?: Partial<AgentSpawnConfig>): AgentSpawnConfig {
+  return {
+    prompt: 'test prompt',
+    cwd: '/tmp',
+    autonomous: true,
+    sandboxEnabled: false,
+    env: {},
+    abortController: new AbortController(),
+    ...overrides,
+  }
+}
+
+async function collectEvents(stream: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
+  const events: AgentEvent[] = []
+  for await (const event of stream) {
+    events.push(event)
+  }
+  return events
+}
+
+describe('Early process death detection', () => {
+  let stderrSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+  })
+
+  afterEach(() => {
+    stderrSpy.mockRestore()
+  })
+
+  it('detects immediate process exit and produces error + result events', async () => {
+    // Use a binary that will exit immediately with an error
+    const provider = new CodexProvider()
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: 'false' }, // 'false' exits with code 1 immediately
+    })
+
+    const handle = provider.spawn(config)
+    const events = await collectEvents(handle.stream)
+
+    // Should have at least an error event and a result event
+    const errorEvents = events.filter(e => e.type === 'error')
+    const resultEvents = events.filter(e => e.type === 'result')
+
+    expect(resultEvents.length).toBeGreaterThanOrEqual(1)
+    const result = resultEvents[resultEvents.length - 1]
+    expect(result.type).toBe('result')
+    expect((result as any).success).toBe(false)
+  })
+
+  it('includes stderr content in error message when process dies immediately', async () => {
+    // Use a shell command that writes to stderr then exits
+    const provider = new CodexProvider()
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: 'sh' },
+      // 'sh' with args ['exec', ...] will fail since 'exec' with those args is invalid
+    })
+
+    const handle = provider.spawn(config)
+    const events = await collectEvents(handle.stream)
+
+    const resultEvents = events.filter(e => e.type === 'result')
+    expect(resultEvents.length).toBeGreaterThanOrEqual(1)
+    const result = resultEvents[resultEvents.length - 1] as any
+    expect(result.success).toBe(false)
+    // The error should contain either stderr content or exit code info
+    expect(result.errors).toBeDefined()
+    expect(result.errors.length).toBeGreaterThan(0)
+    expect(result.errors[0].length).toBeGreaterThan(0)
+  })
+
+  it('logs the spawn command to stderr', async () => {
+    const provider = new CodexProvider()
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: 'false' },
+    })
+
+    // Capture console.error calls
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const handle = provider.spawn(config)
+    // Consume the stream so the process completes
+    await collectEvents(handle.stream)
+
+    // Verify the spawn command was logged
+    const spawnLogCall = consoleErrorSpy.mock.calls.find(
+      call => typeof call[0] === 'string' && call[0].includes('[CodexProvider] Spawning:')
+    )
+    expect(spawnLogCall).toBeDefined()
+    expect(spawnLogCall![0]).toContain('false')
+    expect(spawnLogCall![0]).toContain('exec')
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('truncates long spawn commands in the log', async () => {
+    const provider = new CodexProvider()
+    const longPrompt = 'x'.repeat(300)
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: 'false' },
+      prompt: longPrompt,
+    })
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const handle = provider.spawn(config)
+    await collectEvents(handle.stream)
+
+    const spawnLogCall = consoleErrorSpy.mock.calls.find(
+      call => typeof call[0] === 'string' && call[0].includes('[CodexProvider] Spawning:')
+    )
+    expect(spawnLogCall).toBeDefined()
+    // The log message should be truncated with '...'
+    expect(spawnLogCall![0]).toContain('...')
+    // Total logged command portion should not exceed ~200 chars + prefix
+    const cmdPortion = spawnLogCall![0].replace('[CodexProvider] Spawning: ', '')
+    expect(cmdPortion.length).toBeLessThanOrEqual(203) // 200 + '...'
+
+    consoleErrorSpy.mockRestore()
+  })
+
+  it('produces spawn_failure errorSubtype for immediate exit', async () => {
+    const provider = new CodexProvider()
+    const config = makeSpawnConfig({
+      // Use a command that does not exist to trigger spawn error
+      env: { CODEX_BIN: '/nonexistent/binary/path' },
+    })
+
+    const handle = provider.spawn(config)
+    const events = await collectEvents(handle.stream)
+
+    // Should get either a spawn_failure or process_exit error
+    const resultEvents = events.filter(e => e.type === 'result') as any[]
+    expect(resultEvents.length).toBeGreaterThanOrEqual(1)
+    const result = resultEvents[resultEvents.length - 1]
+    expect(result.success).toBe(false)
+    expect(['spawn_failure', 'process_exit']).toContain(result.errorSubtype)
   })
 })
 
