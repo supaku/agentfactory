@@ -24,6 +24,7 @@ function createMockStdin() {
   return {
     writable: true,
     write: vi.fn(),
+    end: vi.fn(),
   }
 }
 

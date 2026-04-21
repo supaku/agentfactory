@@ -271,6 +271,8 @@ export class ClaudeProvider implements AgentProvider {
         mcpServers,
         maxTurns: config.maxTurns,
         ...(config.model ? { model: config.model } : {}),
+        // Pass effort level to Claude SDK if configured (maps 1:1 to Claude's effort levels)
+        ...(config.effort ? { effort: config.effort } : {}),
         allowedTools: config.allowedTools ?? defaultAllowedTools,
         // Programmatic permission handler for autonomous agents.
         // Filesystem hooks may not resolve in worktrees — this callback
