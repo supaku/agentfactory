@@ -520,6 +520,11 @@ export class CodexProvider implements AgentProvider {
 
     config.onProcessSpawned?.(child.pid)
 
+    // Close stdin immediately — the prompt is passed as a positional arg.
+    // Codex CLI detects piped stdin and tries to read additional input from it.
+    // If we don't close it, the process hangs waiting for EOF on stdin.
+    child.stdin?.end()
+
     // Wire up abort
     const abortHandler = () => {
       child.kill('SIGTERM')
