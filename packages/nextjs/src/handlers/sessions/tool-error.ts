@@ -74,8 +74,9 @@ export function createSessionToolErrorHandler(config: RouteConfig) {
         )
       }
 
-      // Skip Linear forwarding for governor-generated fake session IDs.
-      if (sessionId.startsWith('governor-')) {
+      // Skip Linear forwarding when no real Linear session exists.
+      const linearSessionId = session.providerSessionId ?? sessionId
+      if (linearSessionId.startsWith('governor-')) {
         log.debug('Skipping Linear tool error report for governor-generated session', {
           sessionId,
           toolName,
@@ -92,7 +93,7 @@ export function createSessionToolErrorHandler(config: RouteConfig) {
         const agentSession = createAgentSession({
           client: linearClient.linearClient,
           issueId: session.issueId,
-          sessionId,
+          sessionId: linearSessionId,
           autoTransition: false,
         })
 

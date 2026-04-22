@@ -80,11 +80,13 @@ export function createSessionActivityHandler(config: RouteConfig) {
         contextValue: activity.contextValue,
       })
 
-      // Skip Linear forwarding for governor-generated fake session IDs.
-      // When the governor can't create a real agent session on Linear (e.g., OAuth
-      // token issue), it generates a local ID prefixed with "governor-". There's no
-      // corresponding session on Linear's side, so forwarding would always fail.
-      if (sessionId.startsWith('governor-')) {
+      // Resolve the Linear agent session ID. When the platform's workflow
+      // dispatch sets providerSessionId on the session state, use that as
+      // the authoritative Linear session ID. Fall back to the URL sessionId
+      // for direct webhook-dispatched sessions. Governor-generated sessions
+      // (prefixed "governor-") have no corresponding Linear session.
+      const linearSessionId = session.providerSessionId ?? sessionId
+      if (linearSessionId.startsWith('governor-')) {
         log.debug('Skipping Linear forwarding for governor-generated session', {
           sessionId,
           activityType: activity.type,
@@ -101,7 +103,7 @@ export function createSessionActivityHandler(config: RouteConfig) {
         const agentSession = createAgentSession({
           client: linearClient.linearClient,
           issueId: session.issueId,
-          sessionId,
+          sessionId: linearSessionId,
           autoTransition: false,
         })
 

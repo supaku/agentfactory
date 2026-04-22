@@ -58,8 +58,9 @@ export function createSessionExternalUrlsHandler(config: RouteConfig) {
         )
       }
 
-      // Skip Linear forwarding for governor-generated fake session IDs.
-      if (sessionId.startsWith('governor-')) {
+      // Skip Linear forwarding when no real Linear session exists.
+      const linearSessionId = session.providerSessionId ?? sessionId
+      if (linearSessionId.startsWith('governor-')) {
         log.debug('Skipping Linear external URLs update for governor-generated session', {
           sessionId,
         })
@@ -82,7 +83,7 @@ export function createSessionExternalUrlsHandler(config: RouteConfig) {
       const linearClient = await config.linearClient.getClient(effectiveWorkspaceId)
 
       await linearClient.updateAgentSession({
-        sessionId,
+        sessionId: linearSessionId,
         externalUrls,
       })
 

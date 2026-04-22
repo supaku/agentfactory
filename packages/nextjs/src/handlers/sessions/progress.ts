@@ -80,8 +80,12 @@ export function createSessionProgressHandler(config: RouteConfig) {
         timestamp: new Date().toISOString(),
       })
 
-      // Skip Linear forwarding for governor-generated fake session IDs.
-      if (sessionId.startsWith('governor-')) {
+      // Skip Linear forwarding when no real Linear session exists.
+      // Governor-generated sessions (prefixed "governor-") have no Linear
+      // counterpart. When providerSessionId is set (from platform workflow
+      // dispatch), it overrides the session key for this check.
+      const effectiveSessionId = session.providerSessionId ?? sessionId
+      if (effectiveSessionId.startsWith('governor-')) {
         log.debug('Skipping Linear progress post for governor-generated session', {
           sessionId,
           milestone,
