@@ -33,6 +33,44 @@ import {
 } from './completion-contracts.js'
 
 // ---------------------------------------------------------------------------
+// Build artifact exclusions for backstop auto-commit
+// ---------------------------------------------------------------------------
+
+/**
+ * Glob patterns for build artifacts that should never be committed by the
+ * backstop. These are `git reset HEAD -- <pattern>` arguments, applied
+ * after `git add -A` to unstage files that the repo's .gitignore may not
+ * cover (e.g., provider sandboxes creating caches in non-standard paths).
+ */
+const BACKSTOP_EXCLUDE_PATTERNS = [
+  // Go
+  '**/go-build/**',
+  '**/.gocache/**',
+  '**/gocache/**',
+  '**/__debug_bin*',
+  // Node / JS
+  '**/node_modules/**',
+  '**/.next/**',
+  '**/.nuxt/**',
+  '**/dist/**',
+  '**/.turbo/**',
+  // Python
+  '**/__pycache__/**',
+  '**/*.pyc',
+  '**/.venv/**',
+  // Rust
+  '**/target/debug/**',
+  '**/target/release/**',
+  // General
+  '**/.cache/**',
+  '**/*.tmp',
+  '**/*.log',
+]
+
+/** Maximum number of files the backstop will auto-commit. */
+const BACKSTOP_MAX_FILES = 200
+
+// ---------------------------------------------------------------------------
 // Session output collection
 // ---------------------------------------------------------------------------
 
@@ -497,12 +535,61 @@ function backstopCommitChanges(worktreePath: string, identifier: string, repoCon
       ?? getGitConfig('user.email', worktreePath)
       ?? 'agent@rensei.ai'
 
-    // Stage all changes and commit
+    // Stage all changes and commit.
+    // Use `git add -A` which respects .gitignore, then unstage any
+    // build artifacts that slipped through (provider sandboxes may
+    // create caches in paths the repo's .gitignore doesn't cover).
     execSync('git add -A', {
       cwd: worktreePath,
       encoding: 'utf-8',
       timeout: 30000,
     })
+
+    // Remove common build artifact patterns from the staging area.
+    // These are safe to unstage — if the agent genuinely modified them,
+    // they'll still be in the worktree for manual commit.
+    for (const pattern of BACKSTOP_EXCLUDE_PATTERNS) {
+      try {
+        execSync(`git reset HEAD -- ${pattern}`, {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 10000,
+          stdio: 'pipe',
+        })
+      } catch {
+        // Pattern didn't match — that's fine
+      }
+    }
+
+    // Safety cap: if staged file count is still very high, something
+    // unexpected was added (e.g., a cache directory not in our exclude
+    // list). Abort rather than creating a polluted PR.
+    const stagedFiles = execSync('git diff --cached --name-only', {
+      cwd: worktreePath,
+      encoding: 'utf-8',
+      timeout: 10000,
+    }).trim()
+    const stagedCount = stagedFiles ? stagedFiles.split('\n').length : 0
+
+    if (stagedCount > BACKSTOP_MAX_FILES) {
+      // Reset the index so we don't leave a dirty staging area
+      execSync('git reset HEAD', { cwd: worktreePath, encoding: 'utf-8', timeout: 10000 })
+      return {
+        field: 'commits_present',
+        action: `aborted — ${stagedCount} files staged exceeds safety cap (${BACKSTOP_MAX_FILES})`,
+        success: false,
+        detail: `Likely a build cache or node_modules was staged. Top paths:\n${stagedFiles.split('\n').slice(0, 10).join('\n')}`,
+      }
+    }
+
+    if (stagedCount === 0) {
+      return {
+        field: 'commits_present',
+        action: 'skipped — all changes were build artifacts (excluded)',
+        success: false,
+        detail: 'Worktree changes matched build artifact patterns only',
+      }
+    }
 
     execSync(
       `git commit -m "feat: ${identifier} (auto-committed by session backstop)"`,
@@ -520,7 +607,7 @@ function backstopCommitChanges(worktreePath: string, identifier: string, repoCon
       },
     )
 
-    const changedFiles = status.split('\n').length
+    const changedFiles = stagedCount
     return {
       field: 'commits_present',
       action: `auto-committed ${changedFiles} file(s)${hasConflicts ? ' (resolved conflicted index)' : ''}`,

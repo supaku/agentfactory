@@ -232,14 +232,20 @@ describe('runBackstop', () => {
       .mockReturnValueOnce('Test User\n' as any)     // git config user.name
       .mockReturnValueOnce('test@example.com\n' as any) // git config user.email
       .mockReturnValueOnce('' as any)                 // git add -A
-      .mockReturnValueOnce('' as any)                 // git commit
-      // --- backstopPushBranch ---
-      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
-      .mockReturnValueOnce('' as any)                 // git push
-      // --- backstopCreatePR ---
-      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
-      .mockReturnValueOnce('[]' as any)               // gh pr list
-      .mockReturnValueOnce('https://github.com/org/repo/pull/99\n' as any) // gh pr create
+      // git reset HEAD -- <pattern> calls (all throw = no matches, that's fine)
+      .mockImplementation((cmd: any, ...rest: any[]) => {
+        const cmdStr = typeof cmd === 'string' ? cmd : ''
+        if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
+        if (cmdStr === 'git diff --cached --name-only') return 'src/foo.ts\nsrc/bar.ts\n'
+        if (cmdStr.startsWith('git commit')) return ''
+        // backstopPushBranch
+        if (cmdStr === 'git branch --show-current') return 'SUP-123\n'
+        if (cmdStr.startsWith('git push')) return ''
+        // backstopCreatePR
+        if (cmdStr.startsWith('gh pr list')) return '[]'
+        if (cmdStr.startsWith('gh pr create')) return 'https://github.com/org/repo/pull/99\n'
+        return ''
+      })
 
     const ctx = createSessionContext({
       agent: createMockAgent({
@@ -252,7 +258,7 @@ describe('runBackstop', () => {
     const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
     expect(commitAction).toBeDefined()
     expect(commitAction!.success).toBe(true)
-    expect(commitAction!.action).toContain('auto-committed')
+    expect(commitAction!.action).toContain('auto-committed 2 file(s)')
 
     const pushAction = result.backstop.actions.find(a => a.field === 'branch_pushed')
     expect(pushAction).toBeDefined()
@@ -265,6 +271,44 @@ describe('runBackstop', () => {
     // Restore env vars
     if (origName !== undefined) process.env.GIT_AUTHOR_NAME = origName
     if (origEmail !== undefined) process.env.GIT_AUTHOR_EMAIL = origEmail
+  })
+
+  it('aborts auto-commit when staged file count exceeds safety cap', () => {
+    // Generate 300 fake file names to exceed the 200 cap
+    const manyFiles = Array.from({ length: 300 }, (_, i) => `gocache/file-${i}.o`).join('\n')
+
+    mockExecSync
+      // --- collectSessionOutputs ---
+      .mockReturnValueOnce('SUP-123\n' as any)     // hasCommits: git branch
+      .mockReturnValueOnce('0\n' as any)             // hasCommits: rev-list
+      .mockReturnValueOnce('SUP-123\n' as any)     // isBranchPushed: git branch
+      .mockReturnValueOnce('' as any)                 // isBranchPushed: ls-remote
+      // --- backstopCommitChanges ---
+      .mockReturnValueOnce(' M src/foo.ts\n' as any) // git status --porcelain (has changes)
+      .mockReturnValueOnce('' as any)                 // git add -A
+      // git reset HEAD -- <pattern> calls all throw (no matches)
+      .mockImplementation((cmd: any) => {
+        const cmdStr = typeof cmd === 'string' ? cmd : ''
+        if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
+        if (cmdStr === 'git diff --cached --name-only') return manyFiles
+        // Final git reset HEAD to clean staging
+        if (cmdStr === 'git reset HEAD') return ''
+        return ''
+      })
+
+    const ctx = createSessionContext({
+      agent: createMockAgent({
+        workType: 'development',
+        worktreePath: '/tmp/worktree',
+      }),
+    })
+    const result = runBackstop(ctx)
+
+    const commitAction = result.backstop.actions.find(a => a.field === 'commits_present')
+    expect(commitAction).toBeDefined()
+    expect(commitAction!.success).toBe(false)
+    expect(commitAction!.action).toContain('safety cap')
+    expect(commitAction!.detail).toContain('gocache/file-0.o')
   })
 
   it('does not auto-commit for non-code-producing work types', () => {
@@ -322,14 +366,18 @@ describe('runBackstop', () => {
       // --- backstopCommitChanges ---
       .mockReturnValueOnce(' M src/foo.ts\n' as any) // git status --porcelain
       .mockReturnValueOnce('' as any)                 // git add -A
-      .mockReturnValueOnce('' as any)                 // git commit
-      // --- backstopPushBranch ---
-      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
-      .mockReturnValueOnce('' as any)                 // git push
-      // --- backstopCreatePR ---
-      .mockReturnValueOnce('SUP-123\n' as any)     // git branch
-      .mockReturnValueOnce('[]' as any)               // gh pr list
-      .mockReturnValueOnce('https://github.com/org/repo/pull/99\n' as any) // gh pr create
+      // git reset HEAD -- <pattern> calls + diff + commit + push + PR
+      .mockImplementation((cmd: any, ...rest: any[]) => {
+        const cmdStr = typeof cmd === 'string' ? cmd : ''
+        if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
+        if (cmdStr === 'git diff --cached --name-only') return 'src/foo.ts\n'
+        if (cmdStr.startsWith('git commit')) return ''
+        if (cmdStr === 'git branch --show-current') return 'SUP-123\n'
+        if (cmdStr.startsWith('git push')) return ''
+        if (cmdStr.startsWith('gh pr list')) return '[]'
+        if (cmdStr.startsWith('gh pr create')) return 'https://github.com/org/repo/pull/99\n'
+        return ''
+      })
 
     const ctx = createSessionContext({
       agent: createMockAgent({
