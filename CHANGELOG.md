@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.49
+
+### Fixes
+
+- **Linear session forwarding** — Use `providerSessionId` for Linear forwarding when available, fixing session routing for proxied provider sessions.
+
 ## v0.8.48
 
 ### Features
