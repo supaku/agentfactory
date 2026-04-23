@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.52
+
+### Fixes
+
+- **Codex QA hardening** — Ship templates to Codex agents, fix duplicate and missing events in the event stream, and coalesce log output for cleaner session traces.
+
 ## v0.8.51
 
 ### Features
