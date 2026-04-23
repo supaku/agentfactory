@@ -73,7 +73,129 @@ Complete reference for all AgentFactory configuration options.
 
 The declarative config file controls repository-level settings. Place it at `.agentfactory/config.yaml` in your repo root.
 
-### `providers:` — Provider Selection
+### `profiles:` + `dispatch:` — Profile-Based Agent Configuration (preferred)
+
+A **profile** bundles provider + model + effort + provider-specific config + sub-agent overrides into a single named unit. The `dispatch:` section routes work types and projects to named profiles. This replaces the flat `providers:` + `models:` sections, which could not couple a provider with a specific model or reasoning effort per work type.
+
+```yaml
+profiles:
+  codex-dev:
+    provider: codex
+    model: gpt-5.4
+    effort: high
+    openai:
+      serviceTier: fast
+      reasoningSummary: concise
+    subAgent:
+      model: gpt-5.4-mini
+      effort: low
+
+  claude-coord:
+    provider: claude
+    model: claude-opus-4-7
+    effort: xhigh
+    anthropic:
+      contextWindow: 1000000
+    subAgent:
+      provider: claude
+      model: claude-sonnet-4-6
+      effort: medium
+
+  claude-qa:
+    provider: claude
+    model: claude-sonnet-4-6
+    effort: medium
+
+dispatch:
+  default: codex-dev                 # Profile used when no byWorkType / byProject match
+  byWorkType:
+    coordination: claude-coord       # Coordinators get Opus with 1M context
+    qa: claude-qa                    # QA uses Sonnet
+  byProject:
+    Backend: codex-dev               # All Backend work uses codex-dev
+```
+
+#### `profiles.<name>` fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provider` | string | Yes | `claude`, `codex`, `amp`, `spring-ai`, `a2a` |
+| `model` | string | No | Free-form model ID (e.g., `gpt-5.4`, `claude-opus-4-7`). Passed through to the provider SDK unvalidated. Omit to use provider default. |
+| `effort` | enum | No | Normalized reasoning effort: `low`, `medium`, `high`, `xhigh`. Mapped to provider-native params (see below). |
+| `subAgent` | object | No | Overrides for Task/coordinator sub-agents — `{ provider?, model?, effort? }`. Unset fields inherit from the parent profile. |
+| `openai` | map | No | Raw OpenAI/Codex options (e.g., `serviceTier`, `reasoningSummary`). Extracted when the resolved provider is `codex` or `spring-ai`. |
+| `anthropic` | map | No | Raw Anthropic options (e.g., `contextWindow`). Extracted for `claude` and `amp`. |
+| `codex` | map | No | Codex-specific options (e.g., `useAppServer`). |
+| `gemini` | map | No | Raw Google options (e.g., `thinkingBudget`, `temperature`). Extracted for `a2a`. |
+
+#### `dispatch:` fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `default` | string | Yes | Profile name used when nothing else matches. Must reference a key in `profiles`. |
+| `byWorkType` | map | No | Work-type → profile name. Keys: `development`, `qa`, `acceptance`, `research`, `backlog-creation`, `refinement`, `coordination`, etc. |
+| `byProject` | map | No | Linear project name → profile name. |
+
+Dispatch selection priority: **`byWorkType` > `byProject` > `default`**.
+
+#### Effort level mapping
+
+The normalized `effort` enum is translated to each provider's native parameter:
+
+| `effort` | Claude (`effort`) | Codex/OpenAI (`reasoningEffort`) | Gemini (`thinkingBudget` tokens) |
+|----------|-------------------|----------------------------------|----------------------------------|
+| `low` | `low` | `low` | 4,096 |
+| `medium` | `medium` | `medium` | 16,384 |
+| `high` | `high` | `high` | 32,768 |
+| `xhigh` | `xhigh` | `xhigh` | 65,536 |
+
+#### Provider-specific config selection
+
+The profile carries four optional raw-options blocks (`openai`, `anthropic`, `codex`, `gemini`). At spawn time, only the block that matches the resolved provider is forwarded to the provider as `providerConfig`:
+
+| Resolved provider | Block used |
+|-------------------|------------|
+| `codex` | `openai` |
+| `claude` | `anthropic` |
+| `amp` | `anthropic` |
+| `a2a` | `gemini` |
+| `spring-ai` | `openai` |
+
+This lets a single profile carry settings for multiple providers and lets label/env overrides swap the provider without losing the right options.
+
+#### Sub-agent resolution
+
+Sub-agent fields cascade (highest first):
+1. Platform dispatch sub-agent model (from `QueuedWork.subAgentModel`)
+2. Env `AGENT_SUB_MODEL`
+3. `profiles.<name>.subAgent.{provider,model,effort}`
+4. Inherited from the parent profile (provider/model/effort)
+
+#### Override cascade (within a resolved profile)
+
+After `dispatch` picks a profile, individual fields can still be overridden. Priority (highest wins):
+
+| Tier | Source | Overrides |
+|------|--------|-----------|
+| 1 | Platform dispatch model (`QueuedWork.model`) | `model` |
+| 2 | Issue label `model:<id>` / `provider:<name>` | `model`, `provider` |
+| 3 | Mention context (`use codex`, `@codex`, `provider:codex`) | `provider` |
+| 4 | Env `AGENT_PROVIDER_{WORKTYPE}` / `AGENT_MODEL_{WORKTYPE}` | `provider`, `model` |
+| 5 | Env `AGENT_PROVIDER_{PROJECT}` / `AGENT_MODEL_{PROJECT}` | `provider`, `model` |
+| 6 | Env `AGENT_PROVIDER` / `AGENT_MODEL` | `provider`, `model` |
+| 7 | Profile defaults | — |
+
+`effort` is not overridable via label/env — it is taken from the profile.
+
+#### Validation rules
+
+- `profiles` and `dispatch` must both be present or both absent. Using one without the other is a schema error.
+- Every name in `dispatch.default`, `dispatch.byWorkType.*`, and `dispatch.byProject.*` must exist as a key in `profiles`.
+- Legacy `providers:` and `models:` sections are **silently ignored** when `profiles` is present.
+
+### `providers:` / `models:` — Legacy Provider Selection
+
+> **Superseded by `profiles` + `dispatch`.** These sections still parse and work when `profiles` is not defined, but they can't couple a provider with a model or effort per work type. Prefer profiles for anything new.
 
 Route agents to different providers by work type or project:
 
@@ -88,7 +210,9 @@ providers:
     Social: spring-ai               # Use Spring AI for Social project
 ```
 
-Config-file provider settings integrate with the full [resolution cascade](#provider-resolution-cascade) — they sit between label/mention overrides and environment variable fallbacks.
+A parallel `models:` section with the same shape (`default`, `byWorkType`, `byProject`, plus `subAgent`) controls the model ID. When both `profiles` and `providers`/`models` are defined, the profile config wins and the legacy sections are ignored.
+
+Legacy config-file settings integrate with the full [resolution cascade](#provider-resolution-cascade) — they sit between label/mention overrides and environment variable fallbacks.
 
 ### `routing:` — MAB Intelligent Routing
 
@@ -313,7 +437,9 @@ Per-project values override the repo-wide defaults. String shorthand values are 
 
 ### Provider Resolution Cascade
 
-Provider is resolved per agent using a 10-tier cascade (async mode with MAB routing):
+When `profiles` + `dispatch` are configured (preferred), resolution runs in two phases — see the [profile override cascade](#override-cascade-within-a-resolved-profile) above.
+
+The cascade below applies only when `profiles` is **not** set and the legacy `providers:` / `models:` sections are in use (async mode with MAB routing):
 
 | Tier | Source | Description |
 |------|--------|-------------|
