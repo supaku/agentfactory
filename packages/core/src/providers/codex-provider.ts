@@ -3,18 +3,28 @@
  *
  * Unified Codex provider with two execution modes:
  *
- * 1. **App Server mode** (default when CODEX_USE_APP_SERVER=1):
+ * 1. **App Server mode** (default):
  *    Uses a long-lived `codex app-server` process communicating via JSON-RPC 2.0
- *    over stdio. Supports multiple concurrent threads on a single process.
+ *    over stdio. Supports multiple concurrent threads on a single process,
+ *    mid-session message injection, and in-process tool plugins.
  *
- * 2. **Exec fallback mode** (backward compatibility):
+ * 2. **Exec fallback mode** (opt-in, break-glass):
  *    Spawns the `codex` CLI as a child process and parses its JSONL event stream.
- *    Used for CI/CD or when app-server is unavailable.
+ *    Used for CI/CD environments, short-lived runs, or when app-server is
+ *    unavailable. Also used as an automatic fallback when the app-server
+ *    startup health probe fails.
  *
  * Mode selection:
- *   - CODEX_USE_APP_SERVER=1  → App Server mode (JSON-RPC 2.0)
- *   - CODEX_USE_APP_SERVER=0  → Exec fallback mode (CLI JSONL)
- *   - Not set                 → Exec fallback mode (default, backward compatible)
+ *   - Not set                 → App Server mode (DEFAULT since v0.9)
+ *   - CODEX_USE_APP_SERVER=1  → App Server mode (explicit)
+ *   - CODEX_USE_APP_SERVER=0  → Exec fallback mode (explicit opt-out)
+ *   - providerConfig.useAppServer=true/false → Per-profile override
+ *
+ * Automatic fallback: if App Server mode is selected but the `codex app-server`
+ * process fails to initialize within APP_SERVER_PROBE_TIMEOUT_MS, the spawn
+ * transparently falls back to exec mode and logs the failure. This keeps the
+ * fleet running even when a codex binary version ships a broken JSON-RPC
+ * handshake.
  *
  * Exec CLI invocation patterns:
  *   New session:  codex exec --json --full-auto -C <cwd> "<prompt>"
@@ -29,7 +39,7 @@
  *   error           → error
  */
 
-import { spawn, type ChildProcess } from 'child_process'
+import { spawn, execFileSync, type ChildProcess } from 'child_process'
 import { createInterface } from 'readline'
 import type {
   AgentProvider,
@@ -39,6 +49,14 @@ import type {
   AgentEvent,
 } from './types.js'
 import { CodexAppServerProvider, resolveCodexModel, calculateCostUsd } from './codex-app-server-provider.js'
+
+/**
+ * Timeout for the one-shot `codex app-server --help` binary probe used to
+ * decide whether app-server mode is viable. 3s is long enough for a cold
+ * binary start on overloaded CI, short enough that a hung probe doesn't
+ * delay agent spawn noticeably.
+ */
+const APP_SERVER_PROBE_TIMEOUT_MS = 3000
 
 // ---------------------------------------------------------------------------
 // Codex JSONL event types (subset we care about)
@@ -364,17 +382,22 @@ export function mapCodexItemEvent(event: CodexItemEvent): AgentEvent[] {
 /**
  * Check whether App Server mode is enabled.
  *
- * Returns true when CODEX_USE_APP_SERVER=1 (or 'true').
- * The env var can be set globally or per-spawn via config.env.
+ * App Server mode is ON by default. Callers explicitly opt out via:
+ *   - providerConfig.useAppServer === false   (per-profile)
+ *   - CODEX_USE_APP_SERVER=0 (or 'false')     (env var, global or per-spawn)
+ *
+ * Any other value, including an unset env var, keeps the default ON.
+ * Exported for testing.
  */
-function isAppServerEnabled(config?: AgentSpawnConfig): boolean {
-  // Check providerConfig.useAppServer from profile config first
+export function isAppServerEnabled(config?: AgentSpawnConfig): boolean {
+  // Per-profile providerConfig takes precedence
   if (config?.providerConfig?.useAppServer === true) return true
   if (config?.providerConfig?.useAppServer === false) return false
-  const envVal = config?.env?.CODEX_USE_APP_SERVER
+  const envVal = (config?.env?.CODEX_USE_APP_SERVER
     ?? process.env.CODEX_USE_APP_SERVER
-    ?? ''
-  return envVal === '1' || envVal.toLowerCase() === 'true'
+    ?? '').toLowerCase()
+  if (envVal === '0' || envVal === 'false') return false
+  return true
 }
 
 export class CodexProvider implements AgentProvider {
@@ -384,8 +407,27 @@ export class CodexProvider implements AgentProvider {
    * Dynamic capabilities that reflect the actual runtime mode.
    * App Server mode supports message injection and tool plugins;
    * exec fallback mode does not.
+   *
+   * When App Server mode is selected but the probe hasn't run yet, report
+   * app-server capabilities — the probe runs at first spawn, and the
+   * orchestrator reads capabilities before that. If the probe later fails,
+   * the actual spawn transparently falls back, but downstream features like
+   * tool plugin registration will have already been configured for the
+   * richer mode. This is a deliberate trade-off: over-report capabilities,
+   * fall back gracefully at spawn time.
    */
   get capabilities(): AgentProviderCapabilities {
+    // If probe has conclusively failed, report exec capabilities.
+    if (this.appServerViable === false) {
+      return {
+        supportsMessageInjection: false,
+        supportsSessionResume: true,
+        supportsToolPlugins: false,
+        needsBaseInstructions: false,
+        needsPermissionConfig: false,
+        supportsCodeIntelligenceEnforcement: false,
+      }
+    }
     if (this.appServerProvider || isAppServerEnabled()) {
       return {
         supportsMessageInjection: true,
@@ -410,18 +452,87 @@ export class CodexProvider implements AgentProvider {
   /** App Server delegate — created lazily when App Server mode is enabled */
   private appServerProvider: CodexAppServerProvider | null = null
 
+  /**
+   * Cached result of the app-server binary probe.
+   *   - undefined: probe hasn't run yet
+   *   - true: `codex app-server --help` succeeded, app-server mode is viable
+   *   - false: probe failed, always use exec fallback
+   */
+  private appServerViable: boolean | undefined = undefined
+
   spawn(config: AgentSpawnConfig): AgentHandle {
-    if (isAppServerEnabled(config)) {
+    if (this.shouldUseAppServer(config)) {
       return this.getAppServerProvider().spawn(config)
     }
     return this.createExecHandle(config)
   }
 
   resume(sessionId: string, config: AgentSpawnConfig): AgentHandle {
-    if (isAppServerEnabled(config)) {
+    if (this.shouldUseAppServer(config)) {
       return this.getAppServerProvider().resume(sessionId, config)
     }
     return this.createExecHandle(config, sessionId)
+  }
+
+  /**
+   * Decide whether to use app-server mode for this spawn.
+   *
+   * Composite logic:
+   *   1. If the user has explicitly opted out (env or providerConfig), use exec.
+   *   2. Otherwise, run the one-shot binary probe (if not already cached).
+   *      Probe success → app-server. Probe failure → exec fallback.
+   *
+   * The probe is deliberately cheap: `codex app-server --help` with a short
+   * timeout. Cached for the provider's lifetime so subsequent spawns skip it.
+   */
+  private shouldUseAppServer(config: AgentSpawnConfig): boolean {
+    if (!isAppServerEnabled(config)) return false
+
+    if (this.appServerViable === undefined) {
+      this.appServerViable = this.probeAppServerAvailable(config)
+      if (this.appServerViable) {
+        console.error('[CodexProvider] App server probe succeeded — using app-server mode')
+      } else {
+        console.error('[CodexProvider] App server probe failed — falling back to exec mode for all codex spawns in this orchestrator lifecycle')
+      }
+    }
+    return this.appServerViable
+  }
+
+  /**
+   * Probe whether the `codex` binary supports the `app-server` subcommand.
+   *
+   * This is a lightweight viability check — it does NOT perform the full
+   * JSON-RPC handshake. Handshake failures surface as stream errors during
+   * actual sessions, which the orchestrator logs. The probe protects against
+   * the common failure mode: an older or misconfigured codex binary that
+   * doesn't ship app-server at all.
+   *
+   * Exposed as a protected method so tests can override it.
+   */
+  protected probeAppServerAvailable(config: AgentSpawnConfig): boolean {
+    const codexBin = config.env?.CODEX_BIN || process.env.CODEX_BIN || 'codex'
+    try {
+      execFileSync(codexBin, ['app-server', '--help'], {
+        stdio: 'ignore',
+        timeout: APP_SERVER_PROBE_TIMEOUT_MS,
+        env: { ...process.env, ...config.env },
+      })
+      return true
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error(`[CodexProvider] App server probe error: ${detail}`)
+      return false
+    }
+  }
+
+  /**
+   * Reset the cached probe result so the next spawn re-probes.
+   * Useful for long-lived orchestrators that want to retry after a
+   * codex binary upgrade without restarting the process.
+   */
+  resetProbeCache(): void {
+    this.appServerViable = undefined
   }
 
   /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFailureContextBlock, defaultGeneratePrompt, type WorkflowContext } from './prompts.js'
+import { buildFailureContextBlock, defaultGeneratePrompt, PERSISTENCE_DIRECTIVES, type WorkflowContext } from './prompts.js'
 
 describe('buildFailureContextBlock', () => {
   const baseContext: WorkflowContext = {
@@ -295,5 +295,55 @@ describe('defaultGeneratePrompt coordination retry', () => {
     })
     expect(result).not.toContain('SUB-ISSUE STATUS MANAGEMENT')
     expect(result).not.toContain('COMPLETION VERIFICATION')
+  })
+})
+
+describe('defaultGeneratePrompt persistence directives (REN-74)', () => {
+  const persistenceSignatures = [
+    'PERSIST YOUR WORK',
+    'git add',
+    'git commit',
+    'git push',
+    'gh pr create',
+  ]
+
+  const codeProducingTypes = ['development', 'inflight', 'coordination', 'inflight-coordination'] as const
+
+  for (const workType of codeProducingTypes) {
+    it(`embeds commit/push/PR directives in ${workType} base prompt`, () => {
+      const result = defaultGeneratePrompt('PROJ-123', workType)
+      for (const signature of persistenceSignatures) {
+        expect(result, `${workType} prompt missing signature: ${signature}`).toContain(signature)
+      }
+    })
+  }
+
+  it('embeds directives in coordination rework mode', () => {
+    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
+      cycleCount: 1,
+      strategy: 'normal',
+      failureSummary: 'QA failed',
+    })
+    for (const signature of persistenceSignatures) {
+      expect(result).toContain(signature)
+    }
+  })
+
+  it('does NOT embed persistence directives in read-only work types', () => {
+    const readOnlyTypes = ['qa', 'acceptance', 'qa-coordination', 'acceptance-coordination', 'refinement', 'research', 'security'] as const
+    for (const workType of readOnlyTypes) {
+      const result = defaultGeneratePrompt('PROJ-123', workType)
+      expect(result, `${workType} should not include persistence directives`).not.toContain('PERSIST YOUR WORK')
+    }
+  })
+
+  it('does NOT embed persistence directives in backlog-creation', () => {
+    const result = defaultGeneratePrompt('PROJ-123', 'backlog-creation')
+    expect(result).not.toContain('PERSIST YOUR WORK')
+  })
+
+  it('exported PERSISTENCE_DIRECTIVES constant matches the embedded string', () => {
+    const devPrompt = defaultGeneratePrompt('PROJ-123', 'development')
+    expect(devPrompt).toContain(PERSISTENCE_DIRECTIVES.trim())
   })
 })

@@ -46,6 +46,30 @@ Issues may have multiple PRs. Select the correct one:
 6. If no PR found, emit WORK_RESULT:failed with explanation`
 
 /**
+ * Compressed commit/push/PR ladder.
+ *
+ * Belt-and-suspenders directive for code-producing work types. The full
+ * ladder lives in the `commit-push-pr` template partial; this inline
+ * version guarantees the mandatory persistence steps appear in the prompt
+ * even when a caller bypasses the template system entirely (e.g., the
+ * platform's pre-generated prompts prior to orchestrator template merge).
+ *
+ * Without this, Codex-class single-turn agents will implement + test, then
+ * exit without committing — forcing the session backstop to recover git
+ * state. The backstop is a failure-mode safety net, not the happy path.
+ */
+export const PERSISTENCE_DIRECTIVES = `
+
+MANDATORY — PERSIST YOUR WORK (non-negotiable):
+Your work is NOT done until a PR exists. Execute this ladder before exiting:
+  1. COMMIT: git add <files> && git commit -m "descriptive message"
+  2. PUSH:   git push -u origin $(git branch --show-current)
+  3. PR:     gh pr create --title "..." --body "..."
+If you skip any step, the session backstop will have to recover your work and
+the issue will be flagged as incomplete. Do NOT report completion until the
+PR URL appears in your output.`
+
+/**
  * Context from the workflow state machine for retry enrichment.
  * Injected when an issue has been through previous dev-QA-rejected cycles.
  */
@@ -154,13 +178,16 @@ When creating multiple issues, always add "related" links between them AND block
 Do NOT wait for user approval - create issues automatically.`
       break
     case 'development':
-      basePrompt = `Start work on ${identifier}. Implement the feature/fix as specified.`
+      basePrompt = `Start work on ${identifier}. Implement the feature/fix as specified.
+${PERSISTENCE_DIRECTIVES}`
       break
     case 'inflight':
-      basePrompt = `Continue work on ${identifier}. Resume where you left off.`
+      basePrompt = `Continue work on ${identifier}. Resume where you left off.
+${PERSISTENCE_DIRECTIVES}`
       break
     case 'inflight-coordination':
       basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}. Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.
+${PERSISTENCE_DIRECTIVES}
 ${WORK_RESULT_MARKER_INSTRUCTION}`
       break
     case 'qa':
@@ -217,6 +244,7 @@ COMMON REWORK FIXES:
 - Build failures: Run pnpm build, diagnose, fix
 
 If the existing PR branch is checked out, work directly on it. Do not create a new branch or PR.
+${PERSISTENCE_DIRECTIVES}
 ${WORK_RESULT_MARKER_INSTRUCTION}`
       } else {
         basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.
@@ -230,6 +258,7 @@ Update sub-issue statuses in Linear as work progresses:
 COMPLETION VERIFICATION:
 Before marking the parent issue as complete, verify ALL sub-issues are in Finished status.
 If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
+${PERSISTENCE_DIRECTIVES}
 ${WORK_RESULT_MARKER_INSTRUCTION}`
       }
       break

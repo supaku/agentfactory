@@ -59,6 +59,12 @@ let mockLineEmitter: EventEmitter
 
 vi.mock('child_process', () => ({
   spawn: vi.fn(() => mockProc),
+  // CodexProvider.probeAppServerAvailable() uses execFileSync to check
+  // whether the codex binary supports `app-server --help`. The integration
+  // test suite mocks the app-server process with mockProc, so we simulate a
+  // successful probe (returns empty stdout). Tests that need a failing probe
+  // can override via mockImplementation on the imported spy.
+  execFileSync: vi.fn(() => Buffer.from('')),
 }))
 
 vi.mock('readline', () => ({
@@ -974,7 +980,7 @@ describe('CodexAppServerProvider integration', () => {
       expect(handle).toBeDefined()
     })
 
-    it('CODEX_USE_APP_SERVER not set defaults to exec mode', async () => {
+    it('CODEX_USE_APP_SERVER not set defaults to app-server mode (since v0.9)', async () => {
       const { CodexProvider } = await import('./codex-provider.js')
       const provider = new CodexProvider()
 
@@ -986,8 +992,11 @@ describe('CodexAppServerProvider integration', () => {
         const config = makeConfig({ env: {} })
         const handle = provider.spawn(config)
 
+        // App-server is the default — provider should be instantiated
+        // once the health probe succeeds (mocked to succeed via execFileSync).
         const appServerProvider = (provider as any).appServerProvider
-        expect(appServerProvider).toBeNull()
+        expect(appServerProvider).toBeDefined()
+        expect(appServerProvider).toBeInstanceOf(CodexAppServerProvider)
 
         expect(handle).toBeDefined()
       } finally {

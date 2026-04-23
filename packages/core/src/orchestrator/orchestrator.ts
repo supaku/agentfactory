@@ -650,6 +650,28 @@ export function checkForPushedWorkWithoutPR(worktreePath: string): PushedWorkChe
  *   to include sub-issue context and holistic validation instructions.
  * @returns The appropriate prompt for the work type
  */
+/**
+ * Merge a caller-supplied `customPrompt` with any explicit `mentionContext`
+ * into a single string suitable for injection into the template registry's
+ * `mentionContext` slot.
+ *
+ * The orchestrator treats customPrompt as additional caller context rather
+ * than a full prompt override — the workflow template is the authoritative
+ * source for mandatory directives (commit/push/PR ladder, scope audit,
+ * path scoping, etc.), so customPrompt must never displace it.
+ *
+ * Returns `undefined` when neither input is a non-empty string, so the
+ * template's `{{#if mentionContext}}` guard stays clean.
+ */
+export function mergeMentionContext(
+  mentionContext: string | undefined,
+  customPrompt: string | undefined,
+): string | undefined {
+  const parts = [mentionContext, customPrompt]
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+  return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined
+}
+
 function generatePromptForWorkType(
   identifier: string,
   workType: AgentWorkType,
@@ -2993,12 +3015,24 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       log.info('Model resolved', { model: resolvedModel, source: providerSource, effort: resolvedEffort })
     }
 
-    // Generate prompt based on work type, or use custom prompt if provided
-    // Try template registry first, fall back to hardcoded prompts
+    // Generate prompt. Template registry is the authoritative source for
+    // workflow instructions (commit/push/PR ladder, scope audit, path scoping,
+    // etc.). When a caller supplies a `prompt` (customPrompt) via webhook,
+    // governor, or platform dispatch, treat it as caller-provided context and
+    // fold it into the template's `mentionContext` slot so the template's
+    // mandatory directives are never displaced.
+    //
+    // Rules:
+    //   1. Template exists → render it; customPrompt becomes mentionContext.
+    //   2. Template missing, customPrompt set → use customPrompt verbatim (legacy).
+    //   3. Template missing, no customPrompt → generatePromptForWorkType fallback.
     let prompt: string
-    if (customPrompt) {
-      prompt = customPrompt
-    } else if (this.templateRegistry?.hasTemplate(workType)) {
+    const hasTemplate = this.templateRegistry?.hasTemplate(workType) ?? false
+    // Merge customPrompt with any explicit mentionContext. See
+    // mergeMentionContext() for the merge semantics.
+    const mergedMentionContext = mergeMentionContext(mentionContext, customPrompt)
+
+    if (hasTemplate) {
       // Resolve per-project config overrides (falls back to repo-wide defaults)
       const perProject = projectName && this.repoConfig
         ? getProjectConfig(this.repoConfig, projectName)
@@ -3024,9 +3058,12 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         effort: resolvedEffort,
         subAgentEffort: resolvedSubAgentEffort,
         subAgentProvider: resolvedSubAgentProvider,
+        mentionContext: mergedMentionContext,
       }
-      const rendered = this.templateRegistry.renderPrompt(workType, context)
-      prompt = rendered ?? generatePromptForWorkType(identifier, workType)
+      const rendered = this.templateRegistry!.renderPrompt(workType, context)
+      prompt = rendered ?? customPrompt ?? generatePromptForWorkType(identifier, workType)
+    } else if (customPrompt) {
+      prompt = customPrompt
     } else {
       prompt = generatePromptForWorkType(identifier, workType)
     }

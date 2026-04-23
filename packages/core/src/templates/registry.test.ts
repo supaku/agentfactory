@@ -215,6 +215,28 @@ describe('TemplateRegistry', () => {
       const result = fullRegistry.renderPrompt('development', { identifier: 'SUP-1' })
       expect(result).not.toContain('Additional context')
     })
+
+    // REN-74: when the orchestrator merges a customPrompt into mentionContext,
+    // the rendered development prompt must contain BOTH the mandatory
+    // commit/push/PR ladder AND the caller-provided context. This asserts the
+    // template-merge path produces a prompt a Codex exec-mode agent can act on.
+    it('built-in development template renders commit/push/PR ladder alongside mentionContext', () => {
+      const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
+      const result = fullRegistry.renderPrompt('development', {
+        identifier: 'REN-74',
+        mentionContext: 'Start work on REN-74. Implement the feature/fix as specified.',
+        packageManager: 'pnpm',
+        linearCli: 'pnpm af-linear',
+      })
+      // Mandatory persistence ladder (from commit-push-pr partial)
+      expect(result).toContain('git commit')
+      expect(result).toContain('git push')
+      expect(result).toContain('gh pr create')
+      expect(result).toContain('VALIDATE THEN PERSIST YOUR WORK')
+      // Caller-provided context is preserved
+      expect(result).toContain('Start work on REN-74')
+      expect(result).toContain('Additional context')
+    })
   })
 
   describe('layer override', () => {

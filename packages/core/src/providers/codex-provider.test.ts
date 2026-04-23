@@ -465,6 +465,197 @@ describe('CodexProvider', () => {
 })
 
 // ---------------------------------------------------------------------------
+// App-server default + opt-out env var
+// ---------------------------------------------------------------------------
+
+describe('isAppServerEnabled (default-on since v0.9)', () => {
+  let originalEnv: string | undefined
+
+  beforeEach(() => {
+    originalEnv = process.env.CODEX_USE_APP_SERVER
+    delete process.env.CODEX_USE_APP_SERVER
+  })
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.CODEX_USE_APP_SERVER
+    } else {
+      process.env.CODEX_USE_APP_SERVER = originalEnv
+    }
+  })
+
+  it('returns true when env var is unset', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    expect(isAppServerEnabled()).toBe(true)
+  })
+
+  it('returns true when env var is "1"', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = '1'
+    expect(isAppServerEnabled()).toBe(true)
+  })
+
+  it('returns true when env var is "true"', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = 'true'
+    expect(isAppServerEnabled()).toBe(true)
+  })
+
+  it('returns false when env var is "0"', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = '0'
+    expect(isAppServerEnabled()).toBe(false)
+  })
+
+  it('returns false when env var is "false"', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = 'false'
+    expect(isAppServerEnabled()).toBe(false)
+  })
+
+  it('returns false when env var is "FALSE" (case-insensitive)', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = 'FALSE'
+    expect(isAppServerEnabled()).toBe(false)
+  })
+
+  it('config.providerConfig.useAppServer=true wins over env var "0"', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    process.env.CODEX_USE_APP_SERVER = '0'
+    const config = makeSpawnConfig({ providerConfig: { useAppServer: true } })
+    expect(isAppServerEnabled(config)).toBe(true)
+  })
+
+  it('config.providerConfig.useAppServer=false wins over default-on', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    const config = makeSpawnConfig({ providerConfig: { useAppServer: false } })
+    expect(isAppServerEnabled(config)).toBe(false)
+  })
+
+  it('config.env.CODEX_USE_APP_SERVER=0 overrides process.env default', async () => {
+    const { isAppServerEnabled } = await import('./codex-provider.js')
+    const config = makeSpawnConfig({ env: { CODEX_USE_APP_SERVER: '0' } })
+    expect(isAppServerEnabled(config)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Health probe and fallback-to-exec behavior
+// ---------------------------------------------------------------------------
+
+describe('CodexProvider app-server health probe + fallback', () => {
+  let originalEnv: string | undefined
+  let stderrSpy: { mockRestore: () => void }
+
+  beforeEach(() => {
+    originalEnv = process.env.CODEX_USE_APP_SERVER
+    delete process.env.CODEX_USE_APP_SERVER
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never)
+  })
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.CODEX_USE_APP_SERVER
+    } else {
+      process.env.CODEX_USE_APP_SERVER = originalEnv
+    }
+    stderrSpy.mockRestore()
+  })
+
+  /**
+   * Subclass that stubs out the binary probe so we can exercise the fallback
+   * logic without depending on a real `codex` binary.
+   */
+  async function makeProbedProvider(probeResult: boolean) {
+    const { CodexProvider } = await import('./codex-provider.js')
+    class ProbedCodexProvider extends CodexProvider {
+      public probeCallCount = 0
+      protected override probeAppServerAvailable(): boolean {
+        this.probeCallCount++
+        return probeResult
+      }
+    }
+    return new ProbedCodexProvider()
+  }
+
+  it('runs probe on first spawn and caches the result', async () => {
+    const provider = await makeProbedProvider(true)
+    expect(provider.probeCallCount).toBe(0)
+
+    const config = makeSpawnConfig({ env: { CODEX_BIN: 'false' } })
+    provider.spawn(config)
+    expect(provider.probeCallCount).toBe(1)
+
+    provider.spawn(config)
+    provider.spawn(config)
+    expect(provider.probeCallCount).toBe(1) // still cached
+  })
+
+  it('resetProbeCache() forces re-probe on next spawn', async () => {
+    const provider = await makeProbedProvider(true)
+    const config = makeSpawnConfig({ env: { CODEX_BIN: 'false' } })
+    provider.spawn(config)
+    expect(provider.probeCallCount).toBe(1)
+
+    provider.resetProbeCache()
+    provider.spawn(config)
+    expect(provider.probeCallCount).toBe(2)
+  })
+
+  it('falls back to exec when probe returns false', async () => {
+    const provider = await makeProbedProvider(false)
+    const config = makeSpawnConfig({ env: { CODEX_BIN: 'false' } })
+    const handle = provider.spawn(config)
+    // Exec-mode handle is a CodexAgentHandle — it has a sessionId field
+    // and its stream will surface the spawn failure of CODEX_BIN='false'.
+    expect(handle).toBeDefined()
+    expect(handle.sessionId).toBeNull()
+
+    // Consume the stream to confirm exec path ran. It should emit an error
+    // or result because 'false' exits code 1 immediately.
+    const events = await collectEvents(handle.stream)
+    const hasErrorOrFailedResult = events.some(
+      e => e.type === 'error' || (e.type === 'result' && !e.success)
+    )
+    expect(hasErrorOrFailedResult).toBe(true)
+  })
+
+  it('skips probe entirely when app-server is explicitly disabled', async () => {
+    const provider = await makeProbedProvider(true)
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: 'false', CODEX_USE_APP_SERVER: '0' },
+    })
+    provider.spawn(config)
+    // Probe should not run — opt-out skips it entirely
+    expect(provider.probeCallCount).toBe(0)
+  })
+
+  it('capabilities reports exec mode when probe has failed', async () => {
+    const provider = await makeProbedProvider(false)
+    const config = makeSpawnConfig({ env: { CODEX_BIN: 'false' } })
+    // Before probe runs, capabilities over-reports app-server features
+    expect(provider.capabilities.supportsMessageInjection).toBe(true)
+    // Trigger probe via spawn
+    provider.spawn(config)
+    // After probe fails, capabilities should degrade
+    expect(provider.capabilities.supportsMessageInjection).toBe(false)
+    expect(provider.capabilities.supportsToolPlugins).toBe(false)
+  })
+
+  it('real probeAppServerAvailable returns false for a non-existent binary', async () => {
+    const { CodexProvider } = await import('./codex-provider.js')
+    const provider = new CodexProvider()
+    const config = makeSpawnConfig({
+      env: { CODEX_BIN: '/nonexistent/codex-binary-xyz-123' },
+    })
+    // Exposed as protected — cast to access for test
+    const probeResult = (provider as unknown as { probeAppServerAvailable(c: AgentSpawnConfig): boolean })
+      .probeAppServerAvailable(config)
+    expect(probeResult).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Early process death detection tests
 // ---------------------------------------------------------------------------
 
