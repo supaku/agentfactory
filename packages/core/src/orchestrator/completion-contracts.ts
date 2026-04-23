@@ -21,14 +21,15 @@ import type { AgentWorkType } from './work-types.js'
 
 /** A field the agent session should produce */
 export type CompletionFieldType =
-  | 'pr_url'              // GitHub PR URL created for the work
-  | 'branch_pushed'       // Branch pushed to remote
-  | 'commits_present'     // At least one commit exists on the branch
-  | 'work_result'         // Structured pass/fail marker
-  | 'issue_updated'       // Issue description was modified
-  | 'comment_posted'      // At least one comment was posted to the issue
-  | 'sub_issues_created'  // Sub-issues were created (backlog/coordination)
-  | 'pr_merged'           // PR was merged to target branch
+  | 'pr_url'                  // GitHub PR URL created for the work
+  | 'branch_pushed'           // Branch pushed to remote
+  | 'commits_present'         // At least one commit exists on the branch
+  | 'work_result'             // Structured pass/fail marker
+  | 'issue_updated'           // Issue description was modified
+  | 'comment_posted'          // At least one comment was posted to the issue
+  | 'sub_issues_created'      // Sub-issues were created (backlog/coordination)
+  | 'pr_merged'               // PR was merged to target branch
+  | 'pr_merged_or_enqueued'   // PR was merged OR handed to the local merge queue
 
 /** A single required or optional field in a completion contract */
 export interface CompletionField {
@@ -86,6 +87,14 @@ export interface SessionOutputs {
   commentPosted?: boolean
   subIssuesCreated?: boolean
   prMerged?: boolean
+  /**
+   * True when the orchestrator's post-acceptance auto-enqueue succeeded, or
+   * when a prior handoff (e.g., approved-for-merge label consumed by the
+   * sidecar) has placed the PR in the local queue. Combined with prMerged
+   * by the `pr_merged_or_enqueued` field check — either signal is sufficient
+   * for acceptance completion.
+   */
+  prEnqueuedForMerge?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +164,16 @@ const FIELD = {
     label: 'Pull request merged',
     backstopCapable: false,
   },
+  prMergedOrEnqueued: {
+    type: 'pr_merged_or_enqueued' as const,
+    label: 'Pull request merged or enqueued for merge',
+    // Not backstop-capable: the orchestrator sets prEnqueuedForMerge
+    // synchronously when the auto-enqueue fires, and prMerged is set by
+    // the external merge path. If neither signal is present at
+    // session-end, the diagnostic comment path is the correct recovery —
+    // the backstop has no authority to decide whether a PR should merge.
+    backstopCapable: false,
+  },
 } satisfies Record<string, CompletionField>
 
 // ---------------------------------------------------------------------------
@@ -187,13 +206,18 @@ const CONTRACTS: Record<string, CompletionContract> = {
   },
   acceptance: {
     workType: 'acceptance',
-    required: [FIELD.workResult],
-    optional: [FIELD.prMerged],
+    // REN-1153: acceptance must produce BOTH a pass/fail decision AND a
+    // resolution for the PR (merged directly, or handed to the local merge
+    // queue). Prior contract only required workResult, so an agent could
+    // emit WORK_RESULT:passed, skip the merge, and the issue would auto-
+    // promote Delivered → Accepted leaving the PR open indefinitely.
+    required: [FIELD.workResult, FIELD.prMergedOrEnqueued],
+    optional: [],
   },
   'acceptance-coordination': {
     workType: 'acceptance-coordination',
-    required: [FIELD.workResult],
-    optional: [FIELD.prMerged],
+    required: [FIELD.workResult, FIELD.prMergedOrEnqueued],
+    optional: [],
   },
 
   // --- Coordination work types ---
@@ -307,6 +331,8 @@ function isFieldPresent(fieldType: CompletionFieldType, outputs: SessionOutputs)
       return !!outputs.subIssuesCreated
     case 'pr_merged':
       return !!outputs.prMerged
+    case 'pr_merged_or_enqueued':
+      return !!outputs.prMerged || !!outputs.prEnqueuedForMerge
     default:
       return false
   }

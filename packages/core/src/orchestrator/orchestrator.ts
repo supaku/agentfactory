@@ -3872,16 +3872,37 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
           log?.info('No auto-transition configured for work type', { workType })
         }
 
-        // Merge queue: enqueue PR after successful merge work
-        if (workType === 'merge' && this.mergeQueueAdapter && agent.pullRequestUrl) {
+        // Merge queue: enqueue PR after successful merge work, or after a
+        // passing acceptance when the local merge queue is configured. This
+        // is the REN-503 primary handoff path — acceptance validates the
+        // code, orchestrator hands the PR off to the queue, worker serializes
+        // the actual merge against the latest main. Without this wire, the
+        // queue feature is decorative (the trigger-merge dispatch that used
+        // to populate it was removed in v0.8.20 as a QA-bypass fix).
+        const isMergeWork = workType === 'merge'
+        const isAcceptancePass =
+          (workType === 'acceptance' || workType === 'acceptance-coordination') &&
+          agent.workResult === 'passed'
+        const shouldEnqueue =
+          (isMergeWork || isAcceptancePass) &&
+          this.mergeQueueAdapter &&
+          agent.pullRequestUrl
+        if (shouldEnqueue) {
           try {
-            const prMatch = agent.pullRequestUrl.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
+            const prMatch = agent.pullRequestUrl!.match(/\/([^/]+)\/([^/]+)\/pull\/(\d+)/)
             if (prMatch) {
               const [, owner, repo, prNum] = prMatch
-              const canEnqueue = await this.mergeQueueAdapter.canEnqueue(owner, repo, parseInt(prNum, 10))
+              const canEnqueue = await this.mergeQueueAdapter!.canEnqueue(owner, repo, parseInt(prNum, 10))
               if (canEnqueue) {
-                const status = await this.mergeQueueAdapter.enqueue(owner, repo, parseInt(prNum, 10))
-                log?.info('PR enqueued in merge queue', { owner, repo, prNumber: prNum, state: status.state })
+                const status = await this.mergeQueueAdapter!.enqueue(owner, repo, parseInt(prNum, 10))
+                log?.info('PR enqueued in merge queue', {
+                  owner, repo, prNumber: prNum, state: status.state,
+                  trigger: isMergeWork ? 'merge_work' : 'acceptance_pass',
+                })
+                // Feeds the acceptance completion contract's
+                // pr_merged_or_enqueued check so the backstop treats this
+                // as a successful handoff, not a missed merge.
+                agent.prEnqueuedForMerge = true
               } else {
                 log?.info('PR not eligible for merge queue', { owner, repo, prNumber: prNum })
               }

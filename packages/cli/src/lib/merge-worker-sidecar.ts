@@ -13,12 +13,14 @@
  * If Redis is not configured or merge queue is not enabled, this is a no-op.
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFile } from 'child_process'
+import { promisify } from 'util'
 import path from 'path'
 import fs from 'fs'
 import {
   loadRepositoryConfig,
   MergeWorker,
+  LocalMergeQueueAdapter,
   type MergeWorkerConfig,
   type MergeWorkerDeps,
 } from '@renseiai/agentfactory'
@@ -31,6 +33,17 @@ import {
   redisSet,
   redisExpire,
 } from '@renseiai/agentfactory-server'
+
+const execFileAsync = promisify(execFile)
+
+/** Label used to opt a PR into the local merge queue (REN-503 handoff signal). */
+export const APPROVED_FOR_MERGE_LABEL = 'approved-for-merge'
+
+/** `gh pr list` limit — plenty of headroom; real queues rarely exceed 10. */
+const LABEL_POLL_MAX_PRS = 50
+
+/** Timeout for the `gh pr list` call — stays within one poll interval. */
+const LABEL_POLL_TIMEOUT_MS = 15_000
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +87,101 @@ function getRepoId(gitRoot: string): string {
   } catch {
     return 'default'
   }
+}
+
+/**
+ * Split a `owner/repo` repoId into components. Returns null for unparseable
+ * values (e.g., the "default" fallback) so callers can skip label polling
+ * without crashing.
+ */
+export function splitRepoId(repoId: string): { owner: string; repo: string } | null {
+  const parts = repoId.split('/')
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null
+  return { owner: parts[0], repo: parts[1] }
+}
+
+/** Shape `gh pr list --json number` returns (we only use `number`). */
+interface LabeledPR {
+  number: number
+}
+
+/** Minimal adapter surface the label poller needs. Exported for testing. */
+export interface LabelPollerAdapter {
+  canEnqueue(owner: string, repo: string, prNumber: number): Promise<boolean>
+  enqueue(owner: string, repo: string, prNumber: number): Promise<unknown>
+}
+
+/**
+ * Poll GitHub for PRs carrying the `approved-for-merge` label and hand any
+ * that aren't already queued to the merge queue adapter. This is the
+ * secondary REN-503 handoff path — complements the orchestrator's
+ * synchronous enqueue on acceptance pass, covers human-initiated queueing
+ * (someone labels a PR by hand), and recovers from any missed acceptance
+ * event (agent crashed between pass and enqueue).
+ *
+ * Exported for testing. `gh` is invoked via execFile (no shell), with a
+ * dedicated timeout so a stalled call doesn't wedge the sidecar.
+ *
+ * Returns the number of PRs that were newly enqueued this pass (already-
+ * queued PRs are idempotently no-op and not counted).
+ */
+export async function pollApprovedForMergeLabel(
+  adapter: LabelPollerAdapter,
+  owner: string,
+  repo: string,
+  options: {
+    /** Injectable for testing — defaults to `gh pr list` via execFile. */
+    listLabeledPRs?: (owner: string, repo: string) => Promise<LabeledPR[]>
+    log?: (msg: string) => void
+  } = {},
+): Promise<number> {
+  const log = options.log ?? ((m: string) => console.log(`[merge-worker] ${m}`))
+  const list = options.listLabeledPRs ?? defaultListLabeledPRs
+
+  let prs: LabeledPR[]
+  try {
+    prs = await list(owner, repo)
+  } catch (error) {
+    log(`label poll failed: ${error instanceof Error ? error.message : String(error)}`)
+    return 0
+  }
+
+  if (prs.length === 0) return 0
+
+  let enqueued = 0
+  for (const pr of prs) {
+    try {
+      const canEnqueue = await adapter.canEnqueue(owner, repo, pr.number)
+      if (!canEnqueue) continue
+      // adapter.enqueue is idempotent: if already queued it returns the
+      // current status without double-inserting, so we don't need to
+      // pre-check `isEnqueued` — simpler and avoids a race between check
+      // and insert.
+      await adapter.enqueue(owner, repo, pr.number)
+      enqueued++
+      log(`enqueued labeled PR #${pr.number} (${owner}/${repo})`)
+    } catch (error) {
+      log(`failed to enqueue labeled PR #${pr.number}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return enqueued
+}
+
+async function defaultListLabeledPRs(owner: string, repo: string): Promise<LabeledPR[]> {
+  const { stdout } = await execFileAsync(
+    'gh',
+    [
+      'pr', 'list',
+      '--state', 'open',
+      '--label', APPROVED_FOR_MERGE_LABEL,
+      '--repo', `${owner}/${repo}`,
+      '--json', 'number',
+      '--limit', String(LABEL_POLL_MAX_PRS),
+    ],
+    { timeout: LABEL_POLL_TIMEOUT_MS },
+  )
+  const parsed = JSON.parse(stdout.trim() || '[]') as Array<{ number: number }>
+  return parsed.filter((p): p is LabeledPR => typeof p.number === 'number')
 }
 
 function ensureMergeWorktree(gitRoot: string): string {
@@ -212,8 +320,59 @@ export function startMergeWorkerSidecar(
     }
   })
 
+  // Label poller — REN-503 secondary handoff path. Polls GitHub for PRs
+  // carrying `approved-for-merge` and enqueues them via the local adapter.
+  // Complements the orchestrator's synchronous enqueue on acceptance pass:
+  //   - Recovers from missed acceptance events (agent crash, backstop gap)
+  //   - Enables human-initiated queueing (`gh pr edit N --add-label …`)
+  //   - No effect if repoId is unparseable (e.g., default-fallback string)
+  const adapter = new LocalMergeQueueAdapter(deps.storage as never)
+  const repoParts = splitRepoId(repoId)
+  const labelPollHandle = repoParts
+    ? startLabelPollLoop(adapter, repoParts.owner, repoParts.repo, workerConfig.pollInterval, signal)
+    : null
+
   return {
-    stop: () => worker.stop(),
+    stop: () => {
+      labelPollHandle?.stop()
+      worker.stop()
+    },
     done,
+  }
+}
+
+/**
+ * Start a setInterval loop that runs the label poller at the worker's
+ * pollInterval. Returns a handle that can be stopped. Errors in the poller
+ * are caught inside pollApprovedForMergeLabel — the loop itself never throws.
+ */
+function startLabelPollLoop(
+  adapter: LabelPollerAdapter,
+  owner: string,
+  repo: string,
+  pollIntervalMs: number,
+  signal?: AbortSignal,
+): { stop: () => void } {
+  let stopped = false
+  const run = async (): Promise<void> => {
+    if (stopped || signal?.aborted) return
+    await pollApprovedForMergeLabel(adapter, owner, repo)
+  }
+
+  // First tick immediately so a labeled PR isn't delayed by up to pollInterval
+  // on startup; then run on the configured cadence.
+  void run()
+  const timer = setInterval(() => void run(), pollIntervalMs)
+
+  signal?.addEventListener('abort', () => {
+    stopped = true
+    clearInterval(timer)
+  })
+
+  return {
+    stop: () => {
+      stopped = true
+      clearInterval(timer)
+    },
   }
 }

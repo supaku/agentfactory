@@ -172,6 +172,11 @@ export function collectSessionOutputs(ctx: SessionContext): SessionOutputs {
     commentPosted: ctx.commentPosted,
     issueUpdated: ctx.issueUpdated,
     subIssuesCreated: ctx.subIssuesCreated,
+    // Acceptance auto-enqueue signal (REN-1153). Either the direct merge
+    // (prMerged, populated below) or the enqueue handoff (set by the
+    // orchestrator when acceptance succeeds and mergeQueueAdapter exists)
+    // satisfies the tightened acceptance contract.
+    prEnqueuedForMerge: agent.prEnqueuedForMerge ?? false,
   }
 
   // Inspect git state for code-producing work types

@@ -26,7 +26,18 @@ describe('getCompletionContract', () => {
   it('returns a contract for acceptance work type', () => {
     const contract = getCompletionContract('acceptance')
     expect(contract).toBeDefined()
-    expect(contract!.required.map(f => f.type)).toContain('work_result')
+    const required = contract!.required.map(f => f.type)
+    expect(required).toContain('work_result')
+    // REN-1153: acceptance must also resolve the PR (merged directly, or
+    // handed to the local merge queue). Prior contract let WORK_RESULT:passed
+    // alone satisfy the gate, leaving PRs open indefinitely after Accepted.
+    expect(required).toContain('pr_merged_or_enqueued')
+  })
+
+  it('acceptance-coordination requires pr_merged_or_enqueued', () => {
+    const contract = getCompletionContract('acceptance-coordination')
+    expect(contract).toBeDefined()
+    expect(contract!.required.map(f => f.type)).toContain('pr_merged_or_enqueued')
   })
 
   it('returns a contract for refinement work type', () => {
@@ -219,5 +230,47 @@ describe('formatMissingFields', () => {
     const validation = validateCompletion(contract, {})
     const message = formatMissingFields(contract, validation)
     expect(message).toContain('requires manual action')
+  })
+})
+
+describe('acceptance pr_merged_or_enqueued field (REN-1153)', () => {
+  const contract = getCompletionContract('acceptance')!
+
+  it('workResult:passed alone is insufficient — PR must be merged OR enqueued', () => {
+    const validation = validateCompletion(contract, { workResult: 'passed' })
+    expect(validation.satisfied).toBe(false)
+    expect(validation.missingFields).toContain('pr_merged_or_enqueued')
+  })
+
+  it('workResult:passed + prMerged:true satisfies the contract', () => {
+    const validation = validateCompletion(contract, {
+      workResult: 'passed',
+      prMerged: true,
+    })
+    expect(validation.satisfied).toBe(true)
+  })
+
+  it('workResult:passed + prEnqueuedForMerge:true satisfies the contract', () => {
+    const validation = validateCompletion(contract, {
+      workResult: 'passed',
+      prEnqueuedForMerge: true,
+    })
+    expect(validation.satisfied).toBe(true)
+  })
+
+  it('workResult:failed alone is insufficient (still missing pr resolution)', () => {
+    const validation = validateCompletion(contract, { workResult: 'failed' })
+    // 'failed' counts as a decision for work_result, but pr_merged_or_enqueued
+    // is still missing. Policy: a failed acceptance should also resolve the
+    // PR (e.g., close it, or leave it open for refinement) — the caller must
+    // decide. The contract surfaces the gap.
+    expect(validation.satisfied).toBe(false)
+    expect(validation.missingFields).toContain('pr_merged_or_enqueued')
+  })
+
+  it('pr_merged_or_enqueued is not backstop-capable (requires caller signal)', () => {
+    const validation = validateCompletion(contract, { workResult: 'passed' })
+    expect(validation.backstopRecoverable).not.toContain('pr_merged_or_enqueued')
+    expect(validation.manualRequired).toContain('pr_merged_or_enqueued')
   })
 })
