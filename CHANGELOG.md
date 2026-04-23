@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.8.50
+
+### Features
+
+- **Steering-via-resume** — Orchestrator now attempts to steer agents via session resume before falling back to backstop auto-commit, giving agents a chance to self-correct missing outputs.
+
+### Fixes
+
+- **State recovery cross-issue guard** — `checkRecovery` now guards against cross-issue state contamination, preventing stale recovery data from one issue affecting another.
+
+- **Backstop artifact exclusion** — Backstop now uses path-based exclusion that correctly filters build artifacts and `.agent/` directories, and caps staged file count to prevent oversized auto-commits.
+
 ## v0.8.49
 
 ### Fixes
