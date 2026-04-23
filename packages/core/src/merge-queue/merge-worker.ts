@@ -16,6 +16,7 @@ import { LockFileRegeneration } from './lock-file-regeneration.js'
 import type { MergeContext } from './strategies/types.js'
 import type { ConflictResolverConfig } from './conflict-resolver.js'
 import type { PackageManager } from './lock-file-regeneration.js'
+import type { IssueTrackerClient } from '../orchestrator/issue-tracker-client.js'
 import {
   loadQualityRatchet,
   checkQualityRatchet,
@@ -48,6 +49,13 @@ export interface MergeWorkerConfig {
   packageManager: PackageManager
   remote: string // default 'origin'
   targetBranch: string // default 'main'
+  /**
+   * Status names the worker uses when bubbling merge results back to the
+   * issue tracker. Defaults match Linear conventions ('Accepted'/'Rejected')
+   * and only matter when `deps.issueTracker` is supplied.
+   */
+  acceptedStatus?: string
+  rejectedStatus?: string
 }
 
 export interface MergeWorkerDeps {
@@ -76,12 +84,81 @@ export interface MergeWorkerDeps {
       filePaths: string[],
     ): Promise<Array<{ filePath: string; heldBy: { sessionId: string } }>>
   }
+  /**
+   * Optional issue tracker. When supplied, merge results bubble back to the
+   * originating issue: success posts a comment + transitions to Accepted;
+   * conflict / test-failure / error posts a comment + transitions to
+   * Rejected (which triggers the existing refinement flow).
+   *
+   * When absent, the worker behaves as before — failure reasons land in
+   * Redis and a human running `af merge-queue status` is the only consumer.
+   * This keeps the worker usable in non-Linear contexts and makes tests
+   * trivial to set up.
+   */
+  issueTracker?: IssueTrackerClient
 }
 
 export interface MergeProcessResult {
   prNumber: number
   status: 'merged' | 'conflict' | 'test-failure' | 'error'
   message?: string
+}
+
+/**
+ * Build the Linear comment body for a merge result. Exported for testing.
+ */
+export function formatMergeResultComment(
+  kind: 'merged' | 'conflict' | 'test-failure' | 'error',
+  prUrl: string,
+  detail?: string,
+): string {
+  switch (kind) {
+    case 'merged':
+      return [
+        '## ✅ Merged by the merge queue',
+        '',
+        `${prUrl}`,
+        '',
+        detail ? `> ${detail}` : '',
+      ].filter(Boolean).join('\n')
+
+    case 'conflict':
+      return [
+        '## ⛔ Merge conflict — sending to refinement',
+        '',
+        `${prUrl}`,
+        '',
+        'The merge queue could not resolve conflicts automatically.',
+        detail ? `\n${codeBlock(detail)}` : '',
+      ].filter(Boolean).join('\n')
+
+    case 'test-failure':
+      return [
+        '## ❌ Tests failed during merge — sending to refinement',
+        '',
+        `${prUrl}`,
+        '',
+        'The merge queue rebased the branch onto latest main and re-ran the test suite. The tests failed against the rebased code, indicating a real conflict between this PR and changes already on main.',
+        detail ? `\n${codeBlock(detail)}` : '',
+      ].filter(Boolean).join('\n')
+
+    case 'error':
+      return [
+        '## ⚠️ Merge queue error — sending to refinement',
+        '',
+        `${prUrl}`,
+        '',
+        'An unexpected error occurred while processing this PR through the merge queue.',
+        detail ? `\n${codeBlock(detail)}` : '',
+      ].filter(Boolean).join('\n')
+  }
+}
+
+/** Wrap a string in a fenced code block, truncating very long output. */
+function codeBlock(s: string): string {
+  const MAX = 4000
+  const truncated = s.length > MAX ? s.slice(0, MAX) + '\n…(truncated)' : s
+  return '```\n' + truncated + '\n```'
 }
 
 // ---------------------------------------------------------------------------
@@ -135,13 +212,19 @@ export class MergeWorker {
         // Process the PR
         const result = await this.processEntry(entry)
 
-        // Handle result
+        // Handle result — Redis storage marking AND issue-tracker bubble-up.
+        // The two are independent: storage state is for the CLI; the bubble-up
+        // is the source of truth for downstream agents (refinement on Rejected,
+        // termination on Accepted). Either side failing must not block the
+        // queue from advancing.
         switch (result.status) {
           case 'merged':
             await this.deps.storage.markCompleted(this.config.repoId, result.prNumber)
+            await this.bubbleResultToIssue(entry, result, 'merged')
             break
           case 'conflict':
             await this.deps.storage.markBlocked(this.config.repoId, result.prNumber, result.message ?? 'Merge conflict')
+            await this.bubbleResultToIssue(entry, result, 'conflict')
             break
           case 'test-failure': {
             const action = this.config.escalation.onTestFailure
@@ -150,10 +233,14 @@ export class MergeWorker {
             } else {
               await this.deps.storage.markFailed(this.config.repoId, result.prNumber, result.message ?? 'Tests failed')
             }
+            // Park demotes the issue too — it's still a "merge didn't happen"
+            // signal to refinement, even if we may auto-retry later.
+            await this.bubbleResultToIssue(entry, result, 'test-failure')
             break
           }
           case 'error':
             await this.deps.storage.markFailed(this.config.repoId, result.prNumber, result.message ?? 'Unknown error')
+            await this.bubbleResultToIssue(entry, result, 'error')
             break
         }
       }
@@ -327,6 +414,74 @@ export class MergeWorker {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { prNumber: entry.prNumber, status: 'error', message }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Issue tracker bubble-up
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Bubble a merge result back to the originating issue: comment + status
+   * transition. Best-effort — never throws back to the queue loop. The
+   * status transition is the source of truth (comment is for humans).
+   *
+   * No-op when:
+   *   - deps.issueTracker is not configured (worker runs in
+   *     non-tracker contexts, e.g., OSS users without Linear)
+   *   - the queue entry has no usable issueIdentifier (anonymous PRs
+   *     enqueued via CLI rather than from an issue-driven flow)
+   *
+   * Status mapping:
+   *   - 'merged'        → acceptedStatus  (default 'Accepted')
+   *   - 'conflict'      → rejectedStatus  (default 'Rejected') — refinement picks up
+   *   - 'test-failure'  → rejectedStatus
+   *   - 'error'         → rejectedStatus
+   */
+  private async bubbleResultToIssue(
+    entry: { issueIdentifier?: string; prUrl?: string; prNumber: number },
+    result: MergeProcessResult,
+    kind: 'merged' | 'conflict' | 'test-failure' | 'error',
+  ): Promise<void> {
+    const tracker = this.deps.issueTracker
+    if (!tracker) return
+
+    // Skip anonymous queue entries — `PR-N` placeholder means we never
+    // resolved a real issue identifier at enqueue time. Logging the
+    // outcome to a fake ticket would be worse than silence.
+    const id = entry.issueIdentifier
+    if (!id || /^PR-\d+$/.test(id)) return
+
+    const acceptedStatus = this.config.acceptedStatus ?? 'Accepted'
+    const rejectedStatus = this.config.rejectedStatus ?? 'Rejected'
+    const targetStatus = kind === 'merged' ? acceptedStatus : rejectedStatus
+
+    const prUrl = entry.prUrl ?? `PR #${entry.prNumber}`
+    const body = formatMergeResultComment(kind, prUrl, result.message)
+
+    let issueId: string
+    try {
+      const issue = await tracker.getIssue(id)
+      issueId = issue.id
+    } catch (err) {
+      // Issue may have been archived or the tracker is unreachable.
+      // Don't crash the queue — log to stderr and move on.
+      console.error(`[merge-worker] Failed to resolve issue ${id} for bubble-up:`, err instanceof Error ? err.message : err)
+      return
+    }
+
+    // Comment first (best-effort), then status transition. Either failing
+    // is logged but not re-thrown — the queue must keep advancing.
+    try {
+      await tracker.createComment(issueId, body)
+    } catch (err) {
+      console.error(`[merge-worker] Failed to post merge-result comment to ${id}:`, err instanceof Error ? err.message : err)
+    }
+
+    try {
+      await tracker.updateIssueStatus(issueId, targetStatus)
+    } catch (err) {
+      console.error(`[merge-worker] Failed to transition ${id} → ${targetStatus}:`, err instanceof Error ? err.message : err)
     }
   }
 

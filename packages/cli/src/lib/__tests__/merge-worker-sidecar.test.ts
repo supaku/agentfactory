@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   pollApprovedForMergeLabel,
   splitRepoId,
+  resolveIssueTracker,
   APPROVED_FOR_MERGE_LABEL,
   type LabelPollerAdapter,
 } from '../merge-worker-sidecar.js'
@@ -149,5 +150,47 @@ describe('pollApprovedForMergeLabel', () => {
     // The template instructs agents to add this exact label. If we rename
     // the constant, acceptance-template renders must update in lockstep.
     expect(APPROVED_FOR_MERGE_LABEL).toBe('approved-for-merge')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveIssueTracker
+// ---------------------------------------------------------------------------
+
+describe('resolveIssueTracker', () => {
+  let originalEnv: string | undefined
+
+  beforeEach(() => {
+    originalEnv = process.env.LINEAR_API_KEY
+    delete process.env.LINEAR_API_KEY
+  })
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.LINEAR_API_KEY
+    else process.env.LINEAR_API_KEY = originalEnv
+  })
+
+  it('returns null when caller passes null (explicit opt-out)', () => {
+    process.env.LINEAR_API_KEY = 'lin_xxx' // even when env is set, null wins
+    expect(resolveIssueTracker(null)).toBeNull()
+  })
+
+  it('returns null when no LINEAR_API_KEY and no explicit instance', () => {
+    expect(resolveIssueTracker(undefined)).toBeNull()
+  })
+
+  it('returns the explicit instance when provided', () => {
+    const fake = { getIssue: () => Promise.resolve({} as never) } as never
+    expect(resolveIssueTracker(fake)).toBe(fake)
+  })
+
+  it('autodetects from LINEAR_API_KEY env when caller passes undefined', () => {
+    process.env.LINEAR_API_KEY = 'lin_xxx'
+    const tracker = resolveIssueTracker(undefined)
+    expect(tracker).not.toBeNull()
+    // Has the IssueTrackerClient surface
+    expect(typeof tracker?.getIssue).toBe('function')
+    expect(typeof tracker?.createComment).toBe('function')
+    expect(typeof tracker?.updateIssueStatus).toBe('function')
   })
 })

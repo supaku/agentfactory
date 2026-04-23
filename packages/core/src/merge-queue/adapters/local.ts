@@ -61,6 +61,25 @@ export interface LocalMergeQueueStorage {
   dequeueBatch(repoId: string, prNumbers: number[]): Promise<Array<{ prNumber: number }>>
 }
 
+/**
+ * Pull a Linear-style issue identifier (e.g. "REN-1153", "SUP-42") out of a
+ * branch name or PR title. Returns null if no match.
+ *
+ * Matches:
+ *   - "REN-1153" (bare branch)
+ *   - "REN-1153: short title" (PR title prefix)
+ *   - "feature/REN-1153-cedar-stuff" (branch with prefix)
+ *   - "ren-1153" (lowercase, normalized to upper)
+ *
+ * Exported for testing.
+ */
+export function extractIssueIdentifier(input: string): string | null {
+  if (!input) return null
+  // ALPHA-DIGITS pattern, anchored to word boundary so "v1.2.3-rc4" doesn't match
+  const m = input.match(/\b([A-Za-z]{2,10})-(\d+)\b/)
+  return m ? `${m[1].toUpperCase()}-${m[2]}` : null
+}
+
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
@@ -105,14 +124,16 @@ export class LocalMergeQueueAdapter implements MergeQueueAdapter {
     // Fetch PR details for the queue entry
     let sourceBranch = `pr-${prNumber}`
     let prUrl = `https://github.com/${owner}/${repo}/pull/${prNumber}`
+    let prTitle = ''
     try {
       const { stdout } = await execAsync(
-        `gh pr view ${prNumber} --repo ${owner}/${repo} --json headRefName,url`,
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json headRefName,url,title`,
         { timeout: GH_CLI_TIMEOUT },
       )
       const pr = JSON.parse(stdout)
       sourceBranch = pr.headRefName ?? sourceBranch
       prUrl = pr.url ?? prUrl
+      prTitle = typeof pr.title === 'string' ? pr.title : ''
     } catch {
       // Fall back to defaults
     }
@@ -121,7 +142,15 @@ export class LocalMergeQueueAdapter implements MergeQueueAdapter {
       repoId,
       prNumber,
       prUrl,
-      issueIdentifier: `PR-${prNumber}`,
+      // Resolve the originating issue identifier so the merge worker can
+      // bubble results back to the right ticket. Convention: agents create
+      // branches and PR titles prefixed with the issue identifier
+      // (e.g., branch "REN-1153", title "REN-1153: Cedar-Gated …").
+      // Falls back to PR-N when neither yields a parseable identifier.
+      issueIdentifier:
+        extractIssueIdentifier(sourceBranch) ??
+        extractIssueIdentifier(prTitle) ??
+        `PR-${prNumber}`,
       priority: 3, // Default priority; orchestrator can override
       sourceBranch,
       targetBranch: 'main',

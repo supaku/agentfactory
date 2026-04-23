@@ -673,6 +673,31 @@ export function mergeMentionContext(
 }
 
 /**
+ * Decide whether a passing acceptance session should DEFER its
+ * Delivered → Accepted promotion to the merge worker.
+ *
+ * Truth: an issue is "Accepted" once the merge has actually landed on
+ * main (PM-defined: live in production / shipped to users). When the
+ * local merge queue is wired, the worker drives the terminal transition
+ * after the merge is verified — so the orchestrator must not promote on
+ * acceptance-pass, or the issue would mark Accepted while the PR is
+ * still being processed (and could still fail).
+ *
+ * Returns false when:
+ *   - no merge queue adapter is configured (acceptance merges directly)
+ *   - work type is not acceptance / acceptance-coordination
+ *
+ * Exported for testing.
+ */
+export function shouldDeferAcceptanceTransition(
+  workType: AgentWorkType,
+  hasMergeQueueAdapter: boolean,
+): boolean {
+  if (!hasMergeQueueAdapter) return false
+  return workType === 'acceptance' || workType === 'acceptance-coordination'
+}
+
+/**
  * Pull the actual shell command string out of a tool_use input shape.
  * Codex emits `{ command: string }`, but different providers may wrap it
  * differently (e.g., `{ cmd: [...] }`). Returns undefined when the shape
@@ -3769,8 +3794,25 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
             agent.workResult = workResult
 
             if (workResult === 'passed') {
-              targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
-              log?.info('Work result: passed, promoting', { workType, targetStatus })
+              // REN-503/REN-1153: when the local merge queue is enabled,
+              // a passing acceptance only signals "the code is ready to
+              // ship". The actual transition to Accepted is driven by the
+              // merge worker once the PR lands on main — that's what makes
+              // Accepted mean "live in production" rather than "the agent
+              // says we're done." On merge failure (conflict / test-fail /
+              // error) the worker demotes to Rejected and refinement picks
+              // it up. The orchestrator's only job here is to enqueue, which
+              // happens unconditionally a few lines below.
+              const deferredToMergeQueue = shouldDeferAcceptanceTransition(workType, !!this.mergeQueueAdapter)
+              if (deferredToMergeQueue) {
+                log?.info('Acceptance passed — deferring status transition to merge worker', {
+                  workType,
+                  rationale: 'mergeQueueEnabled',
+                })
+              } else {
+                targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
+                log?.info('Work result: passed, promoting', { workType, targetStatus })
+              }
             } else if (workResult === 'failed') {
               targetStatus = this.statusMappings.workTypeFailStatus[workType]
               log?.info('Work result: failed, transitioning to fail status', { workType, targetStatus })

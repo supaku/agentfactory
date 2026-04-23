@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeMentionContext } from './orchestrator.js'
+import { mergeMentionContext, shouldDeferAcceptanceTransition } from './orchestrator.js'
 
 describe('mergeMentionContext', () => {
   it('returns undefined when both inputs are empty', () => {
@@ -26,5 +26,27 @@ describe('mergeMentionContext', () => {
     expect(mergeMentionContext(123, undefined)).toBeUndefined()
     // @ts-expect-error — runtime defensiveness check
     expect(mergeMentionContext(null, 'prompt')).toBe('prompt')
+  })
+})
+
+describe('shouldDeferAcceptanceTransition', () => {
+  it('returns true for acceptance with merge queue', () => {
+    expect(shouldDeferAcceptanceTransition('acceptance', true)).toBe(true)
+  })
+
+  it('returns true for acceptance-coordination with merge queue', () => {
+    expect(shouldDeferAcceptanceTransition('acceptance-coordination', true)).toBe(true)
+  })
+
+  it('returns false when merge queue is not configured (acceptance merges directly)', () => {
+    expect(shouldDeferAcceptanceTransition('acceptance', false)).toBe(false)
+    expect(shouldDeferAcceptanceTransition('acceptance-coordination', false)).toBe(false)
+  })
+
+  it('returns false for non-acceptance work types regardless of merge queue', () => {
+    expect(shouldDeferAcceptanceTransition('qa', true)).toBe(false)
+    expect(shouldDeferAcceptanceTransition('development', true)).toBe(false)
+    expect(shouldDeferAcceptanceTransition('coordination', true)).toBe(false)
+    expect(shouldDeferAcceptanceTransition('merge', true)).toBe(false)
   })
 })

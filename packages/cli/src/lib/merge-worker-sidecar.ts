@@ -23,6 +23,7 @@ import {
   LocalMergeQueueAdapter,
   type MergeWorkerConfig,
   type MergeWorkerDeps,
+  type IssueTrackerClient,
 } from '@renseiai/agentfactory'
 import {
   MergeQueueStorage,
@@ -33,6 +34,7 @@ import {
   redisSet,
   redisExpire,
 } from '@renseiai/agentfactory-server'
+import { LinearIssueTrackerClient } from '@renseiai/plugin-linear'
 
 const execFileAsync = promisify(execFile)
 
@@ -54,6 +56,13 @@ export interface MergeWorkerSidecarConfig {
   gitRoot?: string
   /** Override repoId (default: derived from git remote) */
   repoId?: string
+  /**
+   * Issue tracker for bubbling merge results back to the originating issue.
+   * When omitted, the sidecar attempts to construct a Linear client from
+   * LINEAR_API_KEY env var. Pass `null` explicitly to disable bubble-up
+   * even when the env var is set (e.g., for local dev runs).
+   */
+  issueTracker?: IssueTrackerClient | null
 }
 
 export interface MergeWorkerSidecarHandle {
@@ -98,6 +107,24 @@ export function splitRepoId(repoId: string): { owner: string; repo: string } | n
   const parts = repoId.split('/')
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null
   return { owner: parts[0], repo: parts[1] }
+}
+
+/**
+ * Resolve which issue tracker the worker should use:
+ *   - explicit `null` → opt-out (no bubble-up)
+ *   - explicit instance → use it
+ *   - omitted (undefined) → autodetect from LINEAR_API_KEY env var
+ *
+ * Exported for testing.
+ */
+export function resolveIssueTracker(
+  fromConfig: IssueTrackerClient | null | undefined,
+): IssueTrackerClient | null {
+  if (fromConfig === null) return null
+  if (fromConfig) return fromConfig
+  const apiKey = process.env.LINEAR_API_KEY
+  if (!apiKey) return null
+  return new LinearIssueTrackerClient({ apiKey })
 }
 
 /** Shape `gh pr list --json number` returns (we only use `number`). */
@@ -284,6 +311,12 @@ export function startMergeWorkerSidecar(
     targetBranch: 'main',
   }
 
+  // Resolve the issue tracker for merge-result bubble-up. Caller can pass
+  // an instance, opt out with `null`, or rely on LINEAR_API_KEY autodetect.
+  // Without a tracker the worker still functions — failures land in Redis
+  // and the CLI can read them, but the originating issue won't auto-demote.
+  const issueTracker = resolveIssueTracker(config.issueTracker)
+
   // Wire Redis deps for the merge worker
   const storage = new MergeQueueStorage()
   const deps: MergeWorkerDeps = {
@@ -305,11 +338,17 @@ export function startMergeWorkerSidecar(
       set: (key, value) => redisSet(key, value).then(() => undefined),
       expire: (key, seconds) => redisExpire(key, seconds).then(() => undefined),
     },
+    ...(issueTracker ? { issueTracker } : {}),
   }
 
   const worker = new MergeWorker(workerConfig, deps)
 
   console.log(`[merge-worker] Starting merge worker sidecar (repo: ${repoId}, worktree: ${worktreePath})`)
+  if (issueTracker) {
+    console.log('[merge-worker] Issue tracker enabled — merge results will bubble back to issues (success → Accepted, failure → Rejected)')
+  } else {
+    console.log('[merge-worker] No issue tracker configured — merge failures will land in Redis only (set LINEAR_API_KEY to enable bubble-up)')
+  }
 
   const done = worker.start(signal).catch((error) => {
     // Lock acquisition failure is expected if another worker is already running
