@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.51
+
+### Features
+
+- **Production-ready Codex support** — Template merge for Codex provider, persistence directives, and app-server as default mode. Codex agents now receive properly merged workflow templates with tool permissions and partials.
+
 ## v0.8.50
 
 ### Features
