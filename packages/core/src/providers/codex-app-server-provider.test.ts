@@ -226,6 +226,52 @@ describe('mapAppServerNotification', () => {
     expect(state.totalCachedInputTokens).toBe(20)
   })
 
+  it('accepts camelCase usage shape (newer codex schema)', () => {
+    const state = freshState()
+    state.turnCount = 1
+    state.model = 'gpt-5-codex'
+
+    // Codex v0.117+ shifted usage fields from snake_case to camelCase.
+    // extractUsageTokens must accept both so cost accounting survives.
+    const notification: JsonRpcNotification = {
+      method: 'turn/completed',
+      params: {
+        turn: {
+          id: 'turn_1',
+          status: 'completed',
+          usage: { inputTokens: 100, outputTokens: 50, cachedInputTokens: 20 },
+        } as unknown as Record<string, unknown>,
+      },
+    }
+    const result = mapAppServerNotification(notification, state)
+
+    expect(result[0]).toMatchObject({
+      type: 'result',
+      cost: {
+        inputTokens: 100,
+        outputTokens: 50,
+        cachedInputTokens: 20,
+      },
+    })
+    expect((result[0] as { cost: { totalCostUsd: number } }).cost.totalCostUsd).toBeGreaterThan(0)
+  })
+
+  it('falls through when usage is entirely absent (no throw)', () => {
+    const state = freshState()
+    state.turnCount = 1
+    state.model = 'gpt-5-codex'
+
+    const notification: JsonRpcNotification = {
+      method: 'turn/completed',
+      params: { turn: { id: 'turn_1', status: 'completed' } },
+    }
+    const result = mapAppServerNotification(notification, state)
+
+    expect(result[0]).toMatchObject({ type: 'result', success: true })
+    // Zero tokens → zero cost (not undefined). State is still clean.
+    expect(state.totalInputTokens).toBe(0)
+  })
+
   it('accumulates usage across multiple turns', () => {
     const state = freshState()
     state.turnCount = 2

@@ -672,6 +672,61 @@ export function mergeMentionContext(
   return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined
 }
 
+/**
+ * Pull the actual shell command string out of a tool_use input shape.
+ * Codex emits `{ command: string }`, but different providers may wrap it
+ * differently (e.g., `{ cmd: [...] }`). Returns undefined when the shape
+ * doesn't contain a parseable command.
+ *
+ * Exported for testing.
+ */
+export function extractShellCommand(input: unknown): string | undefined {
+  if (typeof input === 'string') return input
+  if (input && typeof input === 'object') {
+    const obj = input as Record<string, unknown>
+    if (typeof obj.command === 'string') return obj.command
+    if (Array.isArray(obj.command)) {
+      return obj.command.filter((p): p is string => typeof p === 'string').join(' ')
+    }
+    if (typeof obj.cmd === 'string') return obj.cmd
+  }
+  return undefined
+}
+
+/**
+ * Pattern matcher for "legacy grep/glob" shell commands. Used by the code
+ * intelligence adoption counter so shell-based search (rg, grep, find, sed -n
+ * for reading files, ls recursively) is attributed the same way Claude's
+ * native Grep/Glob tools are.
+ *
+ * Matches the first non-wrapper word in the command (skipping /bin/zsh -lc,
+ * env prefixes, set -e chains). Exported for testing.
+ */
+export function isGrepGlobShellCommand(command: string): boolean {
+  // Strip leading shell wrapper patterns so we match the *real* command.
+  //   /bin/zsh -lc '...', bash -c "...", sh -c '...'
+  const stripped = command.replace(
+    /^\s*(?:\/[^\s]+\/)?(?:ba|z)?sh\s+-(?:l?c|c)\s+['"]?/i,
+    '',
+  )
+  // Look for the first executable token on any line / subcommand.
+  const firstTokens = stripped
+    .split(/[;&|]|\n/)
+    .map(s => s.trim().split(/\s+/)[0])
+    .filter(Boolean)
+
+  const LEGACY_SEARCH_COMMANDS = new Set([
+    'rg', 'ripgrep',
+    'grep', 'egrep', 'fgrep',
+    'find', 'fd',
+    'ack',
+    'ag',
+    'sed', // typically used as `sed -n 'Xp' file` for paging reads
+  ])
+
+  return firstTokens.some(tok => LEGACY_SEARCH_COMMANDS.has(tok))
+}
+
 function generatePromptForWorkType(
   identifier: string,
   workType: AgentWorkType,
@@ -2204,14 +2259,42 @@ export class AgentOrchestrator {
 
     // Delete the branch for non-code-producing work types to prevent stale branches
     // from polluting the namespace and being accidentally reused by future work types.
+    //
+    // Safety: skip deletion if the branch has a remote upstream — that means it
+    // carries development work (from a prior code-producing session) that QA /
+    // acceptance / refinement are validating. Deleting the local ref doesn't
+    // lose data (remote stays), but forces future agents to re-fetch and
+    // breaks the invariant that "branch X exists locally" maps to "there's
+    // ongoing work on X." The original stale-branch-cleanup intent was for
+    // ephemeral branches created during exploratory work types that never
+    // push — those have no upstream and are still cleaned up here.
     if (deleteBranchName) {
       try {
-        execSync(`git branch -D ${deleteBranchName}`, {
-          stdio: 'pipe',
-          encoding: 'utf-8',
-          cwd: this.gitRoot,
-        })
-        console.log(`Deleted branch ${deleteBranchName} (non-code-producing work type)`)
+        // A non-zero exit from `git rev-parse --abbrev-ref X@{upstream}` means
+        // no upstream is set — safe to delete. A zero exit means upstream exists
+        // — preserve the branch.
+        let hasUpstream = false
+        try {
+          execSync(`git rev-parse --abbrev-ref ${deleteBranchName}@{upstream}`, {
+            stdio: 'pipe',
+            encoding: 'utf-8',
+            cwd: this.gitRoot,
+          })
+          hasUpstream = true
+        } catch {
+          hasUpstream = false
+        }
+
+        if (hasUpstream) {
+          console.log(`Preserved branch ${deleteBranchName} (has remote upstream — dev work may still be in progress)`)
+        } else {
+          execSync(`git branch -D ${deleteBranchName}`, {
+            stdio: 'pipe',
+            encoding: 'utf-8',
+            cwd: this.gitRoot,
+          })
+          console.log(`Deleted branch ${deleteBranchName} (non-code-producing work type, no upstream)`)
+        }
       } catch {
         // Branch may not exist (detached HEAD) or may be in use by another worktree — ignore
       }
@@ -3413,10 +3496,21 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
             assistantTextChunks.push(inputStr)
           }
         }
-        // Track code intelligence vs legacy search tool usage
+        // Track code intelligence vs legacy search tool usage.
+        // Two shapes: Claude native tools ("Grep" / "Glob") and provider shell
+        // commands (Codex "shell" with input.command containing rg/grep/find/sed).
+        // Without the shell-command classification, Codex sessions always
+        // reported grepGlobCalls=0 even when the agent grepped heavily.
         if (event.type === 'tool_use') {
           if (event.toolName.includes('af_code_')) codeIntelToolCalls++
-          if (event.toolName === 'Grep' || event.toolName === 'Glob') grepGlobToolCalls++
+          if (event.toolName === 'Grep' || event.toolName === 'Glob') {
+            grepGlobToolCalls++
+          } else if (event.toolName === 'shell' && event.input) {
+            const cmd = extractShellCommand(event.input)
+            if (cmd && isGrepGlobShellCommand(cmd)) {
+              grepGlobToolCalls++
+            }
+          }
         }
         await this.handleAgentEvent(issueId, sessionId, event, emitter, agent, handle)
       }

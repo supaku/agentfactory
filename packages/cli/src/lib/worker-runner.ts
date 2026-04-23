@@ -896,8 +896,17 @@ export async function runWorker(
         status: spawnedAgent.status,
       })
 
+      // Historical warning: "Agent has no PID — spawn may have failed" used to
+      // fire here when pid was missing. That check was correct for exec-mode
+      // providers (Claude, Codex exec) where spawn starts a subprocess and
+      // its PID is known synchronously. It false-positives for multiplexed
+      // providers (Codex app-server) where a single shared process serves
+      // many agent handles and the PID is only plumbed in after the first
+      // event stream iteration. The actual spawn-failed case throws above
+      // (MAX_SPAWN_RETRIES loop), so reaching this point with spawnedAgent
+      // set already means spawn succeeded — log at debug instead of warn.
       if (!spawnedAgent.pid) {
-        agentLog.warn('Agent has no PID - spawn may have failed')
+        agentLog.debug('Agent pid not yet available (likely multiplexed provider — pid will appear after first stream iteration)')
       }
 
       // Start a stop signal checker (also detects ownership loss)

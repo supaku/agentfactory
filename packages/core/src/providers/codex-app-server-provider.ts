@@ -121,15 +121,48 @@ interface AppServerItem {
 interface AppServerTurn {
   id: string
   status?: string
+  /**
+   * Usage tokens. Codex has historically used snake_case (`input_tokens`) but
+   * newer app-server builds have shifted toward camelCase (`inputTokens`).
+   * Both forms are accepted — see extractUsageTokens() for the normalization.
+   */
   usage?: {
     input_tokens?: number
     output_tokens?: number
     cached_input_tokens?: number
+    inputTokens?: number
+    outputTokens?: number
+    cachedInputTokens?: number
   }
   error?: {
     message?: string
     codexErrorInfo?: string
     httpStatusCode?: number
+  }
+}
+
+/**
+ * Normalize a Codex app-server usage object across schema versions.
+ * Returns plain numeric fields; defaults to 0 for missing values so
+ * accumulation math is straightforward.
+ *
+ * Defends against:
+ *   - snake_case (older codex): { input_tokens, output_tokens, cached_input_tokens }
+ *   - camelCase (newer codex):  { inputTokens, outputTokens, cachedInputTokens }
+ *   - Missing usage (some codex builds omit it on interrupted/short turns)
+ */
+function extractUsageTokens(usage: AppServerTurn['usage']): {
+  inputTokens: number
+  outputTokens: number
+  cachedInputTokens: number
+} {
+  if (!usage) {
+    return { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 }
+  }
+  return {
+    inputTokens: usage.input_tokens ?? usage.inputTokens ?? 0,
+    outputTokens: usage.output_tokens ?? usage.outputTokens ?? 0,
+    cachedInputTokens: usage.cached_input_tokens ?? usage.cachedInputTokens ?? 0,
   }
 }
 
@@ -374,7 +407,15 @@ export class AppServerProcessManager {
     })
 
     this.process.on('exit', (code, signal) => {
-      console.error(`[CodexAppServer] Process exited: code=${code} signal=${signal}`)
+      // Shutdown-initiated exits are expected lifecycle, not errors.
+      // Discriminate via shutdownPromise: if we asked the process to stop,
+      // this.shutdownPromise is non-null before the exit event lands.
+      const isShutdown = this.shutdownPromise !== null
+      if (isShutdown) {
+        console.error(`[CodexAppServer] Process shut down cleanly (signal=${signal ?? 'none'})`)
+      } else {
+        console.error(`[CodexAppServer] Process exited unexpectedly: code=${code} signal=${signal}`)
+      }
       this.initialized = false
       this.rejectAllPending(new Error(`App server exited: code=${code} signal=${signal}`))
     })
@@ -552,6 +593,14 @@ export class AppServerProcessManager {
    */
   isHealthy(): boolean {
     return this.initialized && !!this.process && !this.process.killed
+  }
+
+  /**
+   * PID of the shared app-server process, or undefined if not started.
+   * Multiple agent handles share this process — there is no per-session PID.
+   */
+  getProcessPid(): number | undefined {
+    return this.process?.pid
   }
 
   // ─── MCP Server Configuration (SUP-1744) ──────────────────────────
@@ -747,12 +796,12 @@ export function mapAppServerNotification(
       const turn = params.turn as AppServerTurn | undefined
       const turnStatus = turn?.status ?? 'completed'
 
-      // Accumulate usage
-      if (turn?.usage) {
-        state.totalInputTokens += turn.usage.input_tokens ?? 0
-        state.totalOutputTokens += turn.usage.output_tokens ?? 0
-        state.totalCachedInputTokens += turn.usage.cached_input_tokens ?? 0
-      }
+      // Accumulate usage. extractUsageTokens handles both snake_case and
+      // camelCase shapes so cost accounting survives codex schema drift.
+      const usageTokens = extractUsageTokens(turn?.usage)
+      state.totalInputTokens += usageTokens.inputTokens
+      state.totalOutputTokens += usageTokens.outputTokens
+      state.totalCachedInputTokens += usageTokens.cachedInputTokens
 
       if (turnStatus === 'completed') {
         return [{
@@ -1345,6 +1394,15 @@ class AppServerAgentHandle implements AgentHandle {
       // Ensure the app-server is running
       await this.processManager.start()
 
+      // Report the shared process PID to the caller's onProcessSpawned
+      // callback so diagnostics (e.g., worker "Agent spawned { pid }" logs,
+      // heartbeat writers) have a real PID to reference. All agent handles
+      // for this provider share the same PID.
+      const sharedPid = this.processManager.getProcessPid()
+      if (sharedPid !== undefined) {
+        this.config.onProcessSpawned?.(sharedPid)
+      }
+
       // Configure MCP servers if provided (SUP-1744)
       // This registers stdio MCP tool servers (af-linear, af-code-intelligence)
       // with the Codex app-server so it can discover and invoke them.
@@ -1454,6 +1512,31 @@ class AppServerAgentHandle implements AgentHandle {
       // A single `result` event is emitted when the stream actually ends.
       let lastTurnSuccess = true
       let lastTurnErrors: string[] | undefined
+      // Tracks whether a `result` event was already yielded via the turn/completed
+      // path (autonomous mode). Prevents the final synthesized result below from
+      // double-emitting and causing a duplicate "Agent completed" log line.
+      let resultEmitted = false
+      // Coalesce reasoning deltas. Codex streams reasoning as many small tokens
+      // (item/reasoning/textDelta), each of which becomes its own mapped event
+      // and — without coalescing — its own CLI log line rendered with weird
+      // character-by-character spacing ("  V  erified   on   branch..."). We
+      // buffer consecutive reasoning text and yield a single combined event
+      // on the next non-reasoning event or on buffer overflow.
+      let reasoningBuffer = ''
+      let reasoningRaw: unknown = null
+      const REASONING_FLUSH_BYTES = 16 * 1024
+      function flushReasoning(): AgentEvent | null {
+        if (!reasoningBuffer) return null
+        const event: AgentEvent = {
+          type: 'system',
+          subtype: 'reasoning',
+          message: reasoningBuffer,
+          raw: reasoningRaw,
+        }
+        reasoningBuffer = ''
+        reasoningRaw = null
+        return event
+      }
 
       while (!this.streamEnded) {
         // Wait for notifications
@@ -1498,6 +1581,22 @@ class AppServerAgentHandle implements AgentHandle {
           const events = mapAppServerNotification(notification, this.mapperState)
 
           for (const event of events) {
+            // Coalesce reasoning deltas into a single combined event.
+            // Accumulate until a non-reasoning event arrives, then flush.
+            if (event.type === 'system' && event.subtype === 'reasoning' && typeof event.message === 'string') {
+              reasoningBuffer += event.message
+              reasoningRaw = event.raw
+              // Flush proactively on buffer overflow to avoid unbounded memory.
+              if (reasoningBuffer.length >= REASONING_FLUSH_BYTES) {
+                const flushed = flushReasoning()
+                if (flushed) yield flushed
+              }
+              continue
+            }
+            // About to yield a non-reasoning event — flush any pending reasoning first.
+            const pending = flushReasoning()
+            if (pending) yield pending
+
             // Intercept turn/completed result events.
             // In autonomous mode (fleet), emit the result directly to end the session.
             // In interactive mode, convert to system event to keep the stream alive
@@ -1511,6 +1610,7 @@ class AppServerAgentHandle implements AgentHandle {
               if (this.config.autonomous) {
                 // Autonomous: emit result with accumulated text and end stream
                 yield { ...event, message: this.accumulatedText.trim() || undefined }
+                resultEmitted = true
                 this.streamEnded = true
               } else {
                 // Interactive: keep stream alive for injection
@@ -1530,6 +1630,10 @@ class AppServerAgentHandle implements AgentHandle {
         }
       }
 
+      // Flush any trailing reasoning that hadn't been followed by a non-reasoning event.
+      const trailingReasoning = flushReasoning()
+      if (trailingReasoning) yield trailingReasoning
+
       // Cleanup: unsubscribe from the thread
       this.processManager.unsubscribeThread(threadId)
       try {
@@ -1538,25 +1642,29 @@ class AppServerAgentHandle implements AgentHandle {
         // Best effort
       }
 
-      // Emit the final result event when the stream ends (interactive mode / stop)
-      yield {
-        type: 'result',
-        success: lastTurnSuccess,
-        message: this.accumulatedText.trim() || undefined,
-        errors: lastTurnErrors,
-        cost: {
-          inputTokens: this.mapperState.totalInputTokens || undefined,
-          outputTokens: this.mapperState.totalOutputTokens || undefined,
-          cachedInputTokens: this.mapperState.totalCachedInputTokens || undefined,
-          totalCostUsd: calculateCostUsd(
-            this.mapperState.totalInputTokens,
-            this.mapperState.totalCachedInputTokens,
-            this.mapperState.totalOutputTokens,
-            this.mapperState.model ?? undefined,
-          ),
-          numTurns: this.mapperState.turnCount || undefined,
-        },
-        raw: null,
+      // Emit the final result event when the stream ends (interactive mode / stop).
+      // Skip if the autonomous path already yielded a result via turn/completed —
+      // otherwise the orchestrator logs "Agent completed" twice.
+      if (!resultEmitted) {
+        yield {
+          type: 'result',
+          success: lastTurnSuccess,
+          message: this.accumulatedText.trim() || undefined,
+          errors: lastTurnErrors,
+          cost: {
+            inputTokens: this.mapperState.totalInputTokens || undefined,
+            outputTokens: this.mapperState.totalOutputTokens || undefined,
+            cachedInputTokens: this.mapperState.totalCachedInputTokens || undefined,
+            totalCostUsd: calculateCostUsd(
+              this.mapperState.totalInputTokens,
+              this.mapperState.totalCachedInputTokens,
+              this.mapperState.totalOutputTokens,
+              this.mapperState.model ?? undefined,
+            ),
+            numTurns: this.mapperState.turnCount || undefined,
+          },
+          raw: null,
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

@@ -428,6 +428,12 @@ describe('CodexAppServerProvider integration', () => {
         },
       })
 
+      // Regression: autonomous-mode sessions must emit EXACTLY ONE result event.
+      // Prior bug double-emitted (once from turn/completed, once from stream-end
+      // synthesizer) which surfaced as a duplicate "Agent completed" log line.
+      const resultEvents = events.filter((e) => e.type === 'result')
+      expect(resultEvents).toHaveLength(1)
+
       // Verify JSON-RPC requests sent to stdin
       expect(mock.requestsByMethod('thread/start')).toHaveLength(1)
       const threadStartReq = mock.lastRequestByMethod('thread/start')!
@@ -1162,6 +1168,50 @@ describe('CodexAppServerProvider integration', () => {
       const provider = new CodexAppServerProvider()
       expect(provider.capabilities.supportsMessageInjection).toBe(true)
       expect(provider.capabilities.supportsSessionResume).toBe(true)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Reasoning delta coalescing (REN-74 follow-up)
+  // -------------------------------------------------------------------------
+
+  describe('Additional: Reasoning delta coalescing', () => {
+    it('coalesces consecutive reasoning deltas into a single system event', async () => {
+      const provider = new CodexAppServerProvider()
+      const handle = provider.spawn(makeConfig({ autonomous: true }))
+
+      const eventsPromise = collectEventsWithTimeout(handle.stream, 5000)
+
+      const threadId = await mock.completeHandshakeAndThreadStart('thr_coalesce')
+
+      mock.pushTurnStarted(threadId, 'turn_1')
+
+      // Push many small reasoning deltas — each would historically become
+      // its own log line with character-by-character spacing.
+      const deltas = ['Verif', 'ied ', 'on ', 'branch ', '`REN-74`.']
+      for (const delta of deltas) {
+        mock.pushNotification('item/reasoning/textDelta', { threadId, text: delta })
+      }
+
+      // A non-reasoning event triggers the flush.
+      mock.pushAgentMessageDelta(threadId, 'Done.')
+      mock.pushTurnCompleted(threadId, 'turn_1', {
+        status: 'completed',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+
+      const events = await eventsPromise
+
+      const reasoningEvents = events.filter(
+        (e) => e.type === 'system' && 'subtype' in e && e.subtype === 'reasoning',
+      )
+      // Exactly one coalesced reasoning event, not five.
+      expect(reasoningEvents).toHaveLength(1)
+      expect(reasoningEvents[0]).toMatchObject({
+        type: 'system',
+        subtype: 'reasoning',
+        message: 'Verified on branch `REN-74`.',
+      })
     })
   })
 })
