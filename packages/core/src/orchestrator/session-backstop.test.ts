@@ -2,14 +2,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { collectSessionOutputs, runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
 import type { AgentProcess } from './types.js'
 
-// Mock execSync to avoid actual git/gh commands
+// Mock execSync/execFileSync to avoid actual git/gh commands
 vi.mock('node:child_process', () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }))
 
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 
 const mockExecSync = vi.mocked(execSync)
+const mockExecFileSync = vi.mocked(execFileSync)
+
+/**
+ * Match a git subcommand invocation regardless of whether it was issued via
+ * `execSync('git …')` (whole-command string) or `execFileSync('git', [args…])`.
+ * Returns the subcommand string (e.g., 'diff --cached --name-only') that a
+ * caller can then branch on.
+ */
+function gitSubcommand(cmd: unknown, args?: unknown): string | null {
+  if (typeof cmd === 'string') {
+    if (!cmd.startsWith('git ')) return null
+    return cmd.slice(4).trim()
+  }
+  if (cmd === 'git' && Array.isArray(args)) {
+    // Strip -c config overrides, e.g., `-c core.quotePath=false`
+    const argv = args.filter((a, i, arr) => {
+      if (a === '-c') return false
+      if (i > 0 && arr[i - 1] === '-c') return false
+      return true
+    })
+    return argv.join(' ')
+  }
+  return null
+}
 
 function createMockAgent(overrides?: Partial<AgentProcess>): AgentProcess {
   return {
@@ -36,6 +61,15 @@ function createSessionContext(overrides?: Partial<SessionContext>): SessionConte
 
 beforeEach(() => {
   mockExecSync.mockReset()
+  mockExecFileSync.mockReset()
+  // By default, delegate execFileSync → execSync using the same mock table.
+  // This keeps older tests that only script `mockExecSync` working after the
+  // backstop refactor moved some git calls to execFileSync for argv safety.
+  mockExecFileSync.mockImplementation((file: any, args?: any, opts?: any) => {
+    const argv: string[] = Array.isArray(args) ? args : []
+    const reconstructed = [file, ...argv].join(' ')
+    return (mockExecSync as any)(reconstructed, opts)
+  })
 })
 
 describe('collectSessionOutputs', () => {
@@ -236,7 +270,7 @@ describe('runBackstop', () => {
       .mockImplementation((cmd: any, ...rest: any[]) => {
         const cmdStr = typeof cmd === 'string' ? cmd : ''
         if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
-        if (cmdStr === 'git diff --cached --name-only') return 'src/foo.ts\nsrc/bar.ts\n'
+        if (cmdStr.includes('diff --cached --name-only')) return 'src/foo.ts\nsrc/bar.ts\n'
         if (cmdStr.startsWith('git commit')) return ''
         // backstopPushBranch
         if (cmdStr === 'git branch --show-current') return 'SUP-123\n'
@@ -290,7 +324,7 @@ describe('runBackstop', () => {
       .mockImplementation((cmd: any) => {
         const cmdStr = typeof cmd === 'string' ? cmd : ''
         if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
-        if (cmdStr === 'git diff --cached --name-only') return manyFiles
+        if (cmdStr.includes('diff --cached --name-only')) return manyFiles
         // Final git reset HEAD to clean staging
         if (cmdStr === 'git reset HEAD') return ''
         return ''
@@ -370,7 +404,7 @@ describe('runBackstop', () => {
       .mockImplementation((cmd: any, ...rest: any[]) => {
         const cmdStr = typeof cmd === 'string' ? cmd : ''
         if (cmdStr.startsWith('git reset HEAD -- ')) throw new Error('no match')
-        if (cmdStr === 'git diff --cached --name-only') return 'src/foo.ts\n'
+        if (cmdStr.includes('diff --cached --name-only')) return 'src/foo.ts\n'
         if (cmdStr.startsWith('git commit')) return ''
         if (cmdStr === 'git branch --show-current') return 'SUP-123\n'
         if (cmdStr.startsWith('git push')) return ''

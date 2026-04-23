@@ -15,7 +15,7 @@
  * 4. Return structured result for the orchestrator to act on
  */
 
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 import type { AgentProcess } from './types.js'
 import type { AgentWorkType } from './work-types.js'
 import type { RepositoryConfig } from '../config/repository-config.js'
@@ -37,38 +37,113 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Glob patterns for build artifacts that should never be committed by the
- * backstop. These are `git reset HEAD -- <pattern>` arguments, applied
- * after `git add -A` to unstage files that the repo's .gitignore may not
- * cover (e.g., provider sandboxes creating caches in non-standard paths).
+ * Build artifacts that should never be committed by the backstop.
+ *
+ * This used to be a list of glob patterns like `'**\/.cache/**'` fed to
+ * `execSync(\`git reset HEAD -- ${pattern}\`)`. That was broken two ways:
+ *   1. `/bin/sh` (execSync's shell on Unix) does not enable `**` globstar,
+ *      so `**\/.cache/**` was expanded to `*\/.cache/*` which doesn't match
+ *      a top-level `.cache/` directory.
+ *   2. Git pathspec doesn't treat `**` as a recursive wildcard without the
+ *      `:(glob)` magic prefix — and even then, unquoted interpolation
+ *      through the shell mangles the pattern before git sees it.
+ *
+ * The reliable fix: enumerate the staged file list after `git add -A`, match
+ * each path against the rules below in plain JavaScript, and unstage exact
+ * paths (no globs) via `git reset HEAD -- <exact-path>`.
  */
-const BACKSTOP_EXCLUDE_PATTERNS = [
-  // Go
-  '**/go-build/**',
-  '**/.gocache/**',
-  '**/gocache/**',
-  '**/__debug_bin*',
+
+/** Directory names to exclude wherever they appear in the relative path. */
+const EXCLUDE_DIR_ANY_DEPTH: readonly string[] = [
   // Node / JS
-  '**/node_modules/**',
-  '**/.next/**',
-  '**/.nuxt/**',
-  '**/dist/**',
-  '**/.turbo/**',
+  'node_modules',
+  '.next',
+  '.nuxt',
+  'dist',
+  '.turbo',
   // Python
-  '**/__pycache__/**',
-  '**/*.pyc',
-  '**/.venv/**',
-  // Rust
-  '**/target/debug/**',
-  '**/target/release/**',
+  '__pycache__',
+  '.venv',
+  // Go
+  'go-build',
+  '.gocache',
+  'gocache',
+  '.golangci-lint-cache',
   // General
-  '**/.cache/**',
-  '**/*.tmp',
-  '**/*.log',
+  '.cache',
 ]
+
+/**
+ * Directory names to exclude only at the top level of the worktree.
+ * `.agent` is the orchestrator's own state dir; it must never be committed
+ * by the backstop even if prior commits accidentally tracked it.
+ */
+const EXCLUDE_DIR_TOP_LEVEL: readonly string[] = [
+  '.agent',
+]
+
+/** File extensions to exclude (include the leading dot). */
+const EXCLUDE_EXTENSIONS: readonly string[] = ['.pyc', '.tmp', '.log']
+
+/** Basename prefixes to exclude (matches any file whose basename starts with this). */
+const EXCLUDE_BASENAME_PREFIXES: readonly string[] = ['__debug_bin']
+
+/** Exact path prefixes (relative to worktree root) to exclude. */
+const EXCLUDE_PATH_PREFIXES: readonly string[] = [
+  'target/debug/',
+  'target/release/',
+]
+
+/**
+ * Decide whether a staged path should be unstaged before the backstop commits.
+ *
+ * `path` is relative to the worktree root, with forward slashes (git's
+ * `--name-only` output uses forward slashes on every platform).
+ *
+ * Exported for testing.
+ */
+export function shouldExcludeFromBackstop(path: string): boolean {
+  if (!path) return false
+  const parts = path.split('/')
+  const basename = parts[parts.length - 1]
+
+  // Directory names anywhere in the path
+  for (const part of parts) {
+    if (EXCLUDE_DIR_ANY_DEPTH.includes(part)) return true
+  }
+
+  // Top-level-only directory names (index 0 is the top-level component;
+  // require parts.length > 1 so we don't exclude a file *named* ".agent")
+  if (parts.length > 1 && EXCLUDE_DIR_TOP_LEVEL.includes(parts[0])) return true
+
+  // Extension match (on basename)
+  const dotIdx = basename.lastIndexOf('.')
+  if (dotIdx > 0) {
+    const ext = basename.slice(dotIdx)
+    if (EXCLUDE_EXTENSIONS.includes(ext)) return true
+  }
+
+  // Basename prefix match
+  for (const prefix of EXCLUDE_BASENAME_PREFIXES) {
+    if (basename.startsWith(prefix)) return true
+  }
+
+  // Exact path-prefix match
+  for (const prefix of EXCLUDE_PATH_PREFIXES) {
+    if (path === prefix.replace(/\/$/, '') || path.startsWith(prefix)) return true
+  }
+
+  return false
+}
 
 /** Maximum number of files the backstop will auto-commit. */
 const BACKSTOP_MAX_FILES = 200
+
+/**
+ * Number of paths passed per `git reset HEAD --` invocation when unstaging
+ * matched files. Keeps us well under `ARG_MAX` on every common platform.
+ */
+const BACKSTOP_UNSTAGE_BATCH = 100
 
 // ---------------------------------------------------------------------------
 // Session output collection
@@ -535,40 +610,57 @@ function backstopCommitChanges(worktreePath: string, identifier: string, repoCon
       ?? getGitConfig('user.email', worktreePath)
       ?? 'agent@rensei.ai'
 
-    // Stage all changes and commit.
-    // Use `git add -A` which respects .gitignore, then unstage any
-    // build artifacts that slipped through (provider sandboxes may
-    // create caches in paths the repo's .gitignore doesn't cover).
+    // Stage all changes. `git add -A` respects .gitignore for UNTRACKED files
+    // only — tracked files that match .gitignore are still staged on modify
+    // (e.g., .agent/ telemetry that was tracked by a prior commit). We handle
+    // that by enumerating the staged list and unstaging anything matching
+    // `shouldExcludeFromBackstop`.
     execSync('git add -A', {
       cwd: worktreePath,
       encoding: 'utf-8',
       timeout: 30000,
     })
 
-    // Remove common build artifact patterns from the staging area.
-    // These are safe to unstage — if the agent genuinely modified them,
-    // they'll still be in the worktree for manual commit.
-    for (const pattern of BACKSTOP_EXCLUDE_PATTERNS) {
+    // Enumerate staged files exactly — git prints one path per line, forward
+    // slashes, relative to the worktree root, with no quoting (thanks to `-z`
+    // we'd get nul separators, but `--name-only` is fine as long as paths
+    // don't contain newlines; we also pass `-c core.quotePath=false` so
+    // non-ASCII paths come through verbatim).
+    const stagedBefore = execFileSync(
+      'git',
+      ['-c', 'core.quotePath=false', 'diff', '--cached', '--name-only'],
+      { cwd: worktreePath, encoding: 'utf-8', timeout: 10000 },
+    )
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0)
+
+    // Unstage anything matching our exclude rules. Pass exact paths — no
+    // globs, no shell interpolation. Batched to stay under ARG_MAX.
+    const toUnstage = stagedBefore.filter(shouldExcludeFromBackstop)
+    for (let i = 0; i < toUnstage.length; i += BACKSTOP_UNSTAGE_BATCH) {
+      const batch = toUnstage.slice(i, i + BACKSTOP_UNSTAGE_BATCH)
       try {
-        execSync(`git reset HEAD -- ${pattern}`, {
-          cwd: worktreePath,
-          encoding: 'utf-8',
-          timeout: 10000,
-          stdio: 'pipe',
-        })
+        execFileSync(
+          'git',
+          ['reset', 'HEAD', '--', ...batch],
+          { cwd: worktreePath, encoding: 'utf-8', timeout: 10000, stdio: 'pipe' },
+        )
       } catch {
-        // Pattern didn't match — that's fine
+        // If a batch fails (e.g., one of these files isn't known to git for
+        // some reason), keep going. Subsequent safety checks will catch any
+        // residue.
       }
     }
 
-    // Safety cap: if staged file count is still very high, something
-    // unexpected was added (e.g., a cache directory not in our exclude
-    // list). Abort rather than creating a polluted PR.
-    const stagedFiles = execSync('git diff --cached --name-only', {
-      cwd: worktreePath,
-      encoding: 'utf-8',
-      timeout: 10000,
-    }).trim()
+    // Safety cap: if the remaining staged count is very high, something
+    // unexpected got added that our exclude rules didn't cover. Abort
+    // rather than creating a polluted PR.
+    const stagedFiles = execFileSync(
+      'git',
+      ['-c', 'core.quotePath=false', 'diff', '--cached', '--name-only'],
+      { cwd: worktreePath, encoding: 'utf-8', timeout: 10000 },
+    ).trim()
     const stagedCount = stagedFiles ? stagedFiles.split('\n').length : 0
 
     if (stagedCount > BACKSTOP_MAX_FILES) {
@@ -591,8 +683,9 @@ function backstopCommitChanges(worktreePath: string, identifier: string, repoCon
       }
     }
 
-    execSync(
-      `git commit -m "feat: ${identifier} (auto-committed by session backstop)"`,
+    execFileSync(
+      'git',
+      ['commit', '-m', `feat: ${identifier} (auto-committed by session backstop)`],
       {
         cwd: worktreePath,
         encoding: 'utf-8',
