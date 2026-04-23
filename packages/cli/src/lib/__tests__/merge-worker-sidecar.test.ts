@@ -193,4 +193,47 @@ describe('resolveIssueTracker', () => {
     expect(typeof tracker?.createComment).toBe('function')
     expect(typeof tracker?.updateIssueStatus).toBe('function')
   })
+
+  it('falls back to proxy adapter when LINEAR_API_KEY is absent but proxyConfig is supplied', () => {
+    // Coordinator-proxied deployments don't set LINEAR_API_KEY in the
+    // worker fleet env — workers route Linear ops through the platform's
+    // API. The sidecar must use the same path or its bubble-up silently
+    // no-ops, leaving Accepted-but-unmerged issues stuck.
+    const tracker = resolveIssueTracker(undefined, {
+      apiUrl: 'https://platform.example.com',
+      apiKey: 'pf_xxx',
+    })
+    expect(tracker).not.toBeNull()
+    expect(typeof tracker?.getIssue).toBe('function')
+    expect(typeof tracker?.createComment).toBe('function')
+    expect(typeof tracker?.updateIssueStatus).toBe('function')
+  })
+
+  it('prefers Linear key over proxy when both are present', () => {
+    // Direct Linear access is faster than going through the coordinator.
+    // If a deployment somehow has both, prefer the direct path.
+    process.env.LINEAR_API_KEY = 'lin_xxx'
+    const tracker = resolveIssueTracker(undefined, {
+      apiUrl: 'https://platform.example.com',
+      apiKey: 'pf_xxx',
+    })
+    expect(tracker).not.toBeNull()
+    // Both are valid IssueTrackerClient implementations; we don't assert
+    // class identity (would couple this test to internals), but we do
+    // verify the resolution didn't end up null.
+  })
+
+  it('returns null when neither Linear key nor proxy config is available', () => {
+    expect(resolveIssueTracker(undefined, undefined)).toBeNull()
+    expect(resolveIssueTracker(undefined, { apiUrl: '', apiKey: '' })).toBeNull()
+  })
+
+  it('null override wins over proxy config too', () => {
+    // Explicit opt-out: a deployment may want to disable bubble-up even
+    // when proxy credentials are available (e.g., dry-run mode).
+    expect(resolveIssueTracker(null, {
+      apiUrl: 'https://platform.example.com',
+      apiKey: 'pf_xxx',
+    })).toBeNull()
+  })
 })

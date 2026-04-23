@@ -204,8 +204,19 @@ class WorkerFleet {
 
       fleetLog(null, colors.green, 'INF', `All ${workers} workers started`)
 
-      // Start merge worker sidecar (one per fleet, Redis lock prevents duplicates)
-      this.mergeWorkerHandle = startMergeWorkerSidecar({}, signal)
+      // Start merge worker sidecar (one per fleet, Redis lock prevents duplicates).
+      // Pass the same apiUrl/apiKey workers use so the sidecar can construct
+      // a proxy issue tracker for deployments that route Linear ops through
+      // the coordinator (no LINEAR_API_KEY in the fleet env).
+      this.mergeWorkerHandle = startMergeWorkerSidecar(
+        {
+          proxyConfig: {
+            apiUrl: this.fleetConfig.apiUrl,
+            apiKey: this.fleetConfig.apiKey,
+          },
+        },
+        signal,
+      )
       if (this.mergeWorkerHandle) {
         fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar started')
       }
