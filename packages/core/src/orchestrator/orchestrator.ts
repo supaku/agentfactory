@@ -4852,10 +4852,15 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       // Sync and link dependencies from main repo into worktree
       this.syncDependencies(worktreePath, identifier)
 
-      // Check for existing state and potential recovery
+      // Check for existing state and potential recovery.
+      // Pass `expectedIdentifier` so a worktree holding stale state from a
+      // DIFFERENT issue (e.g., a reused path after a template change) can't
+      // trigger a cross-issue recovery. The conflict-check call site at
+      // cleanupConflictingBranch intentionally omits this option.
       const recoveryCheck = checkRecovery(worktreePath, {
         heartbeatTimeoutMs: getHeartbeatTimeoutFromEnv(),
         maxRecoveryAttempts: getMaxRecoveryAttemptsFromEnv(),
+        expectedIdentifier: identifier,
       })
 
       if (recoveryCheck.agentAlive) {
@@ -4863,6 +4868,16 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         throw new Error(
           `Agent already running for ${identifier}: ${recoveryCheck.message}. ` +
           `Stop the existing agent before spawning a new one.`
+        )
+      }
+
+      if (recoveryCheck.reason === 'identifier_mismatch') {
+        // Stale state from a different issue. Log loudly so this is visible
+        // in ops — but don't fail; fall through to fresh spawn, which will
+        // overwrite state.json with the current issue's identifier.
+        console.warn(
+          `[orchestrator] ${identifier}: worktree ${worktreePath} held stale state ` +
+          `for ${recoveryCheck.state?.issueIdentifier} — refusing cross-issue recovery, starting fresh`
         )
       }
 

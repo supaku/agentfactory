@@ -99,12 +99,25 @@ export function readTodos(worktreePath: string): TodosState | null {
 
 /**
  * Check if recovery is possible for a worktree
+ *
+ * When `expectedIdentifier` is provided, the state's `issueIdentifier` must
+ * match. If it doesn't, recovery is refused with reason `identifier_mismatch`
+ * — the worktree holds state from a different issue (e.g., a stale directory
+ * reused across issues, or a worktree-path template change without a
+ * migration). Call sites that intentionally inspect *another* issue's
+ * worktree (e.g., the orchestrator's branch-conflict liveness check) must
+ * omit this option.
  */
 export function checkRecovery(
   worktreePath: string,
   options: {
     heartbeatTimeoutMs?: number
     maxRecoveryAttempts?: number
+    /**
+     * If set, require `state.issueIdentifier === expectedIdentifier`.
+     * Mismatches return `canRecover: false, reason: 'identifier_mismatch'`.
+     */
+    expectedIdentifier?: string
   } = {}
 ): RecoveryCheckResult {
   const heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS
@@ -141,6 +154,21 @@ export function checkRecovery(
       state,
       reason: 'invalid_state',
       message: 'State is missing required fields (issueId, issueIdentifier)',
+    }
+  }
+
+  // Identifier guard: refuse to recover state from a different issue. This
+  // protects against stale worktrees reused across issues and path-template
+  // changes without migration. Omitted `expectedIdentifier` disables the
+  // guard — used by the conflict-check call site that intentionally looks
+  // at another agent's worktree.
+  if (options.expectedIdentifier && state.issueIdentifier !== options.expectedIdentifier) {
+    return {
+      canRecover: false,
+      agentAlive: false,
+      state,
+      reason: 'identifier_mismatch',
+      message: `Worktree state is for ${state.issueIdentifier} but caller expected ${options.expectedIdentifier} — refusing recovery`,
     }
   }
 

@@ -172,7 +172,7 @@ export interface RecoveryCheckResult {
   /** The todos if found */
   todos?: TodosState
   /** Reason why recovery is not possible */
-  reason?: 'no_state' | 'agent_alive' | 'max_attempts' | 'invalid_state'
+  reason?: 'no_state' | 'agent_alive' | 'max_attempts' | 'invalid_state' | 'identifier_mismatch'
   /** Human-readable message */
   message: string
 }
