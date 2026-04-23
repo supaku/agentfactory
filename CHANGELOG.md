@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.53
+
+### Features
+
+- **Merge queue result bubbling** — Merge results now bubble back to Linear issues; Accepted status is deferred until the merge actually lands, preventing premature status promotion.
+
+### Fixes
+
+- **Merge queue acceptance handoff** — Wire acceptance-to-queue handoff, tighten the merge contract, and remove dead merge template.
+
+- **Merge queue proxy resolution** — Sidecar now resolves the proxy issue tracker for coordinator-routed deployments, fixing merge queue failures in proxied environments.
+
+### Docs
+
+- Document profile-based provider/model configuration system.
+
 ## v0.8.52
 
 ### Fixes
