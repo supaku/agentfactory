@@ -48,6 +48,12 @@ import { parseWorkResult } from './parse-work-result.js'
 import { parseSecurityScanOutput } from './security-scan-event.js'
 import { runBackstop, formatBackstopComment, type SessionContext } from './session-backstop.js'
 import {
+  inspectGitStateForSteering,
+  decideSteering,
+  buildSteeringPrompt,
+  runSteeringRetry,
+} from './session-steering.js'
+import {
   captureQualityBaseline,
   computeQualityDelta,
   formatQualityReport,
@@ -1109,6 +1115,9 @@ export class AgentOrchestrator {
   private readonly contextManagers: Map<string, ContextManager> = new Map()
   // Session output flags for completion contract validation (keyed by issueId)
   private readonly sessionOutputFlags: Map<string, { commentPosted: boolean; issueUpdated: boolean; subIssuesCreated: boolean }> = new Map()
+  // Stored spawn configs so the session-steering retry can resume with the same
+  // model/effort/sandbox/env as the original session. Keyed by issueId.
+  private readonly steeringSpawnConfigs: Map<string, AgentSpawnConfig> = new Map()
   // Buffered assistant text for batched logging (keyed by issueId)
   // Streaming providers (Codex) send one token per event — buffer and flush on sentence boundaries
   private readonly assistantTextBuffers: Map<string, { text: string; timer: ReturnType<typeof setTimeout> | null }> = new Map()
@@ -3490,6 +3499,17 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         }
       }
 
+      // --- Session Steering: For providers that support resume, give the
+      // agent a second chance to finish commit/push/PR itself before the
+      // deterministic backstop takes over with a blind auto-commit.
+      if (agent.status === 'completed' && agent.worktreePath) {
+        await this.attemptSessionSteering(agent, log).catch((error) => {
+          log?.warn('Session steering threw — falling through to backstop', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+
       // --- Session Backstop: Validate completion contract and recover missing outputs ---
       if (agent.status === 'completed') {
         const outputFlags = this.sessionOutputFlags.get(issueId)
@@ -4621,6 +4641,9 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     // Cleanup session output flags
     this.sessionOutputFlags.delete(issueId)
 
+    // Cleanup stored spawn config used for steering retries
+    this.steeringSpawnConfigs.delete(issueId)
+
     // Persist and cleanup context manager
     const contextManager = this.contextManagers.get(issueId)
     if (contextManager) {
@@ -5601,6 +5624,10 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       ? this.createResumeWithFallbackHandle(spawnProvider, providerSessionId, spawnConfig, agent, log)
       : spawnProvider.spawn(spawnConfig)
 
+    // Retain the spawn config so post-session steering can resume with the same
+    // model/effort/sandbox/env. Cleared after the backstop runs.
+    this.steeringSpawnConfigs.set(issueId, spawnConfig)
+
     this.agentHandles.set(issueId, handle)
     agent.status = 'running'
 
@@ -5608,6 +5635,68 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     this.processEventStream(issueId, identifier, sessionId, handle, emitter, agent)
 
     return agent
+  }
+
+  /**
+   * Post-session steering: if the agent exited without committing/pushing/
+   * creating a PR and the provider supports session resume, re-enter the
+   * session with a focused follow-up prompt so the agent can finish its own
+   * work. The deterministic backstop still runs afterwards as a final safety
+   * net — this just reduces how often it needs to auto-commit on the agent's
+   * behalf.
+   *
+   * No-ops (returns immediately) when steering preconditions aren't met.
+   */
+  private async attemptSessionSteering(agent: AgentProcess, log: Logger | undefined): Promise<void> {
+    const issueId = agent.issueId
+    if (!agent.worktreePath) return
+
+    const provider = agent.providerName ? this.providerCache.get(agent.providerName) : undefined
+    const gitState = inspectGitStateForSteering(agent.worktreePath)
+    const decision = decideSteering({ agent, provider, gitState })
+
+    if (!decision.shouldAttempt) {
+      log?.debug('Session steering skipped', { reason: decision.reason })
+      return
+    }
+
+    const baseSpawnConfig = this.steeringSpawnConfigs.get(issueId)
+    if (!baseSpawnConfig) {
+      log?.debug('Session steering skipped', { reason: 'no stored spawn config' })
+      return
+    }
+
+    log?.warn('Attempting session steering retry', {
+      reason: decision.reason,
+      provider: provider!.name,
+      providerSessionId: agent.providerSessionId,
+    })
+
+    const steeringPrompt = buildSteeringPrompt({
+      identifier: agent.identifier,
+      gitState,
+      hasPr: !!agent.pullRequestUrl,
+    })
+
+    const outcome = await runSteeringRetry({
+      provider: provider!,
+      providerSessionId: agent.providerSessionId!,
+      baseSpawnConfig,
+      steeringPrompt,
+    })
+
+    // Capture any PR URL the agent created during the retry
+    if (outcome.detectedPrUrl && !agent.pullRequestUrl) {
+      agent.pullRequestUrl = outcome.detectedPrUrl
+    }
+
+    log?.info('Session steering result', {
+      reason: outcome.reason,
+      succeeded: outcome.succeeded,
+      detectedPrUrl: outcome.detectedPrUrl,
+      eventsConsumed: outcome.eventsConsumed,
+      error: outcome.error,
+    })
   }
 
   /**
