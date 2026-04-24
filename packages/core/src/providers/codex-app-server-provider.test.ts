@@ -1194,6 +1194,158 @@ describe('AppServerProcessManager — thread notification routing', () => {
 // Approval & Sandbox Policy Resolution
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Server-request handling
+//
+// Every Codex server-request (has `id` + `method`) MUST get a response or the
+// Codex app server hangs the agent waiting for a reply — the orchestrator's
+// 300s inactivity timeout then kills the session. Previously we handled only
+// approval methods. Unknown methods (notably `mcpServer/elicitation/request`
+// from MCP servers like `codex_apps/github_label_pr`) fell through with no
+// response and deadlocked the agent.
+// ---------------------------------------------------------------------------
+
+describe('AppServerProcessManager — respondToServerRequestWithError', () => {
+  let AppServerProcessManager: typeof import('./codex-app-server-provider.js').AppServerProcessManager
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockProc = createMockChildProcess()
+    const mod = await import('./codex-app-server-provider.js')
+    AppServerProcessManager = mod.AppServerProcessManager
+  })
+
+  async function startManager() {
+    const manager = new AppServerProcessManager({ cwd: '/tmp' })
+    const startPromise = manager.start()
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalled()
+    })
+    emitLine({ id: 1, result: {} })
+    await vi.waitFor(() => {
+      expect(mockProc.stdin.write).toHaveBeenCalledTimes(3)
+    })
+    emitLine({ id: 2, result: { models: [] } })
+    await startPromise
+    return manager
+  }
+
+  it('writes a JSON-RPC error response for unhandled server-request methods', async () => {
+    const manager = await startManager()
+    mockProc.stdin.write.mockClear()
+
+    manager.respondToServerRequestWithError(42, -32601, 'Client does not implement foo/bar')
+
+    expect(mockProc.stdin.write).toHaveBeenCalledTimes(1)
+    const written = mockProc.stdin.write.mock.calls[0][0] as string
+    const parsed = JSON.parse(written.trim())
+    expect(parsed).toEqual({
+      jsonrpc: '2.0',
+      id: 42,
+      error: { code: -32601, message: 'Client does not implement foo/bar' },
+    })
+  })
+
+  it('is a no-op when stdin is not writable', async () => {
+    const manager = await startManager()
+    mockProc.stdin.writable = false
+    mockProc.stdin.write.mockClear()
+
+    manager.respondToServerRequestWithError(1, -32601, 'method gone')
+
+    expect(mockProc.stdin.write).not.toHaveBeenCalled()
+  })
+})
+
+describe('AppServerAgentHandle — server request handlers', () => {
+  let CodexAppServerProvider: typeof import('./codex-app-server-provider.js').CodexAppServerProvider
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockProc = createMockChildProcess()
+    const mod = await import('./codex-app-server-provider.js')
+    CodexAppServerProvider = mod.CodexAppServerProvider
+  })
+
+  function makeSpawnedHandle() {
+    const provider = new CodexAppServerProvider()
+    const handle = provider.spawn({
+      prompt: 't',
+      cwd: '/tmp',
+      env: {},
+      abortController: new AbortController(),
+      autonomous: true,
+      sandboxEnabled: false,
+    })
+    const manager = (provider as any).processManager
+    return { provider, handle, manager }
+  }
+
+  it('handleElicitationRequest responds {action: "cancel"} and emits an elicitation_cancelled event', () => {
+    const { handle, manager } = makeSpawnedHandle()
+    const respondSpy = vi.spyOn(manager, 'respondToServerRequest').mockImplementation(() => {})
+
+    const event = (handle as any).handleElicitationRequest({
+      method: 'mcpServer/elicitation/request',
+      params: {
+        _serverRequestId: 77,
+        threadId: 'thr_x',
+        mcpServer: 'codex_apps',
+        requestedSchema: { type: 'object' },
+      },
+    })
+
+    expect(respondSpy).toHaveBeenCalledWith(77, { action: 'cancel' })
+    expect(event).toBeDefined()
+    expect(event.type).toBe('system')
+    expect(event.subtype).toBe('elicitation_cancelled')
+    expect(event.message).toContain('codex_apps')
+    expect(event.message).toContain('autonomous mode')
+  })
+
+  it('handleElicitationRequest returns null when _serverRequestId is missing (no invented id)', () => {
+    const { handle, manager } = makeSpawnedHandle()
+    const respondSpy = vi.spyOn(manager, 'respondToServerRequest').mockImplementation(() => {})
+
+    const event = (handle as any).handleElicitationRequest({
+      method: 'mcpServer/elicitation/request',
+      params: { threadId: 'thr_x' /* _serverRequestId intentionally absent */ },
+    })
+
+    expect(respondSpy).not.toHaveBeenCalled()
+    expect(event).toBeNull()
+  })
+
+  it('handleUnhandledServerRequest responds with JSON-RPC -32601 and emits unhandled_server_request', () => {
+    const { handle, manager } = makeSpawnedHandle()
+    const errSpy = vi.spyOn(manager, 'respondToServerRequestWithError').mockImplementation(() => {})
+
+    const event = (handle as any).handleUnhandledServerRequest({
+      method: 'someNewCodexMethod/requestFrob',
+      params: { _serverRequestId: 9, threadId: 'thr_x' },
+    })
+
+    expect(errSpy).toHaveBeenCalledWith(9, -32601, expect.stringContaining('someNewCodexMethod/requestFrob'))
+    expect(event).toBeDefined()
+    expect(event.type).toBe('system')
+    expect(event.subtype).toBe('unhandled_server_request')
+    expect(event.message).toContain('someNewCodexMethod/requestFrob')
+  })
+
+  it('handleUnhandledServerRequest returns null when _serverRequestId is missing', () => {
+    const { handle, manager } = makeSpawnedHandle()
+    const errSpy = vi.spyOn(manager, 'respondToServerRequestWithError').mockImplementation(() => {})
+
+    const event = (handle as any).handleUnhandledServerRequest({
+      method: 'something',
+      params: {},
+    })
+
+    expect(errSpy).not.toHaveBeenCalled()
+    expect(event).toBeNull()
+  })
+})
+
 describe('Approval & Sandbox Policy Resolution (via spawn params)', () => {
   let CodexAppServerProvider: typeof import('./codex-app-server-provider.js').CodexAppServerProvider
 

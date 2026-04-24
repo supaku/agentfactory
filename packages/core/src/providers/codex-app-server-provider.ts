@@ -554,6 +554,28 @@ export class AppServerProcessManager {
   }
 
   /**
+   * Send a JSON-RPC error response to a server request.
+   *
+   * Used for server-request methods we don't know how to handle — we must
+   * respond (with *something*) or Codex will hang the agent waiting for a
+   * reply. A JSON-RPC error (code -32601 / Method not found) is the correct
+   * signal: "the client does not implement this method."
+   */
+  respondToServerRequestWithError(
+    requestId: number | string,
+    code: number,
+    message: string,
+  ): void {
+    if (!this.process?.stdin?.writable) {
+      console.error('[CodexAppServer] Cannot respond to server request: stdin not writable')
+      return
+    }
+    console.error(`[CodexAppServer] Responding to server request ${requestId} with error ${code}: ${message}`)
+    const response = JSON.stringify({ jsonrpc: '2.0', id: requestId, error: { code, message } })
+    this.process.stdin.write(response + '\n')
+  }
+
+  /**
    * Handle an incoming JSON-RPC notification.
    * Routes to the appropriate thread listener based on threadId in params.
    */
@@ -1358,6 +1380,75 @@ class AppServerAgentHandle implements AgentHandle {
   }
 
   /**
+   * Handle an MCP `elicitation/request` server request from Codex.
+   *
+   * The MCP spec lets a server ask the client for user input mid-tool-call
+   * via `elicitation/create`; Codex forwards these as
+   * `mcpServer/elicitation/request` server-requests. Our agents run
+   * autonomously with no human to prompt, so we respond with
+   * `{action: "cancel"}` per the MCP spec — this tells the MCP server to
+   * abort the operation cleanly rather than hang indefinitely.
+   *
+   * Emits a system event for observability so operators can see which MCP
+   * tool calls are producing unsatisfiable elicitation prompts.
+   */
+  private handleElicitationRequest(notification: JsonRpcNotification): AgentEvent | null {
+    const params = notification.params ?? {}
+    const serverRequestId = params._serverRequestId as number | string | undefined
+
+    if (serverRequestId == null) {
+      // Shouldn't happen — handleServerRequest stamps this on every
+      // server request before queuing. Fall through without responding
+      // rather than invent an id.
+      return null
+    }
+
+    // MCP elicitation response shape: { action: "accept" | "decline" | "cancel", content? }
+    this.processManager.respondToServerRequest(serverRequestId, { action: 'cancel' })
+
+    // Best-effort context for the observer: which MCP tool was asking.
+    const mcpServer = (params.mcpServer ?? params.server ?? 'unknown') as string
+    const requestedSchema = params.requestedSchema ? ' (schema present)' : ''
+
+    return {
+      type: 'system',
+      subtype: 'elicitation_cancelled',
+      message: `Cancelled MCP elicitation from ${mcpServer}${requestedSchema} — autonomous mode has no user to prompt`,
+      raw: notification,
+    }
+  }
+
+  /**
+   * Fallback for Codex server-request methods we don't explicitly handle.
+   *
+   * Every server request expects a response; failing to respond hangs the
+   * agent until the orchestrator's inactivity timeout fires (300s default).
+   * Respond with a JSON-RPC "Method not found" error so the Codex/MCP side
+   * knows the client doesn't implement the method, and emit a system event
+   * so operators can see which methods still need specific handlers.
+   */
+  private handleUnhandledServerRequest(notification: JsonRpcNotification): AgentEvent | null {
+    const params = notification.params ?? {}
+    const serverRequestId = params._serverRequestId as number | string | undefined
+
+    if (serverRequestId == null) return null
+
+    // JSON-RPC 2.0: -32601 = Method not found
+    this.processManager.respondToServerRequestWithError(
+      serverRequestId,
+      -32601,
+      `Client does not implement ${notification.method}`,
+    )
+
+    return {
+      type: 'system',
+      subtype: 'unhandled_server_request',
+      message: `Declined unhandled Codex server request: ${notification.method}`,
+      raw: notification,
+    }
+  }
+
+  /**
    * Start a new turn on the existing thread with additional user input (SUP-1741).
    * Used for between-turn injection when no turn is currently active.
    */
@@ -1563,6 +1654,35 @@ class AppServerAgentHandle implements AgentHandle {
               yield deniedEvent
             }
             continue // Don't yield as a regular AgentEvent
+          }
+
+          // MCP elicitation requests (e.g. the Codex-bundled `codex_apps`
+          // GitHub MCP server asking the user to confirm a label). The
+          // autonomous agent has no human to prompt, so we cancel the
+          // elicitation per the MCP spec. Without this handler, the server
+          // request never gets a response → the MCP tool call hangs → the
+          // agent hits the 300s inactivity timeout and gets killed.
+          if (notification.method === 'mcpServer/elicitation/request') {
+            const elicitationEvent = this.handleElicitationRequest(notification)
+            if (elicitationEvent) {
+              yield elicitationEvent
+            }
+            continue
+          }
+
+          // Defensive fallback: any other server request (identifiable by
+          // the `_serverRequestId` we stamp in handleServerRequest) that we
+          // don't have a specific handler for MUST get a response, or Codex
+          // will hang the agent. Reply with a JSON-RPC "Method not found"
+          // error so the MCP server knows we can't satisfy it, and emit a
+          // system event so the unhandled method surfaces in the stream
+          // and we can write a specific handler next time.
+          if (notification.params && typeof notification.params === 'object' && '_serverRequestId' in notification.params) {
+            const unhandledEvent = this.handleUnhandledServerRequest(notification)
+            if (unhandledEvent) {
+              yield unhandledEvent
+            }
+            continue
           }
 
           // Track active turn ID for mid-turn steering (SUP-1740)
