@@ -220,6 +220,133 @@ describe('MergeWorker', () => {
       expect(mockStrategy.finalize).not.toHaveBeenCalled()
     })
 
+    // ---------------------------------------------------------------------
+    // Retryable prepare failures (REN-1253 / REN-1254)
+    //
+    // When the strategy signals a transient branch-conflict, the worker
+    // must retry in-process with backoff before surfacing the failure to
+    // the issue. The strategies' detached checkouts make this path
+    // unlikely, but the retry contract is part of the fix surface.
+    // ---------------------------------------------------------------------
+
+    it('retryable prepare failure retries with configured backoffs and eventually succeeds', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ retryablePrepareBackoffsMs: [1, 1, 1] })
+      const deps = makeDeps()
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.prepare
+        .mockResolvedValueOnce({ success: false, error: "'REN-1253' is already used by worktree at '/p/REN-1253-AC'", retryable: true })
+        .mockResolvedValueOnce({ success: false, error: "'REN-1253' is already used by worktree at '/p/REN-1253-AC'", retryable: true })
+        .mockResolvedValueOnce({ success: true, headSha: 'abc123' })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const result = await worker.processEntry(entry)
+
+      expect(mockStrategy.prepare).toHaveBeenCalledTimes(3)
+      expect(result.status).toBe('merged')
+      expect(mockStrategy.finalize).toHaveBeenCalledOnce()
+    })
+
+    it('retryable prepare failure exhausts retries then surfaces a hard error', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ retryablePrepareBackoffsMs: [1, 1] })
+      const deps = makeDeps()
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.prepare.mockResolvedValue({
+        success: false,
+        error: "'REN-1253' is already used by worktree at '/p/REN-1253-AC'",
+        retryable: true,
+      })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const result = await worker.processEntry(entry)
+
+      // 1 initial attempt + 2 retries = 3 total
+      expect(mockStrategy.prepare).toHaveBeenCalledTimes(3)
+      expect(result.status).toBe('error')
+      expect(result.message).toContain('Prepare failed')
+      expect(mockStrategy.execute).not.toHaveBeenCalled()
+      expect(mockStrategy.finalize).not.toHaveBeenCalled()
+    })
+
+    it('non-retryable prepare failure does not retry', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ retryablePrepareBackoffsMs: [1, 1, 1] })
+      const deps = makeDeps()
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.prepare.mockResolvedValue({
+        success: false,
+        error: 'fatal: could not read from remote',
+        // retryable omitted → falsy
+      })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const result = await worker.processEntry(entry)
+
+      expect(mockStrategy.prepare).toHaveBeenCalledTimes(1)
+      expect(result.status).toBe('error')
+      expect(result.message).toContain('could not read from remote')
+    })
+
+    it('empty retryablePrepareBackoffsMs disables retry loop', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ retryablePrepareBackoffsMs: [] })
+      const deps = makeDeps()
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.prepare.mockResolvedValue({
+        success: false,
+        error: "'REN-1253' is already used by worktree at '/p/REN-1253-AC'",
+        retryable: true,
+      })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const result = await worker.processEntry(entry)
+
+      expect(mockStrategy.prepare).toHaveBeenCalledTimes(1)
+      expect(result.status).toBe('error')
+    })
+
     it('merge conflict triggers ConflictResolver', async () => {
       vi.useRealTimers()
       const config = makeConfig()

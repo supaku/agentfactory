@@ -64,6 +64,15 @@ function mockExecSequence(results: Array<string | Error>) {
   })
 }
 
+/**
+ * The branch-conflict errors that REN-1253 / REN-1254 observed — both git
+ * phrasings. Strategies must treat these as `retryable: true` on prepare.
+ */
+const BRANCH_CONFLICT_USED_BY =
+  "Command failed: git checkout feature/test\nfatal: 'feature/test' is already used by worktree at '/Users/me/repo.wt/REN-1253-AC'"
+const BRANCH_CONFLICT_CHECKED_OUT =
+  "fatal: 'feature/test' is already checked out at '/Users/me/repo/.worktrees/feature-test-DEV'"
+
 describe('createMergeStrategy factory', () => {
   it('returns RebaseStrategy for "rebase"', () => {
     const strategy = createMergeStrategy('rebase')
@@ -101,10 +110,13 @@ describe('RebaseStrategy', () => {
   })
 
   describe('prepare', () => {
-    it('fetches target branch and checks out source branch', async () => {
+    it('fetches both branches and issues a detached checkout at origin/<source>', async () => {
+      // Detached checkout is the core of the fix — a plain `git checkout <source>`
+      // would collide with any concurrent worktree (e.g., the acceptance agent's
+      // `<ISSUE>-AC` worktree) holding the same branch.
       mockExecSequence([
-        '',             // git fetch origin main
-        '',             // git checkout feature/test
+        '',             // git fetch origin main feature/test
+        '',             // git checkout --detach origin/feature/test
         'abc123\n',    // git rev-parse HEAD
       ])
 
@@ -113,14 +125,24 @@ describe('RebaseStrategy', () => {
       expect(result).toEqual({ success: true, headSha: 'abc123' })
       expect(mockExec).toHaveBeenCalledTimes(3)
 
-      // Verify commands and cwd
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git fetch origin main')
+      expect(calls[0][0]).toBe('git fetch origin main feature/test')
       expect(calls[0][1]).toEqual({ cwd: '/worktree' })
-      expect(calls[1][0]).toBe('git checkout feature/test')
+      expect(calls[1][0]).toBe('git checkout --detach origin/feature/test')
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
       expect(calls[2][0]).toBe('git rev-parse HEAD')
-      expect(calls[2][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('never issues a non-detached checkout of the source branch', async () => {
+      // Regression guard for REN-1253 / REN-1254. `git checkout <branch>` (no
+      // --detach) is what produced the "is already used by worktree" failure.
+      mockExecSuccess('abc123\n')
+
+      await strategy.prepare(defaultCtx)
+
+      for (const [cmd] of mockExec.mock.calls) {
+        expect(cmd).not.toMatch(/git checkout (?!--detach)/)
+      }
     })
 
     it('returns failure when fetch fails', async () => {
@@ -129,7 +151,33 @@ describe('RebaseStrategy', () => {
       const result = await strategy.prepare(defaultCtx)
 
       expect(result.success).toBe(false)
+      expect(result.retryable).toBeFalsy()
       expect(result.error).toContain('could not read from remote')
+    })
+
+    it('returns retryable=true on "is already used by worktree" error', async () => {
+      mockExecSequence([
+        '',                               // git fetch
+        new Error(BRANCH_CONFLICT_USED_BY), // git checkout --detach
+      ])
+
+      const result = await strategy.prepare(defaultCtx)
+
+      expect(result.success).toBe(false)
+      expect(result.retryable).toBe(true)
+      expect(result.error).toContain('already used by worktree')
+    })
+
+    it('returns retryable=true on "is already checked out at" error', async () => {
+      mockExecSequence([
+        '',                                    // git fetch
+        new Error(BRANCH_CONFLICT_CHECKED_OUT),  // git checkout --detach
+      ])
+
+      const result = await strategy.prepare(defaultCtx)
+
+      expect(result.success).toBe(false)
+      expect(result.retryable).toBe(true)
     })
   })
 
@@ -192,27 +240,61 @@ describe('RebaseStrategy', () => {
   })
 
   describe('finalize', () => {
-    it('force-pushes source branch and fast-forward merges to target', async () => {
+    it('pushes source via HEAD:<source> refspec and fast-forwards target with the rebased SHA', async () => {
+      // Run full prepare+execute so finalize sees the rebased SHA via the
+      // strategy's per-context state map.
       mockExecSequence([
-        '',  // git push origin feature/test --force-with-lease
-        '',  // git checkout main
-        '',  // git merge --ff-only feature/test
-        '',  // git push origin main
+        '', '', 'abc123\n',   // prepare
+        '', 'def456\n',       // execute → rebasedSha=def456
+        '',                   // finalize: push origin HEAD:feature/test --force-with-lease=feature/test
+        '',                   // finalize: push origin def456:main
       ])
 
+      await strategy.prepare(defaultCtx)
+      await strategy.execute(defaultCtx)
       await strategy.finalize(defaultCtx)
 
-      expect(mockExec).toHaveBeenCalledTimes(4)
+      const finalizeCalls = mockExec.mock.calls.slice(5)
+      expect(finalizeCalls).toHaveLength(2)
+      expect(finalizeCalls[0][0]).toBe(
+        'git push origin HEAD:feature/test --force-with-lease=feature/test',
+      )
+      expect(finalizeCalls[0][1]).toEqual({ cwd: '/worktree' })
+      expect(finalizeCalls[1][0]).toBe('git push origin def456:main')
+      expect(finalizeCalls[1][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('never issues a non-detached checkout during finalize', async () => {
+      // Regression guard — the old finalize did `git checkout main`, which
+      // would collide with anyone who has `main` checked out elsewhere.
+      mockExecSequence([
+        '', '', 'abc123\n',  // prepare
+        '', 'def456\n',      // execute
+        '', '',              // finalize pushes
+      ])
+
+      await strategy.prepare(defaultCtx)
+      await strategy.execute(defaultCtx)
+      await strategy.finalize(defaultCtx)
+
+      for (const [cmd] of mockExec.mock.calls) {
+        expect(cmd).not.toMatch(/git checkout (?!--detach)/)
+      }
+    })
+
+    it('falls back to current HEAD when no rebasedSha was captured', async () => {
+      mockExecSequence([
+        'fallback-sha\n',   // git rev-parse HEAD (fallback path)
+        '',                 // push HEAD:<source>
+        '',                 // push <sha>:<target>
+      ])
+
+      // finalize called without prior prepare/execute — state map has no entry
+      await strategy.finalize({ ...defaultCtx })
 
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git push origin feature/test --force-with-lease')
-      expect(calls[0][1]).toEqual({ cwd: '/worktree' })
-      expect(calls[1][0]).toBe('git checkout main')
-      expect(calls[1][1]).toEqual({ cwd: '/worktree' })
-      expect(calls[2][0]).toBe('git merge --ff-only feature/test')
-      expect(calls[2][1]).toEqual({ cwd: '/worktree' })
-      expect(calls[3][0]).toBe('git push origin main')
-      expect(calls[3][1]).toEqual({ cwd: '/worktree' })
+      expect(calls[0][0]).toBe('git rev-parse HEAD')
+      expect(calls[2][0]).toBe('git push origin fallback-sha:main')
     })
 
     it('throws when push fails', async () => {
@@ -236,10 +318,10 @@ describe('MergeCommitStrategy', () => {
   })
 
   describe('prepare', () => {
-    it('fetches and checks out target branch', async () => {
+    it('fetches both branches and detaches at origin/<target>', async () => {
       mockExecSequence([
-        '',            // git fetch origin main
-        '',            // git checkout main
+        '',            // git fetch origin main feature/test
+        '',            // git checkout --detach origin/main
         'aaa111\n',   // git rev-parse HEAD
       ])
 
@@ -247,9 +329,17 @@ describe('MergeCommitStrategy', () => {
 
       expect(result).toEqual({ success: true, headSha: 'aaa111' })
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git fetch origin main')
-      expect(calls[1][0]).toBe('git checkout main')
+      expect(calls[0][0]).toBe('git fetch origin main feature/test')
+      expect(calls[1][0]).toBe('git checkout --detach origin/main')
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('never issues a non-detached checkout of the target branch', async () => {
+      mockExecSuccess('aaa111\n')
+      await strategy.prepare(defaultCtx)
+      for (const [cmd] of mockExec.mock.calls) {
+        expect(cmd).not.toMatch(/git checkout (?!--detach)/)
+      }
     })
 
     it('returns failure on error', async () => {
@@ -258,7 +348,20 @@ describe('MergeCommitStrategy', () => {
       const result = await strategy.prepare(defaultCtx)
 
       expect(result.success).toBe(false)
+      expect(result.retryable).toBeFalsy()
       expect(result.error).toContain('pathspec did not match')
+    })
+
+    it('returns retryable=true on branch-conflict errors (both phrasings)', async () => {
+      for (const msg of [BRANCH_CONFLICT_USED_BY, BRANCH_CONFLICT_CHECKED_OUT]) {
+        vi.clearAllMocks()
+        mockExecSequence(['', new Error(msg)])
+
+        const result = await strategy.prepare(defaultCtx)
+
+        expect(result.success).toBe(false)
+        expect(result.retryable).toBe(true)
+      }
     })
   })
 
@@ -308,15 +411,23 @@ describe('MergeCommitStrategy', () => {
   })
 
   describe('finalize', () => {
-    it('pushes target branch', async () => {
+    it('pushes HEAD to the target branch via refspec', async () => {
       mockExecSuccess()
 
       await strategy.finalize(defaultCtx)
 
       expect(mockExec).toHaveBeenCalledTimes(1)
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git push origin main')
+      expect(calls[0][0]).toBe('git push origin HEAD:main')
       expect(calls[0][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('never issues a non-detached checkout during finalize', async () => {
+      mockExecSuccess()
+      await strategy.finalize(defaultCtx)
+      for (const [cmd] of mockExec.mock.calls) {
+        expect(cmd).not.toMatch(/git checkout (?!--detach)/)
+      }
     })
   })
 })
@@ -334,10 +445,10 @@ describe('SquashStrategy', () => {
   })
 
   describe('prepare', () => {
-    it('fetches and checks out target branch', async () => {
+    it('fetches both branches and detaches at origin/<target>', async () => {
       mockExecSequence([
-        '',            // git fetch origin main
-        '',            // git checkout main
+        '',            // git fetch origin main feature/test
+        '',            // git checkout --detach origin/main
         'ccc333\n',   // git rev-parse HEAD
       ])
 
@@ -345,9 +456,29 @@ describe('SquashStrategy', () => {
 
       expect(result).toEqual({ success: true, headSha: 'ccc333' })
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git fetch origin main')
-      expect(calls[1][0]).toBe('git checkout main')
+      expect(calls[0][0]).toBe('git fetch origin main feature/test')
+      expect(calls[1][0]).toBe('git checkout --detach origin/main')
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('never issues a non-detached checkout of the target branch', async () => {
+      mockExecSuccess('ccc333\n')
+      await strategy.prepare(defaultCtx)
+      for (const [cmd] of mockExec.mock.calls) {
+        expect(cmd).not.toMatch(/git checkout (?!--detach)/)
+      }
+    })
+
+    it('returns retryable=true on branch-conflict errors (both phrasings)', async () => {
+      for (const msg of [BRANCH_CONFLICT_USED_BY, BRANCH_CONFLICT_CHECKED_OUT]) {
+        vi.clearAllMocks()
+        mockExecSequence(['', new Error(msg)])
+
+        const result = await strategy.prepare(defaultCtx)
+
+        expect(result.success).toBe(false)
+        expect(result.retryable).toBe(true)
+      }
     })
   })
 
@@ -400,14 +531,14 @@ describe('SquashStrategy', () => {
   })
 
   describe('finalize', () => {
-    it('pushes target branch', async () => {
+    it('pushes HEAD to the target branch via refspec', async () => {
       mockExecSuccess()
 
       await strategy.finalize(defaultCtx)
 
       expect(mockExec).toHaveBeenCalledTimes(1)
       const calls = mockExec.mock.calls
-      expect(calls[0][0]).toBe('git push origin main')
+      expect(calls[0][0]).toBe('git push origin HEAD:main')
       expect(calls[0][1]).toEqual({ cwd: '/worktree' })
     })
   })

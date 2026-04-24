@@ -29,6 +29,17 @@ export interface PrepareResult {
   error?: string
   /** HEAD SHA after preparation */
   headSha?: string
+  /**
+   * When true, the failure is transient and the merge worker should requeue
+   * the PR with backoff instead of surfacing a hard failure to the issue.
+   *
+   * Currently set when prepare detects a branch-conflict error — the branch
+   * is held by another worktree (typically the acceptance agent's `-AC`
+   * worktree whose teardown races with merge-queue handoff). The detached
+   * checkouts used by the strategies bypass this lock, but this field lets
+   * any lingering cases degrade gracefully rather than dead-end the PR.
+   */
+  retryable?: boolean
 }
 
 /** Result of the execute (merge) step */

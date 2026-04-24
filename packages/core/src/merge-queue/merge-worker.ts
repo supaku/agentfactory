@@ -56,7 +56,26 @@ export interface MergeWorkerConfig {
    */
   acceptedStatus?: string
   rejectedStatus?: string
+  /**
+   * In-process backoffs (ms) used when a strategy's prepare() returns
+   * `retryable: true`. The worker sleeps each value in order, retrying
+   * prepare() between sleeps; if all retries are exhausted the PR falls
+   * through to the normal error path.
+   *
+   * This path is defense-in-depth — the strategies use detached checkouts
+   * so the branch-conflict error that originally motivated this retry loop
+   * shouldn't surface in the first place. Kept here so any future transient
+   * condition (including the same conflict reappearing through a different
+   * codepath) degrades gracefully.
+   *
+   * Default: [5000, 15000, 30000] — ~50s total budget, tuned so the worker
+   * doesn't stall the rest of the queue too long on a pathological case.
+   */
+  retryablePrepareBackoffsMs?: number[]
 }
+
+/** Default in-process backoffs for retryable prepare failures. */
+export const DEFAULT_RETRYABLE_PREPARE_BACKOFFS_MS = [5_000, 15_000, 30_000] as const
 
 export interface MergeWorkerDeps {
   storage: {
@@ -286,8 +305,27 @@ export class MergeWorker {
     }
 
     try {
-      // 1. Prepare: fetch latest main
-      const prepareResult = await strategy.prepare(ctx)
+      // 1. Prepare: fetch latest main.
+      //
+      // Transient prepare failures (strategy returns `retryable: true` — e.g.,
+      // an acceptance agent's `<ISSUE>-AC` worktree still holds the branch
+      // during handoff) are retried in-process with backoff before surfacing
+      // to the issue as a hard failure. The strategies' detached checkouts
+      // should prevent this from ever being hit in practice, but we keep the
+      // retry loop as defense-in-depth — the alternative (dead-ending every
+      // PR that loses the teardown race) is much worse than briefly stalling
+      // the queue.
+      const backoffs =
+        this.config.retryablePrepareBackoffsMs ?? [...DEFAULT_RETRYABLE_PREPARE_BACKOFFS_MS]
+      let prepareResult = await strategy.prepare(ctx)
+      for (let i = 0; !prepareResult.success && prepareResult.retryable && i < backoffs.length; i++) {
+        console.log(
+          `[merge-worker] prepare returned retryable error for PR #${entry.prNumber}: ${prepareResult.error}. ` +
+          `Retrying in ${backoffs[i]}ms (attempt ${i + 2}/${backoffs.length + 1})`,
+        )
+        await this.sleep(backoffs[i])
+        prepareResult = await strategy.prepare(ctx)
+      }
       if (!prepareResult.success) {
         return { prNumber: entry.prNumber, status: 'error', message: `Prepare failed: ${prepareResult.error}` }
       }
