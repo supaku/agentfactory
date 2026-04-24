@@ -15,6 +15,7 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { MergeStrategy, MergeContext, PrepareResult, MergeResult } from './types.js'
 import { isBranchConflictError } from '../branch-conflict.js'
+import { cleanWorktreeState } from './worktree-cleanup.js'
 
 const execAsync = promisify(exec)
 
@@ -23,6 +24,7 @@ export class SquashStrategy implements MergeStrategy {
 
   async prepare(ctx: MergeContext): Promise<PrepareResult> {
     try {
+      await cleanWorktreeState(ctx.worktreePath)
       await execAsync(
         `git fetch ${ctx.remote} ${ctx.targetBranch} ${ctx.sourceBranch}`,
         { cwd: ctx.worktreePath },
