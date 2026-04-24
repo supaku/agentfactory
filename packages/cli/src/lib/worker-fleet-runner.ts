@@ -120,6 +120,29 @@ function fleetLog(
   )
 }
 
+/**
+ * Resolve when the given child process has exited. If it has *already* exited
+ * by the time this is called, the returned promise resolves immediately.
+ *
+ * Exported for testing. The naive
+ *
+ *   new Promise<void>((resolve) => child.on('exit', () => resolve()))
+ *
+ * pattern deadlocks when the exit event has already fired: Node does not
+ * re-emit `exit` to handlers registered after the fact. That matters for the
+ * fleet's shutdown path because SIGINT reaches worker children directly
+ * through the process group, so they often exit before the parent's shutdown
+ * code gets to register its listener.
+ */
+export function waitForProcessExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve()
+  }
+  return new Promise<void>((resolve) => {
+    child.once('exit', () => resolve())
+  })
+}
+
 function getDefaultWorkerScript(): string {
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
@@ -186,8 +209,18 @@ class WorkerFleet {
       return
     }
 
-    // Wire up AbortSignal for graceful shutdown
-    const onAbort = () => this.shutdown('AbortSignal')
+    // Wire up AbortSignal for graceful shutdown.
+    //
+    // The `shuttingDown` flag is set SYNCHRONOUSLY here, not inside the async
+    // `shutdown()` body. Otherwise when SIGINT hits the process group
+    // (terminal Ctrl+C), worker children receive the signal and exit before
+    // the parent's `shutdown()` has a chance to run — and the exit handler
+    // at spawnWorker() misinterprets those clean exits as crashes and
+    // schedules restarts. Setting the flag here closes that race window.
+    const onAbort = () => {
+      this.shuttingDown = true
+      void this.shutdown('AbortSignal')
+    }
     signal?.addEventListener('abort', onAbort, { once: true })
 
     try {
@@ -351,47 +384,70 @@ class WorkerFleet {
     })
   }
 
+  private shutdownStarted = false
+
   private async shutdown(reason: string): Promise<void> {
-    if (this.shuttingDown) return
+    if (this.shutdownStarted) return
+    this.shutdownStarted = true
+    // Also set `shuttingDown` — onAbort sets it synchronously on signal-driven
+    // shutdown, but shutdown() can also be invoked directly (e.g., auto-update)
+    // where that hasn't happened yet. Idempotent either way.
     this.shuttingDown = true
 
     process.stdout.write(
       `\r\n${colors.yellow}Received ${reason} - shutting down fleet...${colors.reset}\r\n`,
     )
 
+    // Stop the merge worker sidecar in parallel with worker teardown. The
+    // sidecar has its own tight poll loop that can mark PRs failed / enqueue
+    // labeled PRs between now and when we'd otherwise get around to calling
+    // stop() — serializing it behind worker exits (the old order) meant the
+    // queue kept churning during the shutdown window, and when the worker
+    // wait hung on a race, the sidecar never got stopped at all.
+    const sidecarStop = this.mergeWorkerHandle
+      ? (async () => {
+          fleetLog(null, colors.cyan, 'INF', 'Stopping merge worker sidecar...')
+          this.mergeWorkerHandle!.stop()
+          try {
+            await this.mergeWorkerHandle!.done
+          } catch {
+            // Sidecar done-promise surfaces worker-loop errors; we're
+            // tearing down anyway.
+          }
+          fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar stopped')
+        })()
+      : Promise.resolve()
+
     for (const [id, worker] of this.workers) {
       fleetLog(id, worker.color, 'INF', 'Stopping worker...')
-      worker.process.kill('SIGTERM')
+      try {
+        worker.process.kill('SIGTERM')
+      } catch {
+        // Process may already be dead — no-op.
+      }
     }
 
-    // Wait for workers to exit (max 30 seconds)
+    // Wait for workers to exit (max 30 seconds).
     const forceKillTimeout = setTimeout(() => {
       process.stdout.write(
         `${colors.red}Timeout waiting for workers - force killing${colors.reset}\r\n`,
       )
       for (const worker of this.workers.values()) {
-        worker.process.kill('SIGKILL')
+        try {
+          worker.process.kill('SIGKILL')
+        } catch {
+          // Already dead.
+        }
       }
     }, 30000)
 
     await Promise.all(
-      Array.from(this.workers.values()).map(
-        (worker) =>
-          new Promise<void>((resolve) => {
-            worker.process.on('exit', () => resolve())
-          }),
-      ),
+      Array.from(this.workers.values()).map((worker) => waitForProcessExit(worker.process)),
     )
 
     clearTimeout(forceKillTimeout)
+    await sidecarStop
 
-    // Stop merge worker sidecar
-    if (this.mergeWorkerHandle) {
-      fleetLog(null, colors.cyan, 'INF', 'Stopping merge worker sidecar...')
-      this.mergeWorkerHandle.stop()
-      await this.mergeWorkerHandle.done
-      fleetLog(null, colors.cyan, 'INF', 'Merge worker sidecar stopped')
-    }
     process.stdout.write(`${colors.green}All workers stopped${colors.reset}\r\n`)
 
     // Resolve the running promise so start() returns
