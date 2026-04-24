@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.55
+
+### Fixes
+
+- **Merge queue worktree reset** — Reset worktree state before every `prepare()` call, ensuring a clean starting point and preventing stale state from prior merge attempts from causing failures.
+
 ## v0.8.54
 
 ### Fixes
