@@ -113,6 +113,68 @@ describe('captureQualityBaseline', () => {
 
     // Should record at least 1 failure, not throw
     expect(baseline.tests.failed).toBeGreaterThanOrEqual(1)
+    // And flag the output as unparseable so downstream consumers (quality
+    // ratchet in particular) can tell "we don't know" from "zero tests".
+    expect(baseline.tests.parseError).toBeTruthy()
+  })
+
+  it('sets parseError when command succeeds but output format is unrecognised', () => {
+    // git rev-parse HEAD
+    mockExecSync.mockReturnValueOnce('abc123\n')
+    // JSON reporter returns something that isn't valid vitest JSON
+    mockExecSync.mockReturnValueOnce('not-json-output')
+    // text fallback also returns output the text parser can't make sense of
+    mockExecSync.mockReturnValueOnce('Some other tool\nFinished successfully.\n')
+    // typecheck
+    mockExecSync.mockReturnValueOnce('')
+
+    const baseline = captureQualityBaseline('/work', {})
+
+    // The critical invariant: a `total: 0` must never masquerade as a
+    // real measurement. REN-1253 follow-up: silent fallback to 0 was
+    // failing the merge queue's ratchet check on every PR.
+    expect(baseline.tests.parseError).toBeTruthy()
+    expect(baseline.tests.total).toBe(0)
+    expect(baseline.tests.parseError).toMatch(/parser/i)
+  })
+
+  it('does not set parseError when the JSON reporter parses cleanly', () => {
+    mockExecSync.mockReturnValueOnce('abc123\n')
+    mockExecSync.mockReturnValueOnce(JSON.stringify({ numTotalTests: 42, numPassedTests: 42, numFailedTests: 0 }))
+    mockExecSync.mockReturnValueOnce('')
+
+    const baseline = captureQualityBaseline('/work', {})
+
+    expect(baseline.tests.parseError).toBeUndefined()
+    expect(baseline.tests.total).toBe(42)
+  })
+
+  it('does not set parseError when the text parser recognises the summary', () => {
+    mockExecSync.mockReturnValueOnce('abc123\n')
+    mockExecSync.mockImplementationOnce(() => { throw new Error('json reporter unavailable') })
+    mockExecSync.mockReturnValueOnce('Tests  1309 passed | 0 failed | 1309 total')
+    mockExecSync.mockReturnValueOnce('')
+
+    const baseline = captureQualityBaseline('/work', {})
+
+    expect(baseline.tests.parseError).toBeUndefined()
+    expect(baseline.tests.total).toBe(1309)
+  })
+
+  it('redirects stderr into the captured output (2>&1)', () => {
+    // Production regression: vitest 4+ writes its summary to stderr, and
+    // execSync's default return captures stdout only. Without 2>&1, the
+    // text parser sees an empty string on success and falls back to
+    // `total: 0`, failing the ratchet check.
+    mockExecSync.mockReturnValueOnce('abc123\n')
+    mockExecSync.mockReturnValueOnce('{"numTotalTests":5,"numPassedTests":5,"numFailedTests":0}')
+    mockExecSync.mockReturnValueOnce('')
+
+    captureQualityBaseline('/work', { testCommand: 'pnpm test' })
+
+    // The JSON test command call is the 2nd execSync call (git rev-parse is first).
+    const testCall = mockExecSync.mock.calls[1]
+    expect(testCall[0]).toContain('2>&1')
   })
 
   it('returns unknown commit SHA when git fails', () => {

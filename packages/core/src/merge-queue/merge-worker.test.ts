@@ -1185,6 +1185,202 @@ describe('MergeWorker', () => {
 
       expect(deps.storage.markBlocked).toHaveBeenCalledWith('repo-1', 42, expect.any(String))
     })
+
+    // ---------------------------------------------------------------------
+    // Label cleanup on terminal failures
+    //
+    // Without this, the sidecar's `approved-for-merge` label poller
+    // re-enqueues failed PRs every poll tick → `markFailed → poller
+    // re-enqueues → markFailed` hot-loop (REN-1253 follow-up).
+    // ---------------------------------------------------------------------
+
+    it('removes the approved-for-merge label after a terminal conflict', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({ prLabeler: { removeApprovedForMergeLabel } })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.execute.mockResolvedValue({ status: 'conflict', conflictFiles: ['a.ts'] })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn().mockResolvedValue({ status: 'escalated', method: 'escalation', message: 'Conflict' }),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      expect(removeApprovedForMergeLabel).toHaveBeenCalledWith(42)
+    })
+
+    it('removes the approved-for-merge label after a test failure', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        escalation: { onConflict: 'reassign', onTestFailure: 'notify' },
+      })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({ prLabeler: { removeApprovedForMergeLabel } })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecFailure('Tests failed', 'FAIL: 2 tests')
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      expect(removeApprovedForMergeLabel).toHaveBeenCalledWith(42)
+    })
+
+    it('does NOT remove the label on successful merge (merge handles branch removal)', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({ prLabeler: { removeApprovedForMergeLabel } })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+      expect(removeApprovedForMergeLabel).not.toHaveBeenCalled()
+    })
+
+    it('queue keeps advancing when prLabeler.removeApprovedForMergeLabel throws', async () => {
+      // Label removal is best-effort — a gh CLI failure must not block
+      // the next PR from being processed.
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const removeApprovedForMergeLabel = vi.fn().mockRejectedValue(new Error('gh: not authenticated'))
+      const deps = makeDeps({ prLabeler: { removeApprovedForMergeLabel } })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.execute.mockResolvedValue({ status: 'conflict', conflictFiles: ['a.ts'] })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn().mockResolvedValue({ status: 'escalated', method: 'escalation', message: 'Conflict' }),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await expect(startPromise).resolves.toBeUndefined()
+
+      expect(removeApprovedForMergeLabel).toHaveBeenCalled()
+      expect(deps.storage.markBlocked).toHaveBeenCalled()
+    })
+
+    it('no-ops when no prLabeler is wired (non-GitHub deployments)', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const deps = makeDeps()  // No prLabeler
+      expect(deps.prLabeler).toBeUndefined()
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.execute.mockResolvedValue({ status: 'conflict', conflictFiles: ['a.ts'] })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({
+        resolve: vi.fn().mockResolvedValue({ status: 'escalated', method: 'escalation', message: 'Conflict' }),
+      }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await expect(startPromise).resolves.toBeUndefined()
+
+      expect(deps.storage.markBlocked).toHaveBeenCalled()
+    })
   })
 
   // -------------------------------------------------------------------------

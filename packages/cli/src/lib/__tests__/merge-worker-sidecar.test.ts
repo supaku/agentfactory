@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+vi.mock('child_process', async () => {
+  const actual = await vi.importActual<typeof import('child_process')>('child_process')
+  return { ...actual, execFile: vi.fn() }
+})
+
+import { execFile } from 'child_process'
 import {
   pollApprovedForMergeLabel,
   splitRepoId,
   resolveIssueTracker,
+  removeApprovedForMergeLabel,
   APPROVED_FOR_MERGE_LABEL,
   type LabelPollerAdapter,
 } from '../merge-worker-sidecar.js'
 import { LocalMergeQueueAdapter } from '@renseiai/agentfactory'
 import { createLocalMergeQueueStorage } from '@renseiai/agentfactory-server'
+
+const mockExecFile = vi.mocked(execFile)
 
 // ---------------------------------------------------------------------------
 // splitRepoId
@@ -390,5 +400,73 @@ describe('LocalMergeQueueAdapter wiring via bridge', () => {
     })
 
     expect(mock.isEnqueued).toHaveBeenCalledWith('RenseiAI/platform', 61)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// removeApprovedForMergeLabel
+//
+// Breaks the `markFailed → label poller re-enqueues → markFailed` hot loop
+// (REN-1253 follow-up, v0.8.55+). Called by the merge worker on every
+// terminal failure state; must be idempotent and best-effort.
+// ---------------------------------------------------------------------------
+
+describe('removeApprovedForMergeLabel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function mockExecFileSuccess(stdout = '') {
+    mockExecFile.mockImplementation(((_cmd: string, _args: readonly string[], _opts: unknown, callback?: (err: unknown, stdout: string, stderr: string) => void) => {
+      const cb = typeof _opts === 'function' ? _opts : callback
+      cb?.(null, stdout, '')
+      return {} as ReturnType<typeof execFile>
+    }) as unknown as typeof execFile)
+  }
+
+  function mockExecFileFailure(message: string) {
+    mockExecFile.mockImplementation(((_cmd: string, _args: readonly string[], _opts: unknown, callback?: (err: unknown, stdout: string, stderr: string) => void) => {
+      const cb = typeof _opts === 'function' ? _opts : callback
+      cb?.(new Error(message), '', message)
+      return {} as ReturnType<typeof execFile>
+    }) as unknown as typeof execFile)
+  }
+
+  it('calls `gh pr edit <N> --repo <owner>/<repo> --remove-label approved-for-merge`', async () => {
+    mockExecFileSuccess()
+
+    await removeApprovedForMergeLabel('RenseiAI', 'platform', 63)
+
+    expect(mockExecFile).toHaveBeenCalledTimes(1)
+    const [cmd, args] = mockExecFile.mock.calls[0] as unknown as [string, string[]]
+    expect(cmd).toBe('gh')
+    expect(args).toEqual([
+      'pr', 'edit', '63',
+      '--repo', 'RenseiAI/platform',
+      '--remove-label', 'approved-for-merge',
+    ])
+  })
+
+  it('swallows "does not have label" errors (label already absent is success)', async () => {
+    mockExecFileFailure('HTTP 422: Label does not exist on this issue')
+
+    // `gh` returns non-zero when the label isn't on the PR, but the
+    // desired post-condition (label absent) already holds. We must not
+    // re-throw or log as if it's a real failure.
+    await expect(removeApprovedForMergeLabel('RenseiAI', 'platform', 63)).resolves.toBeUndefined()
+  })
+
+  it('does not throw when gh CLI is missing', async () => {
+    mockExecFileFailure('spawn gh ENOENT')
+
+    // On a workstation without gh installed the removal is a warning,
+    // not a fatal error. The worker must keep processing the queue.
+    await expect(removeApprovedForMergeLabel('RenseiAI', 'platform', 63)).resolves.toBeUndefined()
+  })
+
+  it('does not throw when the PR number is invalid', async () => {
+    mockExecFileFailure('no pull requests found for branch')
+
+    await expect(removeApprovedForMergeLabel('RenseiAI', 'platform', 99999)).resolves.toBeUndefined()
   })
 })

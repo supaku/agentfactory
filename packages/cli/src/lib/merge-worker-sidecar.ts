@@ -235,6 +235,43 @@ export async function pollApprovedForMergeLabel(
   return enqueued
 }
 
+/**
+ * Remove the `approved-for-merge` label from a PR via the `gh` CLI. Best-
+ * effort — logs on failure but never throws. Exported for testing.
+ *
+ * `gh pr edit --remove-label` is idempotent: if the label isn't present it
+ * exits non-zero with "Unprocessable Entity" style output. We treat that as
+ * success because the end state is what we want.
+ */
+export async function removeApprovedForMergeLabel(
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<void> {
+  try {
+    await execFileAsync(
+      'gh',
+      [
+        'pr', 'edit', String(prNumber),
+        '--repo', `${owner}/${repo}`,
+        '--remove-label', APPROVED_FOR_MERGE_LABEL,
+      ],
+      { timeout: LABEL_POLL_TIMEOUT_MS },
+    )
+    console.log(`[merge-worker] removed ${APPROVED_FOR_MERGE_LABEL} label from PR #${prNumber}`)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // Label already absent is success from our perspective — the PR no
+    // longer has the label, which is the desired post-condition.
+    if (msg.includes('does not have label') || msg.includes('not found')) {
+      return
+    }
+    console.warn(
+      `[merge-worker] failed to remove ${APPROVED_FOR_MERGE_LABEL} label from PR #${prNumber}: ${msg}`,
+    )
+  }
+}
+
 async function defaultListLabeledPRs(
   owner: string,
   repo: string,
@@ -363,6 +400,19 @@ export function startMergeWorkerSidecar(
   // originating issue won't auto-demote.
   const issueTracker = resolveIssueTracker(config.issueTracker, config.proxyConfig)
 
+  // Wire a PR labeler when we can parse owner/repo from the repoId.
+  // Non-GitHub deployments (or unparseable repoIds) skip it — the worker
+  // will no-op the label-removal call. On terminal failures (conflict,
+  // test-failure, error) the worker removes the `approved-for-merge`
+  // label so the label poller doesn't immediately re-enqueue the same PR.
+  const labelRepoParts = splitRepoId(repoId)
+  const prLabeler = labelRepoParts
+    ? {
+        removeApprovedForMergeLabel: (prNumber: number) =>
+          removeApprovedForMergeLabel(labelRepoParts.owner, labelRepoParts.repo, prNumber),
+      }
+    : undefined
+
   // Wire Redis deps for the merge worker
   const storage = new MergeQueueStorage()
   const deps: MergeWorkerDeps = {
@@ -385,6 +435,7 @@ export function startMergeWorkerSidecar(
       expire: (key, seconds) => redisExpire(key, seconds).then(() => undefined),
     },
     ...(issueTracker ? { issueTracker } : {}),
+    ...(prLabeler ? { prLabeler } : {}),
   }
 
   const worker = new MergeWorker(workerConfig, deps)
