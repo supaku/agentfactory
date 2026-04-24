@@ -192,16 +192,20 @@ export async function pollApprovedForMergeLabel(
   repo: string,
   options: {
     /** Injectable for testing — defaults to `gh pr list` via execFile. */
-    listLabeledPRs?: (owner: string, repo: string) => Promise<LabeledPR[]>
+    listLabeledPRs?: (owner: string, repo: string, signal?: AbortSignal) => Promise<LabeledPR[]>
     log?: (msg: string) => void
+    /** Abort signal; an in-flight `gh` call is killed and the poll returns 0 on abort. */
+    signal?: AbortSignal
   } = {},
 ): Promise<number> {
   const log = options.log ?? ((m: string) => console.log(`[merge-worker] ${m}`))
   const list = options.listLabeledPRs ?? defaultListLabeledPRs
 
+  if (options.signal?.aborted) return 0
+
   let prs: LabeledPR[]
   try {
-    prs = await list(owner, repo)
+    prs = await list(owner, repo, options.signal)
   } catch (error) {
     log(`label poll failed: ${error instanceof Error ? error.message : String(error)}`)
     return 0
@@ -211,6 +215,9 @@ export async function pollApprovedForMergeLabel(
 
   let enqueued = 0
   for (const pr of prs) {
+    // Bail mid-iteration if shutdown has been requested — the fleet is
+    // trying to tear down and we don't want to keep enqueueing PRs.
+    if (options.signal?.aborted) break
     try {
       const canEnqueue = await adapter.canEnqueue(owner, repo, pr.number)
       if (!canEnqueue) continue
@@ -228,7 +235,11 @@ export async function pollApprovedForMergeLabel(
   return enqueued
 }
 
-async function defaultListLabeledPRs(owner: string, repo: string): Promise<LabeledPR[]> {
+async function defaultListLabeledPRs(
+  owner: string,
+  repo: string,
+  signal?: AbortSignal,
+): Promise<LabeledPR[]> {
   const { stdout } = await execFileAsync(
     'gh',
     [
@@ -239,7 +250,7 @@ async function defaultListLabeledPRs(owner: string, repo: string): Promise<Label
       '--json', 'number',
       '--limit', String(LABEL_POLL_MAX_PRS),
     ],
-    { timeout: LABEL_POLL_TIMEOUT_MS },
+    { timeout: LABEL_POLL_TIMEOUT_MS, signal },
   )
   const parsed = JSON.parse(stdout.trim() || '[]') as Array<{ number: number }>
   return parsed.filter((p): p is LabeledPR => typeof p.number === 'number')
@@ -439,7 +450,7 @@ function startLabelPollLoop(
   let stopped = false
   const run = async (): Promise<void> => {
     if (stopped || signal?.aborted) return
-    await pollApprovedForMergeLabel(adapter, owner, repo)
+    await pollApprovedForMergeLabel(adapter, owner, repo, { signal })
   }
 
   // First tick immediately so a labeled PR isn't delayed by up to pollInterval

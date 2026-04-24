@@ -153,6 +153,70 @@ describe('pollApprovedForMergeLabel', () => {
     // the constant, acceptance-template renders must update in lockstep.
     expect(APPROVED_FOR_MERGE_LABEL).toBe('approved-for-merge')
   })
+
+  // -----------------------------------------------------------------------
+  // AbortSignal plumbing — the sidecar kept marking PRs failed + enqueueing
+  // labeled PRs for ~30s after SIGINT. Every shutdown-aware code path must
+  // short-circuit when the signal has aborted.
+  // -----------------------------------------------------------------------
+
+  it('returns 0 immediately when the signal is already aborted (no list call)', async () => {
+    const adapter = makeAdapter()
+    const listLabeledPRs = vi.fn(async () => [{ number: 61 }])
+    const controller = new AbortController()
+    controller.abort()
+
+    const enqueued = await pollApprovedForMergeLabel(
+      adapter, 'RenseiAI', 'platform',
+      { listLabeledPRs, log: () => {}, signal: controller.signal },
+    )
+
+    expect(enqueued).toBe(0)
+    expect(listLabeledPRs).not.toHaveBeenCalled()
+    expect(adapter.canEnqueueMock).not.toHaveBeenCalled()
+    expect(adapter.enqueueMock).not.toHaveBeenCalled()
+  })
+
+  it('passes the signal through to the list callback (so execFile can kill gh)', async () => {
+    const adapter = makeAdapter()
+    const controller = new AbortController()
+    const listLabeledPRs = vi.fn(async (_o: string, _r: string, signal?: AbortSignal) => {
+      expect(signal).toBe(controller.signal)
+      return [{ number: 61 }]
+    })
+
+    await pollApprovedForMergeLabel(
+      adapter, 'RenseiAI', 'platform',
+      { listLabeledPRs, log: () => {}, signal: controller.signal },
+    )
+
+    expect(listLabeledPRs).toHaveBeenCalledWith('RenseiAI', 'platform', controller.signal)
+  })
+
+  it('stops mid-iteration when the signal aborts between PRs', async () => {
+    const adapter = makeAdapter()
+    const controller = new AbortController()
+    // After the first enqueue, abort — the loop should break before #72.
+    adapter.enqueueMock.mockImplementation(async () => {
+      controller.abort()
+      return { state: 'queued' }
+    })
+
+    const enqueued = await pollApprovedForMergeLabel(
+      adapter, 'RenseiAI', 'platform',
+      {
+        listLabeledPRs: async () => [{ number: 61 }, { number: 72 }, { number: 85 }],
+        log: () => {},
+        signal: controller.signal,
+      },
+    )
+
+    expect(enqueued).toBe(1)
+    expect(adapter.enqueueMock).toHaveBeenCalledTimes(1)
+    // #72 and #85 never touched.
+    expect(adapter.enqueueMock).not.toHaveBeenCalledWith('RenseiAI', 'platform', 72)
+    expect(adapter.enqueueMock).not.toHaveBeenCalledWith('RenseiAI', 'platform', 85)
+  })
 })
 
 // ---------------------------------------------------------------------------
