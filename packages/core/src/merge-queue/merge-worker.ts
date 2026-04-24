@@ -255,6 +255,14 @@ export class MergeWorker {
           case 'merged':
             await this.deps.storage.markCompleted(this.config.repoId, result.prNumber)
             await this.bubbleResultToIssue(entry, result, 'merged')
+            // Remove the label even on success: GitHub's PR-state update is
+            // async, so `gh pr list --state open --label approved-for-merge`
+            // can still include the just-merged PR for ~10s afterwards.
+            // Without this, the label poller re-enqueues the PR, the worker
+            // tries to fetch the already-deleted source branch, and marks
+            // it failed — bubbling a spurious Rejected status to Linear for
+            // a PR that actually merged cleanly.
+            await this.removeApprovedForMergeLabel(result.prNumber)
             break
           case 'conflict':
             await this.deps.storage.markBlocked(this.config.repoId, result.prNumber, result.message ?? 'Merge conflict')
