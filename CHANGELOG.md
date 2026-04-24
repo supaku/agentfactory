@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.57
+
+### Fixes
+
+- **Codex elicitation hang** — Respond to elicitation and unknown server requests instead of hanging, preventing Codex sessions from stalling on interactive prompts.
+
+- **Quality baseline vitest parsing** — Fix test count parsing under pnpm 10 + vitest 4, where output format changes broke the quality baseline parser.
+
+- **Merge queue label cleanup** — Remove `approved-for-merge` label on successful merge too, not just on failure, keeping label state consistent.
+
 ## v0.8.56
 
 ### Fixes
