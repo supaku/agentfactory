@@ -1269,7 +1269,13 @@ describe('MergeWorker', () => {
       expect(removeApprovedForMergeLabel).toHaveBeenCalledWith(42)
     })
 
-    it('does NOT remove the label on successful merge (merge handles branch removal)', async () => {
+    it('also removes the label on successful merge (closes the GitHub async-update race)', async () => {
+      // GitHub's PR-state update is async: for ~10s after the merge push,
+      // `gh pr list --state open --label approved-for-merge` still returns
+      // the just-merged PR. Without removing the label on success, the
+      // label poller re-enqueues the PR, the worker tries to fetch the
+      // deleted source branch, marks it failed, and bubbles a spurious
+      // Rejected status to the originating issue.
       vi.useRealTimers()
       const config = makeConfig({ pollInterval: 50 })
       const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
@@ -1302,7 +1308,7 @@ describe('MergeWorker', () => {
       await startPromise
 
       expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
-      expect(removeApprovedForMergeLabel).not.toHaveBeenCalled()
+      expect(removeApprovedForMergeLabel).toHaveBeenCalledWith(42)
     })
 
     it('queue keeps advancing when prLabeler.removeApprovedForMergeLabel throws', async () => {
