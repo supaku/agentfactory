@@ -6,6 +6,8 @@ import {
   APPROVED_FOR_MERGE_LABEL,
   type LabelPollerAdapter,
 } from '../merge-worker-sidecar.js'
+import { LocalMergeQueueAdapter } from '@renseiai/agentfactory'
+import { createLocalMergeQueueStorage } from '@renseiai/agentfactory-server'
 
 // ---------------------------------------------------------------------------
 // splitRepoId
@@ -235,5 +237,94 @@ describe('resolveIssueTracker', () => {
       apiUrl: 'https://platform.example.com',
       apiKey: 'pf_xxx',
     })).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// LocalMergeQueueAdapter wiring (regression)
+// ---------------------------------------------------------------------------
+//
+// Context: v0.8.53 shipped a sidecar that constructed the label poller's
+// adapter with `new LocalMergeQueueAdapter(deps.storage as never)`. But
+// deps.storage is a narrowed shim that only exposes what MergeWorker
+// needs (dequeue/markCompleted/markFailed/markBlocked/peekAll/dequeueBatch).
+// The adapter calls isEnqueued / getPosition / remove / getFailedReason /
+// getBlockedReason on storage — none of which existed on the shim. At
+// runtime: `this.storage.isEnqueued is not a function`.
+//
+// The `as never` hid the mismatch. The fix routes storage through
+// createLocalMergeQueueStorage (the existing server→core bridge) which
+// returns a fully-typed LocalMergeQueueStorage. Removing the cast means
+// the type system catches this at compile time going forward; this test
+// catches it at runtime for good measure.
+
+describe('LocalMergeQueueAdapter wiring via bridge', () => {
+  /**
+   * Faithful mock of MergeQueueStorage surface for bridge wiring.
+   * All methods return sensible defaults so we can call through without
+   * caring about the data — the test is about wiring, not behavior.
+   */
+  function createMockMergeQueueStorage() {
+    return {
+      enqueue: vi.fn(async () => undefined),
+      dequeue: vi.fn(async () => null),
+      peek: vi.fn(async () => null),
+      peekAll: vi.fn(async () => []),
+      dequeueBatch: vi.fn(async () => []),
+      reorder: vi.fn(async () => undefined),
+      markCompleted: vi.fn(async () => undefined),
+      markFailed: vi.fn(async () => undefined),
+      markBlocked: vi.fn(async () => undefined),
+      getStatus: vi.fn(async () => ({ depth: 0, processing: null, failed: [], blocked: [] })),
+      retry: vi.fn(async () => undefined),
+      skip: vi.fn(async () => undefined),
+      isEnqueued: vi.fn(async () => false),
+      getPosition: vi.fn(async () => null),
+      getFailedReason: vi.fn(async () => null),
+      getBlockedReason: vi.fn(async () => null),
+      list: vi.fn(async () => []),
+      listFailed: vi.fn(async () => []),
+      listBlocked: vi.fn(async () => []),
+    }
+  }
+
+  it('createLocalMergeQueueStorage produces a storage the adapter can use', () => {
+    const storage = createLocalMergeQueueStorage(createMockMergeQueueStorage() as never)
+    // Every method the LocalMergeQueueAdapter touches must be a function —
+    // this is the shape that the `as never` cast was hiding.
+    expect(typeof storage.enqueue).toBe('function')
+    expect(typeof storage.isEnqueued).toBe('function')
+    expect(typeof storage.getPosition).toBe('function')
+    expect(typeof storage.getFailedReason).toBe('function')
+    expect(typeof storage.getBlockedReason).toBe('function')
+    expect(typeof storage.remove).toBe('function')
+    expect(typeof storage.getQueueDepth).toBe('function')
+    expect(typeof storage.peekAll).toBe('function')
+    expect(typeof storage.dequeueBatch).toBe('function')
+  })
+
+  it('adapter.canEnqueue does not crash with "is not a function"', async () => {
+    const storage = createLocalMergeQueueStorage(createMockMergeQueueStorage() as never)
+    const adapter = new LocalMergeQueueAdapter(storage)
+    // canEnqueue only shells out to gh, which will fail in tests — but it
+    // shouldn't throw a TypeError about missing storage methods. If the
+    // storage surface is missing a method, we'd get a sync throw here.
+    await expect(adapter.canEnqueue('RenseiAI', 'platform', 999)).resolves.not.toThrow()
+  })
+
+  it('adapter.enqueue calls isEnqueued without throwing "is not a function"', async () => {
+    const mock = createMockMergeQueueStorage()
+    const storage = createLocalMergeQueueStorage(mock as never)
+    const adapter = new LocalMergeQueueAdapter(storage)
+
+    // adapter.enqueue first checks isEnqueued. If isEnqueued were missing
+    // (the original bug), this would throw "is not a function". With the
+    // bridge in place, it delegates to mock.isEnqueued and proceeds.
+    await adapter.enqueue('RenseiAI', 'platform', 61).catch(() => {
+      /* downstream gh call may fail — that's fine, we only care that the
+         storage dispatch worked. */
+    })
+
+    expect(mock.isEnqueued).toHaveBeenCalledWith('RenseiAI/platform', 61)
   })
 })

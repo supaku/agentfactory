@@ -27,6 +27,7 @@ import {
 } from '@renseiai/agentfactory'
 import {
   MergeQueueStorage,
+  createLocalMergeQueueStorage,
   isRedisConfigured,
   redisSetNX,
   redisDel,
@@ -402,7 +403,13 @@ export function startMergeWorkerSidecar(
   //   - Recovers from missed acceptance events (agent crash, backstop gap)
   //   - Enables human-initiated queueing (`gh pr edit N --add-label …`)
   //   - No effect if repoId is unparseable (e.g., default-fallback string)
-  const adapter = new LocalMergeQueueAdapter(deps.storage as never)
+  //
+  // The adapter requires the full LocalMergeQueueStorage interface
+  // (isEnqueued, getPosition, getQueueDepth, remove, getFailedReason,
+  // getBlockedReason…). The server's MergeQueueStorage doesn't match
+  // that shape 1:1 — e.g., `remove` maps to `skip`. Use the existing
+  // bridge instead of casting; the bridge is the supported adapter path.
+  const adapter = new LocalMergeQueueAdapter(createLocalMergeQueueStorage(storage))
   const repoParts = splitRepoId(repoId)
   const labelPollHandle = repoParts
     ? startLabelPollLoop(adapter, repoParts.owner, repoParts.repo, workerConfig.pollInterval, signal)
