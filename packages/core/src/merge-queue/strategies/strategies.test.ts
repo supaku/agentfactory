@@ -4,14 +4,23 @@ vi.mock('child_process', () => ({
   exec: vi.fn(),
 }))
 
+// Strategy tests don't care how the worktree cleanup is implemented — they
+// just care that it runs before the detached checkout. The real cleanup
+// commands are covered in worktree-cleanup.test.ts.
+vi.mock('./worktree-cleanup.js', () => ({
+  cleanWorktreeState: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { exec } from 'child_process'
 import { createMergeStrategy } from './index.js'
 import { RebaseStrategy } from './rebase-strategy.js'
 import { MergeCommitStrategy } from './merge-commit-strategy.js'
 import { SquashStrategy } from './squash-strategy.js'
+import { cleanWorktreeState } from './worktree-cleanup.js'
 import type { MergeContext } from './types.js'
 
 const mockExec = vi.mocked(exec)
+const mockCleanWorktreeState = vi.mocked(cleanWorktreeState)
 
 /** Default context for all tests */
 const defaultCtx: MergeContext = {
@@ -131,6 +140,25 @@ describe('RebaseStrategy', () => {
       expect(calls[1][0]).toBe('git checkout --detach origin/feature/test')
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
       expect(calls[2][0]).toBe('git rev-parse HEAD')
+    })
+
+    it('cleans worktree state before fetching', async () => {
+      // v0.8.54 regression: without this, the staged lock file from a prior
+      // failed PR's lock-file-regeneration step persisted in the index and
+      // blocked every subsequent `git rebase` with
+      // "Your index contains uncommitted changes."
+      mockExecSequence([
+        '',             // git fetch
+        '',             // git checkout --detach
+        'abc123\n',    // git rev-parse HEAD
+      ])
+
+      await strategy.prepare(defaultCtx)
+
+      expect(mockCleanWorktreeState).toHaveBeenCalledWith('/worktree')
+      // Called before any exec (cleanup must run before fetch)
+      expect(mockCleanWorktreeState.mock.invocationCallOrder[0])
+        .toBeLessThan(mockExec.mock.invocationCallOrder[0])
     })
 
     it('never issues a non-detached checkout of the source branch', async () => {
@@ -334,6 +362,12 @@ describe('MergeCommitStrategy', () => {
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
     })
 
+    it('cleans worktree state before fetching', async () => {
+      mockExecSuccess('aaa111\n')
+      await strategy.prepare(defaultCtx)
+      expect(mockCleanWorktreeState).toHaveBeenCalledWith('/worktree')
+    })
+
     it('never issues a non-detached checkout of the target branch', async () => {
       mockExecSuccess('aaa111\n')
       await strategy.prepare(defaultCtx)
@@ -459,6 +493,12 @@ describe('SquashStrategy', () => {
       expect(calls[0][0]).toBe('git fetch origin main feature/test')
       expect(calls[1][0]).toBe('git checkout --detach origin/main')
       expect(calls[1][1]).toEqual({ cwd: '/worktree' })
+    })
+
+    it('cleans worktree state before fetching', async () => {
+      mockExecSuccess('ccc333\n')
+      await strategy.prepare(defaultCtx)
+      expect(mockCleanWorktreeState).toHaveBeenCalledWith('/worktree')
     })
 
     it('never issues a non-detached checkout of the target branch', async () => {
