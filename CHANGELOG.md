@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.8.54
+
+### Fixes
+
+- **Merge queue worktree locks** — Use detached-HEAD checkouts in merge prepare so the operation survives worktree lock contention.
+
+- **Merge queue label poller storage** — Route sidecar label poller storage through the existing bridge, fixing state persistence for label-driven merge triggers.
+
 ## v0.8.53
 
 ### Features
