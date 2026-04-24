@@ -4,6 +4,7 @@ import {
   computeQualityDelta,
   formatQualityReport,
   parseVitestJson,
+  parseTestTextOutput,
   countTypescriptErrors,
   loadBaseline,
   saveBaseline,
@@ -175,6 +176,23 @@ describe('captureQualityBaseline', () => {
     // The JSON test command call is the 2nd execSync call (git rev-parse is first).
     const testCall = mockExecSync.mock.calls[1]
     expect(testCall[0]).toContain('2>&1')
+  })
+
+  it('passes --reporter=json without the `--` delimiter (pnpm 10 compat)', () => {
+    // REN-1262 regression: under pnpm 10, `--` is no longer stripped from
+    // forwarded args, so `pnpm test -- --reporter=json` delivers the
+    // literal `--` to vitest, which treats `-- --reporter=json` as a
+    // positional filter and exits with "No test files found". Must use
+    // `pnpm test --reporter=json` (no `--`) so the flag reaches vitest.
+    mockExecSync.mockReturnValueOnce('abc123\n')
+    mockExecSync.mockReturnValueOnce('{"numTotalTests":5,"numPassedTests":5,"numFailedTests":0}')
+    mockExecSync.mockReturnValueOnce('')
+
+    captureQualityBaseline('/work', { testCommand: 'pnpm test' })
+
+    const jsonTestCall = mockExecSync.mock.calls[1][0] as string
+    expect(jsonTestCall).toContain('--reporter=json')
+    expect(jsonTestCall).not.toMatch(/\s--\s+--reporter=json/)
   })
 
   it('returns unknown commit SHA when git fails', () => {
@@ -477,6 +495,80 @@ describe('parseVitestJson', () => {
     const result = parseVitestJson(json)
 
     expect(result?.skipped).toBe(3) // 20 - 15 - 2
+  })
+})
+
+// ---------------------------------------------------------------------------
+// parseTestTextOutput
+// ---------------------------------------------------------------------------
+
+describe('parseTestTextOutput', () => {
+  it('parses clean vitest summary with pipe-separated counts', () => {
+    expect(parseTestTextOutput('Tests  42 passed | 2 failed | 44 total')).toEqual({
+      total: 44,
+      passed: 42,
+      failed: 2,
+      skipped: 0,
+    })
+  })
+
+  it('parses vitest summary with parenthesised total', () => {
+    expect(parseTestTextOutput('Tests  2817 passed | 1 skipped (2818)')).toEqual({
+      total: 2818,
+      passed: 2817,
+      failed: 0,
+      skipped: 1,
+    })
+  })
+
+  it('parses vitest output with inline ANSI colour escapes (REN-1262)', () => {
+    // vitest 4+ emits colour codes even when writing to a non-TTY pipe.
+    // Without stripAnsi, `\s+` in the regex can't cross the escapes and
+    // the parser returns null → parseError → ratchet silently unenforced.
+    const ansiOutput = 'Tests\x1b[22m\x1b[1m\x1b[32m  2836 passed\x1b[39m\x1b[22m\x1b[2m \x1b[22m | \x1b[1m0 failed\x1b[22m \x1b[90m(2836)\x1b[39m'
+    expect(parseTestTextOutput(ansiOutput)).toEqual({
+      total: 2836,
+      passed: 2836,
+      failed: 0,
+      skipped: 0,
+    })
+  })
+
+  it('parses vitest output with ANSI colours in the skipped branch too', () => {
+    const ansiOutput = '\x1b[32mTests\x1b[39m  \x1b[32m42 passed\x1b[39m | \x1b[33m3 skipped\x1b[39m | 45 total'
+    expect(parseTestTextOutput(ansiOutput)).toEqual({
+      total: 45,
+      passed: 42,
+      failed: 0,
+      skipped: 3,
+    })
+  })
+
+  it('parses jest summary', () => {
+    expect(parseTestTextOutput('Tests:       2 failed, 42 passed, 44 total')).toEqual({
+      total: 44,
+      passed: 42,
+      failed: 2,
+      skipped: 0,
+    })
+  })
+
+  it('parses jest summary with ANSI escapes', () => {
+    const ansiJest = '\x1b[1mTests:\x1b[22m       \x1b[31m2 failed\x1b[39m, \x1b[32m42 passed\x1b[39m, 44 total'
+    expect(parseTestTextOutput(ansiJest)).toEqual({
+      total: 44,
+      passed: 42,
+      failed: 2,
+      skipped: 0,
+    })
+  })
+
+  it('returns null for unrelated output', () => {
+    expect(parseTestTextOutput('Finished build.')).toBeNull()
+  })
+
+  it('returns null for empty string', () => {
+    expect(parseTestTextOutput('')).toBeNull()
   })
 })
 

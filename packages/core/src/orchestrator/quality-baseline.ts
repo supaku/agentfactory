@@ -218,8 +218,16 @@ function captureTestMetrics(
   const defaults = { total: 0, passed: 0, failed: 0, skipped: 0 }
 
   try {
-    // Try JSON reporter first for structured output
-    const jsonCommand = `${testCommand} -- --reporter=json`
+    // Try JSON reporter first for structured output.
+    //
+    // No `--` delimiter: pnpm 10 stopped stripping `--` when forwarding args
+    // to scripts that consume their own args (behaviour change from pnpm 9).
+    // Under pnpm 10, `pnpm test -- --reporter=json` delivers a literal `--`
+    // to vitest, which treats `-- --reporter=json` as a positional file
+    // filter and exits with "No test files found". Dropping the `--` lets
+    // pnpm 10 pass `--reporter=json` through as a flag, and pnpm 9 still
+    // accepts the same form.
+    const jsonCommand = `${testCommand} --reporter=json`
     const output = runCommand(jsonCommand, worktreePath, timeout)
     const parsed = parseVitestJson(output)
     if (parsed) return parsed
@@ -366,15 +374,33 @@ export function parseVitestJson(output: string): QualityBaseline['tests'] | null
 }
 
 /**
+ * Strip ANSI SGR escape sequences (colour / style codes) from a string.
+ *
+ * vitest 4+ emits colour codes even when writing to a non-TTY pipe. The raw
+ * summary looks like `Tests\x1b[22m\x1b[1m\x1b[32m  2836 passed\x1b[39m…`
+ * — `\s+` in the regex below can't cross those escapes, so we strip them
+ * first. Export kept internal; the only caller is parseTestTextOutput.
+ */
+function stripAnsi(input: string): string {
+  // eslint-disable-next-line no-control-regex
+  return input.replace(/\x1b\[[0-9;]*m/g, '')
+}
+
+/**
  * Parse test text output for counts using common patterns.
  * Supports vitest and jest text output formats.
+ *
+ * Exported for testing.
  */
-function parseTestTextOutput(output: string): QualityBaseline['tests'] | null {
+export function parseTestTextOutput(output: string): QualityBaseline['tests'] | null {
   if (!output) return null
+
+  // Strip ANSI before pattern-matching — see stripAnsi() for the "why".
+  const clean = stripAnsi(output)
 
   // Vitest format: "Tests  42 passed | 2 failed | 44 total"
   // Also: "Tests  42 passed (44)"
-  const vitestMatch = output.match(
+  const vitestMatch = clean.match(
     /Tests\s+(\d+)\s+passed(?:\s*\|\s*(\d+)\s+failed)?(?:\s*\|\s*(\d+)\s+skipped)?(?:\s*\|\s*(\d+)\s+total|\s*\((\d+)\))/,
   )
   if (vitestMatch) {
@@ -386,7 +412,7 @@ function parseTestTextOutput(output: string): QualityBaseline['tests'] | null {
   }
 
   // Jest format: "Tests:       2 failed, 42 passed, 44 total"
-  const jestMatch = output.match(
+  const jestMatch = clean.match(
     /Tests:\s+(?:(\d+)\s+failed,\s+)?(\d+)\s+passed,\s+(\d+)\s+total/,
   )
   if (jestMatch) {
