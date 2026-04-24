@@ -1,13 +1,18 @@
 /**
  * Merge Commit Strategy
  *
- * Performs a standard merge commit (--no-ff) from the source branch into the target.
- * Preserves full branch history with an explicit merge commit.
+ * Performs a standard merge commit (--no-ff) from the source branch into the
+ * target. Preserves full branch history with an explicit merge commit.
+ *
+ * All checkouts are detached against `origin/<branch>` refs so the merge
+ * worker never takes a local branch ref. See rebase-strategy.ts for the full
+ * rationale.
  */
 
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { MergeStrategy, MergeContext, PrepareResult, MergeResult } from './types.js'
+import { isBranchConflictError } from '../branch-conflict.js'
 
 const execAsync = promisify(exec)
 
@@ -16,12 +21,22 @@ export class MergeCommitStrategy implements MergeStrategy {
 
   async prepare(ctx: MergeContext): Promise<PrepareResult> {
     try {
-      await execAsync(`git fetch ${ctx.remote} ${ctx.targetBranch}`, { cwd: ctx.worktreePath })
-      await execAsync(`git checkout ${ctx.targetBranch}`, { cwd: ctx.worktreePath })
+      await execAsync(
+        `git fetch ${ctx.remote} ${ctx.targetBranch} ${ctx.sourceBranch}`,
+        { cwd: ctx.worktreePath },
+      )
+      await execAsync(
+        `git checkout --detach ${ctx.remote}/${ctx.targetBranch}`,
+        { cwd: ctx.worktreePath },
+      )
       const { stdout } = await execAsync('git rev-parse HEAD', { cwd: ctx.worktreePath })
       return { success: true, headSha: stdout.trim() }
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
+      const message = err instanceof Error ? err.message : String(err)
+      if (isBranchConflictError(message)) {
+        return { success: false, error: message, retryable: true }
+      }
+      return { success: false, error: message }
     }
   }
 
@@ -63,6 +78,12 @@ export class MergeCommitStrategy implements MergeStrategy {
   }
 
   async finalize(ctx: MergeContext): Promise<void> {
-    await execAsync(`git push ${ctx.remote} ${ctx.targetBranch}`, { cwd: ctx.worktreePath })
+    // Push HEAD (the merge commit) to the target branch via explicit refspec
+    // so we don't need a local branch ref. Because HEAD has origin/<target>
+    // as its first parent, this is a fast-forward push.
+    await execAsync(
+      `git push ${ctx.remote} HEAD:${ctx.targetBranch}`,
+      { cwd: ctx.worktreePath },
+    )
   }
 }

@@ -73,6 +73,10 @@ import type { ToolPlugin } from '../tools/index.js'
 import type { TemplateContext } from '../templates/index.js'
 import { getLockFileName, getInstallCommand, getAddCommand, type PackageManager } from '../package-manager.js'
 import { createMergeQueueAdapter } from '../merge-queue/index.js'
+import {
+  isBranchConflictError as isBranchConflictErrorShared,
+  parseConflictingWorktreePath as parseConflictingWorktreePathShared,
+} from '../merge-queue/branch-conflict.js'
 import type {
   OrchestratorConfig,
   OrchestratorIssue,
@@ -1664,31 +1668,16 @@ export class AgentOrchestrator {
     return String(error)
   }
 
-  /**
-   * Check if a git error indicates a branch/worktree conflict.
-   *
-   * Git uses different error messages depending on the situation:
-   * - "is already checked out at '/path'" - branch checked out in another worktree
-   * - "is already used by worktree at '/path'" - branch associated with another worktree
-   *
-   * Both mean the same thing: the branch is occupied by another worktree.
-   */
+  // Branch-conflict detection lives in ../merge-queue/branch-conflict.ts so the
+  // merge worker can reuse the same logic. These thin wrappers exist only so
+  // existing `this.isBranchConflictError(...)` / `this.parseConflictingWorktreePath(...)`
+  // call sites keep working.
   private isBranchConflictError(errorMsg: string): boolean {
-    return errorMsg.includes('is already checked out at') ||
-           errorMsg.includes('is already used by worktree at')
+    return isBranchConflictErrorShared(errorMsg)
   }
 
-  /**
-   * Extract the conflicting worktree path from a git branch conflict error.
-   *
-   * Parses paths like:
-   * - "fatal: 'SUP-402' is already checked out at '/path/to/.worktrees/SUP-402-DEV'"
-   * - "fatal: 'SUP-402' is already used by worktree at '/path/to/.worktrees/SUP-402-DEV'"
-   */
   private parseConflictingWorktreePath(errorMsg: string): string | null {
-    // Match either "checked out at" or "used by worktree at" followed by a quoted path
-    const match = errorMsg.match(/(?:already checked out at|already used by worktree at)\s+'([^']+)'/)
-    return match?.[1] ?? null
+    return parseConflictingWorktreePathShared(errorMsg)
   }
 
   /**
