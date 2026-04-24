@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.56
+
+### Fixes
+
+- **Fleet shutdown hang** — Fix Ctrl+C hanging on the worker fleet shutdown path, ensuring clean process termination.
+
 ## v0.8.55
 
 ### Fixes
