@@ -220,6 +220,45 @@ describe('checkQualityRatchet', () => {
     expect(result.violations[0].actual).toBe(99)
   })
 
+  // --------------------------------------------------------------------
+  // parseError handling — REN-1253 follow-up (v0.8.55 regression)
+  //
+  // The merge worker was failing every PR with `testCount: 0 is below
+  // minimum threshold of 1309` because captureQualityBaseline silently
+  // returned `total: 0` when it couldn't parse vitest output (summary
+  // written to stderr, not captured). checkQualityRatchet must skip
+  // the testCount threshold when the parser failed — otherwise we
+  // block merges for reasons orthogonal to code quality.
+  // --------------------------------------------------------------------
+
+  it('skips testCount threshold when tests.parseError is set', () => {
+    const ratchet = makeRatchet()
+    const current = makeBaseline({
+      tests: { total: 0, passed: 0, failed: 0, skipped: 0, parseError: 'unrecognised output' },
+    })
+
+    const result = checkQualityRatchet(ratchet, current)
+
+    expect(result.passed).toBe(true)
+    expect(result.violations.find(v => v.metric === 'testCount')).toBeUndefined()
+  })
+
+  it('still enforces non-testCount thresholds when parseError is set', () => {
+    // Typecheck and lint thresholds are orthogonal to the test-count
+    // parse issue — they must still gate merges.
+    const ratchet = makeRatchet()
+    const current = makeBaseline({
+      tests: { total: 0, passed: 0, failed: 0, skipped: 0, parseError: 'unrecognised output' },
+      typecheck: { errorCount: 100, exitCode: 1 },
+    })
+
+    const result = checkQualityRatchet(ratchet, current)
+
+    expect(result.passed).toBe(false)
+    expect(result.violations.find(v => v.metric === 'typecheckErrors')).toBeDefined()
+    expect(result.violations.find(v => v.metric === 'testCount')).toBeUndefined()
+  })
+
   it('passes with zero-threshold ratchet when metrics are zero', () => {
     const ratchet = makeRatchet({
       thresholds: {
@@ -288,6 +327,44 @@ describe('updateQualityRatchet', () => {
     const updated = updateQualityRatchet('/repo', makeBaseline(), 'SUP-200')
 
     expect(updated).toBe(false)
+  })
+
+  it('does not tighten test thresholds when tests.parseError is set', () => {
+    // Critical safety: without this guard, a parse failure (total: 0,
+    // failed: 1 defaults) would tighten testFailures.max to the default
+    // `1`, and the next legitimately-clean run would trip
+    // testFailures.max=1 vs actual=0 in the wrong direction. More
+    // insidiously, if defaults ever get `failed: 0`, the ratchet would
+    // get tightened to forbid any test failures forever.
+    const ratchet = makeRatchet({
+      thresholds: {
+        testCount: { min: 100 },
+        testFailures: { max: 5 },
+        typecheckErrors: { max: 10 },
+        lintErrors: { max: 20 },
+      },
+    })
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(JSON.stringify(ratchet))
+
+    // parseError result: total=0, failed=1 (the "complete failure" default).
+    // Typecheck/lint improved, so the ratchet WILL update for those.
+    const unparseable = makeBaseline({
+      tests: { total: 0, passed: 0, failed: 1, skipped: 0, parseError: 'unrecognised output' },
+      typecheck: { errorCount: 3, exitCode: 0 },
+      lint: { errorCount: 10, warningCount: 0 },
+    })
+
+    const updated = updateQualityRatchet('/repo', unparseable, 'SUP-200')
+
+    expect(updated).toBe(true)
+    const written = JSON.parse(mockWriteFileSync.mock.calls[0][1] as string)
+    // Test thresholds MUST be untouched.
+    expect(written.thresholds.testCount.min).toBe(100)
+    expect(written.thresholds.testFailures.max).toBe(5)
+    // Non-test thresholds still tighten on improvement.
+    expect(written.thresholds.typecheckErrors.max).toBe(3)
+    expect(written.thresholds.lintErrors.max).toBe(10)
   })
 
   it('tightens only the metrics that improved (partial improvement)', () => {

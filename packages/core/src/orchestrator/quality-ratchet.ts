@@ -89,7 +89,12 @@ export function checkQualityRatchet(
 
   const { thresholds } = ratchet
 
-  if (current.tests.total < thresholds.testCount.min) {
+  // Skip the testCount threshold when the baseline couldn't parse a count.
+  // A parseError means we don't actually know how many tests ran — treating
+  // that as "0 tests" would fail the ratchet on every PR and block merges
+  // for reasons orthogonal to code quality.  The merge worker logs the
+  // parseError upstream so the underlying cause is still visible.
+  if (!current.tests.parseError && current.tests.total < thresholds.testCount.min) {
     violations.push({
       metric: 'testCount',
       threshold: thresholds.testCount.min,
@@ -148,16 +153,23 @@ export function updateQualityRatchet(
   const updated = { ...existing, thresholds: { ...existing.thresholds } }
   let changed = false
 
-  // Test count: min can only go up
-  if (current.tests.total > existing.thresholds.testCount.min) {
-    updated.thresholds.testCount = { min: current.tests.total }
-    changed = true
-  }
+  // Test counts are only trustworthy when the output parsed cleanly. On a
+  // parseError the `total`/`failed` numbers are whatever the defaults were
+  // (0 / 1) and using them would either fail to tighten (harmless) or
+  // falsely tighten testFailures.max to 0 (harmful — would block every
+  // subsequent PR with any real test failure).
+  if (!current.tests.parseError) {
+    // Test count: min can only go up
+    if (current.tests.total > existing.thresholds.testCount.min) {
+      updated.thresholds.testCount = { min: current.tests.total }
+      changed = true
+    }
 
-  // Test failures: max can only go down
-  if (current.tests.failed < existing.thresholds.testFailures.max) {
-    updated.thresholds.testFailures = { max: current.tests.failed }
-    changed = true
+    // Test failures: max can only go down
+    if (current.tests.failed < existing.thresholds.testFailures.max) {
+      updated.thresholds.testFailures = { max: current.tests.failed }
+      changed = true
+    }
   }
 
   // Typecheck errors: max can only go down

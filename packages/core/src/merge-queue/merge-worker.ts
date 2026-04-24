@@ -115,6 +115,21 @@ export interface MergeWorkerDeps {
    * trivial to set up.
    */
   issueTracker?: IssueTrackerClient
+  /**
+   * Optional PR labeler. When supplied, the worker removes the
+   * `approved-for-merge` label from PRs that reach a terminal failure
+   * state (conflict / test-failure / error). Without this, the sidecar's
+   * label poller sees the label on the next tick and re-enqueues the same
+   * PR, producing a `markFailed → poller re-enqueues → dequeue → markFailed`
+   * hot loop that burns Redis traffic and hammers GitHub.
+   *
+   * Implementations are best-effort; failures are logged but do not crash
+   * the worker loop. The refinement cycle is expected to re-add the label
+   * when a subsequent acceptance run passes.
+   */
+  prLabeler?: {
+    removeApprovedForMergeLabel(prNumber: number): Promise<void>
+  }
 }
 
 export interface MergeProcessResult {
@@ -244,6 +259,7 @@ export class MergeWorker {
           case 'conflict':
             await this.deps.storage.markBlocked(this.config.repoId, result.prNumber, result.message ?? 'Merge conflict')
             await this.bubbleResultToIssue(entry, result, 'conflict')
+            await this.removeApprovedForMergeLabel(result.prNumber)
             break
           case 'test-failure': {
             const action = this.config.escalation.onTestFailure
@@ -255,11 +271,13 @@ export class MergeWorker {
             // Park demotes the issue too — it's still a "merge didn't happen"
             // signal to refinement, even if we may auto-retry later.
             await this.bubbleResultToIssue(entry, result, 'test-failure')
+            await this.removeApprovedForMergeLabel(result.prNumber)
             break
           }
           case 'error':
             await this.deps.storage.markFailed(this.config.repoId, result.prNumber, result.message ?? 'Unknown error')
             await this.bubbleResultToIssue(entry, result, 'error')
+            await this.removeApprovedForMergeLabel(result.prNumber)
             break
         }
       }
@@ -407,6 +425,14 @@ export class MergeWorker {
           packageManager: this.config.packageManager as string,
         }
         const current = captureQualityBaseline(ctx.worktreePath, qualityConfig)
+        if (current.tests.parseError) {
+          // Log loudly — the ratchet's testCount threshold is being skipped
+          // for this PR. Silent would hide degradations; failing the PR
+          // would block merges for reasons orthogonal to code quality.
+          console.warn(
+            `[merge-worker] Quality baseline could not parse test counts for PR #${entry.prNumber}: ${current.tests.parseError}. Skipping testCount threshold.`,
+          )
+        }
         const ratchetResult = checkQualityRatchet(ratchet, current)
         if (!ratchetResult.passed) {
           return {
@@ -520,6 +546,27 @@ export class MergeWorker {
       await tracker.updateIssueStatus(issueId, targetStatus)
     } catch (err) {
       console.error(`[merge-worker] Failed to transition ${id} → ${targetStatus}:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  /**
+   * Remove the `approved-for-merge` label from a PR that reached a terminal
+   * failure state. Without this, the sidecar's label poller re-enqueues the
+   * same PR on its next tick and the queue hot-loops between `markFailed`
+   * and re-enqueue.
+   *
+   * No-op when no `prLabeler` is wired (non-GitHub deployments). The
+   * refinement cycle re-adds the label when a later acceptance run passes.
+   */
+  private async removeApprovedForMergeLabel(prNumber: number): Promise<void> {
+    if (!this.deps.prLabeler) return
+    try {
+      await this.deps.prLabeler.removeApprovedForMergeLabel(prNumber)
+    } catch (err) {
+      console.error(
+        `[merge-worker] Failed to remove approved-for-merge label from PR #${prNumber}:`,
+        err instanceof Error ? err.message : err,
+      )
     }
   }
 

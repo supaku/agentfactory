@@ -25,6 +25,17 @@ export interface QualityBaseline {
     passed: number
     failed: number
     skipped: number
+    /**
+     * Set when both the JSON and text parsers failed to extract a count
+     * from the test output. The `total/passed/failed/skipped` fields are
+     * unreliable in that case — callers (e.g. quality-ratchet) must not
+     * treat a `total: 0` as "no tests" when this field is set.
+     *
+     * Typical cause: the test runner wrote its summary only to stderr and
+     * the runner's output capture missed it, or the runner uses a format
+     * the parsers don't recognize.
+     */
+    parseError?: string
   }
   typecheck: {
     errorCount: number
@@ -219,15 +230,27 @@ function captureTestMetrics(
   // Fall back to running the test command and parsing exit code + text
   try {
     const output = runCommand(testCommand, worktreePath, timeout)
-    return parseTestTextOutput(output) ?? defaults
+    const parsed = parseTestTextOutput(output)
+    if (parsed) return parsed
+    // Command succeeded but neither parser recognised the summary format.
+    // Report a parseError sentinel instead of silently claiming "0 tests" —
+    // see QualityBaseline['tests'].parseError for the rationale.
+    return {
+      ...defaults,
+      parseError: 'Test command exited 0 but neither JSON nor text parser recognised the output summary',
+    }
   } catch (error) {
     // Test command failed — try to parse the error output for counts
     const errorOutput = extractErrorOutput(error)
     const parsed = parseTestTextOutput(errorOutput)
     if (parsed) return parsed
 
-    // Complete failure — assume tests exist but all fail
-    return { ...defaults, failed: 1 }
+    // Complete failure — we genuinely don't know the count. Mark it.
+    return {
+      ...defaults,
+      failed: 1,
+      parseError: 'Test command failed and no count could be parsed from its output',
+    }
   }
 }
 
@@ -273,7 +296,12 @@ function captureLintMetrics(
 }
 
 function runCommand(command: string, cwd: string, timeout: number): string {
-  return execSync(command, {
+  // Redirect stderr → stdout at the shell level so the returned string includes
+  // both streams. Many test runners (vitest 4+ in particular) write their
+  // pass/fail summary only to stderr — without this, the text parser sees
+  // empty output on success and returns `total: 0`, which then trips the
+  // quality ratchet in the merge worker.
+  return execSync(`${command} 2>&1`, {
     cwd,
     encoding: 'utf-8',
     timeout,
