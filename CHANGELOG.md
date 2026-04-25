@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.58
+
+### Fixes
+
+- **Codex sandbox writableRoots** — Include worktree gitdir in Codex sandbox `writableRoots`, fixing git operations that failed in sandboxed worktree environments.
+
 ## v0.8.57
 
 ### Fixes
