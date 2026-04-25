@@ -5,6 +5,7 @@ import {
   mapAppServerItemEvent,
   normalizeMcpToolName,
   resolveSandboxPolicy,
+  resolveWorktreeWritableRoots,
   resolveCodexModel,
   calculateCostUsd,
   CODEX_MODEL_MAP,
@@ -15,6 +16,9 @@ import {
   type JsonRpcNotification,
 } from './codex-app-server-provider.js'
 import type { AgentSpawnConfig } from './types.js'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 
 // ---------------------------------------------------------------------------
 // Mock child_process and readline for AppServerProcessManager tests
@@ -1817,6 +1821,123 @@ describe('resolveSandboxPolicy', () => {
   it('sandboxLevel takes precedence over sandboxEnabled boolean', () => {
     const config = { sandboxLevel: 'read-only', sandboxEnabled: true, cwd: '/work' } as unknown as AgentSpawnConfig
     expect(resolveSandboxPolicy(config)).toEqual({ type: 'readOnly', networkAccess: true })
+  })
+
+  describe('linked worktree handling', () => {
+    let mainRepo: string
+    let worktree: string
+    let tmpRoot: string
+
+    beforeEach(() => {
+      tmpRoot = mkdtempSync(join(tmpdir(), 'codex-sandbox-wt-'))
+      mainRepo = join(tmpRoot, 'main-repo')
+      worktree = join(tmpRoot, 'main-repo.wt', 'feature')
+      const mainGitDir = join(mainRepo, '.git')
+      const worktreeGitDir = join(mainGitDir, 'worktrees', 'feature')
+      mkdirSync(worktreeGitDir, { recursive: true })
+      mkdirSync(worktree, { recursive: true })
+      writeFileSync(join(worktree, '.git'), `gitdir: ${worktreeGitDir}\n`)
+      writeFileSync(join(worktreeGitDir, 'commondir'), '../..\n')
+    })
+
+    afterEach(() => {
+      rmSync(tmpRoot, { recursive: true, force: true })
+    })
+
+    it('extends writableRoots with the main .git when cwd is a linked worktree', () => {
+      const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: worktree } as unknown as AgentSpawnConfig
+      const policy = resolveSandboxPolicy(config) as Record<string, unknown>
+      expect(policy.writableRoots).toEqual([worktree, join(mainRepo, '.git')])
+    })
+
+    it('falls back to dirname(dirname(gitdir)) when commondir file is missing', () => {
+      const worktreeGitDir = join(mainRepo, '.git', 'worktrees', 'feature')
+      rmSync(join(worktreeGitDir, 'commondir'))
+
+      const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: worktree } as unknown as AgentSpawnConfig
+      const policy = resolveSandboxPolicy(config) as Record<string, unknown>
+      expect(policy.writableRoots).toEqual([worktree, join(mainRepo, '.git')])
+    })
+
+    it('returns only cwd when .git is a regular directory (main repo)', () => {
+      mkdirSync(join(mainRepo, '.git', 'objects'), { recursive: true })
+      const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: mainRepo } as unknown as AgentSpawnConfig
+      const policy = resolveSandboxPolicy(config) as Record<string, unknown>
+      expect(policy.writableRoots).toEqual([mainRepo])
+    })
+
+    it('returns only cwd when .git is missing', () => {
+      const config = { sandboxLevel: 'workspace-write', sandboxEnabled: false, cwd: tmpRoot } as unknown as AgentSpawnConfig
+      const policy = resolveSandboxPolicy(config) as Record<string, unknown>
+      expect(policy.writableRoots).toEqual([tmpRoot])
+    })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveWorktreeWritableRoots
+// ---------------------------------------------------------------------------
+
+describe('resolveWorktreeWritableRoots', () => {
+  let tmpRoot: string
+
+  beforeEach(() => {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'codex-wt-roots-'))
+  })
+
+  afterEach(() => {
+    rmSync(tmpRoot, { recursive: true, force: true })
+  })
+
+  it('returns the main .git directory for a linked worktree', () => {
+    const mainRepo = join(tmpRoot, 'repo')
+    const worktree = join(tmpRoot, 'repo.wt', 'branch')
+    const worktreeGitDir = join(mainRepo, '.git', 'worktrees', 'branch')
+    mkdirSync(worktreeGitDir, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(join(worktree, '.git'), `gitdir: ${worktreeGitDir}\n`)
+    writeFileSync(join(worktreeGitDir, 'commondir'), '../..\n')
+
+    expect(resolveWorktreeWritableRoots(worktree)).toEqual([join(mainRepo, '.git')])
+  })
+
+  it('handles relative gitdir paths', () => {
+    const mainRepo = join(tmpRoot, 'repo')
+    const worktree = join(tmpRoot, 'repo.wt', 'branch')
+    const worktreeGitDir = join(mainRepo, '.git', 'worktrees', 'branch')
+    mkdirSync(worktreeGitDir, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    // Relative gitdir (rare, but supported by git)
+    writeFileSync(join(worktree, '.git'), 'gitdir: ../../repo/.git/worktrees/branch\n')
+    writeFileSync(join(worktreeGitDir, 'commondir'), '../..\n')
+
+    expect(resolveWorktreeWritableRoots(worktree)).toEqual([join(mainRepo, '.git')])
+  })
+
+  it('handles absolute commondir paths', () => {
+    const mainRepo = join(tmpRoot, 'repo')
+    const worktree = join(tmpRoot, 'repo.wt', 'branch')
+    const worktreeGitDir = join(mainRepo, '.git', 'worktrees', 'branch')
+    mkdirSync(worktreeGitDir, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(join(worktree, '.git'), `gitdir: ${worktreeGitDir}\n`)
+    writeFileSync(join(worktreeGitDir, 'commondir'), `${join(mainRepo, '.git')}\n`)
+
+    expect(resolveWorktreeWritableRoots(worktree)).toEqual([join(mainRepo, '.git')])
+  })
+
+  it('returns empty when .git is a directory (main repo)', () => {
+    mkdirSync(join(tmpRoot, '.git'), { recursive: true })
+    expect(resolveWorktreeWritableRoots(tmpRoot)).toEqual([])
+  })
+
+  it('returns empty when .git is missing', () => {
+    expect(resolveWorktreeWritableRoots(tmpRoot)).toEqual([])
+  })
+
+  it('returns empty when .git file is malformed', () => {
+    writeFileSync(join(tmpRoot, '.git'), 'not a gitdir line\n')
+    expect(resolveWorktreeWritableRoots(tmpRoot)).toEqual([])
   })
 })
 
