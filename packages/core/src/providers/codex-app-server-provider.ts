@@ -24,8 +24,8 @@
 
 import { spawn, type ChildProcess } from 'child_process'
 import { createInterface, type Interface } from 'readline'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
-import { join } from 'path'
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
+import { dirname, isAbsolute, join, resolve } from 'path'
 import { homedir } from 'os'
 import type {
   AgentProvider,
@@ -1153,6 +1153,43 @@ function resolveApprovalPolicy(config: AgentSpawnConfig): string {
  *   "install/deploy/admin"   → dangerFullAccess
  */
 /**
+ * If `cwd` is a linked git worktree, return additional roots that need to be
+ * writable for git operations (`git add`, `git commit`, etc.) to succeed.
+ *
+ * A linked worktree's `.git` is a file (not a directory) containing
+ * `gitdir: <abs-path>` pointing to `<main-repo>/.git/worktrees/<name>/`.
+ * Git writes the worktree's index/HEAD/refs there, and shared objects to the
+ * main `.git` (resolved via the `commondir` file). The codex `workspace-write`
+ * sandbox only includes `cwd` by default, so commits fail with
+ * `index.lock: Operation not permitted` unless we extend the writable roots.
+ */
+export function resolveWorktreeWritableRoots(cwd: string): string[] {
+  try {
+    const gitMarker = join(cwd, '.git')
+    if (!existsSync(gitMarker) || !lstatSync(gitMarker).isFile()) return []
+
+    const content = readFileSync(gitMarker, 'utf8').trim()
+    const match = content.match(/^gitdir:\s*(.+)$/m)
+    if (!match) return []
+
+    const rawGitdir = match[1].trim()
+    const gitdir = isAbsolute(rawGitdir) ? rawGitdir : resolve(cwd, rawGitdir)
+
+    let commondir = dirname(dirname(gitdir))
+    try {
+      const rel = readFileSync(join(gitdir, 'commondir'), 'utf8').trim()
+      if (rel) commondir = isAbsolute(rel) ? rel : resolve(gitdir, rel)
+    } catch {
+      // commondir file missing — fall back to dirname(dirname(gitdir))
+    }
+
+    return commondir ? [commondir] : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Resolve sandbox policy as an object for turn/start (supports writableRoots).
  * Codex v0.117+ turn/start accepts: { type: 'workspaceWrite', writableRoots: [...] }
  *
@@ -1166,7 +1203,11 @@ export function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, u
       case 'read-only':
         return { type: 'readOnly', networkAccess: true }
       case 'workspace-write':
-        return { type: 'workspaceWrite', writableRoots: [config.cwd], networkAccess: true }
+        return {
+          type: 'workspaceWrite',
+          writableRoots: [config.cwd, ...resolveWorktreeWritableRoots(config.cwd)],
+          networkAccess: true,
+        }
       case 'full-access':
         return { type: 'dangerFullAccess' }
     }
@@ -1174,7 +1215,11 @@ export function resolveSandboxPolicy(config: AgentSpawnConfig): Record<string, u
 
   // Fallback: boolean sandboxEnabled → workspaceWrite with network
   if (!config.sandboxEnabled) return undefined
-  return { type: 'workspaceWrite', writableRoots: [config.cwd], networkAccess: true }
+  return {
+    type: 'workspaceWrite',
+    writableRoots: [config.cwd, ...resolveWorktreeWritableRoots(config.cwd)],
+    networkAccess: true,
+  }
 }
 
 /**

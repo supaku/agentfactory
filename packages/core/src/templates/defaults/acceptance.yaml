@@ -34,6 +34,8 @@ prompt: |
 
   IMPORTANT CONSTRAINTS:
   - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.
+  - The implementation lives on the PR's branch, NOT in this worktree. This worktree (`{{identifier}}-AC`) is intentionally a fresh branch off main with no project changes — that is normal. Inspect the PR with `gh pr view <PR_NUMBER>` and `gh pr diff <PR_NUMBER>`, not the local working tree.
+  - If you find yourself running `git add`, `git commit`, or editing project files, STOP — you are in the wrong work type. Emit WORK_RESULT:failed and explain that the PR appears incomplete.
   - If the PR has problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
   - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
   - Only use {{linearCli}} for: get-issue, list-comments, create-comment, check-deployment
