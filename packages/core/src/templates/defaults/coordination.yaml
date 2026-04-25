@@ -69,6 +69,7 @@ prompt: |
   integration-level problems (e.g., missing switch cases from combined type changes, missing
   cross-package dependencies). These are integration gaps between sub-issues, not sub-issue failures.
   Only proceed to commit/push/PR after all validation passes.
+  {{> partials/validation-hard-fail}}
 
   COMPLETION VERIFICATION:
   Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:

@@ -43,6 +43,7 @@ prompt: |
   {{> partials/code-intelligence-instructions}}
   {{> partials/cli-instructions}}
   {{> partials/scope-completion-audit}}
+  {{> partials/validation-hard-fail}}
   {{> partials/commit-push-pr}}
 
   {{> partials/work-result-marker}}

@@ -23,6 +23,7 @@ prompt: |
   {{> partials/dependency-instructions}}
   {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
   {{> partials/scope-completion-audit}}
+  {{> partials/validation-hard-fail}}
   {{> partials/commit-push-pr}}
   {{#if mentionContext}}
 

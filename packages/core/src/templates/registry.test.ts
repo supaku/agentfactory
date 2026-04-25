@@ -203,6 +203,59 @@ describe('TemplateRegistry', () => {
       expect(result).toContain('NEVER run `git stash`')
     })
 
+    // REN-1263: coordination/development/inflight agents must apply the same
+    // hard-fail rule as the QA agent — a non-zero exit from typecheck/build/test
+    // forces WORK_RESULT:failed and cannot be passed off as "pre-existing".
+    describe('REN-1263: validation hard-fail rule (coordination/development parity with QA)', () => {
+      const workTypesWithHardFail = [
+        'development',
+        'inflight',
+        'development-retry',
+        'coordination',
+        'inflight-coordination',
+      ] as const
+
+      for (const workType of workTypesWithHardFail) {
+        it(`${workType} template includes the validation hard-fail rule`, () => {
+          const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
+          // Cast to satisfy renderPrompt's AgentWorkType param — strategy template
+          // names like "development-retry" are valid keys at runtime.
+          const result = fullRegistry.renderPrompt(workType as never, {
+            identifier: 'REN-1263',
+            packageManager: 'pnpm',
+            linearCli: 'pnpm af-linear',
+          })
+          expect(result).not.toBeNull()
+          // Header is the unique marker introduced by the validation-hard-fail partial.
+          expect(result).toContain('HARD FAIL RULE — VALIDATION EXIT CODES')
+          // Mirror QA's hard-fail wording: non-zero exit = automatic fail.
+          expect(result).toContain('non-zero exit')
+          expect(result).toContain('WORK_RESULT:failed')
+          // Forbidden justifications must be explicitly listed.
+          expect(result).toContain('pre-existing')
+          expect(result).toContain('not introduced by this work')
+          expect(result).toContain('environmental')
+          expect(result).toContain('warning only')
+          // Escalation path requires create-blocker.
+          expect(result).toContain('create-blocker')
+          // Exit code is the source of truth — not stdout parsing.
+          expect(result).toMatch(/exit code is the (single )?source of truth/i)
+        })
+      }
+
+      it('commit-push-pr partial reinforces exit-code-as-truth in development prompts', () => {
+        const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
+        const result = fullRegistry.renderPrompt('development', {
+          identifier: 'REN-1263',
+          packageManager: 'pnpm',
+          linearCli: 'pnpm af-linear',
+        })
+        expect(result).not.toBeNull()
+        expect(result).toContain('EXIT CODE IS THE SOURCE OF TRUTH')
+        expect(result).toMatch(/NEVER emit WORK_RESULT:passed while any of these/)
+      })
+    })
+
     it('built-in templates handle mentionContext', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
       const result = fullRegistry.renderPrompt('development', {
