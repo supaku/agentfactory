@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: validation-hard-fail
+  description: |
+    Hard-fail validation rule shared by coordination/development/inflight agents.
+    Mirrors the QA agent's hard-fail rule: any non-zero exit from typecheck/build/
+    test/lint forces WORK_RESULT:failed regardless of cause.
+content: |
+
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  HARD FAIL RULE — VALIDATION EXIT CODES (NON-NEGOTIABLE)         ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  This rule mirrors the QA agent's hard-fail rule and is applied identically here.
+  ANY non-zero exit code from the following commands is an automatic WORK_RESULT:failed:
+
+  {{#if validateCommand}}
+    - `{{{validateCommand}}}`
+  {{else}}
+    - `{{packageManager}} exec tsc --noEmit` (or `{{packageManager}} typecheck`)
+  {{/if}}
+  {{#if buildCommand}}
+    - `{{{buildCommand}}}`
+  {{else}}
+    - `{{packageManager}} build`
+  {{/if}}
+  {{#if testCommand}}
+    - `{{{testCommand}}}`
+  {{else}}
+    - `{{packageManager}} test`
+  {{/if}}
+    - `{{packageManager}} lint` (when present in package.json)
+
+  HOW TO ENFORCE THIS RULE:
+  1. After running each validation command, IMMEDIATELY capture and check the actual
+     shell exit code (e.g., `$?` in bash). Do NOT decide pass/fail by parsing stdout
+     or stderr for the strings "warning", "error", "pre-existing", or similar.
+     The exit code is the single source of truth.
+  2. If the exit code is non-zero, you MUST do exactly ONE of the following:
+     (a) Fix the failure in this session and re-run until the command exits 0, OR
+     (b) Call `{{linearCli}} create-blocker <this-issue-id> --title "..."` to escalate
+         a genuinely out-of-scope blocker AND emit `<!-- WORK_RESULT:failed -->`, OR
+     (c) Emit `<!-- WORK_RESULT:failed -->` with a clear description of the failure.
+  3. You MUST NOT emit `<!-- WORK_RESULT:passed -->` while any of the above commands
+     exits non-zero. There are NO exceptions.
+
+  FORBIDDEN JUSTIFICATIONS (DO NOT USE THESE TO RATIONALIZE A PASS):
+  The following phrasings are EXPLICITLY FORBIDDEN as reasons to emit
+  WORK_RESULT:passed when an actual exit code is non-zero. If you find yourself
+  reaching for any of these, you are about to violate this rule — stop and emit
+  WORK_RESULT:failed instead:
+    - "pre-existing" / "pre-existing failure" / "pre-existing error"
+    - "not introduced by this work" / "not caused by my changes"
+    - "environmental" / "environment issue" / "infrastructure issue"
+    - "warning only" / "just a warning" / "non-blocking warning"
+    - "will resolve on merge" / "will be fixed on rebase"
+    - "out of scope" (without an accompanying create-blocker call AND failed marker)
+    - "Turbopack worktree-root error" or any specific tooling-quirk excuse
+    - "tsc clean apart from..." / "build clean apart from..."
+
+  Pre-existing failures may be legitimately tracked via the quality baseline
+  delta — but that is the orchestrator's job, NOT yours. Your job is: if the
+  command exits non-zero in your session, you fail. Promotion-vs-attribution
+  is decided downstream.
+
+  REPLAY CHECK (mental model):
+  Before emitting WORK_RESULT:passed, ask yourself: "If the QA agent ran exactly
+  the commands I just ran, would they all exit 0?" If the answer is no — for
+  ANY reason — emit WORK_RESULT:failed. The QA agent applies the same rule and
+  WILL hard-fail the same commands; passing here only wastes a QA cycle.

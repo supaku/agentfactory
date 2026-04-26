@@ -34,6 +34,16 @@ content: |
      If any command fails, fix the issue and re-run until all pass.
      Do NOT skip validation — pushing code that fails typecheck/build/test wastes
      an entire QA cycle and delays delivery.
+
+     EXIT CODE IS THE SOURCE OF TRUTH:
+     Decide pass/fail by the actual shell exit code, NOT by parsing stdout/stderr
+     for the strings "warning", "error", or "pre-existing". A non-zero exit code
+     is ALWAYS a failure — see the HARD FAIL RULE — VALIDATION EXIT CODES section
+     for the full rule, including forbidden justifications ("pre-existing", "not
+     introduced by this work", "environmental", "warning only", etc.) and the
+     required escalation paths (fix in this session, create-blocker, or
+     WORK_RESULT:failed). NEVER emit WORK_RESULT:passed while any of these
+     commands exits non-zero.
      {{#if qualityBaseline}}
 
      QUALITY DELTA SELF-CHECK:
