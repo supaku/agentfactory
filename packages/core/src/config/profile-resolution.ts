@@ -8,7 +8,9 @@
  * 1. Resolve profile name from dispatch (byWorkType > byProject > default)
  * 2. Look up profile -> base provider, model, effort, providerConfig, subAgent
  * 3. Apply overrides in priority order:
- *    - Platform dispatch model (highest)
+ *    - Platform dispatch model (highest; provider auto-switches when the
+ *      dispatched model is unambiguously owned by another declared profile
+ *      or matches a well-known prefix like `claude-*` / `gpt-*`)
  *    - Issue label provider:/model:
  *    - Mention context
  *    - Env AGENT_PROVIDER_{WORKTYPE} / AGENT_MODEL_{WORKTYPE}
@@ -83,6 +85,29 @@ function extractProviderFromMention(mention: string): AgentProviderName | null {
       return provider as AgentProviderName
     }
   }
+  return null
+}
+
+/**
+ * Infer the provider for a model name.
+ *
+ * Resolution: (1) match against any declared profile's `model`; (2) match
+ * well-known model-name prefixes. Used to keep (provider, model) pairs
+ * coherent when a model override arrives without a matching provider override
+ * — e.g., a `dispatchModel` of `claude-opus-4-7` layered onto a codex profile
+ * would otherwise produce a 400 from the codex backend.
+ *
+ * Returns null when inference is ambiguous; callers keep the prior provider.
+ */
+export function inferProviderForModel(
+  model: string,
+  profiles: Record<string, ProfileConfig>,
+): AgentProviderName | null {
+  for (const profile of Object.values(profiles)) {
+    if (profile.model === model) return profile.provider
+  }
+  if (/^claude-/i.test(model)) return 'claude'
+  if (/^(gpt-|o1-|o3-|o4-)/i.test(model)) return 'codex'
   return null
 }
 
@@ -209,7 +234,17 @@ export function resolveProfileForSpawn(context: ProfileResolutionContext): Resol
   // Platform dispatch model override (highest priority)
   if (context.dispatchModel) {
     model = context.dispatchModel
-    providerSource = `profile:${profileName} + dispatch model`
+    providerSource = `profile:${profileName} + dispatch model:${context.dispatchModel}`
+
+    // Keep (provider, model) coherent: if the dispatched model belongs to a
+    // different provider (declared via profile or known prefix), switch the
+    // provider too. Otherwise, e.g., codex+ChatGPT would receive a Claude
+    // model and return HTTP 400.
+    const inferred = inferProviderForModel(context.dispatchModel, profiles)
+    if (inferred && inferred !== provider) {
+      provider = inferred
+      providerSource = `${providerSource}→provider:${inferred}`
+    }
   }
 
   // Step 4: Extract provider-specific config
