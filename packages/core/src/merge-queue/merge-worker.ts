@@ -72,6 +72,17 @@ export interface MergeWorkerConfig {
    * doesn't stall the rest of the queue too long on a pathological case.
    */
   retryablePrepareBackoffsMs?: number[]
+  /**
+   * Maximum time (ms) the worker waits for GitHub to mark a PR as MERGED
+   * after `strategy.finalize()` fast-forwards the target branch. Once the
+   * PR transitions to MERGED, the worker proceeds to delete the source
+   * branch. If the timeout elapses without the transition, the worker
+   * deletes the branch anyway and logs a warning — the PR will show
+   * CLOSED-not-merged in that case.
+   *
+   * Default: 30_000 (30s). Lowered in tests to keep them fast.
+   */
+  mergeRecordedTimeoutMs?: number
 }
 
 /** Default in-process backoffs for retryable prepare failures. */
@@ -126,15 +137,40 @@ export interface MergeWorkerDeps {
    * Implementations are best-effort; failures are logged but do not crash
    * the worker loop. The refinement cycle is expected to re-add the label
    * when a subsequent acceptance run passes.
+   *
+   * Optional `getPRState` provides a pre-flight check before processing.
+   * The sidecar's label poller can enqueue the same PR multiple times
+   * across ticks (the label removal that prevents this only happens
+   * AFTER the first dequeue). Without this check, the worker dequeues a
+   * stale entry, can't fetch the just-deleted source branch, returns
+   * `error`, and bubbles a spurious Rejected status to a PR that
+   * actually merged cleanly. With the check, duplicate entries no-op
+   * silently — the queue advances without re-running the bubble-up.
    */
   prLabeler?: {
     removeApprovedForMergeLabel(prNumber: number): Promise<void>
+    getPRState?(prNumber: number): Promise<PRState | null>
   }
+}
+
+/** Subset of GitHub PR state used for pre-flight skip detection. */
+export interface PRState {
+  /** GitHub PR state. CLOSED with `mergedAt` set means merged. */
+  state: 'OPEN' | 'CLOSED' | 'MERGED'
+  /** ISO timestamp when the PR merged, or null if never merged. */
+  mergedAt: string | null
 }
 
 export interface MergeProcessResult {
   prNumber: number
-  status: 'merged' | 'conflict' | 'test-failure' | 'error'
+  /**
+   * `noop` is set when a pre-flight check determines the PR is already
+   * handled (merged or closed) and the queue entry is stale. The worker
+   * pops it from storage but skips the issue bubble-up and label removal
+   * (both already done by the original processing run). Distinct from
+   * `merged` to avoid double-posting `✅ Merged` on duplicate entries.
+   */
+  status: 'merged' | 'noop' | 'conflict' | 'test-failure' | 'error'
   message?: string
 }
 
@@ -262,7 +298,16 @@ export class MergeWorker {
             // tries to fetch the already-deleted source branch, and marks
             // it failed — bubbling a spurious Rejected status to Linear for
             // a PR that actually merged cleanly.
+            //
+            // Pre-flight `getPRState` blocks the duplicate from re-running
+            // the merge work, but the label still has to come off so we
+            // don't accumulate stale queue entries.
             await this.removeApprovedForMergeLabel(result.prNumber)
+            break
+          case 'noop':
+            // Stale duplicate entry — original run already merged + bubbled
+            // + removed the label. Silently complete to advance the queue.
+            await this.deps.storage.markCompleted(this.config.repoId, result.prNumber)
             break
           case 'conflict':
             await this.deps.storage.markBlocked(this.config.repoId, result.prNumber, result.message ?? 'Merge conflict')
@@ -331,6 +376,36 @@ export class MergeWorker {
     }
 
     try {
+      // 0. Pre-flight: skip if the PR is already merged or closed.
+      //
+      // The label poller can enqueue the same PR across multiple ticks before
+      // the worker has a chance to remove the `approved-for-merge` label.
+      // Once the first dequeue merges + deletes the source branch, every
+      // subsequent dequeue would crash in `prepare()` with "couldn't find
+      // remote ref" and bubble a spurious Rejected status to the issue —
+      // exactly the failure mode that took out REN-1165.
+      //
+      // We treat any non-OPEN state as already-handled and short-circuit
+      // with `noop` so the queue advances without re-running bubble-up.
+      // No-op when `getPRState` is unwired — keeps non-GitHub deployments
+      // working as before.
+      if (this.deps.prLabeler?.getPRState) {
+        try {
+          const prState = await this.deps.prLabeler.getPRState(entry.prNumber)
+          if (prState && prState.state !== 'OPEN') {
+            return {
+              prNumber: entry.prNumber,
+              status: 'noop',
+              message: `PR already ${prState.state.toLowerCase()}${prState.mergedAt ? ` (merged at ${prState.mergedAt})` : ''}`,
+            }
+          }
+        } catch {
+          // Pre-flight is best-effort. If the API call fails, fall through
+          // and let the strategies handle it — better to risk one spurious
+          // failure than to skip a PR that actually needed processing.
+        }
+      }
+
       // 1. Prepare: fetch latest main.
       //
       // Transient prepare failures (strategy returns `retryable: true` — e.g.,
@@ -471,6 +546,25 @@ export class MergeWorker {
       // 6. Finalize: push and merge
       await strategy.finalize(ctx)
 
+      // 6.5. Wait for GitHub to record the merge before deleting the branch.
+      //
+      // The rebase strategy fast-forwards `main` on the remote via
+      // `git push <rebasedSha>:main`. GitHub auto-detects this push as a
+      // merge of any open PR whose HEAD is in the new `main` history and
+      // transitions the PR to MERGED with `mergedAt` set. If we delete the
+      // source branch before that detection runs, GitHub processes the
+      // branch-delete first and closes the PR with `state: CLOSED,
+      // mergedAt: null` — `git log main` then looks like a series of
+      // direct-to-main commits with no associated PR (the REN-1165
+      // failure mode).
+      //
+      // Polling getPRState until the PR is MERGED is a defensive sleep
+      // that closes that race. Best-effort: if the API call isn't wired
+      // (non-GitHub deployments) or polling times out, fall through to
+      // the unconditional delete — worst case the PR shows CLOSED instead
+      // of MERGED, no other harm.
+      await this.waitForPRMergeRecorded(entry.prNumber)
+
       // 7. Delete branch if configured
       if (this.config.deleteBranchOnMerge) {
         try {
@@ -555,6 +649,42 @@ export class MergeWorker {
     } catch (err) {
       console.error(`[merge-worker] Failed to transition ${id} → ${targetStatus}:`, err instanceof Error ? err.message : err)
     }
+  }
+
+  /**
+   * Poll GitHub until the PR is recorded as MERGED, with a short timeout.
+   *
+   * Closes the race between (a) the rebase strategy's fast-forward push to
+   * `main` and (b) our subsequent branch deletion. GitHub auto-detects the
+   * merge from the push to base; deleting the source branch before that
+   * detection lands closes the PR with `mergedAt: null`. Waiting for the
+   * MERGED transition first lets the merge metadata be recorded properly.
+   *
+   * Best-effort: returns silently when getPRState isn't wired, when the
+   * call fails, or when the timeout elapses. Worst case the PR shows
+   * CLOSED-not-merged — the same outcome as before this change.
+   */
+  private async waitForPRMergeRecorded(prNumber: number): Promise<void> {
+    const getPRState = this.deps.prLabeler?.getPRState
+    if (!getPRState) return
+
+    const timeoutMs = this.config.mergeRecordedTimeoutMs ?? 30_000
+    const deadline = Date.now() + timeoutMs
+    const intervalMs = 500
+    while (Date.now() < deadline) {
+      try {
+        const state = await getPRState(prNumber)
+        if (state?.state === 'MERGED') return
+      } catch {
+        // Treat API errors as "not yet" and keep polling within the budget.
+      }
+      await this.sleep(intervalMs)
+    }
+    console.warn(
+      `[merge-worker] PR #${prNumber}: GitHub did not record the merge within ` +
+      `${timeoutMs}ms after fast-forward push. Branch will be deleted regardless; ` +
+      `PR may show CLOSED instead of MERGED.`,
+    )
   }
 
   /**

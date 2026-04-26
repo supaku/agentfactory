@@ -143,7 +143,43 @@ describe('resolveProfileForSpawn', () => {
         dispatchModel: 'custom-model-1',
       }))
       expect(result.model).toBe('custom-model-1')
-      expect(result.provider).toBe('codex') // provider unchanged
+      expect(result.provider).toBe('codex') // unknown model — provider unchanged
+    })
+
+    it('dispatch model auto-switches provider when it matches a declared profile', () => {
+      // codex-dev is the default profile (provider=codex). claude-coord declares
+      // model=claude-opus-4-7. A dispatchModel of claude-opus-4-7 must flip the
+      // provider to claude — otherwise codex would receive a claude model.
+      const result = resolveProfileForSpawn(makeContext({
+        dispatchModel: 'claude-opus-4-7',
+      }))
+      expect(result.model).toBe('claude-opus-4-7')
+      expect(result.provider).toBe('claude')
+      expect(result.source).toContain('→provider:claude')
+    })
+
+    it('dispatch model auto-switches provider via well-known prefix (claude-*)', () => {
+      const result = resolveProfileForSpawn(makeContext({
+        dispatchModel: 'claude-future-model-99',
+      }))
+      expect(result.provider).toBe('claude')
+    })
+
+    it('dispatch model auto-switches provider via well-known prefix (gpt-*)', () => {
+      // Force a non-codex profile so the switch is observable
+      const result = resolveProfileForSpawn(makeContext({
+        workType: 'coordination', // resolves to claude-coord
+        dispatchModel: 'gpt-5-codex',
+      }))
+      expect(result.provider).toBe('codex')
+    })
+
+    it('dispatch model leaves provider alone when already matching', () => {
+      const result = resolveProfileForSpawn(makeContext({
+        dispatchModel: 'gpt-5.4-mini', // codex profile, codex provider — same family
+      }))
+      expect(result.provider).toBe('codex')
+      expect(result.source).not.toContain('→provider:')
     })
 
     it('label provider: overrides profile provider', () => {

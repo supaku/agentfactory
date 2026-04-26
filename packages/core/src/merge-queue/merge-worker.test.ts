@@ -1387,6 +1387,363 @@ describe('MergeWorker', () => {
 
       expect(deps.storage.markBlocked).toHaveBeenCalled()
     })
+
+    // ---------------------------------------------------------------------
+    // Pre-flight PR-state check (Bug B from REN-1165)
+    // ---------------------------------------------------------------------
+    //
+    // Scenario: the label poller can enqueue the same PR multiple times
+    // across ticks before the first dequeue removes the label. After the
+    // first run merges + deletes the source branch, every subsequent
+    // dequeue would crash in `prepare()` with "couldn't find remote ref"
+    // and bubble a spurious Rejected status to the originating issue.
+    //
+    // The pre-flight `getPRState` check short-circuits with `noop` when
+    // the PR is already merged or closed, so the queue advances without
+    // re-running the merge work or the bubble-up.
+
+    it('short-circuits with noop when PR is already MERGED', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const getPRState = vi.fn().mockResolvedValue({
+        state: 'MERGED' as const,
+        mergedAt: '2026-04-26T19:08:01Z',
+      })
+      const issueTracker = {
+        getIssue: vi.fn(),
+        createComment: vi.fn(),
+        updateIssueStatus: vi.fn(),
+      } as any
+      const deps = makeDeps({
+        prLabeler: { removeApprovedForMergeLabel, getPRState },
+        issueTracker,
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      // Strategy must NOT be invoked — pre-flight should bail out first.
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // Pre-flight ran; strategy did not.
+      expect(getPRState).toHaveBeenCalledWith(42)
+      expect(mockStrategy.prepare).not.toHaveBeenCalled()
+
+      // Storage advanced via markCompleted — the entry is consumed.
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+
+      // Critically: no bubble-up to the issue (would post duplicate ✅ Merged
+      // or worse, a spurious Rejected) and no second label-removal attempt.
+      expect(issueTracker.createComment).not.toHaveBeenCalled()
+      expect(issueTracker.updateIssueStatus).not.toHaveBeenCalled()
+      expect(removeApprovedForMergeLabel).not.toHaveBeenCalled()
+    })
+
+    it('short-circuits with noop when PR is CLOSED-not-merged', async () => {
+      // Mirror case: rebase strategy fast-forwarded main + deleted branch
+      // before GitHub auto-detected the merge, so the PR shows CLOSED with
+      // mergedAt:null. Still already-handled — re-running would error.
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const getPRState = vi.fn().mockResolvedValue({
+        state: 'CLOSED' as const,
+        mergedAt: null,
+      })
+      const deps = makeDeps({
+        prLabeler: {
+          removeApprovedForMergeLabel: vi.fn().mockResolvedValue(undefined),
+          getPRState,
+        },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      expect(mockStrategy.prepare).not.toHaveBeenCalled()
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
+
+    it('processes the merge normally when PR is OPEN', async () => {
+      // Sanity check: pre-flight must not interfere with the happy path.
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        // Short timeout so the post-merge `waitForPRMergeRecorded` poll
+        // doesn't hang the test; we never return MERGED from this mock so
+        // the wait will hit timeout and proceed (its warning is expected).
+        mergeRecordedTimeoutMs: 50,
+      })
+      // Two calls: one pre-flight (OPEN), then waitForPRMergeRecorded poll
+      // (still OPEN — we want to exercise the timeout path here).
+      const getPRState = vi.fn().mockResolvedValue({
+        state: 'OPEN' as const,
+        mergedAt: null,
+      })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({
+        prLabeler: { removeApprovedForMergeLabel, getPRState },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // Pre-flight ran AND the merge proceeded.
+      expect(getPRState).toHaveBeenCalledWith(42)
+      expect(mockStrategy.prepare).toHaveBeenCalled()
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+      expect(removeApprovedForMergeLabel).toHaveBeenCalledWith(42)
+    })
+
+    it('waits for GitHub to record the merge before deleting the source branch (Bug A)', async () => {
+      // After strategy.finalize() pushes the rebased SHA to main, GitHub
+      // auto-detects the merge and transitions the PR to MERGED. If we
+      // delete the source branch before that detection lands, GitHub
+      // closes the PR with mergedAt:null instead — `git log main` then
+      // looks like direct-to-main commits with no associated PR.
+      //
+      // We verify the worker actually polls getPRState (proving the wait
+      // loop runs) and reaches MERGED before deleting the branch.
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        mergeRecordedTimeoutMs: 5_000,
+        deleteBranchOnMerge: true,
+      })
+
+      // Pre-flight returns OPEN. The wait then polls 3 times before
+      // GitHub records MERGED — proving the poll loop is doing work.
+      let pollCount = 0
+      const getPRState = vi.fn().mockImplementation(async () => {
+        pollCount++
+        if (pollCount < 4) return { state: 'OPEN' as const, mergedAt: null }
+        return { state: 'MERGED' as const, mergedAt: '2026-04-26T19:08:01Z' }
+      })
+
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({
+        prLabeler: { removeApprovedForMergeLabel, getPRState },
+      })
+
+      // Track when the branch-delete command runs in the order of exec calls.
+      // Branch delete is the LAST exec call in step 7 of processEntry, so by
+      // the time it fires the wait must have completed.
+      let branchDeleteSeen = false
+      mockExec.mockImplementation((cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        if (cmd.includes('--delete')) branchDeleteSeen = true
+        cb?.(null, { stdout: '', stderr: '' })
+        return {} as ReturnType<typeof exec>
+      })
+
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+      ac.abort()
+      await startPromise
+
+      // Pre-flight + poll loop iterations — proves the wait actually polled.
+      expect(getPRState.mock.calls.length).toBeGreaterThanOrEqual(4)
+      expect(mockStrategy.finalize).toHaveBeenCalled()
+      // Branch delete ran (we got past the wait without timing out).
+      expect(branchDeleteSeen).toBe(true)
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
+
+    it('proceeds with branch delete even if GitHub never records the merge', async () => {
+      // Worst-case: the wait times out without seeing MERGED. We must
+      // not block the queue forever — log a warning and delete anyway.
+      // Outcome: PR shows CLOSED-not-merged (the pre-fix behavior), but
+      // the queue keeps moving.
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        mergeRecordedTimeoutMs: 100,
+        deleteBranchOnMerge: true,
+      })
+
+      // Pre-flight returns OPEN; subsequent polls keep returning OPEN
+      // (simulating a stuck GitHub webhook or repo without auto-merge
+      // detection). The wait will time out.
+      const getPRState = vi.fn().mockResolvedValue({
+        state: 'OPEN' as const,
+        mergedAt: null,
+      })
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({
+        prLabeler: { removeApprovedForMergeLabel, getPRState },
+      })
+
+      let branchDeleteCalled = false
+      mockExec.mockImplementation((cmd: string, _opts: unknown, callback?: Function) => {
+        const cb = typeof _opts === 'function' ? _opts : callback
+        if (cmd.includes('--delete')) branchDeleteCalled = true
+        cb?.(null, { stdout: '', stderr: '' })
+        return {} as ReturnType<typeof exec>
+      })
+
+      const worker = new MergeWorker(config, deps)
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      ac.abort()
+      await startPromise
+
+      expect(branchDeleteCalled).toBe(true)
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
+
+    it('falls through to normal processing when getPRState throws', async () => {
+      // Pre-flight is best-effort. A gh CLI failure must not skip a real
+      // merge — better to risk one spurious failure than to silently drop
+      // a PR that needed processing.
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        // Bound the post-merge wait so a thrown getPRState doesn't hang.
+        mergeRecordedTimeoutMs: 50,
+      })
+      const getPRState = vi.fn().mockRejectedValue(new Error('gh: rate limited'))
+      const deps = makeDeps({
+        prLabeler: {
+          removeApprovedForMergeLabel: vi.fn().mockResolvedValue(undefined),
+          getPRState,
+        },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // Pre-flight failed; normal merge path still ran.
+      expect(getPRState).toHaveBeenCalled()
+      expect(mockStrategy.prepare).toHaveBeenCalled()
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
   })
 
   // -------------------------------------------------------------------------

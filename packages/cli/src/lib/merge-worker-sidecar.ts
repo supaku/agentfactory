@@ -272,6 +272,41 @@ export async function removeApprovedForMergeLabel(
   }
 }
 
+/**
+ * Fetch a PR's state via `gh pr view`. Returns null when the call fails
+ * (network, missing PR, gh not installed) so callers can fall through to
+ * the normal merge path rather than skipping unintentionally.
+ */
+export async function getPRState(
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<{ state: 'OPEN' | 'CLOSED' | 'MERGED'; mergedAt: string | null } | null> {
+  try {
+    const { stdout } = await execFileAsync(
+      'gh',
+      [
+        'pr', 'view', String(prNumber),
+        '--repo', `${owner}/${repo}`,
+        '--json', 'state,mergedAt',
+      ],
+      { timeout: LABEL_POLL_TIMEOUT_MS },
+    )
+    const parsed = JSON.parse(stdout.trim() || '{}') as {
+      state?: string
+      mergedAt?: string | null
+    }
+    if (parsed.state === 'OPEN' || parsed.state === 'CLOSED' || parsed.state === 'MERGED') {
+      return { state: parsed.state, mergedAt: parsed.mergedAt ?? null }
+    }
+    return null
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[merge-worker] getPRState(#${prNumber}) failed: ${msg}`)
+    return null
+  }
+}
+
 async function defaultListLabeledPRs(
   owner: string,
   repo: string,
@@ -405,11 +440,17 @@ export function startMergeWorkerSidecar(
   // will no-op the label-removal call. On terminal failures (conflict,
   // test-failure, error) the worker removes the `approved-for-merge`
   // label so the label poller doesn't immediately re-enqueue the same PR.
+  //
+  // `getPRState` is the pre-flight check that prevents stale duplicate
+  // entries from re-running the merge work and posting spurious Rejected
+  // status to the originating issue (the REN-1165 failure mode).
   const labelRepoParts = splitRepoId(repoId)
   const prLabeler = labelRepoParts
     ? {
         removeApprovedForMergeLabel: (prNumber: number) =>
           removeApprovedForMergeLabel(labelRepoParts.owner, labelRepoParts.repo, prNumber),
+        getPRState: (prNumber: number) =>
+          getPRState(labelRepoParts.owner, labelRepoParts.repo, prNumber),
       }
     : undefined
 

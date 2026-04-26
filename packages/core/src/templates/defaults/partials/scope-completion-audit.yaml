@@ -23,6 +23,53 @@ content: |
   - Include full technical detail on WHY it cannot be delivered in this session
   - Do NOT list it in a comment as a "follow-up" or "future work"
 
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  INTEGRATION COMPLETENESS CHECK — second mandatory pass          ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  Tests passing on a new module does NOT prove that module is reachable
+  from the runtime. Library code with no production caller is dead code,
+  and "the function exists and has tests" is not the same as "the
+  acceptance criterion is satisfied".
+
+  Real failure (REN-1165, April 2026): a coordinator delivered three new
+  libraries — `skill-matcher.ts`, `mab-selector.ts`, `load-aware-router.ts`
+  — each with 23–27 passing tests. The parent acceptance criterion was
+  "inbound work routed to the best available agent". QA passed. The work
+  shipped. NOTHING in the inbound request path imported any of the new
+  modules. The acceptance criterion was satisfied on paper only.
+  Don't repeat this.
+
+  For EVERY new top-level source file and every newly exported symbol
+  added by this PR, do this check:
+
+  1. Find at least one importer (or other call site, in non-import
+     languages) that is OUTSIDE the new module's own directory and is
+     NOT a test, example, fixture, or demo file.
+  2. Trace that importer back to a runtime entry point — an HTTP
+     handler, CLI command, webhook receiver, scheduled job, queue
+     consumer, or whatever your project uses to get work off the wire.
+  3. If no production importer exists AND any acceptance criterion
+     describes runtime behavior (words like routing, dispatch,
+     processing, handling, serving, validating, persisting, scanning,
+     reacting, triggering — anything that runs in response to an
+     input), the work is INCOMPLETE. Wire the new code into an
+     existing entry point in this same PR.
+
+  Quick command to surface candidates (adapt to your language):
+
+      git diff origin/main..HEAD --name-only --diff-filter=A \
+        | grep -Ev '\.test\.|/__tests__/|/fixtures/|/examples?/'
+
+  Then for each result, grep the rest of the codebase for imports of
+  its exports. Zero results outside its own directory == not wired.
+
+  EXEMPT: the issue description explicitly says "library only",
+  "no wiring this session", "scaffolding only", "infrastructure for
+  future work", or similarly carves out integration as out of scope.
+  When this exemption applies, state it explicitly in the PR
+  description so the next agent knows the wiring is still owed.
+
   ┌─────────────────────────────────────────────────────────────────┐
   │  PROHIBITED BEHAVIORS (violating these = automatic FAIL):       │
   ├─────────────────────────────────────────────────────────────────┤
@@ -32,6 +79,8 @@ content: |
   │  • Using "out of scope for this PR" for items IN the issue      │
   │  • Using "can be addressed later" / "punting to follow-up"      │
   │  • Creating comments that list TODOs for work described here    │
+  │  • Shipping a new module with no production caller when the     │
+  │    acceptance criteria describe runtime behavior                │
   └─────────────────────────────────────────────────────────────────┘
 
   If the issue scope is genuinely too large to complete in a single session:
