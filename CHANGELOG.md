@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.59
+
+### Fixes
+
+- **Merge queue duplicate-dequeue race** — Close the duplicate-dequeue race on already-merged PRs, preventing redundant merge attempts when a PR has already landed.
+
+- **Provider inference from dispatchModel** — Orchestrator now infers provider from `dispatchModel`, hardens the merge queue, and tightens the scope completion audit.
+
+- **Validation exit hard-fail** — Coordination and development workflows now hard-fail on non-zero validation exits, ensuring agents can't silently skip past failed typechecks or tests.
+
 ## v0.8.58
 
 ### Fixes
