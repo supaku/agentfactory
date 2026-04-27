@@ -40,6 +40,19 @@ export interface PrepareResult {
    * any lingering cases degrade gracefully rather than dead-end the PR.
    */
   retryable?: boolean
+  /**
+   * When true, the failure indicates the source branch no longer exists on
+   * the remote — almost always because a previous successful merge for the
+   * same PR already deleted it. The merge worker treats this as `noop` so
+   * the queue advances without bubbling a spurious Rejected status to the
+   * originating issue.
+   *
+   * Closes the residual race left by the `getPRState` pre-flight check:
+   * GitHub's PR-state transition can lag the actual merge by a few seconds,
+   * so a duplicate dequeue that fires inside that window passes pre-flight
+   * (state still OPEN) and then fails here on the missing branch.
+   */
+  alreadyMerged?: boolean
 }
 
 /** Result of the execute (merge) step */

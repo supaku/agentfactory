@@ -25,7 +25,7 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import type { MergeStrategy, MergeContext, PrepareResult, MergeResult } from './types.js'
-import { isBranchConflictError } from '../branch-conflict.js'
+import { isBranchConflictError, isMissingRemoteRefError } from '../branch-conflict.js'
 import { cleanWorktreeState } from './worktree-cleanup.js'
 
 const execAsync = promisify(exec)
@@ -74,6 +74,9 @@ export class RebaseStrategy implements MergeStrategy {
       const message = err instanceof Error ? err.message : String(err)
       if (isBranchConflictError(message)) {
         return { success: false, error: message, retryable: true }
+      }
+      if (isMissingRemoteRefError(message, ctx.sourceBranch)) {
+        return { success: false, error: message, alreadyMerged: true }
       }
       return { success: false, error: message }
     }

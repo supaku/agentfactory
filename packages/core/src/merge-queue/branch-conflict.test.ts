@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { isBranchConflictError, parseConflictingWorktreePath } from './branch-conflict.js'
+import {
+  isBranchConflictError,
+  isMissingRemoteRefError,
+  parseConflictingWorktreePath,
+} from './branch-conflict.js'
 
 describe('isBranchConflictError', () => {
   it('matches the "is already used by worktree at" phrasing', () => {
@@ -56,5 +60,38 @@ describe('parseConflictingWorktreePath', () => {
     // Shouldn't happen in real git output, but guard against loose matches.
     const msg = "is already used by worktree at /no/quotes/here"
     expect(parseConflictingWorktreePath(msg)).toBeNull()
+  })
+})
+
+describe('isMissingRemoteRefError', () => {
+  it('matches the exact REN-1166 error for the named source branch', () => {
+    // The message that bubbled "⚠️ Merge queue error" on a PR that had
+    // already merged: the duplicate dequeue tried to fetch the just-deleted
+    // source branch.
+    const msg = "Command failed: git fetch origin main REN-1166\nfatal: couldn't find remote ref REN-1166\n"
+    expect(isMissingRemoteRefError(msg, 'REN-1166')).toBe(true)
+  })
+
+  it('does not match when the missing ref is the target branch (real config error)', () => {
+    // Catching a missing target would silently swallow a misconfiguration
+    // worth surfacing — guard against that by anchoring on the source.
+    const msg = "fatal: couldn't find remote ref main"
+    expect(isMissingRemoteRefError(msg, 'feature/x')).toBe(false)
+  })
+
+  it('does not match when the missing ref differs from the expected source', () => {
+    const msg = "fatal: couldn't find remote ref some-other-branch"
+    expect(isMissingRemoteRefError(msg, 'feature/x')).toBe(false)
+  })
+
+  it('returns false for unrelated git errors', () => {
+    expect(isMissingRemoteRefError('fatal: not a git repository', 'X')).toBe(false)
+    expect(isMissingRemoteRefError('CONFLICT (content): Merge conflict', 'X')).toBe(false)
+    expect(isMissingRemoteRefError('', 'X')).toBe(false)
+  })
+
+  it('handles slashed branch names', () => {
+    const msg = "fatal: couldn't find remote ref feature/SUP-100"
+    expect(isMissingRemoteRefError(msg, 'feature/SUP-100')).toBe(true)
   })
 })
