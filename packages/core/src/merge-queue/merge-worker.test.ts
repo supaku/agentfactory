@@ -1695,6 +1695,226 @@ describe('MergeWorker', () => {
       expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
     })
 
+    // ---------------------------------------------------------------------
+    // REN-1166: local "recently merged" marker + prepare-side alreadyMerged.
+    //
+    // The `getPRState` pre-flight added in REN-1165 closes most duplicate
+    // dequeues, but GitHub's PR-state propagation can lag the merge by a
+    // few seconds. During that window pre-flight sees state=OPEN and the
+    // duplicate falls through. Two complementary defenses:
+    //   - Local Redis marker written in the success path (authoritative,
+    //     not subject to GitHub propagation).
+    //   - Strategy-level detection of "couldn't find remote ref" when
+    //     prepare() fetches the (now-deleted) source branch.
+    // ---------------------------------------------------------------------
+
+    it('short-circuits with noop when local recently-merged marker is set', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const deps = makeDeps({
+        prLabeler: {
+          removeApprovedForMergeLabel: vi.fn().mockResolvedValue(undefined),
+          getPRState: vi.fn(),
+        },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      // Marker present — pre-flight should short-circuit BEFORE getPRState
+      // (which would otherwise contact GitHub and could still report OPEN).
+      vi.mocked(deps.redis.get).mockImplementation(async (key: string) => {
+        if (key === 'merge:completed:repo-1:42') return String(Date.now())
+        return null
+      })
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // Marker hit — strategy never invoked, getPRState never called.
+      expect(mockStrategy.prepare).not.toHaveBeenCalled()
+      expect(deps.prLabeler!.getPRState).not.toHaveBeenCalled()
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
+
+    it('writes recently-merged marker on successful merge', async () => {
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        mergeRecordedTimeoutMs: 50,
+        recentlyMergedTtlSeconds: 900,
+      })
+      const deps = makeDeps()
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // setNX called with the marker key, value (timestamp), and configured TTL.
+      // Filter out the lock-acquire and heartbeat setNX calls.
+      const markerCalls = vi.mocked(deps.redis.setNX).mock.calls.filter(
+        (c) => typeof c[0] === 'string' && c[0].startsWith('merge:completed:'),
+      )
+      expect(markerCalls.length).toBe(1)
+      expect(markerCalls[0][0]).toBe('merge:completed:repo-1:42')
+      expect(markerCalls[0][2]).toBe(900)
+    })
+
+    it('strategy-side alreadyMerged maps to noop, not error', async () => {
+      // Belt-and-braces: if the local marker has expired or was lost
+      // (worker restart, Redis flush), the strategy still detects the
+      // missing-remote-ref error and the worker treats it as noop.
+      vi.useRealTimers()
+      const config = makeConfig({ pollInterval: 50 })
+      const issueTracker = {
+        getIssue: vi.fn(),
+        createComment: vi.fn(),
+        updateIssueStatus: vi.fn(),
+      } as any
+      const removeApprovedForMergeLabel = vi.fn().mockResolvedValue(undefined)
+      const deps = makeDeps({
+        issueTracker,
+        prLabeler: {
+          removeApprovedForMergeLabel,
+          // No getPRState wired — exercise the prepare-side path directly.
+        },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockResolvedValue(null)
+
+      const mockStrategy = makeMockStrategy()
+      mockStrategy.prepare.mockResolvedValue({
+        success: false,
+        error: "fatal: couldn't find remote ref feature/SUP-100\n",
+        alreadyMerged: true,
+      })
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      expect(mockStrategy.prepare).toHaveBeenCalled()
+      expect(mockStrategy.execute).not.toHaveBeenCalled()
+      // Treated as noop: storage advances, no spurious Rejected bubble-up,
+      // no second label-removal attempt.
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+      expect(issueTracker.createComment).not.toHaveBeenCalled()
+      expect(issueTracker.updateIssueStatus).not.toHaveBeenCalled()
+      expect(removeApprovedForMergeLabel).not.toHaveBeenCalled()
+    })
+
+    it('falls through to GitHub state check when marker lookup throws', async () => {
+      // Best-effort marker lookup. A Redis blip must not skip a real merge.
+      vi.useRealTimers()
+      const config = makeConfig({
+        pollInterval: 50,
+        mergeRecordedTimeoutMs: 50,
+      })
+      const getPRState = vi.fn().mockResolvedValue({
+        state: 'OPEN' as const,
+        mergedAt: null,
+      })
+      const deps = makeDeps({
+        prLabeler: {
+          removeApprovedForMergeLabel: vi.fn().mockResolvedValue(undefined),
+          getPRState,
+        },
+      })
+      const worker = new MergeWorker(config, deps)
+
+      const entry = makeEntry()
+      let dequeueCount = 0
+      vi.mocked(deps.storage.dequeue).mockImplementation(async () => {
+        dequeueCount++
+        return dequeueCount === 1 ? entry : null
+      })
+      vi.mocked(deps.redis.get).mockImplementation(async (key: string) => {
+        if (key.startsWith('merge:completed:')) {
+          throw new Error('redis: blip')
+        }
+        return null
+      })
+
+      const mockStrategy = makeMockStrategy()
+      mockCreateMergeStrategy.mockReturnValue(mockStrategy)
+      MockConflictResolver.mockImplementation(() => ({ resolve: vi.fn() }) as any)
+      MockLockFileRegeneration.mockImplementation(() => ({
+        shouldRegenerate: vi.fn().mockReturnValue(false),
+        regenerate: vi.fn(),
+        getLockFileName: vi.fn(),
+        ensureGitAttributes: vi.fn(),
+      }) as any)
+      mockExecSuccess()
+
+      const ac = new AbortController()
+      const startPromise = worker.start(ac.signal)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      ac.abort()
+      await startPromise
+
+      // Marker lookup threw — pre-flight fell through to getPRState (OPEN)
+      // and the merge ran normally.
+      expect(getPRState).toHaveBeenCalledWith(42)
+      expect(mockStrategy.prepare).toHaveBeenCalled()
+      expect(deps.storage.markCompleted).toHaveBeenCalledWith('repo-1', 42)
+    })
+
     it('falls through to normal processing when getPRState throws', async () => {
       // Pre-flight is best-effort. A gh CLI failure must not skip a real
       // merge — better to risk one spurious failure than to silently drop

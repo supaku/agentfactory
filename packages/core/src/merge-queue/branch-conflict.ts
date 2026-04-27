@@ -39,3 +39,27 @@ export function parseConflictingWorktreePath(errorMessage: string): string | nul
   )
   return match?.[1] ?? null
 }
+
+/**
+ * Returns true when a git error message indicates the requested remote ref
+ * is missing — i.e., `git fetch <remote> <ref>` printed
+ *   fatal: couldn't find remote ref <ref>
+ *
+ * In merge-queue context this only happens after the source branch was
+ * deleted on the remote (typically by a previous successful merge that
+ * removed it). The pre-flight `getPRState` check is supposed to catch
+ * stale duplicate entries before we get here, but it relies on GitHub's
+ * PR-state propagation — which lags the actual merge by a few seconds.
+ * When the propagation hasn't landed, the duplicate falls through and
+ * `prepare()` fails on the missing branch. Treating that specific error
+ * as "already merged" turns the second processing attempt into a `noop`
+ * instead of bubbling a spurious Rejected status to the issue.
+ *
+ * The caller passes the expected source branch so a missing-target-branch
+ * error (which would be a real configuration problem worth surfacing) is
+ * not silently swallowed.
+ */
+export function isMissingRemoteRefError(errorMessage: string, sourceBranch: string): boolean {
+  if (!errorMessage.includes("couldn't find remote ref")) return false
+  return errorMessage.includes(`couldn't find remote ref ${sourceBranch}`)
+}

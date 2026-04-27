@@ -83,10 +83,42 @@ export interface MergeWorkerConfig {
    * Default: 30_000 (30s). Lowered in tests to keep them fast.
    */
   mergeRecordedTimeoutMs?: number
+  /**
+   * Lifetime (seconds) of the local "recently merged" marker written to
+   * Redis on every successful merge. Pre-flight consults this marker
+   * before the GitHub `getPRState` call — present means a previous run
+   * already merged this PR and the duplicate dequeue should `noop`.
+   *
+   * The marker exists because GitHub's PR-state propagation can lag the
+   * actual merge by a few seconds; during that window pre-flight sees
+   * `state: OPEN` and would otherwise fall through to `prepare()`, which
+   * then fails on the just-deleted source branch and bubbles a spurious
+   * Rejected status. The local marker is authoritative and not subject
+   * to that race.
+   *
+   * Default: 600 (10 min). Long enough to cover any plausible duplicate
+   * dequeue; short enough that the key set doesn't grow unbounded.
+   */
+  recentlyMergedTtlSeconds?: number
 }
 
 /** Default in-process backoffs for retryable prepare failures. */
 export const DEFAULT_RETRYABLE_PREPARE_BACKOFFS_MS = [5_000, 15_000, 30_000] as const
+
+/** Default lifetime of the local "recently merged" marker (10 minutes). */
+export const DEFAULT_RECENTLY_MERGED_TTL_SECONDS = 600
+
+/**
+ * Redis key tracking PRs whose merge already succeeded in this repo. The
+ * worker writes it on every `merged` outcome and consults it in pre-flight
+ * before the GitHub `getPRState` call.
+ *
+ * Exported so other queue components (e.g., the bubble-up backstop) can
+ * agree on the key shape without depending on the worker class.
+ */
+export function recentlyMergedKey(repoId: string, prNumber: number): string {
+  return `merge:completed:${repoId}:${prNumber}`
+}
 
 export interface MergeWorkerDeps {
   storage: {
@@ -290,6 +322,11 @@ export class MergeWorker {
         switch (result.status) {
           case 'merged':
             await this.deps.storage.markCompleted(this.config.repoId, result.prNumber)
+            // Local "recently merged" marker, written before bubble-up so a
+            // duplicate dequeue racing the bubble sees it. GitHub-independent
+            // — closes the residual window where `getPRState` still reports
+            // OPEN because the PR-state transition hasn't propagated yet.
+            await this.markRecentlyMerged(result.prNumber)
             await this.bubbleResultToIssue(entry, result, 'merged')
             // Remove the label even on success: GitHub's PR-state update is
             // async, so `gh pr list --state open --label approved-for-merge`
@@ -389,6 +426,27 @@ export class MergeWorker {
       // with `noop` so the queue advances without re-running bubble-up.
       // No-op when `getPRState` is unwired — keeps non-GitHub deployments
       // working as before.
+      //
+      // 0a. Local marker first (REN-1166). The success path writes
+      // `merge:completed:<repo>:<pr>` to Redis with a short TTL. This is
+      // authoritative regardless of GitHub's PR-state propagation, which
+      // can lag the merge by several seconds and let a duplicate dequeue
+      // pass the `getPRState` check below.
+      try {
+        const marker = await this.deps.redis.get(
+          recentlyMergedKey(this.config.repoId, entry.prNumber),
+        )
+        if (marker) {
+          return {
+            prNumber: entry.prNumber,
+            status: 'noop',
+            message: 'PR already merged (local marker)',
+          }
+        }
+      } catch {
+        // Best-effort. A Redis blip here just falls through to the
+        // GitHub-side check, which is the previous behavior.
+      }
       if (this.deps.prLabeler?.getPRState) {
         try {
           const prState = await this.deps.prLabeler.getPRState(entry.prNumber)
@@ -428,6 +486,20 @@ export class MergeWorker {
         prepareResult = await strategy.prepare(ctx)
       }
       if (!prepareResult.success) {
+        // The strategy detected that the source branch no longer exists on
+        // the remote — almost always because a previous successful merge
+        // for this PR already deleted it. Treat as `noop` so the queue
+        // advances quietly instead of bubbling Rejected on a PR that
+        // actually merged cleanly. (REN-1166: belt-and-braces with the
+        // local marker check above — covers the case where the marker has
+        // expired or was lost across worker restarts.)
+        if (prepareResult.alreadyMerged) {
+          return {
+            prNumber: entry.prNumber,
+            status: 'noop',
+            message: 'Source branch missing on remote (already merged)',
+          }
+        }
         return { prNumber: entry.prNumber, status: 'error', message: `Prepare failed: ${prepareResult.error}` }
       }
 
@@ -648,6 +720,31 @@ export class MergeWorker {
       await tracker.updateIssueStatus(issueId, targetStatus)
     } catch (err) {
       console.error(`[merge-worker] Failed to transition ${id} → ${targetStatus}:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  /**
+   * Write the local "recently merged" marker so duplicate dequeues short-
+   * circuit in pre-flight regardless of GitHub's PR-state propagation.
+   *
+   * Best-effort — a Redis write failure here doesn't fail the merge (it
+   * already happened). Worst case the duplicate falls through to the
+   * GitHub-state pre-flight or to `prepare()`, which now also detects
+   * the missing-remote-ref error and treats it as `noop`.
+   */
+  private async markRecentlyMerged(prNumber: number): Promise<void> {
+    const ttl = this.config.recentlyMergedTtlSeconds ?? DEFAULT_RECENTLY_MERGED_TTL_SECONDS
+    try {
+      await this.deps.redis.setNX(
+        recentlyMergedKey(this.config.repoId, prNumber),
+        String(Date.now()),
+        ttl,
+      )
+    } catch (err) {
+      console.warn(
+        `[merge-worker] Failed to write recently-merged marker for PR #${prNumber}: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+      )
     }
   }
 

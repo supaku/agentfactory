@@ -81,6 +81,14 @@ const BRANCH_CONFLICT_USED_BY =
   "Command failed: git checkout feature/test\nfatal: 'feature/test' is already used by worktree at '/Users/me/repo.wt/REN-1253-AC'"
 const BRANCH_CONFLICT_CHECKED_OUT =
   "fatal: 'feature/test' is already checked out at '/Users/me/repo/.worktrees/feature-test-DEV'"
+/**
+ * The "couldn't find remote ref" failure that REN-1166 observed: a duplicate
+ * dequeue tried to fetch the source branch a previous run had already deleted
+ * after a successful merge. Strategies must mark this as `alreadyMerged: true`
+ * so the worker can `noop` instead of bubbling Rejected.
+ */
+const MISSING_SOURCE_REF =
+  "Command failed: git fetch origin main feature/test\nfatal: couldn't find remote ref feature/test\n"
 
 describe('createMergeStrategy factory', () => {
   it('returns RebaseStrategy for "rebase"', () => {
@@ -206,6 +214,18 @@ describe('RebaseStrategy', () => {
 
       expect(result.success).toBe(false)
       expect(result.retryable).toBe(true)
+    })
+
+    it('returns alreadyMerged=true when source branch is missing on remote (REN-1166)', async () => {
+      mockExecSequence([
+        new Error(MISSING_SOURCE_REF),  // git fetch fails — branch was deleted
+      ])
+
+      const result = await strategy.prepare(defaultCtx)
+
+      expect(result.success).toBe(false)
+      expect(result.alreadyMerged).toBe(true)
+      expect(result.retryable).toBeFalsy()
     })
   })
 
@@ -397,6 +417,13 @@ describe('MergeCommitStrategy', () => {
         expect(result.retryable).toBe(true)
       }
     })
+
+    it('returns alreadyMerged=true when source branch is missing on remote (REN-1166)', async () => {
+      mockExecSequence([new Error(MISSING_SOURCE_REF)])
+      const result = await strategy.prepare(defaultCtx)
+      expect(result.success).toBe(false)
+      expect(result.alreadyMerged).toBe(true)
+    })
   })
 
   describe('execute', () => {
@@ -519,6 +546,13 @@ describe('SquashStrategy', () => {
         expect(result.success).toBe(false)
         expect(result.retryable).toBe(true)
       }
+    })
+
+    it('returns alreadyMerged=true when source branch is missing on remote (REN-1166)', async () => {
+      mockExecSequence([new Error(MISSING_SOURCE_REF)])
+      const result = await strategy.prepare(defaultCtx)
+      expect(result.success).toBe(false)
+      expect(result.alreadyMerged).toBe(true)
     })
   })
 
