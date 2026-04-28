@@ -345,6 +345,67 @@ STRUCTURED RESULT MARKER (REQUIRED):
 - All checks pass (no blockers): Include <!-- WORK_RESULT:passed --> in your final message
 - Any blockers found or assessment failed: Include <!-- WORK_RESULT:failed --> in your final message`
       break
+
+    case 'operational-scanner-vercel':
+      // PM agent (012 Archetype 6 — Operational Scanner, Vercel variant). REN-1328.
+      // The TemplateRegistry-based prompt is the canonical path; this legacy
+      // function is a fallback for environments that haven't migrated to templates.
+      // NOTE: Live Vercel binding is mocked pending REN-1311 (RenseiVercelPlugin).
+      basePrompt = `Run Vercel operational scan.
+
+WORKFLOW:
+1. Query Vercel deploy logs for the configured time window (mock source pending REN-1311).
+2. Cluster by failure type: deploy failures, function timeouts, cold-start regressions.
+3. Dedupe against existing Linear issues (search by vercel-deploy-id).
+4. For each new cluster: create a standalone bug-report issue with provenance tags.
+
+HARD RULES:
+- NEVER use --parentId (Principle 1).
+- Cap issues per scan at 10 (default).
+- Tag issues: bug, source:vercel, provenance:scan-<runId>.
+
+${WORK_RESULT_MARKER_INSTRUCTION}`
+      break
+
+    case 'operational-scanner-audit':
+      // PM agent (012 Archetype 6 — Operational Scanner, Audit variant). REN-1328.
+      // The TemplateRegistry-based prompt is the canonical path; this fallback
+      // is for environments that haven't migrated to templates.
+      basePrompt = `Run audit-chain operational scan.
+
+WORKFLOW:
+1. Query audit chain entries for the configured time window (006 Seam 6).
+2. Cluster by anomaly type: missing entries, broken chains, unexpected actors.
+3. Dedupe against existing Linear issues (search by audit-event-id).
+4. For each new cluster: create a standalone bug-report issue with provenance tags.
+
+HARD RULES:
+- NEVER use --parentId (Principle 1).
+- Cap issues per scan at 10 (default).
+- Tag issues: bug, source:audit, provenance:scan-<runId>.
+
+${WORK_RESULT_MARKER_INSTRUCTION}`
+      break
+
+    case 'operational-scanner-ci':
+      // PM agent (012 Archetype 6 — Operational Scanner, CI variant). REN-1328.
+      // The TemplateRegistry-based prompt is the canonical path; this fallback
+      // is for environments that haven't migrated to templates.
+      basePrompt = `Run CI operational scan.
+
+WORKFLOW:
+1. Query CI run logs for the configured time window.
+2. Cluster by signal type: flaky tests, slow steps, optimization opportunities.
+3. Dedupe against existing Linear issues (search by ci-run-id + test-name).
+4. For each new cluster: create a standalone bug-report or improvement issue with provenance.
+
+HARD RULES:
+- NEVER use --parentId (Principle 1).
+- Cap issues per scan at 10 (default).
+- Tag issues: source:ci, provenance:scan-<runId>; add bug for flaky tests, chore for optimizations.
+
+${WORK_RESULT_MARKER_INSTRUCTION}`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION

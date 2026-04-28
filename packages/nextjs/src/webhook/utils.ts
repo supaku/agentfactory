@@ -212,4 +212,7 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   'improvement-loop': 'Improvement Loop queued. Agent will analyze recent sessions and author meta-issues for systemic patterns...',
   'ga-readiness': 'GA-readiness assessment queued. Agent will evaluate feature readiness for production: AC coverage, architectural drift, observability, and security review status...',
   'documentation-steward': 'Documentation steward queued. Agent will scan docs for stale references and undocumented surfaces, author refinement issues for gaps...',
+  'operational-scanner-vercel': 'Vercel operational scan queued. Agent will scan deploy logs for failures, timeouts, and cold-start regressions, then author bug-report issues (live binding pending REN-1311)...',
+  'operational-scanner-audit': 'Audit chain scan queued. Agent will scan audit chains for anomalies per 006 Seam 6 (broken chains, unexpected actors) and author bug-report issues...',
+  'operational-scanner-ci': 'CI operational scan queued. Agent will scan CI runs for flaky tests, slow steps, and optimization opportunities, then author bug-report and chore issues...',
 }

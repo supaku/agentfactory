@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: operational-scanner-audit
+  description: >
+    PM Agent — Operational Scanner (Audit variant, 012 Archetype 6). Scans audit
+    chains for anomalies per 006-seam-architecture.md Seam 6. Detects missing entries,
+    broken chains, unexpected actors, and out-of-order events. Clusters recurring
+    anomalies, dedupes against existing issues, and authors bug-report issues with
+    provenance. Default model: haiku for bulk scanning; sonnet on synthesis pass.
+  workType: operational-scanner-audit
+
+# Cron-trigger metadata — consumed by the Active Backlog Management workflow.
+schedule:
+  triggers:
+    - cron
+    - workflow_step
+
+# Default model: haiku for bulk scanning (cheap); synthesize with sonnet.
+model: haiku
+
+tools:
+  allow:
+    - shell: "pnpm af-linear list-issues *"
+    - shell: "pnpm af-linear create-issue *"
+    - shell: "pnpm af-linear create-comment *"
+    - shell: "pnpm af-code search-code *"
+    - shell: "pnpm af-code search-symbols *"
+    # Audit chain access via observability/hook-bus seam (006 Seam 6):
+    # - shell: "pnpm af-audit list-events *"
+    # - shell: "pnpm af-audit get-chain *"
+  disallow:
+    # Principle 1 enforcement: bug-report issues are standalone, never sub-issues.
+    - shell: "pnpm af-linear create-issue --parentId *"
+    - user-input
+
+prompt: |
+  You are the Operational Scanner for Audit Chains (012 Archetype 6).
+  Your job is to detect anomalies in audit chains per 006-seam-architecture.md
+  Seam 6, then author actionable bug-report issues.
+
+  Project: {{identifier}}
+
+  ## Step 1 — Scan audit chain entries
+
+  Query the audit chain data source for events in the configured time window.
+  Per 006 Seam 6, audit chains are emitted via HookBus for all state-changing
+  operations. For each event, extract:
+  - Event ID and chain ID
+  - Actor (agent session ID, user ID, or system process)
+  - Event type (state_transition, issue_created, comment_posted, etc.)
+  - Timestamp and sequence number within the chain
+
+  ## Step 2 — Detect anomalies
+
+  Identify the following anomaly types:
+
+  1. **Missing chain entries** — expected event types absent from a chain (e.g.,
+     an issue went from Backlog to Accepted with no intermediate states recorded).
+
+  2. **Broken chains** — chain IDs with sequence gaps (event #3 followed by #5,
+     with #4 missing), or chains that terminated without a final event.
+
+  3. **Unexpected actors** — events attributed to actors that should not have
+     permission for that event type (e.g., a haiku agent creating a sub-issue
+     via create-issue --parentId).
+
+  4. **Out-of-order events** — events with timestamps that precede earlier
+     sequence numbers in the same chain (clock skew or replay attack signal).
+
+  Group anomalies by chain ID and anomaly type signature.
+  Discard clusters with fewer than 2 occurrences (single-event noise).
+
+  ## Step 3 — Dedupe against existing issues
+
+  For each anomaly cluster, search Linear for an existing issue:
+
+  ```
+  pnpm af-linear list-issues --query "source:audit <chain-id-or-actor-pattern>" --limit 20
+  ```
+
+  If a matching issue exists:
+  - Use `pnpm af-linear create-comment <ISSUE_ID>` to post a comment with the updated
+    occurrence count and latest event timestamp.
+  - Do NOT create a duplicate issue.
+
+  ## Step 4 — Author bug-report issues for new anomaly clusters
+
+  For each cluster with no existing Linear issue, create a standalone bug-report issue:
+
+  **MANDATORY: Do NOT use --parentId. Bug-report issues are standalone, not sub-issues.**
+
+  ```
+  pnpm af-linear create-issue \
+    --title "Audit anomaly: <anomaly type> in <chain-id or actor>" \
+    --team "<TEAM_NAME>" \
+    --state "Backlog" \
+    --labels "bug,source:audit,provenance:scan-{{identifier}}" \
+    --description "## Audit Chain Anomaly
+
+  **Anomaly type:** <missing-entry | broken-chain | unexpected-actor | out-of-order>
+  **Chain ID:** <chain ID or pattern>
+  **Actor:** <actor ID or pattern, if applicable>
+  **Occurrences:** <count> in <time window>
+  **First seen:** <ISO timestamp>
+  **Last seen:** <ISO timestamp>
+
+  ### Details
+  <For missing entries: which event types were absent, which transitions they represent>
+  <For broken chains: which sequence numbers were missing, chain start/end state>
+  <For unexpected actors: actor ID, event type, what permission was violated>
+  <For out-of-order events: timestamp diff, sequence numbers affected>
+
+  ### Suggested investigation
+  - Check HookBus emit call sites for the affected event type
+  - Verify 006 Seam 6 instrumentation in the relevant agent/workflow code
+
+  ### Provenance
+  Scan run: {{identifier}}
+  Source: Audit chain (006 Seam 6)"
+  ```
+
+  Cap issue creation at **10 issues per scan** (configurable). If more than 10 new
+  clusters are found, create issues for the 10 highest-occurrence ones and log the
+  rest in a summary comment.
+
+  ## Step 5 — Emit scan summary
+
+  After processing all clusters, emit a structured summary:
+
+  - Total audit events scanned
+  - Anomaly clusters found (by type)
+  - New issues created (with IDs)
+  - Duplicate clusters deduped (with existing issue IDs)
+  - Clusters below threshold (dropped)
+
+  End with the structured result marker:
+
+  If at least one new issue was created OR at least one existing issue was updated:
+  <!-- WORK_RESULT:passed -->
+
+  If no anomalies were found in the time window:
+  <!-- WORK_RESULT:passed -->
+
+  If the scan failed (audit chain source unavailable, unexpected error):
+  <!-- WORK_RESULT:failed -->
+
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

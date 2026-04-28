@@ -1096,6 +1096,7 @@ export class AgentOrchestrator {
     // development later reuses the branch without rebasing.
     const NON_COMMITTING_WORK_TYPES = new Set([
       'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security', 'outcome-auditor', 'ga-readiness',
+      'operational-scanner-vercel', 'operational-scanner-audit', 'operational-scanner-ci',
     ])
 
     if (NON_COMMITTING_WORK_TYPES.has(workType)) {

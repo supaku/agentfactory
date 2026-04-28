@@ -24,3 +24,6 @@ export type AgentWorkType =
   | 'outcome-auditor'
   | 'ga-readiness'
   | 'documentation-steward'
+  | 'operational-scanner-vercel'
+  | 'operational-scanner-audit'
+  | 'operational-scanner-ci'
