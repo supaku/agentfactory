@@ -150,13 +150,13 @@ describe('TemplateRegistry', () => {
   describe('built-in defaults', () => {
     it('loads built-in default templates when useBuiltinDefaults is true', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      // 11 base work types (10 + improvement-loop from REN-1299 + outcome-auditor from REN-1297 + backlog-groomer from REN-1298)
+      // 12 base work types (research, backlog-creation, development, inflight, qa, acceptance, security,
+      // refinement, improvement-loop, outcome-auditor, backlog-groomer, refinement-coordination)
       // + 5 strategy templates (refinement-context-enriched, refinement-decompose, development-retry, qa-retry, qa-native).
-      // The former coordination types were removed in REN-1286.
       // The former `merge` template was removed — merging is handled by the local queue
       // (acceptance hands off to the sidecar worker) so agents no longer need a merge prompt.
       const workTypes = fullRegistry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(16)
+      expect(workTypes.length).toBe(17)
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
       expect(workTypes).toContain('backlog-groomer')
