@@ -1,0 +1,125 @@
+api = "rensei.dev/v1"
+
+# ---------------------------------------------------------------------------
+# Kit identity
+# ---------------------------------------------------------------------------
+
+[kit]
+id = "default/ts-nextjs"
+version = "1.0.0"
+name = "TypeScript / Next.js"
+description = "OSS default kit for TypeScript and Next.js projects. Detects next.config.{ts,js,mjs} and package.json#dependencies.next."
+author = "Rensei AI"
+authorIdentity = "did:web:rensei.ai"
+license = "MIT"
+homepage = "https://rensei.ai"
+repository = "https://github.com/RenseiAI/agentfactory"
+priority = 80
+
+# ---------------------------------------------------------------------------
+# Platform support — applies on all three major OS targets
+# ---------------------------------------------------------------------------
+
+[supports]
+os = ["linux", "macos", "windows"]
+arch = ["x86_64", "arm64"]
+
+# ---------------------------------------------------------------------------
+# Host requirements
+# ---------------------------------------------------------------------------
+
+[requires]
+rensei = "^1.0"
+capabilities = []
+
+# ---------------------------------------------------------------------------
+# Detection
+# ---------------------------------------------------------------------------
+
+[detect]
+# Phase 1 declarative: match if any Next.js config file is present
+files = ["next.config.ts", "next.config.js", "next.config.mjs"]
+# AND package.json must list next as a direct dependency
+files_all = ["package.json"]
+
+[[detect.content_matches]]
+file = "package.json"
+json_path = "$.dependencies.next"
+
+# Toolchain pre-declared so the workarea provider can pre-warm Node 22
+[detect.toolchain]
+node = "22"
+
+# ---------------------------------------------------------------------------
+# Contributions
+# ---------------------------------------------------------------------------
+
+[provide.commands]
+build    = "pnpm build"
+test     = "pnpm test"
+validate = "pnpm typecheck"
+
+[provide.commands_override.windows]
+build    = "pnpm.cmd build"
+test     = "pnpm.cmd test"
+validate = "pnpm.cmd typecheck"
+
+[[provide.tool_permissions]]
+shell = "pnpm *"
+
+[[provide.tool_permissions]]
+shell = "node *"
+
+[[provide.tool_permissions]]
+shell = "npx *"
+
+[[provide.tool_permissions]]
+shell = "git *"
+
+[[provide.prompt_fragments]]
+partial = "ts-nextjs-conventions"
+when    = ["development", "qa", "refinement"]
+file    = "partials/ts-nextjs-conventions.yaml"
+
+[[provide.prompt_fragments]]
+partial = "ts-nextjs-qa"
+when    = ["qa"]
+file    = "partials/ts-nextjs-qa.yaml"
+
+[[provide.skills]]
+file = "skills/ts-nextjs-debugging/SKILL.md"
+id   = "ts-nextjs-debugging"
+
+[provide.workarea_config]
+clean_dirs    = [".next", "dist", "out", ".turbo"]
+preserve_dirs = ["~/.npm", "~/.pnpm-store", "node_modules/.cache"]
+
+# Per-OS toolchain install — used by WorkareaProvider when Node 22 is not
+# pre-warmed in the pool. Kits declare these so the platform doesn't need
+# to maintain Node install logic per OS.
+[provide.toolchain_install.linux]
+node_22 = "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash && export NVM_DIR=$HOME/.nvm && . $NVM_DIR/nvm.sh && nvm install 22 && nvm use 22"
+pnpm    = "npm install -g pnpm@latest"
+
+[provide.toolchain_install.macos]
+node_22 = "brew install node@22 && brew link node@22"
+pnpm    = "npm install -g pnpm@latest"
+
+[provide.toolchain_install.windows]
+node_22 = "winget install OpenJS.NodeJS.LTS"
+pnpm    = "npm install -g pnpm@latest"
+
+[provide.hooks]
+post_acquire = "bin/setup.sh"
+
+[provide.hooks.os.windows]
+post_acquire = "bin\\setup.cmd"
+
+# ---------------------------------------------------------------------------
+# Composition
+# ---------------------------------------------------------------------------
+
+[composition]
+order          = "framework"
+conflicts_with = []
+composes_with  = ["default/docker-compose", "default/postgres-dev"]

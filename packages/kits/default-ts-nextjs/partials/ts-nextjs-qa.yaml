@@ -1,0 +1,19 @@
+# TypeScript / Next.js QA-specific prompt fragment
+# Injected only during qa work type
+
+name: ts-nextjs-qa
+content: |
+  ## TypeScript / Next.js QA Checklist
+
+  When running QA on a TypeScript / Next.js project:
+
+  1. **Type check first**: Run `pnpm typecheck` — TypeScript errors block the build.
+  2. **Run tests**: Run `pnpm test` and confirm all tests pass.
+  3. **Build check**: Run `pnpm build` to ensure the production build succeeds.
+  4. **Lint**: Run `pnpm lint` if a lint script exists in package.json.
+
+  ### Common Issues
+  - Missing `export type` when re-exporting types (verbatimModuleSyntax)
+  - `Cannot find module` — check tsconfig paths and workspace dependencies
+  - `hydration mismatch` — verify Server/Client Component boundaries
+  - Stale `.next` cache — add `.next` to `clean_dirs` (already configured by this kit)

@@ -1,0 +1,31 @@
+# TypeScript / Next.js conventions prompt fragment
+# Injected during development, qa, and refinement work types
+
+name: ts-nextjs-conventions
+content: |
+  ## TypeScript / Next.js Project Context
+
+  This project uses TypeScript and Next.js. Follow these conventions:
+
+  ### Build & Test
+  - `pnpm build` — production build (Next.js)
+  - `pnpm test` — run the test suite
+  - `pnpm typecheck` — TypeScript type-checking (preferred as `validate`)
+
+  ### Code Style
+  - Use TypeScript strict mode (`strict: true` in tsconfig.json)
+  - Prefer named exports over default exports for components and utilities
+  - Use App Router conventions (`app/` directory) for Next.js 13+
+  - Server Components by default; `'use client'` only when browser APIs are needed
+  - Colocate tests with source files (`foo.test.ts` next to `foo.ts`)
+
+  ### File Organization
+  - `app/` — Next.js App Router pages and layouts
+  - `components/` — reusable UI components
+  - `lib/` or `utils/` — shared utilities and helpers
+  - `packages/` — monorepo sub-packages (if applicable)
+
+  ### Performance
+  - Prefer `import type` for type-only imports
+  - Use `next/image` for images and `next/link` for navigation
+  - Avoid client-side data fetching in Server Components
