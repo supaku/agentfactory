@@ -133,6 +133,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Assess feature GA readiness: AC coverage, architectural drift, observability, and security review status',
     tags: ['pm', 'ga', 'readiness', 'release'],
   },
+  'documentation-steward': {
+    id: 'documentation-steward',
+    name: 'Documentation Steward',
+    description: 'Scan repo docs for stale references and undocumented surfaces; author refinement issues for gaps',
+    tags: ['pm', 'docs', 'documentation', 'steward'],
+  },
 }
 
 /**

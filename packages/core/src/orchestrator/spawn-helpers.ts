@@ -409,6 +409,31 @@ If the issue is older than 60 days with no recent activity, also add label pm:st
 NEVER create sub-issues (Principle 1). Process this one issue only.${LINEAR_CLI_INSTRUCTION}`
       break
 
+    case 'documentation-steward':
+      // PM agent (012 Archetype 7 — Documentation Steward). Maintains docs alongside code.
+      // The TemplateRegistry-based prompt is the canonical path; this legacy
+      // function is a fallback for environments that haven't migrated to templates.
+      basePrompt = `Run documentation steward scan for ${identifier}.
+
+WORKFLOW:
+1. Enumerate all Markdown files in the repo.
+2. Cross-reference API/symbol mentions in docs against current codebase.
+3. Identify public surfaces without documentation.
+4. Check recent PRs for code changes not accompanied by doc updates.
+5. Author standalone refinement issues for each gap.
+   - NEVER use --parentId (Principle 1: sub-issues are reserved for human intent).
+6. Post a summary comment on ${identifier} with counts and issue IDs.
+
+HARD RULES:
+- NEVER create sub-issues (--parentId is forbidden).
+- Direct PRs only for typo-class fixes when tenant policy allows.
+- Complex gaps always become standalone refinement issues.
+
+STRUCTURED RESULT MARKER (REQUIRED):
+- On completion: Include <!-- WORK_RESULT:passed --> in your final message
+- On failure (repo inaccessible, no docs): Include <!-- WORK_RESULT:failed -->${LINEAR_CLI_INSTRUCTION}`
+      break
+
     case 'ga-readiness':
       // PM agent (012 Archetype 5 — GA-Readiness Assessor). Runs before production promotion.
       // The TemplateRegistry-based prompt is the canonical path; this legacy

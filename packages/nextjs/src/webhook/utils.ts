@@ -211,4 +211,5 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   'outcome-auditor': 'Outcome audit queued. Agent will verify accepted issues delivered their stated intent and author follow-up issues for gaps...',
   'improvement-loop': 'Improvement Loop queued. Agent will analyze recent sessions and author meta-issues for systemic patterns...',
   'ga-readiness': 'GA-readiness assessment queued. Agent will evaluate feature readiness for production: AC coverage, architectural drift, observability, and security review status...',
+  'documentation-steward': 'Documentation steward queued. Agent will scan docs for stale references and undocumented surfaces, author refinement issues for gaps...',
 }

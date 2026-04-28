@@ -329,6 +329,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'outcome-auditor': 'OA',
   'improvement-loop': 'IMP',
   'ga-readiness': 'GA',
+  'documentation-steward': 'DS',
 }
 
 /**
@@ -742,6 +743,7 @@ export function createWorktree(opts: CreateWorktreeOptions): { worktreePath: str
 
   const NON_COMMITTING_WORK_TYPES = new Set([
     'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security', 'outcome-auditor', 'ga-readiness',
+    'backlog-groomer', 'improvement-loop', 'documentation-steward',
   ])
 
   if (NON_COMMITTING_WORK_TYPES.has(workType)) {

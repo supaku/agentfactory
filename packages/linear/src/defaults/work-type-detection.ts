@@ -67,6 +67,11 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'ga readiness', 'ga-readiness', 'ga ready', 'assess ga', 'ga check',
     'production readiness', 'ready for ga', 'ga assessment', 'pre-ga',
   ],
+  'documentation-steward': [
+    'documentation steward', 'documentation-steward', 'doc steward', 'docs steward',
+    'stale docs', 'stale documentation', 'undocumented surfaces', 'doc drift',
+    'docs audit', 'documentation audit', 'run doc steward',
+  ],
 }
 
 /**
