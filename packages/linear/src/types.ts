@@ -310,29 +310,25 @@ export type LinearWorkflowStatus =
  * |--------------|------------------------|-----------------------------------------------|
  * | Icebox       | research               | Research/story-writer                         |
  * | Icebox       | backlog-creation       | Create backlog issues from research           |
- * | Backlog      | development            | Developer agents                              |
- * | Backlog      | coordination           | Coordinate sub-issue execution                |
- * | Started      | inflight               | Developer (resume/continue)                   |
- * | Finished     | qa                     | QA agents                                     |
- * | Finished     | qa-coordination        | Coordinate QA across sub-issues               |
- * | Delivered    | acceptance             | Acceptance testing                            |
- * | Delivered    | acceptance-coordination| Coordinate acceptance across sub-issues       |
+ * | Backlog      | development            | Developer agents (spawns sub-agents when parent issue) |
+ * | Started      | inflight               | Developer (resume/continue; spawns sub-agents when parent issue) |
+ * | Finished     | qa                     | QA agents (spawns sub-agents when parent issue) |
+ * | Delivered    | acceptance             | Acceptance testing (spawns sub-agents when parent issue) |
  * | Rejected     | refinement             | Refine and return to Backlog                  |
  * | Rejected     | refinement-coordination| Coordinate refinement across sub-issues       |
+ *
+ * Note: coordinator behavior (spawning sub-agents) is now a runtime concern
+ * decided by the agent based on whether sub-issues exist, not a separate work type.
  */
 export type AgentWorkType =
   | 'research'              // Icebox: Flesh out story details, research
   | 'backlog-creation'      // Icebox: Create backlog issues from researched story
-  | 'development'           // Backlog: Implement the feature/fix
-  | 'inflight'              // Started: Continue in-progress work
-  | 'inflight-coordination' // Started: Resume coordination of sub-issues for in-progress parent issues
-  | 'qa'                    // Finished: Validate implementation
-  | 'acceptance'            // Delivered: Final acceptance testing
+  | 'development'           // Backlog: Implement the feature/fix (also coordinates sub-agents for parent issues)
+  | 'inflight'              // Started: Continue in-progress work (also resumes sub-agent coordination for parent issues)
+  | 'qa'                    // Finished: Validate implementation (also coordinates QA sub-agents for parent issues)
+  | 'acceptance'            // Delivered: Final acceptance testing (also coordinates acceptance for parent issues)
   | 'refinement'            // Rejected: Address feedback, prep for retry
   | 'refinement-coordination' // Rejected: Coordinate refinement across sub-issues for parent issues
-  | 'coordination'          // Backlog: Coordinate sub-issue execution for parent issues
-  | 'qa-coordination'       // Finished: Coordinate QA across sub-issues for parent issues
-  | 'acceptance-coordination' // Delivered: Coordinate acceptance across sub-issues for parent issues
   | 'merge'                 // Merge queue: handle PR merge operations
   | 'security'              // Security scanning: SAST, dependency audit
 
@@ -364,14 +360,10 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'backlog-creation': null,  // No transition from Icebox on start
   'development': 'Started',  // Backlog -> Started when agent begins
   'inflight': null,          // Already Started, no change
-  'inflight-coordination': null, // Already Started, no change
   'qa': null,                // Already Finished
   'acceptance': null,        // Already Delivered
   'refinement': null,        // Already Rejected
   'refinement-coordination': null, // Already Rejected
-  'coordination': 'Started', // Backlog -> Started when coordinator begins
-  'qa-coordination': null,   // Already Finished
-  'acceptance-coordination': null, // Already Delivered
   'merge': null,            // Merge is triggered programmatically, no status transition
   'security': null,         // Security scanning: no status transition on start
 }
@@ -385,14 +377,10 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'backlog-creation': null,  // Issues created in Backlog, source stays in Icebox
   'development': 'Finished', // Started -> Finished when work done
   'inflight': 'Finished',    // Started -> Finished when work done
-  'inflight-coordination': 'Finished', // Started -> Finished when all sub-issues done
   'qa': 'Delivered',         // Finished -> Delivered on QA pass
   'acceptance': 'Accepted',  // Delivered -> Accepted on acceptance pass
   'refinement': 'Backlog',   // Rejected -> Backlog after refinement
-  'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers coordination which re-runs failing sub-issues)
-  'coordination': 'Finished', // Started -> Finished when all sub-issues done
-  'qa-coordination': 'Delivered', // Finished -> Delivered when QA coordination passes
-  'acceptance-coordination': 'Accepted', // Delivered -> Accepted when acceptance coordination passes
+  'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers development which re-runs failing sub-issues)
   'merge': null,            // Merge completion is handled by the merge queue adapter
   'security': 'Finished',   // Security scan complete
 }
@@ -406,14 +394,10 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'backlog-creation': null,
   'development': null,
   'inflight': null,
-  'inflight-coordination': null,
   'qa': 'Rejected',             // QA failure -> Rejected (refinement handler analyzes failure context and dispatches targeted fixes)
   'acceptance': 'Rejected',    // Acceptance failure -> Rejected (rejection handler diagnoses next steps)
   'refinement': null,
   'refinement-coordination': null,
-  'coordination': null,
-  'qa-coordination': 'Rejected',    // QA coordination failure -> Rejected (refinement-coordination reads QA feedback and dispatches targeted fixes to failing sub-issues)
-  'acceptance-coordination': 'Rejected', // Acceptance coordination failure -> Rejected
   'merge': null,            // Merge failure is handled by the merge queue adapter
   'security': null,         // Security scan failure: no status transition
 }
@@ -426,12 +410,8 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
 export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set([
   'development',
   'inflight',
-  'inflight-coordination',
   'qa',
   'acceptance',
-  'coordination',
-  'qa-coordination',
-  'acceptance-coordination',
   'research',
   'backlog-creation',
   'refinement',
@@ -449,14 +429,10 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'backlog-creation': ['Icebox'],
   'development': ['Backlog'],
   'inflight': ['Started'],
-  'inflight-coordination': ['Started'],
   'qa': ['Finished'],
   'acceptance': ['Delivered'],
   'refinement': ['Rejected'],
   'refinement-coordination': ['Rejected'],
-  'coordination': ['Backlog', 'Started'],
-  'qa-coordination': ['Finished'],
-  'acceptance-coordination': ['Delivered'],
   'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
   'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
 }
@@ -472,10 +448,10 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
  */
 export const STATUS_VALID_WORK_TYPES: Record<string, AgentWorkType[]> = {
   'Icebox': ['research', 'backlog-creation'],
-  'Backlog': ['development', 'coordination'],
-  'Started': ['inflight', 'inflight-coordination', 'merge'],
-  'Finished': ['qa', 'qa-coordination'],
-  'Delivered': ['acceptance', 'acceptance-coordination'],
+  'Backlog': ['development'],
+  'Started': ['inflight', 'merge'],
+  'Finished': ['qa'],
+  'Delivered': ['acceptance'],
   'Rejected': ['refinement', 'refinement-coordination'],
 }
 

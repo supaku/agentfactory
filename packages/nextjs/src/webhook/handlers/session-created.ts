@@ -147,9 +147,8 @@ export async function handleSessionCreated(
   if (isMention && promptContext && config.detectWorkTypeFromPrompt) {
     // For mentions: unconstrained detection (pass all work types)
     const allWorkTypes: AgentWorkType[] = [
-      'coordination', 'backlog-creation', 'research', 'qa', 'inflight',
-      'inflight-coordination', 'acceptance', 'refinement', 'development',
-      'qa-coordination', 'acceptance-coordination',
+      'backlog-creation', 'research', 'qa', 'inflight',
+      'acceptance', 'refinement', 'refinement-coordination', 'development',
     ]
     const mentionWorkType = config.detectWorkTypeFromPrompt(promptContext, allWorkTypes)
     if (mentionWorkType) {
@@ -188,59 +187,36 @@ export async function handleSessionCreated(
     })
   }
 
-  // Phase 2.5: Auto-detect parent/child issues for coordination routing
-  // Apply to ALL work types that have coordination variants, regardless of
-  // whether the work type was derived from status or mention. Parent issues
-  // with sub-issues must always use coordination agents.
-  const coordinationUpgradeable =
-    workType === 'development' || workType === 'refinement' ||
-    workType === 'qa' || workType === 'acceptance'
-  if (coordinationUpgradeable) {
+  // Phase 2.5: Skip child/sub-issues for non-mention sessions.
+  // Sub-issues are managed by the parent issue's agent, not dispatched independently.
+  if (workTypeSource === 'status' && workType === 'development') {
     try {
       const linearClient = await config.linearClient.getClient(payload.organizationId)
-
-      // Skip child/sub-issues for non-mention sessions — these are managed
-      // by the parent issue's coordinator agent, not dispatched independently.
-      if (workTypeSource === 'status' && workType === 'development') {
-        const isChild = await linearClient.isChildIssue(issueId)
-        if (isChild) {
-          sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
-            issueIdentifier,
-          })
-
-          try {
-            await emitActivity(
-              linearClient,
-              sessionId,
-              'response',
-              `This is a sub-issue. Work will be coordinated by the parent issue's agent.`
-            )
-          } catch (err) {
-            sessionLog.warn('Failed to emit sub-issue skip activity', { error: err })
-          }
-
-          return NextResponse.json({
-            success: true,
-            skipped: true,
-            reason: 'sub_issue_managed_by_parent',
-          })
-        }
-      }
-
-      const isParent = await linearClient.isParentIssue(issueId)
-      if (isParent) {
-        if (workType === 'development') workType = 'coordination'
-        else if (workType === 'inflight') workType = 'inflight-coordination'
-        else if (workType === 'refinement') workType = 'refinement-coordination'
-        else if (workType === 'qa') workType = 'qa-coordination'
-        else if (workType === 'acceptance') workType = 'acceptance-coordination'
-        sessionLog.info('Parent issue detected, switching to coordination work type', {
+      const isChild = await linearClient.isChildIssue(issueId)
+      if (isChild) {
+        sessionLog.info('Sub-issue detected, skipping independent agent dispatch', {
           issueIdentifier,
-          workType,
+        })
+
+        try {
+          await emitActivity(
+            linearClient,
+            sessionId,
+            'response',
+            `This is a sub-issue. Work will be coordinated by the parent issue's agent.`
+          )
+        } catch (err) {
+          sessionLog.warn('Failed to emit sub-issue skip activity', { error: err })
+        }
+
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          reason: 'sub_issue_managed_by_parent',
         })
       }
     } catch (err) {
-      sessionLog.warn('Failed to check issue parent/child status', { error: err })
+      sessionLog.warn('Failed to check issue child status', { error: err })
     }
   }
 
@@ -396,9 +372,7 @@ export async function handleSessionCreated(
   let prContext = ''
   const needsPrContext =
     workType === 'qa' ||
-    workType === 'acceptance' ||
-    workType === 'qa-coordination' ||
-    workType === 'acceptance-coordination'
+    workType === 'acceptance'
 
   if (needsPrContext) {
     try {
@@ -461,8 +435,7 @@ export async function handleSessionCreated(
   let wfContext: WorkflowContext | undefined
   const needsFailureContext =
     workType === 'refinement' || workType === 'refinement-coordination' ||
-    (workType === 'development' && currentStatus === 'Backlog') ||
-    (workType === 'coordination' && currentStatus === 'Started')
+    (workType === 'development' && (currentStatus === 'Backlog' || currentStatus === 'Started'))
   if (needsFailureContext) {
     try {
       const workflowState = await getWorkflowState(issueId)

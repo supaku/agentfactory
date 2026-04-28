@@ -43,71 +43,70 @@ describe('detectWorkType', () => {
     })
   })
 
-  describe('parent issues (isParent=true)', () => {
-    it('upgrades Backlog/development to coordination', () => {
-      expect(detectWorkType('Backlog', true, STATUS_TO_WORK_TYPE)).toBe('coordination')
+  describe('parent issues (isParent=true) — no upgrade, same work type as leaf', () => {
+    it('maps Backlog to development (not coordination)', () => {
+      expect(detectWorkType('Backlog', true, STATUS_TO_WORK_TYPE)).toBe('development')
     })
 
-    it('upgrades Finished/qa to qa-coordination', () => {
-      expect(detectWorkType('Finished', true, STATUS_TO_WORK_TYPE)).toBe('qa-coordination')
+    it('maps Finished to qa (not qa-coordination)', () => {
+      expect(detectWorkType('Finished', true, STATUS_TO_WORK_TYPE)).toBe('qa')
     })
 
-    it('upgrades Delivered/acceptance to acceptance-coordination', () => {
-      expect(detectWorkType('Delivered', true, STATUS_TO_WORK_TYPE)).toBe('acceptance-coordination')
+    it('maps Delivered to acceptance (not acceptance-coordination)', () => {
+      expect(detectWorkType('Delivered', true, STATUS_TO_WORK_TYPE)).toBe('acceptance')
     })
 
-    it('upgrades Rejected/refinement to refinement-coordination', () => {
-      expect(detectWorkType('Rejected', true, STATUS_TO_WORK_TYPE)).toBe('refinement-coordination')
+    it('maps Rejected to refinement (not refinement-coordination)', () => {
+      expect(detectWorkType('Rejected', true, STATUS_TO_WORK_TYPE)).toBe('refinement')
     })
 
-    it('does not upgrade research (Icebox) — no coordination variant', () => {
+    it('maps Icebox to research regardless of parent status', () => {
       expect(detectWorkType('Icebox', true, STATUS_TO_WORK_TYPE)).toBe('research')
     })
 
-    it('upgrades Started/inflight to inflight-coordination', () => {
-      expect(detectWorkType('Started', true, STATUS_TO_WORK_TYPE)).toBe('inflight-coordination')
+    it('maps Started to inflight (not inflight-coordination)', () => {
+      expect(detectWorkType('Started', true, STATUS_TO_WORK_TYPE)).toBe('inflight')
     })
 
-    it('upgrades unknown status (defaults to development → coordination)', () => {
-      expect(detectWorkType('SomeUnknownStatus', true, STATUS_TO_WORK_TYPE)).toBe('coordination')
-    })
-  })
-
-  describe('downgrade when isParent becomes false (REN-1080 bug)', () => {
-    // Regression: if a queued work type was 'coordination' but the issue
-    // no longer has children (deleted/moved between queue and dispatch),
-    // re-validation must downgrade back to the base work type.
-    it('downgrades coordination to development when isParent=false', () => {
-      expect(detectWorkType('Backlog', false, STATUS_TO_WORK_TYPE)).toBe('development')
-    })
-
-    it('downgrades qa-coordination to qa when isParent=false', () => {
-      expect(detectWorkType('Finished', false, STATUS_TO_WORK_TYPE)).toBe('qa')
-    })
-
-    it('downgrades acceptance-coordination to acceptance when isParent=false', () => {
-      expect(detectWorkType('Delivered', false, STATUS_TO_WORK_TYPE)).toBe('acceptance')
-    })
-
-    it('downgrades inflight-coordination to inflight when isParent=false', () => {
-      expect(detectWorkType('Started', false, STATUS_TO_WORK_TYPE)).toBe('inflight')
-    })
-
-    it('downgrades refinement-coordination to refinement when isParent=false', () => {
-      expect(detectWorkType('Rejected', false, STATUS_TO_WORK_TYPE)).toBe('refinement')
+    it('defaults unknown status to development', () => {
+      expect(detectWorkType('SomeUnknownStatus', true, STATUS_TO_WORK_TYPE)).toBe('development')
     })
   })
 
-  describe('post-refinement rework scenario (SUP-1116 bug)', () => {
-    it('parent issue returning to Backlog after refinement gets coordination, not development', () => {
-      // This is the exact scenario that caused SUP-1116 to fail:
-      // After refinement-coordination completed, the parent moved to Backlog.
-      // The orchestrator's run() previously hardcoded 'development', which loaded
-      // the wrong template and the agent asked for human input instead of
-      // autonomously dispatching sub-agents.
+  describe('coordinator-shaped agent for parent issue (REN-1286)', () => {
+    // After removing -coordination work types, parent issues use the same work type as leaf issues.
+    // The agent's runtime decides whether to spawn sub-agents based on whether sub-issues exist,
+    // not based on the work type label.
+    it('parent issue with Backlog status gets development work type — agent decides sub-agent spawning at runtime', () => {
       const workType = detectWorkType('Backlog', true, STATUS_TO_WORK_TYPE)
-      expect(workType).toBe('coordination')
-      expect(workType).not.toBe('development')
+      expect(workType).toBe('development')
+      // Coordinator behavior is now a runtime concern, not encoded in the work type
+      expect(workType).not.toBe('coordination')
+    })
+
+    it('parent issue with Finished status gets qa work type — agent decides sub-agent spawning at runtime', () => {
+      const workType = detectWorkType('Finished', true, STATUS_TO_WORK_TYPE)
+      expect(workType).toBe('qa')
+      expect(workType).not.toBe('qa-coordination')
+    })
+
+    it('parent issue with Delivered status gets acceptance work type', () => {
+      const workType = detectWorkType('Delivered', true, STATUS_TO_WORK_TYPE)
+      expect(workType).toBe('acceptance')
+      expect(workType).not.toBe('acceptance-coordination')
+    })
+
+    it('parent issue with Started status gets inflight work type', () => {
+      const workType = detectWorkType('Started', true, STATUS_TO_WORK_TYPE)
+      expect(workType).toBe('inflight')
+      expect(workType).not.toBe('inflight-coordination')
+    })
+
+    it('parent Rejected issue gets refinement — refinement-coordination is still valid for parent triage', () => {
+      // Note: refinement-coordination is still a valid work type but it is set
+      // explicitly in STATUS_WORK_TYPE_MAP by the issue tracker adapter, not auto-upgraded.
+      const workType = detectWorkType('Rejected', true, STATUS_TO_WORK_TYPE)
+      expect(workType).toBe('refinement')
     })
   })
 })

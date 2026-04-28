@@ -34,19 +34,14 @@ describe('shouldDeferAcceptanceTransition', () => {
     expect(shouldDeferAcceptanceTransition('acceptance', true)).toBe(true)
   })
 
-  it('returns true for acceptance-coordination with merge queue', () => {
-    expect(shouldDeferAcceptanceTransition('acceptance-coordination', true)).toBe(true)
-  })
-
   it('returns false when merge queue is not configured (acceptance merges directly)', () => {
     expect(shouldDeferAcceptanceTransition('acceptance', false)).toBe(false)
-    expect(shouldDeferAcceptanceTransition('acceptance-coordination', false)).toBe(false)
   })
 
   it('returns false for non-acceptance work types regardless of merge queue', () => {
     expect(shouldDeferAcceptanceTransition('qa', true)).toBe(false)
     expect(shouldDeferAcceptanceTransition('development', true)).toBe(false)
-    expect(shouldDeferAcceptanceTransition('coordination', true)).toBe(false)
+    expect(shouldDeferAcceptanceTransition('refinement-coordination', true)).toBe(false)
     expect(shouldDeferAcceptanceTransition('merge', true)).toBe(false)
   })
 })

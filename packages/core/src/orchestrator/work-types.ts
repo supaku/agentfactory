@@ -15,14 +15,10 @@ export type AgentWorkType =
   | 'backlog-creation'
   | 'development'
   | 'inflight'
-  | 'inflight-coordination'
   | 'qa'
   | 'acceptance'
   | 'refinement'
   | 'refinement-coordination'
-  | 'coordination'
-  | 'qa-coordination'
-  | 'acceptance-coordination'
   | 'merge'                 // Merge queue: handle PR merge operations
   | 'security'              // Security scanning: SAST, dependency audit
 

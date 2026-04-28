@@ -150,7 +150,7 @@ describe('handleSessionPrompted — bare mention handling', () => {
       issueId: 'issue-uuid-1',
       issueIdentifier: 'TEST-1',
       status: 'completed',
-      workType: 'coordination',
+      workType: 'development',
       providerSessionId: null,
       worktreePath: '',
       queuedAt: Date.now() - 60000,
@@ -167,11 +167,11 @@ describe('handleSessionPrompted — bare mention handling', () => {
     expect(config.generatePrompt).toHaveBeenCalled()
     const [identifier, workType] = config.generatePrompt.mock.calls[0]
     expect(identifier).toBe('TEST-1')
-    // Work type should be derived from current status (Finished → qa), not stale session (coordination)
+    // Work type should be derived from current status (Finished → qa), not stale session (development)
     expect(workType).toBe('qa')
   })
 
-  it('bare @mention on parent issue upgrades to coordination variant', async () => {
+  it('bare @mention on parent issue uses qa work type (coordinator behavior decided at runtime)', async () => {
     const mockLinearClient = {
       getIssue: vi.fn().mockResolvedValue({
         state: Promise.resolve({ name: 'Finished' }),
@@ -188,7 +188,7 @@ describe('handleSessionPrompted — bare mention handling', () => {
       issueId: 'issue-uuid-1',
       issueIdentifier: 'TEST-1',
       status: 'completed',
-      workType: 'coordination',
+      workType: 'development',
       providerSessionId: null,
       worktreePath: '',
       queuedAt: Date.now() - 60000,
@@ -201,7 +201,8 @@ describe('handleSessionPrompted — bare mention handling', () => {
       log
     )
 
-    expect(config.generatePrompt).toHaveBeenCalledWith('TEST-1', 'qa-coordination')
+    // After REN-1286: parent issues use 'qa' work type, coordinator behavior is runtime-decided
+    expect(config.generatePrompt).toHaveBeenCalledWith('TEST-1', 'qa')
   })
 
   it('@mention with actual instructions uses stripped instructions as prompt', async () => {

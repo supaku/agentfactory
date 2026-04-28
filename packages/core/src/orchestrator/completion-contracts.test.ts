@@ -34,11 +34,6 @@ describe('getCompletionContract', () => {
     expect(required).toContain('pr_merged_or_enqueued')
   })
 
-  it('acceptance-coordination requires pr_merged_or_enqueued', () => {
-    const contract = getCompletionContract('acceptance-coordination')
-    expect(contract).toBeDefined()
-    expect(contract!.required.map(f => f.type)).toContain('pr_merged_or_enqueued')
-  })
 
   it('returns a contract for refinement work type', () => {
     const contract = getCompletionContract('refinement')
@@ -58,12 +53,13 @@ describe('getCompletionContract', () => {
     expect(contract!.required.map(f => f.type)).toContain('sub_issues_created')
   })
 
-  it('returns a contract for coordination work type', () => {
-    const contract = getCompletionContract('coordination')
+  it('returns a contract for development work type (which handles coordinator behavior)', () => {
+    const contract = getCompletionContract('development')
     expect(contract).toBeDefined()
     const required = contract!.required.map(f => f.type)
     expect(required).toContain('pr_url')
-    expect(required).toContain('work_result')
+    expect(required).toContain('branch_pushed')
+    expect(required).toContain('commits_present')
   })
 
   it('returns a contract for merge work type', () => {
@@ -72,10 +68,7 @@ describe('getCompletionContract', () => {
     expect(contract!.required.map(f => f.type)).toContain('pr_merged')
   })
 
-  it('returns contracts for all coordination variants', () => {
-    expect(getCompletionContract('qa-coordination')).toBeDefined()
-    expect(getCompletionContract('acceptance-coordination')).toBeDefined()
-    expect(getCompletionContract('inflight-coordination')).toBeDefined()
+  it('returns contract for refinement-coordination', () => {
     expect(getCompletionContract('refinement-coordination')).toBeDefined()
   })
 })

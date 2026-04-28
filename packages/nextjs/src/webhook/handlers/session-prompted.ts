@@ -193,19 +193,7 @@ export async function handleSessionPrompted(
       if (currentStatus) {
         derivedWorkType = determineWorkType(currentStatus)
 
-        // Upgrade to coordination variant if parent issue
-        const coordinationUpgradeable =
-          derivedWorkType === 'development' || derivedWorkType === 'refinement' ||
-          derivedWorkType === 'qa' || derivedWorkType === 'acceptance'
-        if (coordinationUpgradeable) {
-          const isParent = await linearClient.isParentIssue(issueId)
-          if (isParent) {
-            if (derivedWorkType === 'development') derivedWorkType = 'coordination'
-            else if (derivedWorkType === 'qa') derivedWorkType = 'qa-coordination'
-            else if (derivedWorkType === 'acceptance') derivedWorkType = 'acceptance-coordination'
-            else if (derivedWorkType === 'refinement') derivedWorkType = 'refinement-coordination'
-          }
-        }
+        // No coordination variant upgrade needed — parent/leaf issues use the same work type
 
         promptLog.info('Derived work type from current issue status', {
           currentStatus,

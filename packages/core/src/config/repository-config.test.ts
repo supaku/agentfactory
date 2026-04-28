@@ -1114,13 +1114,13 @@ describe('RepositoryConfigSchema systemPrompt', () => {
       ...base,
       systemPrompt: {
         byWorkType: {
-          'qa-coordination': 'Validate all sub-issues individually.',
+          'refinement-coordination': 'Triage sub-issues individually.',
           development: 'Follow TDD workflow.',
         },
       },
     })
     expect(result.systemPrompt!.append).toBeUndefined()
-    expect(result.systemPrompt!.byWorkType!['qa-coordination']).toBe('Validate all sub-issues individually.')
+    expect(result.systemPrompt!.byWorkType!['refinement-coordination']).toBe('Triage sub-issues individually.')
     expect(result.systemPrompt!.byWorkType!['development']).toBe('Follow TDD workflow.')
   })
 

@@ -26,43 +26,27 @@ export const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'backlog-creation': 'BC',
   development: 'DEV',
   inflight: 'INF',
-  'inflight-coordination': 'INF-COORD',
-  coordination: 'COORD',
   qa: 'QA',
   acceptance: 'AC',
   refinement: 'REF',
   'refinement-coordination': 'REF-COORD',
-  'qa-coordination': 'QA-COORD',
-  'acceptance-coordination': 'AC-COORD',
   merge: 'MRG',
   security: 'SEC',
 }
 
 /**
- * Detect the appropriate work type for an issue based on its status,
- * upgrading to coordination variants for parent issues with sub-issues.
- *
- * This prevents parent issues returning to Backlog after refinement from
- * being dispatched as 'development' (which uses the wrong template and
- * produces no sub-agent orchestration).
+ * Detect the appropriate work type for an issue based on its status.
+ * Parent and leaf issues use the same work type — coordinator behavior
+ * is decided at runtime by the agent based on sub-issue presence.
  */
 export function detectWorkType(
   statusName: string,
-  isParent: boolean,
+  _isParent: boolean,
   statusToWorkType?: Record<string, AgentWorkType>
 ): AgentWorkType {
   const mapping = statusToWorkType ?? {}
-  let workType: AgentWorkType = mapping[statusName] ?? 'development'
+  const workType: AgentWorkType = mapping[statusName] ?? 'development'
   console.log(`Auto-detected work type: ${workType} (from status: ${statusName})`)
-
-  if (isParent) {
-    if (workType === 'development') workType = 'coordination'
-    else if (workType === 'qa') workType = 'qa-coordination'
-    else if (workType === 'acceptance') workType = 'acceptance-coordination'
-    else if (workType === 'inflight') workType = 'inflight-coordination'
-    else if (workType === 'refinement') workType = 'refinement-coordination'
-    console.log(`Upgraded to coordination work type: ${workType} (parent issue)`)
-  }
 
   return workType
 }
@@ -77,14 +61,14 @@ export function detectWorkType(
  *
  * Returns false when:
  *   - no merge queue adapter is configured (acceptance merges directly)
- *   - work type is not acceptance / acceptance-coordination
+ *   - work type is not acceptance
  */
 export function shouldDeferAcceptanceTransition(
   workType: AgentWorkType,
   hasMergeQueueAdapter: boolean,
 ): boolean {
   if (!hasMergeQueueAdapter) return false
-  return workType === 'acceptance' || workType === 'acceptance-coordination'
+  return workType === 'acceptance'
 }
 
 // ---------------------------------------------------------------------------

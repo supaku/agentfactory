@@ -42,7 +42,7 @@ describe('parseWorkResult', () => {
         parseWorkResult('<!-- WORK_RESULT:passed -->', 'development')
       ).toBe('passed')
       expect(
-        parseWorkResult('<!-- WORK_RESULT:failed -->', 'coordination')
+        parseWorkResult('<!-- WORK_RESULT:failed -->', 'inflight')
       ).toBe('failed')
     })
   })
@@ -78,11 +78,11 @@ describe('parseWorkResult', () => {
       expect(parseWorkResult('QA Result: Pass', 'acceptance')).toBe('unknown')
     })
 
-    it('matches QA patterns for qa-coordination work type', () => {
-      expect(parseWorkResult('## QA Passed\nAll sub-issues pass.', 'qa-coordination')).toBe('passed')
-      expect(parseWorkResult('## QA Failed\nSUP-712 needs work.', 'qa-coordination')).toBe('failed')
-      expect(parseWorkResult('QA Result: Pass', 'qa-coordination')).toBe('passed')
-      expect(parseWorkResult('QA Result: Fail', 'qa-coordination')).toBe('failed')
+    it('matches QA patterns for qa work type with sub-issues', () => {
+      expect(parseWorkResult('## QA Passed\nAll sub-issues pass.', 'qa')).toBe('passed')
+      expect(parseWorkResult('## QA Failed\nSUP-712 needs work.', 'qa')).toBe('failed')
+      expect(parseWorkResult('QA Result: Pass', 'qa')).toBe('passed')
+      expect(parseWorkResult('QA Result: Fail', 'qa')).toBe('failed')
     })
 
     it('checks fail patterns before pass patterns', () => {
@@ -93,27 +93,27 @@ describe('parseWorkResult', () => {
     })
 
     it('detects "Overall Result: FAIL" (coordination style)', () => {
-      expect(parseWorkResult('**Overall Result: FAIL** — 4 of 6 phases failed', 'qa-coordination')).toBe('failed')
+      expect(parseWorkResult('**Overall Result: FAIL** — 4 of 6 phases failed', 'qa')).toBe('failed')
     })
 
     it('detects "Overall QA Result: FAIL" (coordination style)', () => {
-      expect(parseWorkResult('**Overall QA Result: FAIL (0/6 sub-issues pass)**', 'qa-coordination')).toBe('failed')
+      expect(parseWorkResult('**Overall QA Result: FAIL (0/6 sub-issues pass)**', 'qa')).toBe('failed')
     })
 
     it('detects "Roll-Up Verdict: FAIL"', () => {
-      expect(parseWorkResult('### Roll-Up Verdict: FAIL (0/6 sub-issues pass)', 'qa-coordination')).toBe('failed')
+      expect(parseWorkResult('### Roll-Up Verdict: FAIL (0/6 sub-issues pass)', 'qa')).toBe('failed')
     })
 
     it('detects "Parent QA verdict: FAIL"', () => {
-      expect(parseWorkResult('**Parent QA verdict: FAIL — requires fixes**', 'qa-coordination')).toBe('failed')
+      expect(parseWorkResult('**Parent QA verdict: FAIL — requires fixes**', 'qa')).toBe('failed')
     })
 
     it('detects "Overall Result: PASS" (coordination style)', () => {
-      expect(parseWorkResult('**Overall Result: PASS** — all phases passed', 'qa-coordination')).toBe('passed')
+      expect(parseWorkResult('**Overall Result: PASS** — all phases passed', 'qa')).toBe('passed')
     })
 
     it('detects "Roll-Up Verdict: PASS"', () => {
-      expect(parseWorkResult('### Roll-Up Verdict: PASS (6/6 sub-issues pass)', 'qa-coordination')).toBe('passed')
+      expect(parseWorkResult('### Roll-Up Verdict: PASS (6/6 sub-issues pass)', 'qa')).toBe('passed')
     })
 
     // Real agent output patterns (SUP-867 regression)
@@ -165,17 +165,17 @@ describe('parseWorkResult', () => {
       )).toBe('passed')
     })
 
-    it('detects "already complete" as pass for qa-coordination', () => {
+    it('detects "already complete" as pass for qa', () => {
       expect(parseWorkResult(
         'QA coordination is already complete. No further action needed.',
-        'qa-coordination'
+        'qa'
       )).toBe('passed')
     })
 
     it('detects "APPROVED FOR MERGE" as pass', () => {
       expect(parseWorkResult(
         '**Status: APPROVED FOR MERGE**\n\nAll checks passed.',
-        'qa-coordination'
+        'qa'
       )).toBe('passed')
     })
 
@@ -189,7 +189,7 @@ describe('parseWorkResult', () => {
     it('detects "QA Coordination Complete" inline text as pass', () => {
       expect(parseWorkResult(
         'QA Coordination Complete for SUP-1145\n\nFound and fixed 2 blocking rework issues.',
-        'qa-coordination'
+        'qa'
       )).toBe('passed')
     })
 
@@ -203,7 +203,7 @@ describe('parseWorkResult', () => {
     it('fail patterns take precedence over "QA Complete" when fail indicators present', () => {
       expect(parseWorkResult(
         '## QA Complete\n\nStatus: 3 Issues Found\n\nQA Coordination Complete',
-        'qa-coordination'
+        'qa'
       )).toBe('failed')
     })
   })
@@ -251,61 +251,61 @@ describe('parseWorkResult', () => {
       ).toBe('unknown')
     })
 
-    it('matches acceptance patterns for acceptance-coordination work type', () => {
-      expect(parseWorkResult('## Acceptance Complete', 'acceptance-coordination')).toBe('passed')
-      expect(parseWorkResult('PR has been merged successfully', 'acceptance-coordination')).toBe('passed')
-      expect(parseWorkResult('## Acceptance Failed', 'acceptance-coordination')).toBe('failed')
-      expect(parseWorkResult('Cannot merge PR', 'acceptance-coordination')).toBe('failed')
+    it('matches acceptance patterns for acceptance work type with sub-issues', () => {
+      expect(parseWorkResult('## Acceptance Complete', 'acceptance')).toBe('passed')
+      expect(parseWorkResult('PR has been merged successfully', 'acceptance')).toBe('passed')
+      expect(parseWorkResult('## Acceptance Failed', 'acceptance')).toBe('failed')
+      expect(parseWorkResult('Cannot merge PR', 'acceptance')).toBe('failed')
     })
   })
 
   // Coordination heuristic pattern tests
-  describe('coordination heuristic patterns', () => {
+  describe('development/coordination heuristic patterns', () => {
     it('detects "all 8/8 sub-issues completed"', () => {
       expect(
-        parseWorkResult('all 8/8 sub-issues completed and marked Finished in Linear.', 'coordination')
+        parseWorkResult('all 8/8 sub-issues completed and marked Finished in Linear.', 'development')
       ).toBe('passed')
     })
 
     it('detects "all sub-issues completed" without count', () => {
       expect(
-        parseWorkResult('All sub-issues completed successfully.', 'coordination')
+        parseWorkResult('All sub-issues completed successfully.', 'development')
       ).toBe('passed')
     })
 
     it('detects "all sub-issues finished"', () => {
       expect(
-        parseWorkResult('All 3/3 sub-issues finished.', 'coordination')
+        parseWorkResult('All 3/3 sub-issues finished.', 'development')
       ).toBe('passed')
     })
 
     it('detects "Coordination Complete"', () => {
       expect(
-        parseWorkResult('## Coordination Complete\nAll work done.', 'coordination')
+        parseWorkResult('## Coordination Complete\nAll work done.', 'development')
       ).toBe('passed')
     })
 
     it('detects "Must Fix Before Merge" as fail', () => {
       expect(
-        parseWorkResult('### CRITICAL — Must Fix Before Merge\n1. provision-trial.ts uses removed fields', 'coordination')
+        parseWorkResult('### CRITICAL — Must Fix Before Merge\n1. provision-trial.ts uses removed fields', 'development')
       ).toBe('failed')
     })
 
     it('detects "N Critical Issues (Block Merge)" as fail', () => {
       expect(
-        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad migration', 'coordination')
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad migration', 'development')
       ).toBe('failed')
     })
 
     it('detects "sub-issues need work" as fail', () => {
       expect(
-        parseWorkResult('2 sub-issues need work before this can proceed.', 'coordination')
+        parseWorkResult('2 sub-issues need work before this can proceed.', 'development')
       ).toBe('failed')
     })
 
     it('detects "Parent issue marked Finished"', () => {
       expect(
-        parseWorkResult('Execution: Wave 1...Wave 2...Wave 3. Parent issue marked Finished in Linear.', 'coordination')
+        parseWorkResult('Execution: Wave 1...Wave 2...Wave 3. Parent issue marked Finished in Linear.', 'development')
       ).toBe('passed')
     })
 
@@ -313,62 +313,64 @@ describe('parseWorkResult', () => {
       expect(
         parseWorkResult(
           '### All 6 sub-issues: Finished\n\n| SUP-1607 | SubscriptionProvider | Finished |',
-          'coordination'
+          'development'
         )
       ).toBe('passed')
     })
 
     it('detects "All 3 sub-issues — Finished" (dash format)', () => {
       expect(
-        parseWorkResult('All 3 sub-issues — Finished. PR created.', 'coordination')
+        parseWorkResult('All 3 sub-issues — Finished. PR created.', 'development')
       ).toBe('passed')
     })
 
-    it('does not match coordination patterns for non-coordination work types', () => {
-      expect(parseWorkResult('All sub-issues completed.', 'development')).toBe('unknown')
-      expect(parseWorkResult('All sub-issues completed.', 'qa')).toBe('unknown')
+    it('matches development/coordination patterns for development but not other work types', () => {
+      // development CAN be a coordinator (when handling parent issues)
+      expect(parseWorkResult('All sub-issues completed.', 'development')).toBe('passed')
+      // qa is NOT a coordinator (its heuristics are different)
+      expect(parseWorkResult('All sub-issues completed.', 'refinement')).toBe('unknown')
     })
 
     it('checks fail patterns before pass patterns', () => {
       expect(
-        parseWorkResult('All 8/8 sub-issues completed.\n### Must Fix Before Merge\n1. Bad code', 'coordination')
+        parseWorkResult('All 8/8 sub-issues completed.\n### Must Fix Before Merge\n1. Bad code', 'development')
       ).toBe('failed')
     })
 
     // Early-exit detection — agent reported progress instead of completing
     it('detects "I\'ll wait for them to complete" as early-exit fail', () => {
       expect(
-        parseWorkResult("Both agents are progressing well. I'll wait for them to complete before proceeding.", 'coordination')
+        parseWorkResult("Both agents are progressing well. I'll wait for them to complete before proceeding.", 'development')
       ).toBe('failed')
     })
 
     it('detects "agents are actively working" as early-exit fail', () => {
       expect(
-        parseWorkResult('SUP-1552 agent has read the existing patterns. Agents are actively working on their sub-issues.', 'coordination')
+        parseWorkResult('SUP-1552 agent has read the existing patterns. Agents are actively working on their sub-issues.', 'development')
       ).toBe('failed')
     })
 
     it('detects "waiting for sub-agents to finish" as early-exit fail', () => {
       expect(
-        parseWorkResult('Spawned 2 agents. Waiting for sub-agents to finish their work.', 'coordination')
+        parseWorkResult('Spawned 2 agents. Waiting for sub-agents to finish their work.', 'development')
       ).toBe('failed')
     })
 
     it('detects "before proceeding to Layer 2" as early-exit fail', () => {
       expect(
-        parseWorkResult('Wave 1 agents spawned. Will check results before proceeding to Layer 2.', 'coordination')
+        parseWorkResult('Wave 1 agents spawned. Will check results before proceeding to Layer 2.', 'development')
       ).toBe('failed')
     })
 
     it('detects "work is in progress" as early-exit fail', () => {
       expect(
-        parseWorkResult('Work is in progress on 3 sub-issues. Status will be updated.', 'coordination')
+        parseWorkResult('Work is in progress on 3 sub-issues. Status will be updated.', 'development')
       ).toBe('failed')
     })
 
     it('early-exit patterns also apply to inflight-coordination', () => {
       expect(
-        parseWorkResult("Agents are actively running. I'll wait for them to complete.", 'inflight-coordination')
+        parseWorkResult("Agents are actively running. I'll wait for them to complete.", 'inflight')
       ).toBe('failed')
     })
   })
@@ -377,7 +379,7 @@ describe('parseWorkResult', () => {
   describe('QA coordination real-world patterns', () => {
     it('detects "Status: N Issues Found" as fail', () => {
       expect(
-        parseWorkResult('### Status: 3 Issues Found (1 Critical, 2 Minor)', 'qa-coordination')
+        parseWorkResult('### Status: 3 Issues Found (1 Critical, 2 Minor)', 'qa')
       ).toBe('failed')
     })
 
@@ -389,7 +391,7 @@ describe('parseWorkResult', () => {
 
     it('detects "N Critical Issues (Block Merge)" in QA context as fail', () => {
       expect(
-        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad code', 'qa-coordination')
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. Bad code', 'qa')
       ).toBe('failed')
     })
   })
@@ -398,13 +400,13 @@ describe('parseWorkResult', () => {
   describe('acceptance coordination real-world patterns', () => {
     it('detects "Must Fix Before Merge" in acceptance context as fail', () => {
       expect(
-        parseWorkResult('## Acceptance Coordination Report\n### CRITICAL — Must Fix Before Merge', 'acceptance-coordination')
+        parseWorkResult('## Acceptance Coordination Report\n### CRITICAL — Must Fix Before Merge', 'acceptance')
       ).toBe('failed')
     })
 
     it('detects "N Critical Issues (Block Merge)" in acceptance context as fail', () => {
       expect(
-        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. provision-trial.ts uses removed fields', 'acceptance-coordination')
+        parseWorkResult('### 3 Critical Issues (Block Merge)\n1. provision-trial.ts uses removed fields', 'acceptance')
       ).toBe('failed')
     })
   })

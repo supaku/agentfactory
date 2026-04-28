@@ -137,10 +137,9 @@ export function decideAction(ctx: DecisionContext): DecisionResult {
   }
 
   // --- Sub-issue guard ---
-  // Sub-issues are managed exclusively by the coordinator (or qa-coordinator /
-  // acceptance-coordinator) via the parent issue. The governor must never
-  // dispatch workflows on sub-issues directly, regardless of their status,
-  // to prevent duplicate work.
+  // Sub-issues are managed exclusively via the parent issue's agent.
+  // The governor must never dispatch workflows on sub-issues directly,
+  // regardless of their status, to prevent duplicate work.
   if (issue.parentId !== undefined) {
     return {
       action: 'none',
@@ -292,9 +291,9 @@ function decideIcebox(ctx: DecisionContext): DecisionResult {
 
 /**
  * Handle Backlog issues — trigger development if enabled.
- * Parent issues use the coordination template.
+ * Parent issues use the development template with sub-agent spawning.
  * Sub-issues are skipped — only top-level/parent issues are dispatched directly.
- * The coordinator handles sub-issue lifecycle once the parent is being worked.
+ * The agent handles sub-issue lifecycle once the parent is being worked.
  */
 function decideBacklog(ctx: DecisionContext): DecisionResult {
   const { issue, config } = ctx
@@ -303,11 +302,11 @@ function decideBacklog(ctx: DecisionContext): DecisionResult {
     return { action: 'none', reason: `Auto-development is disabled for ${issue.identifier}` }
   }
 
-  // Parent issues use the coordination template for sub-issue orchestration.
+  // Parent issues use the development template — coordinator behavior is runtime-decided.
   if (ctx.isParentIssue) {
     return {
       action: 'trigger-development',
-      reason: `Parent issue ${issue.identifier} is in Backlog — triggering coordination development`,
+      reason: `Parent issue ${issue.identifier} is in Backlog — triggering development (agent will coordinate sub-issues)`,
     }
   }
 

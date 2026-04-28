@@ -14,10 +14,6 @@ describe('getWorktreeIdentifier', () => {
     expect(getWorktreeIdentifier('SUP-123', 'acceptance')).toBe('SUP-123-AC')
   })
 
-  it('returns identifier with COORD suffix for coordination', () => {
-    expect(getWorktreeIdentifier('SUP-123', 'coordination')).toBe('SUP-123-COORD')
-  })
-
   it('returns identifier with RES suffix for research', () => {
     expect(getWorktreeIdentifier('SUP-123', 'research')).toBe('SUP-123-RES')
   })
@@ -30,20 +26,8 @@ describe('getWorktreeIdentifier', () => {
     expect(getWorktreeIdentifier('SUP-123', 'inflight')).toBe('SUP-123-INF')
   })
 
-  it('returns identifier with INF-COORD suffix for inflight-coordination', () => {
-    expect(getWorktreeIdentifier('SUP-123', 'inflight-coordination')).toBe('SUP-123-INF-COORD')
-  })
-
   it('returns identifier with REF suffix for refinement', () => {
     expect(getWorktreeIdentifier('SUP-123', 'refinement')).toBe('SUP-123-REF')
-  })
-
-  it('returns identifier with QA-COORD suffix for qa-coordination', () => {
-    expect(getWorktreeIdentifier('SUP-123', 'qa-coordination')).toBe('SUP-123-QA-COORD')
-  })
-
-  it('returns identifier with AC-COORD suffix for acceptance-coordination', () => {
-    expect(getWorktreeIdentifier('SUP-123', 'acceptance-coordination')).toBe('SUP-123-AC-COORD')
   })
 
   it('returns identifier with REF-COORD suffix for refinement-coordination', () => {

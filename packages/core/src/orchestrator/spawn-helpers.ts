@@ -113,7 +113,7 @@ export function loadAppEnvFiles(
   }
 
   // Determine which env file to load based on work type
-  const isTestWork = workType === 'qa' || workType === 'acceptance' || workType === 'qa-coordination' || workType === 'acceptance-coordination'
+  const isTestWork = workType === 'qa' || workType === 'acceptance'
   const envFileName = isTestWork ? '.env.test.local' : '.env.local'
 
   const env: Record<string, string> = {}
@@ -260,47 +260,6 @@ When your work is complete and validated (typecheck, build, test all pass):
 If you skip these steps, your work will be LOST. The orchestrator marks work as FAILED if no PR is detected.${LINEAR_CLI_INSTRUCTION}`
       break
 
-    case 'inflight-coordination':
-      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}.
-Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.
-
-SUB-ISSUE STATUS MANAGEMENT:
-You MUST update sub-issue statuses in Linear as work progresses:
-- When starting work on a sub-issue: pnpm af-linear update-sub-issue <id> --state Started
-- When a sub-agent completes a sub-issue: pnpm af-linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
-- If a sub-agent fails on a sub-issue: pnpm af-linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
-
-COMPLETION VERIFICATION:
-Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
-  pnpm af-linear list-sub-issue-statuses ${identifier}
-If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
-
-SUB-AGENT SAFETY RULES (CRITICAL):
-This is a SHARED WORKTREE. Multiple sub-agents run concurrently in this directory.
-Every sub-agent prompt you construct MUST include these rules:
-
-1. NEVER run: git worktree remove, git worktree prune
-2. NEVER run: git checkout, git switch (to a different branch)
-3. NEVER run: git reset --hard, git clean -fd, git restore .
-4. NEVER delete or modify the .git file in the worktree root
-5. Only the orchestrator manages worktree lifecycle
-6. Work only on files relevant to your sub-issue to minimize conflicts
-7. Commit changes with descriptive messages before reporting completion
-
-Prefix every sub-agent prompt with: "SHARED WORKTREE — DO NOT MODIFY GIT STATE"
-
-DEPENDENCY INSTALLATION:
-Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
-If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
-(never with run_in_background). Never use sleep or polling loops to wait for commands.
-
-IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
-- Use Grep to search for specific code patterns instead of reading entire files
-- Use Read with offset/limit parameters to paginate through large files
-- Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
-      break
-
     case 'qa':
       basePrompt = `QA ${identifier}.
 Validate the implementation against acceptance criteria.
@@ -364,132 +323,6 @@ IMPORTANT CONSTRAINTS:
 - This is a REFINEMENT task — do NOT implement fixes yourself, only triage and route feedback to sub-issues.
 - NEVER run pnpm af-linear update-issue --state on the parent issue. The orchestrator manages parent status transitions.
 - Only use pnpm af-linear for: list-sub-issues, list-sub-issue-statuses, get-issue, list-comments, create-comment, update-sub-issue${LINEAR_CLI_INSTRUCTION}`
-      break
-
-    case 'coordination':
-      basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}.
-Fetch sub-issues with dependency graph, create Claude Code Tasks mapping to each sub-issue,
-spawn sub-agents for unblocked sub-issues in parallel, monitor completion,
-and create a single PR with all changes when done.
-
-SUB-ISSUE STATUS MANAGEMENT:
-You MUST update sub-issue statuses in Linear as work progresses:
-- When starting work on a sub-issue: pnpm af-linear update-sub-issue <id> --state Started
-- When a sub-agent completes a sub-issue: pnpm af-linear update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
-- If a sub-agent fails on a sub-issue: pnpm af-linear create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
-
-COMPLETION VERIFICATION:
-Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
-  pnpm af-linear list-sub-issue-statuses ${identifier}
-If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
-
-SUB-AGENT SAFETY RULES (CRITICAL):
-This is a SHARED WORKTREE. Multiple sub-agents run concurrently in this directory.
-Every sub-agent prompt you construct MUST include these rules:
-
-1. NEVER run: git worktree remove, git worktree prune
-2. NEVER run: git checkout, git switch (to a different branch)
-3. NEVER run: git reset --hard, git clean -fd, git restore .
-4. NEVER delete or modify the .git file in the worktree root
-5. Only the orchestrator manages worktree lifecycle
-6. Work only on files relevant to your sub-issue to minimize conflicts
-7. Commit changes with descriptive messages before reporting completion
-
-Prefix every sub-agent prompt with: "SHARED WORKTREE \u2014 DO NOT MODIFY GIT STATE"
-
-DEPENDENCY INSTALLATION:
-Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
-If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
-(never with run_in_background). Never use sleep or polling loops to wait for commands.
-
-IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
-- Use Grep to search for specific code patterns instead of reading entire files
-- Use Read with offset/limit parameters to paginate through large files
-- Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
-      break
-
-    case 'qa-coordination':
-      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}.
-
-WORKFLOW:
-1. Fetch sub-issues: pnpm af-linear list-sub-issues ${identifier}
-2. Create Claude Code Tasks for each sub-issue's QA verification
-3. Spawn qa-reviewer sub-agents in parallel \u2014 no dependency graph needed, all sub-issues are already Finished
-4. Each sub-agent: reads sub-issue requirements, runs scoped tests, validates implementation, emits pass/fail
-5. Collect results \u2014 ALL sub-issues must pass QA for the parent to pass
-
-RESULT HANDLING:
-- If ALL pass: Mark parent as complete (transitions to Delivered). Update each sub-issue to Delivered.
-- If ANY fail: Post rollup comment listing per-sub-issue results. Emit <!-- WORK_RESULT:failed -->. The orchestrator will move the issue to Rejected for coordinated refinement.
-
-IMPORTANT CONSTRAINTS:
-- This is READ-ONLY validation \u2014 do NOT create PRs or make git commits
-- The PR already exists from the development coordination phase
-- Run pnpm test, pnpm typecheck, and pnpm build as part of validation
-- Verify each sub-issue's acceptance criteria against the actual code changes
-
-SUB-AGENT SAFETY RULES (CRITICAL):
-This is a SHARED WORKTREE. Multiple sub-agents run concurrently in this directory.
-Every sub-agent prompt you construct MUST include these rules:
-1. NEVER run: git worktree remove, git worktree prune
-2. NEVER run: git checkout, git switch (to a different branch)
-3. NEVER run: git reset --hard, git clean -fd, git restore .
-4. NEVER delete or modify the .git file in the worktree root
-5. Work only on files relevant to your sub-issue to minimize conflicts
-Prefix every sub-agent prompt with: "SHARED WORKTREE \u2014 DO NOT MODIFY GIT STATE"
-
-STRUCTURED RESULT MARKER (REQUIRED):
-You MUST include a structured result marker in your final output message.
-The orchestrator parses your output to determine whether to promote or reject the issue.
-Without this marker, the issue status will NOT be updated automatically.
-- On QA pass: Include <!-- WORK_RESULT:passed --> in your final message
-- On QA fail: Include <!-- WORK_RESULT:failed --> in your final message
-
-DEPENDENCY INSTALLATION:
-Dependencies are symlinked from the main repo by the orchestrator. Do NOT run pnpm install.
-If you encounter a specific "Cannot find module" error, run it SYNCHRONOUSLY
-(never with run_in_background). Never use sleep or polling loops to wait for commands.
-
-IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
-- Use Grep to search for specific code patterns instead of reading entire files
-- Use Read with offset/limit parameters to paginate through large files
-- Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
-      break
-
-    case 'acceptance-coordination':
-      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}.
-
-WORKFLOW:
-1. Verify all sub-issues are in Delivered status: pnpm af-linear list-sub-issue-statuses ${identifier}
-2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
-3. Validate the PR:
-   - CI checks are passing
-   - No merge conflicts
-   - Preview deployment succeeded (if applicable)
-4. Merge the PR: gh pr merge <PR_NUMBER> --squash
-5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
-6. Bulk-update all sub-issues to Accepted: for each sub-issue, run pnpm af-linear update-sub-issue <id> --state Accepted
-7. Mark parent as complete (transitions to Accepted)
-
-IMPORTANT CONSTRAINTS:
-- ALL sub-issues must be in Delivered status before proceeding
-- The PR must pass CI and have no conflicts
-- If merge fails, report the error and do not mark as Accepted
-
-STRUCTURED RESULT MARKER (REQUIRED):
-You MUST include a structured result marker in your final output message.
-The orchestrator parses your output to determine whether to promote or reject the issue.
-Without this marker, the issue status will NOT be updated automatically.
-- On acceptance pass: Include <!-- WORK_RESULT:passed --> in your final message
-- On acceptance fail: Include <!-- WORK_RESULT:failed --> in your final message
-
-IMPORTANT: If you encounter "exceeds maximum allowed tokens" error when reading files:
-- Use Grep to search for specific code patterns instead of reading entire files
-- Use Read with offset/limit parameters to paginate through large files
-- Avoid reading auto-generated files like payload-types.ts (use Grep instead)
-See the "Working with Large Files" section in the project documentation (CLAUDE.md / AGENTS.md) for details.${LINEAR_CLI_INSTRUCTION}`
       break
 
     case 'merge':

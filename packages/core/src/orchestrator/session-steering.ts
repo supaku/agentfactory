@@ -33,8 +33,6 @@ import type { AgentWorkType } from './work-types.js'
 const CODE_PRODUCING_WORK_TYPES: ReadonlySet<AgentWorkType> = new Set([
   'development',
   'inflight',
-  'coordination',
-  'inflight-coordination',
 ])
 
 /** Git state relevant to deciding whether steering is warranted */

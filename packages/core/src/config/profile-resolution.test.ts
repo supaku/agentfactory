@@ -39,7 +39,7 @@ const profiles: Record<string, ProfileConfig> = {
 const dispatch: DispatchConfig = {
   default: 'codex-dev',
   byWorkType: {
-    coordination: 'claude-coord',
+    'refinement-coordination': 'claude-coord',
     qa: 'codex-qa',
   },
   byProject: {
@@ -68,8 +68,8 @@ describe('resolveProfileForSpawn', () => {
     delete process.env.AGENT_MODEL
     delete process.env.AGENT_PROVIDER_QA
     delete process.env.AGENT_MODEL_QA
-    delete process.env.AGENT_PROVIDER_COORDINATION
-    delete process.env.AGENT_MODEL_COORDINATION
+    delete process.env.AGENT_PROVIDER_REFINEMENT_COORDINATION
+    delete process.env.AGENT_MODEL_REFINEMENT_COORDINATION
     delete process.env.AGENT_PROVIDER_SOCIAL
     delete process.env.AGENT_MODEL_SOCIAL
     delete process.env.AGENT_SUB_MODEL
@@ -93,11 +93,11 @@ describe('resolveProfileForSpawn', () => {
     })
 
     it('uses dispatch.byWorkType when workType matches', () => {
-      const result = resolveProfileForSpawn(makeContext({ workType: 'coordination' }))
+      const result = resolveProfileForSpawn(makeContext({ workType: 'refinement-coordination' }))
       expect(result.provider).toBe('claude')
       expect(result.model).toBe('claude-opus-4-7')
       expect(result.effort).toBe('xhigh')
-      expect(result.source).toContain('dispatch.byWorkType.coordination')
+      expect(result.source).toContain('dispatch.byWorkType.refinement-coordination')
     })
 
     it('uses dispatch.byProject when project matches and no workType match', () => {
@@ -168,7 +168,7 @@ describe('resolveProfileForSpawn', () => {
     it('dispatch model auto-switches provider via well-known prefix (gpt-*)', () => {
       // Force a non-codex profile so the switch is observable
       const result = resolveProfileForSpawn(makeContext({
-        workType: 'coordination', // resolves to claude-coord
+        workType: 'refinement-coordination', // resolves to claude-coord
         dispatchModel: 'gpt-5-codex',
       }))
       expect(result.provider).toBe('codex')
@@ -261,8 +261,8 @@ describe('resolveProfileForSpawn', () => {
     })
 
     it('hyphenated work types normalize to underscores in env key', () => {
-      process.env.AGENT_PROVIDER_QA_COORDINATION = 'amp'
-      const result = resolveProfileForSpawn(makeContext({ workType: 'qa-coordination' }))
+      process.env.AGENT_PROVIDER_REFINEMENT_COORDINATION = 'amp'
+      const result = resolveProfileForSpawn(makeContext({ workType: 'refinement-coordination' }))
       expect(result.provider).toBe('amp')
     })
   })
@@ -278,7 +278,7 @@ describe('resolveProfileForSpawn', () => {
     })
 
     it('extracts anthropic config for claude provider', () => {
-      const result = resolveProfileForSpawn(makeContext({ workType: 'coordination' }))
+      const result = resolveProfileForSpawn(makeContext({ workType: 'refinement-coordination' }))
       expect(result.providerConfig).toEqual({ speed: 'fast' })
     })
 

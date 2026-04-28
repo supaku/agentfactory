@@ -426,7 +426,7 @@ describe('createInitialState', () => {
       ['research', 'RES'],
       ['backlog-creation', 'BC'],
       ['development', 'DEV'],
-      ['coordination', 'COORD'],
+      ['inflight', 'INF'],
       ['qa', 'QA'],
       ['acceptance', 'AC'],
       ['refinement', 'REF'],

@@ -154,10 +154,10 @@ describe('TemplateRegistry', () => {
       // was removed — merging is handled by the local queue (acceptance hands
       // off to the sidecar worker) so agents no longer need a merge prompt.
       const workTypes = fullRegistry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(18)
+      expect(workTypes.length).toBe(14)
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
-      expect(workTypes).toContain('coordination')
+      expect(workTypes).not.toContain('coordination')
       expect(workTypes).toContain('security')
       expect(workTypes).not.toContain('merge')
       // Strategy-specific templates
@@ -189,12 +189,12 @@ describe('TemplateRegistry', () => {
       expect(result).toContain('WORK_RESULT:failed')
     })
 
-    it('built-in coordination template includes shared worktree safety', () => {
+    it('built-in development template includes shared worktree safety (for parent issues with sub-issues)', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      const result = fullRegistry.renderPrompt('coordination', { identifier: 'SUP-1' })
+      // When subIssueList is provided, the development template renders the coordinator path
+      const result = fullRegistry.renderPrompt('development', { identifier: 'SUP-1', subIssueList: '- SUP-2: Sub issue 1' })
       expect(result).toContain('SHARED WORKTREE')
       expect(result).toContain('git worktree remove')
-      expect(result).toContain('git stash')
     })
 
     it('built-in development template bans git stash', () => {
@@ -203,16 +203,14 @@ describe('TemplateRegistry', () => {
       expect(result).toContain('NEVER run `git stash`')
     })
 
-    // REN-1263: coordination/development/inflight agents must apply the same
+    // REN-1263: development/inflight agents must apply the same
     // hard-fail rule as the QA agent — a non-zero exit from typecheck/build/test
     // forces WORK_RESULT:failed and cannot be passed off as "pre-existing".
-    describe('REN-1263: validation hard-fail rule (coordination/development parity with QA)', () => {
+    describe('REN-1263: validation hard-fail rule (development parity with QA)', () => {
       const workTypesWithHardFail = [
         'development',
         'inflight',
         'development-retry',
-        'coordination',
-        'inflight-coordination',
       ] as const
 
       for (const workType of workTypesWithHardFail) {

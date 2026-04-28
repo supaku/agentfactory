@@ -126,16 +126,22 @@ describe('PartialTemplateSchema', () => {
 })
 
 describe('AgentWorkTypeSchema', () => {
-  it('accepts all 12 work types', () => {
+  it('accepts all 10 work types', () => {
     const workTypes = [
       'research', 'backlog-creation', 'development', 'inflight',
-      'inflight-coordination', 'qa', 'acceptance', 'refinement',
-      'coordination', 'qa-coordination', 'acceptance-coordination',
-      'refinement-coordination',
+      'qa', 'acceptance', 'refinement',
+      'refinement-coordination', 'merge', 'security',
     ]
     for (const wt of workTypes) {
       expect(AgentWorkTypeSchema.parse(wt)).toBe(wt)
     }
+  })
+
+  it('rejects deprecated -coordination work types', () => {
+    expect(() => AgentWorkTypeSchema.parse('coordination')).toThrow()
+    expect(() => AgentWorkTypeSchema.parse('inflight-coordination')).toThrow()
+    expect(() => AgentWorkTypeSchema.parse('qa-coordination')).toThrow()
+    expect(() => AgentWorkTypeSchema.parse('acceptance-coordination')).toThrow()
   })
 
   it('rejects invalid work type', () => {

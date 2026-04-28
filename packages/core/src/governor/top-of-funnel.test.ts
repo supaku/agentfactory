@@ -283,7 +283,7 @@ describe('determineTopOfFunnelAction', () => {
     expect(action.reason).toContain('held')
   })
 
-  it('returns none for parent/coordinator issues', () => {
+  it('returns none for parent issues (handled via development workflow)', () => {
     const issue = makeIssue()
     const action = determineTopOfFunnelAction(
       issue,
@@ -291,7 +291,7 @@ describe('determineTopOfFunnelAction', () => {
       defaultContext({ isParentIssue: true }),
     )
     expect(action.type).toBe('none')
-    expect(action.reason).toContain('coordination')
+    expect(action.reason).toContain('Parent issues')
   })
 
   // -- Research triggers --

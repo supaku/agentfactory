@@ -267,9 +267,9 @@ describe('ROUTING_KEYS', () => {
     )
   })
 
-  it('generates correct posteriors key for coordination work type', () => {
-    expect(ROUTING_KEYS.posteriors('amp', 'qa-coordination')).toBe(
-      'routing:posteriors:amp:qa-coordination',
+  it('generates correct posteriors key for refinement-coordination work type', () => {
+    expect(ROUTING_KEYS.posteriors('amp', 'refinement-coordination')).toBe(
+      'routing:posteriors:amp:refinement-coordination',
     )
   })
 
