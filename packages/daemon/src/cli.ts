@@ -9,11 +9,14 @@
  * The launchd plist (REN-1292) and systemd unit (REN-1293) point to this script.
  *
  * Commands:
- *   start     — Start the daemon (default)
- *   stop      — Gracefully stop a running daemon
- *   status    — Print daemon status as JSON
- *   setup     — Run the first-run setup wizard
- *   update    — Manually trigger a daemon self-update (drain → fetch → verify → swap → restart)
+ *   start             — Start the daemon (default)
+ *   stop              — Gracefully stop a running daemon
+ *   status            — Print daemon status as JSON
+ *   setup             — Run the first-run setup wizard
+ *   update            — Manually trigger a daemon self-update (drain → fetch → verify → swap → restart)
+ *   install [--user|--system] — Install as a systemd unit (Linux only)
+ *   uninstall [--user|--system] — Remove the systemd unit (Linux only)
+ *   doctor [--user|--system] — Health check for the systemd installation (Linux only)
  *
  * Environment variables:
  *   RENSEI_DAEMON_CONFIG   — Override config file path (default: ~/.rensei/daemon.yaml)
@@ -30,10 +33,18 @@
  *   for manual triggers.
  */
 
+import { platform } from 'node:process'
 import { Daemon } from './daemon.js'
 import { runSetupWizard } from './setup-wizard.js'
 import { loadConfig, DEFAULT_CONFIG_PATH } from './config.js'
 import { AutoUpdater, EXIT_CODE_RESTART } from './auto-update.js'
+import {
+  installSystemdUnit,
+  uninstallSystemdUnit,
+  systemdDoctor,
+  UNIT_FILENAME,
+} from './installer-linux.js'
+import type { SystemdScope } from './installer-linux.js'
 
 const command = process.argv[2] ?? 'start'
 const configPath = process.env['RENSEI_DAEMON_CONFIG'] ?? DEFAULT_CONFIG_PATH
@@ -159,9 +170,91 @@ async function main(): Promise<void> {
       break
     }
 
+    case 'install': {
+      if (platform !== 'linux') {
+        console.error('[daemon] install: systemd installer is only supported on Linux.')
+        console.error(`[daemon] Current platform: ${platform}`)
+        process.exit(1)
+      }
+
+      // Parse --system / --user flags from remaining argv
+      const installArgs = process.argv.slice(3)
+      let installScope: SystemdScope = 'user'
+      if (installArgs.includes('--system')) {
+        installScope = 'system'
+      }
+
+      console.log(`[daemon] Installing systemd unit (scope: ${installScope})...`)
+      try {
+        const unitPath = installSystemdUnit({ scope: installScope })
+        console.log(`[daemon] Unit file written: ${unitPath}`)
+        console.log(`[daemon] Unit enabled and started.`)
+        if (installScope === 'user') {
+          console.log(`[daemon] Logs: journalctl --user -u ${UNIT_FILENAME.replace('.service', '')}`)
+        } else {
+          console.log(`[daemon] Logs: journalctl -u ${UNIT_FILENAME.replace('.service', '')}`)
+        }
+      } catch (err) {
+        console.error(`[daemon] Install failed: ${(err as Error).message}`)
+        process.exit(1)
+      }
+      break
+    }
+
+    case 'uninstall': {
+      if (platform !== 'linux') {
+        console.error('[daemon] uninstall: systemd installer is only supported on Linux.')
+        process.exit(1)
+      }
+
+      const uninstallArgs = process.argv.slice(3)
+      let uninstallScope: SystemdScope = 'user'
+      if (uninstallArgs.includes('--system')) {
+        uninstallScope = 'system'
+      }
+
+      console.log(`[daemon] Uninstalling systemd unit (scope: ${uninstallScope})...`)
+      try {
+        const unitPath = uninstallSystemdUnit({ scope: uninstallScope })
+        console.log(`[daemon] Unit file removed: ${unitPath}`)
+      } catch (err) {
+        console.error(`[daemon] Uninstall failed: ${(err as Error).message}`)
+        process.exit(1)
+      }
+      break
+    }
+
+    case 'doctor': {
+      if (platform !== 'linux') {
+        console.error('[daemon] doctor: systemd health check is only supported on Linux.')
+        process.exit(1)
+      }
+
+      const doctorArgs = process.argv.slice(3)
+      let doctorScope: SystemdScope = 'user'
+      if (doctorArgs.includes('--system')) {
+        doctorScope = 'system'
+      }
+
+      const health = systemdDoctor({ scope: doctorScope })
+      console.log(JSON.stringify(health, null, 2))
+
+      if (!health.unitExists) {
+        console.error(`[daemon] Unit file not found at ${health.unitPath}.`)
+        console.error('[daemon] Run: rensei-daemon install to install the unit.')
+        process.exit(1)
+      }
+
+      if (health.isActive === false) {
+        console.error('[daemon] Unit is not active.')
+        process.exit(1)
+      }
+      break
+    }
+
     default:
       console.error(`Unknown command: ${command}`)
-      console.error('Usage: rensei-daemon [start|stop|status|setup|update]')
+      console.error('Usage: rensei-daemon [start|stop|status|setup|update|install|uninstall|doctor]')
       process.exit(1)
   }
 }
