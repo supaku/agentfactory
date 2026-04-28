@@ -29,13 +29,14 @@
  */
 
 // Provider base contract — unified Provider<F> interface and ProviderHookEvent taxonomy
+// Note: SandboxProviderCapabilities is intentionally omitted here — the canonical
+// extended version (18-field struct, REN-1281) is re-exported below from ./types.js.
 export type {
   ProviderFamily,
   ProviderHealth,
   ScopeSelector,
   ProviderScope,
   ProviderEntry,
-  SandboxProviderCapabilities,
   WorkareaProviderCapabilities,
   AgentRuntimeProviderCapabilities,
   VersionControlProviderCapabilities,
