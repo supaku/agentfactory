@@ -345,7 +345,7 @@ describe('verifySignature', () => {
     expect(result.reason).toMatch(/publicKey is empty/)
   })
 
-  it('fails when signatureValue does not start with STUB_VALID (real crypto not yet wired)', () => {
+  it('fails when signatureValue does not start with STUB_VALID (directs callers to async path)', () => {
     const manifest = makeManifest('sandbox', 'local-mac', validSandboxCaps)
     const sig: ProviderSignature = {
       ...makeValidSig(manifest),
@@ -353,7 +353,9 @@ describe('verifySignature', () => {
     }
     const result = verifySignature(sig, manifest, sig.publicKey)
     expect(result.valid).toBe(false)
-    expect(result.reason).toMatch(/REN-1314/)
+    // REN-1314 ships real async verifier dispatch in signing.ts;
+    // the synchronous verifySignature() directs callers to the async path.
+    expect(result.reason).toMatch(/signing\.ts|async/)
   })
 
   it('passes with _testBypassVerify even without STUB_VALID prefix', () => {

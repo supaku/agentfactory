@@ -264,7 +264,7 @@ describe('verifyPluginSignature', () => {
     expect(result.reason).toMatch(/signatureValue is empty/)
   })
 
-  it('fails when signatureValue is not STUB_VALID (real crypto stubbed)', () => {
+  it('fails when signatureValue is not STUB_VALID (directs to async path)', () => {
     const m = makeManifest('acme')
     const expectedHash = hashPluginManifest(m)
     const withRealSig: PluginManifest = {
@@ -280,7 +280,9 @@ describe('verifyPluginSignature', () => {
     }
     const result = verifyPluginSignature(withRealSig)
     expect(result.valid).toBe(false)
-    expect(result.reason).toMatch(/REN-1314/)
+    // REN-1314 ships real async verifier dispatch in providers/signing.ts.
+    // The synchronous verifyPluginSignature() directs callers to the async path.
+    expect(result.reason).toMatch(/signing\.ts|async/)
   })
 
   it('passes with _testBypassVerify even for non-STUB_VALID signature', () => {

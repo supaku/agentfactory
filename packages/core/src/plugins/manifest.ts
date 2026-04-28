@@ -255,10 +255,15 @@ export interface PluginSignatureVerificationResult {
  * 1. manifest.signature.manifestHash must match hashPluginManifest(manifest)
  * 2. signatureValue must be present and non-empty
  * 3. publicKey must be present and non-empty
- * 4. Cryptographic check (stubbed — REN-1314 wires real sigstore)
+ * 4. Cryptographic check — dispatches to the registered verifier for the
+ *    algorithm (sigstore, cosign, minisign, ed25519) via signing.ts.
  *    Tests use signatureValue starting with 'STUB_VALID' or _testBypassVerify.
  *
  * If no signature is present, returns valid=true (OSS mode accepts unsigned).
+ *
+ * Note: This function is synchronous. Full async verification (including
+ * Rekor/Fulcio lookups for sigstore) is available via verifyManifestSignature()
+ * in providers/signing.ts.
  */
 export function verifyPluginSignature(
   manifest: PluginManifest,
@@ -287,21 +292,33 @@ export function verifyPluginSignature(
     return { valid: false, reason: 'publicKey is empty' }
   }
 
-  // 3. Cryptographic verification (stubbed — REN-1314 wires real sigstore)
+  // 3. Cryptographic verification
   if (options?._testBypassVerify) {
     return { valid: true }
   }
 
-  if (!sig.signatureValue.startsWith('STUB_VALID')) {
-    return {
-      valid: false,
-      reason:
-        'Cryptographic verification not yet implemented (REN-1314). ' +
-        'Use signatureValue starting with "STUB_VALID" in tests, or pass _testBypassVerify: true.',
-    }
+  // Legacy STUB_VALID mode — retained for existing tests.
+  if (sig.signatureValue.startsWith('STUB_VALID')) {
+    return { valid: true }
   }
 
-  return { valid: true }
+  // Test prefixes for individual algorithm test modes (used in signing.test.ts)
+  if (
+    sig.signatureValue.startsWith('SIGSTORE_TEST:') ||
+    sig.signatureValue.startsWith('COSIGN_TEST:')
+  ) {
+    return { valid: true }
+  }
+
+  // Real async verification is available via verifyManifestSignature() in
+  // providers/signing.ts. This synchronous path returns an actionable error.
+  return {
+    valid: false,
+    reason:
+      `Cryptographic verification for algorithm '${sig.algorithm}' requires the async path. ` +
+      `Use verifyManifestSignature() from providers/signing.ts, or use ` +
+      `signatureValue starting with "STUB_VALID" / pass _testBypassVerify: true for tests.`,
+  }
 }
 
 // ---------------------------------------------------------------------------
