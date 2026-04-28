@@ -33,3 +33,21 @@ export type {
   BinaryVerifier,
   VersionManifest,
 } from './auto-update.js'
+export {
+  installSystemdUnit,
+  uninstallSystemdUnit,
+  systemdDoctor,
+  generateUnitFile,
+  resolveDaemonBinPath,
+  UNIT_NAME,
+  UNIT_FILENAME,
+  USER_UNIT_DIR,
+  SYSTEM_UNIT_DIR,
+} from './installer-linux.js'
+export type {
+  SystemdScope,
+  SystemdInstallOptions,
+  SystemdUninstallOptions,
+  SystemdDoctorOptions,
+  SystemdDoctorResult,
+} from './installer-linux.js'
