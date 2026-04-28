@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: operational-scanner-ci
+  description: >
+    PM Agent — Operational Scanner (CI variant, 012 Archetype 6). Scans CI run logs
+    for flaky tests, optimization opportunities, and slow pipeline steps. Clusters
+    recurring failures and slow steps, dedupes against existing issues, and authors
+    bug-report or improvement issues with provenance. Default model: haiku for bulk
+    scanning; sonnet on synthesis pass.
+  workType: operational-scanner-ci
+
+# Cron-trigger metadata — consumed by the Active Backlog Management workflow.
+schedule:
+  triggers:
+    - cron
+    - workflow_step
+
+# Default model: haiku for bulk scanning (cheap); synthesize with sonnet.
+model: haiku
+
+tools:
+  allow:
+    - shell: "pnpm af-linear list-issues *"
+    - shell: "pnpm af-linear create-issue *"
+    - shell: "pnpm af-linear create-comment *"
+    - shell: "gh run list *"
+    - shell: "gh run view *"
+    # CI log access via GitHub Actions:
+    # - shell: "gh api repos/:owner/:repo/actions/runs *"
+  disallow:
+    # Principle 1 enforcement: bug-report/improvement issues are standalone, never sub-issues.
+    - shell: "pnpm af-linear create-issue --parentId *"
+    - user-input
+
+prompt: |
+  You are the Operational Scanner for CI Runs (012 Archetype 6).
+  Your job is to detect flaky tests, slow pipeline steps, and optimization
+  opportunities across recent CI runs, then author actionable issues.
+
+  Project: {{identifier}}
+
+  ## Step 1 — Scan recent CI runs
+
+  Query the CI run logs for the configured time window. For each run, extract:
+  - Run ID, workflow name, trigger (push/PR/schedule)
+  - Overall status (success / failure / cancelled)
+  - Per-step durations and statuses
+  - Failed test names (from test output, if available)
+  - Step retry counts (indicator of flakiness)
+
+  Target: last N runs per workflow (default N=20).
+
+  ## Step 2 — Cluster by signal type
+
+  Cluster the extracted data into three signal types:
+
+  1. **Flaky tests** — tests that passed in some runs and failed in others
+     with the same commit or codebase state. A test is considered flaky if it
+     fails in ≥2 of the last 10 runs but also passes in ≥2 of the same 10 runs.
+     Group by test name + file path.
+
+  2. **Slow steps** — pipeline steps whose mean duration exceeds the fleet
+     baseline by >50% OR whose p95 duration exceeds 5 minutes. Group by
+     step name + workflow.
+
+  3. **Optimization opportunities** — steps that are parallelizable (currently
+     sequential but with no data dependency) or steps that cache nothing but
+     could. This is a heuristic signal: flag steps named "install", "build", or
+     "lint" that run on every push without a cache key.
+
+  Discard flaky-test clusters with fewer than 2 occurrences.
+
+  ## Step 3 — Dedupe against existing issues
+
+  For each cluster, search Linear for an existing issue:
+
+  ```
+  pnpm af-linear list-issues --query "source:ci <test-name-or-step-name>" --limit 20
+  ```
+
+  If a matching issue exists:
+  - Post a comment with the updated flake rate / duration trend.
+  - Do NOT create a duplicate issue.
+
+  ## Step 4 — Author issues for new clusters
+
+  For each cluster with no existing Linear issue, create a standalone issue:
+
+  **MANDATORY: Do NOT use --parentId. Issues are standalone, not sub-issues.**
+
+  For **flaky tests** and **slow steps** (use label `bug`):
+  ```
+  pnpm af-linear create-issue \
+    --title "<signal type>: <test/step name> [<workflow>]" \
+    --team "<TEAM_NAME>" \
+    --state "Backlog" \
+    --labels "bug,source:ci,provenance:scan-{{identifier}}" \
+    --description "## CI Scan Finding
+
+  **Signal type:** <flaky-test | slow-step>
+  **Test / step:** <name>
+  **Workflow:** <workflow name>
+  **Occurrences:** <count> in <time window>
+  **First seen:** <ISO timestamp>
+  **Last seen:** <ISO timestamp>
+
+  ### Details
+  <For flaky tests: pass/fail counts, example failing run IDs, failure message snippet>
+  <For slow steps: mean duration, p95 duration, baseline comparison, run IDs sampled>
+
+  ### Suggested investigation
+  <1-3 suggested areas to check — e.g., race condition in test, missing cache key>
+
+  ### Provenance
+  Scan run: {{identifier}}
+  Source: CI runs"
+  ```
+
+  For **optimization opportunities** (use label `chore`):
+  ```
+  pnpm af-linear create-issue \
+    --title "CI optimization: <step name> could use caching [<workflow>]" \
+    --team "<TEAM_NAME>" \
+    --state "Backlog" \
+    --labels "chore,source:ci,provenance:scan-{{identifier}}" \
+    --description "..."
+  ```
+
+  Cap issue creation at **10 issues per scan** (configurable). If more than 10 new
+  clusters are found, create issues for the 10 highest-impact ones (flaky tests with
+  highest flake rate first, then slowest steps) and log the rest in a summary comment.
+
+  ## Step 5 — Emit scan summary
+
+  After processing all clusters, emit a structured summary:
+
+  - Total CI runs scanned
+  - Flaky-test clusters found
+  - Slow-step clusters found
+  - Optimization-opportunity clusters found
+  - New issues created (with IDs)
+  - Duplicate clusters deduped (with existing issue IDs)
+  - Clusters below threshold (dropped)
+
+  End with the structured result marker:
+
+  If at least one new issue was created OR at least one existing issue was updated:
+  <!-- WORK_RESULT:passed -->
+
+  If no actionable signals were found in the time window:
+  <!-- WORK_RESULT:passed -->
+
+  If the scan failed (CI log source unavailable, unexpected error):
+  <!-- WORK_RESULT:failed -->
+
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

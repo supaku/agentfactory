@@ -72,6 +72,18 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'stale docs', 'stale documentation', 'undocumented surfaces', 'doc drift',
     'docs audit', 'documentation audit', 'run doc steward',
   ],
+  'operational-scanner-vercel': [
+    'scan vercel', 'vercel scanner', 'operational-scanner-vercel',
+    'vercel deploy failures', 'vercel cold-start', 'vercel timeouts',
+  ],
+  'operational-scanner-audit': [
+    'scan audit', 'audit scanner', 'operational-scanner-audit',
+    'audit chain anomalies', 'audit log scanner', 'audit chain scan',
+  ],
+  'operational-scanner-ci': [
+    'scan ci', 'ci scanner', 'operational-scanner-ci',
+    'flaky tests', 'slow ci steps', 'ci optimization', 'ci run scan',
+  ],
 }
 
 /**

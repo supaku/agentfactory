@@ -317,6 +317,9 @@ export function getTaskListId(
     'improvement-loop': 'IMP',
     'ga-readiness': 'GA',
     'documentation-steward': 'DS',
+    'operational-scanner-vercel': 'OSV',
+    'operational-scanner-audit': 'OSA',
+    'operational-scanner-ci': 'OSC',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

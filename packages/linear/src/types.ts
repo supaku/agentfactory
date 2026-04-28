@@ -321,21 +321,24 @@ export type LinearWorkflowStatus =
  * decided by the agent based on whether sub-issues exist, not a separate work type.
  */
 export type AgentWorkType =
-  | 'research'              // Icebox: Flesh out story details, research
-  | 'backlog-creation'      // Icebox: Create backlog issues from researched story
-  | 'backlog-groomer'       // Icebox: PM agent — scan icebox, decide discard/refine/escalate-human (cron-triggered)
-  | 'development'           // Backlog: Implement the feature/fix (also coordinates sub-agents for parent issues)
-  | 'inflight'              // Started: Continue in-progress work (also resumes sub-agent coordination for parent issues)
-  | 'qa'                    // Finished: Validate implementation (also coordinates QA sub-agents for parent issues)
-  | 'acceptance'            // Delivered: Final acceptance testing (also coordinates acceptance for parent issues)
-  | 'refinement'            // Rejected: Address feedback, prep for retry
-  | 'refinement-coordination' // Rejected: Coordinate refinement across sub-issues for parent issues
-  | 'merge'                 // Merge queue: handle PR merge operations
-  | 'security'              // Security scanning: SAST, dependency audit
-  | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
-  | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
-  | 'ga-readiness'          // PM agent: assess feature GA readiness before production promotion (REN-1327)
-  | 'documentation-steward' // PM agent: flag stale docs, identify undocumented surfaces, author refinement issues (REN-1329)
+  | 'research'                    // Icebox: Flesh out story details, research
+  | 'backlog-creation'            // Icebox: Create backlog issues from researched story
+  | 'backlog-groomer'             // Icebox: PM agent — scan icebox, decide discard/refine/escalate-human (cron-triggered)
+  | 'development'                 // Backlog: Implement the feature/fix (also coordinates sub-agents for parent issues)
+  | 'inflight'                    // Started: Continue in-progress work (also resumes sub-agent coordination for parent issues)
+  | 'qa'                          // Finished: Validate implementation (also coordinates QA sub-agents for parent issues)
+  | 'acceptance'                  // Delivered: Final acceptance testing (also coordinates acceptance for parent issues)
+  | 'refinement'                  // Rejected: Address feedback, prep for retry
+  | 'refinement-coordination'     // Rejected: Coordinate refinement across sub-issues for parent issues
+  | 'merge'                       // Merge queue: handle PR merge operations
+  | 'security'                    // Security scanning: SAST, dependency audit
+  | 'improvement-loop'            // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
+  | 'outcome-auditor'             // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
+  | 'ga-readiness'                // PM agent: assess feature GA readiness before production promotion (REN-1327)
+  | 'documentation-steward'       // PM agent: flag stale docs, identify undocumented surfaces, author refinement issues (REN-1329)
+  | 'operational-scanner-vercel'  // PM agent: scan Vercel for deploy failures, timeouts, cold-start regressions (REN-1328)
+  | 'operational-scanner-audit'   // PM agent: scan audit chains for anomalies per 006 Seam 6 (REN-1328)
+  | 'operational-scanner-ci'      // PM agent: scan CI runs for flaky tests, slow steps, optimization opportunities (REN-1328)
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -372,10 +375,13 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'refinement-coordination': null, // Already Rejected
   'merge': null,            // Merge is triggered programmatically, no status transition
   'security': null,         // Security scanning: no status transition on start
-  'improvement-loop': null,  // PM Agent: cron-triggered, no status transition on start
-  'outcome-auditor': null,  // Outcome Auditor: cron/workflow-triggered, no status transition on start
-  'ga-readiness': null,     // GA-Readiness Assessor: manually/workflow-triggered, no status transition on start
-  'documentation-steward': null, // Documentation Steward: cron/workflow-triggered, no status transition on start
+  'improvement-loop': null,              // PM Agent: cron-triggered, no status transition on start
+  'outcome-auditor': null,              // Outcome Auditor: cron/workflow-triggered, no status transition on start
+  'ga-readiness': null,                 // GA-Readiness Assessor: manually/workflow-triggered, no status transition on start
+  'documentation-steward': null,        // Documentation Steward: cron/workflow-triggered, no status transition on start
+  'operational-scanner-vercel': null,   // Vercel scanner: cron/workflow-triggered, no status transition on start
+  'operational-scanner-audit': null,    // Audit scanner: cron/workflow-triggered, no status transition on start
+  'operational-scanner-ci': null,       // CI scanner: cron/workflow-triggered, no status transition on start
 }
 
 /**
@@ -394,10 +400,13 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers development which re-runs failing sub-issues)
   'merge': null,            // Merge completion is handled by the merge queue adapter
   'security': 'Finished',   // Security scan complete
-  'improvement-loop': null, // PM Agent: no auto-transition; cron-triggered, stateless
-  'outcome-auditor': null,  // Outcome Auditor: no auto-transition; tags issues with audit:clean/has-followups
-  'ga-readiness': null,     // GA-Readiness Assessor: no auto-transition; posts report comment, authors blockers
-  'documentation-steward': null, // Documentation Steward: no auto-transition; posts scan summary comment
+  'improvement-loop': null,              // PM Agent: no auto-transition; cron-triggered, stateless
+  'outcome-auditor': null,              // Outcome Auditor: no auto-transition; tags issues with audit:clean/has-followups
+  'ga-readiness': null,                 // GA-Readiness Assessor: no auto-transition; posts report comment, authors blockers
+  'documentation-steward': null,        // Documentation Steward: no auto-transition; posts scan summary comment
+  'operational-scanner-vercel': null,   // Vercel scanner: no auto-transition; authors bug-report issues
+  'operational-scanner-audit': null,    // Audit scanner: no auto-transition; authors anomaly issues
+  'operational-scanner-ci': null,       // CI scanner: no auto-transition; authors flaky/slow-test issues
 }
 
 /**
@@ -416,10 +425,13 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'refinement-coordination': null,
   'merge': null,            // Merge failure is handled by the merge queue adapter
   'security': null,         // Security scan failure: no status transition
-  'improvement-loop': null, // PM Agent: no status transition on failure
-  'outcome-auditor': null,  // Outcome Auditor failure: no status transition
-  'ga-readiness': null,     // GA-Readiness Assessor failure: no status transition
-  'documentation-steward': null, // Documentation Steward failure: no status transition
+  'improvement-loop': null,              // PM Agent: no status transition on failure
+  'outcome-auditor': null,              // Outcome Auditor failure: no status transition
+  'ga-readiness': null,                 // GA-Readiness Assessor failure: no status transition
+  'documentation-steward': null,        // Documentation Steward failure: no status transition
+  'operational-scanner-vercel': null,   // Vercel scanner failure: no status transition
+  'operational-scanner-audit': null,    // Audit scanner failure: no status transition
+  'operational-scanner-ci': null,       // CI scanner failure: no status transition
 }
 
 /**
@@ -442,6 +454,9 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'outcome-auditor',
   'ga-readiness',
   'documentation-steward',
+  'operational-scanner-vercel',
+  'operational-scanner-audit',
+  'operational-scanner-ci',
 ])
 
 /**
@@ -458,12 +473,15 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'acceptance': ['Delivered'],
   'refinement': ['Rejected'],
   'refinement-coordination': ['Rejected'],
-  'improvement-loop': [],     // PM Agent: cron-triggered, not status-gated
-  'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
-  'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
-  'outcome-auditor': ['Accepted'],  // Outcome Auditor runs on recently accepted issues
-  'ga-readiness': [],         // GA-Readiness Assessor: manually/workflow-triggered, not status-gated
-  'documentation-steward': [], // Documentation Steward: cron/workflow-triggered, not status-gated
+  'improvement-loop': [],              // PM Agent: cron-triggered, not status-gated
+  'merge': ['Started', 'Finished'],    // Merge can be triggered on in-progress or completed PRs
+  'security': ['Started', 'Finished'], // Security scan can be triggered on in-progress or completed work
+  'outcome-auditor': ['Accepted'],     // Outcome Auditor runs on recently accepted issues
+  'ga-readiness': [],                  // GA-Readiness Assessor: manually/workflow-triggered, not status-gated
+  'documentation-steward': [],         // Documentation Steward: cron/workflow-triggered, not status-gated
+  'operational-scanner-vercel': [],    // Vercel scanner: cron/workflow-triggered, not status-gated
+  'operational-scanner-audit': [],     // Audit scanner: cron/workflow-triggered, not status-gated
+  'operational-scanner-ci': [],        // CI scanner: cron/workflow-triggered, not status-gated
 }
 
 /**

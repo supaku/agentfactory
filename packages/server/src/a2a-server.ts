@@ -139,6 +139,24 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Scan repo docs for stale references and undocumented surfaces; author refinement issues for gaps',
     tags: ['pm', 'docs', 'documentation', 'steward'],
   },
+  'operational-scanner-vercel': {
+    id: 'operational-scanner-vercel',
+    name: 'Operational Scanner — Vercel',
+    description: 'Scan Vercel deploy logs for failures, function timeouts, and cold-start regressions; author bug-report issues (REN-1328; live binding pending REN-1311)',
+    tags: ['pm', 'operational', 'vercel', 'scanning'],
+  },
+  'operational-scanner-audit': {
+    id: 'operational-scanner-audit',
+    name: 'Operational Scanner — Audit',
+    description: 'Scan audit chains for anomalies per 006 Seam 6 (missing entries, broken chains, unexpected actors); author bug-report issues',
+    tags: ['pm', 'operational', 'audit', 'scanning'],
+  },
+  'operational-scanner-ci': {
+    id: 'operational-scanner-ci',
+    name: 'Operational Scanner — CI',
+    description: 'Scan CI run logs for flaky tests, slow steps, and optimization opportunities; author bug-report and improvement issues',
+    tags: ['pm', 'operational', 'ci', 'scanning'],
+  },
 }
 
 /**

@@ -13,19 +13,22 @@
 export type AgentWorkType =
   | 'research'
   | 'backlog-creation'
-  | 'backlog-groomer'       // PM agent: scan icebox, decide discard/refine/escalate-human
+  | 'backlog-groomer'                  // PM agent: scan icebox, decide discard/refine/escalate-human
   | 'development'
   | 'inflight'
   | 'qa'
   | 'acceptance'
   | 'refinement'
   | 'refinement-coordination'
-  | 'merge'                 // Merge queue: handle PR merge operations
-  | 'security'              // Security scanning: SAST, dependency audit
-  | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
-  | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
-  | 'ga-readiness'          // PM agent: assess feature GA readiness before production promotion (REN-1327)
-  | 'documentation-steward' // PM agent: flag stale docs, identify undocumented surfaces, author refinement issues (REN-1329)
+  | 'merge'                            // Merge queue: handle PR merge operations
+  | 'security'                         // Security scanning: SAST, dependency audit
+  | 'improvement-loop'                 // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
+  | 'outcome-auditor'                  // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
+  | 'ga-readiness'                     // PM agent: assess feature GA readiness before production promotion (REN-1327)
+  | 'documentation-steward'            // PM agent: flag stale docs, identify undocumented surfaces, author refinement issues (REN-1329)
+  | 'operational-scanner-vercel'       // PM agent: scan Vercel for deploy failures, timeouts, cold-start regressions (REN-1328)
+  | 'operational-scanner-audit'        // PM agent: scan audit chains for anomalies, per 006 Seam 6 (REN-1328)
+  | 'operational-scanner-ci'           // PM agent: scan CI runs for flaky tests, slow steps, optimization opportunities (REN-1328)
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').
