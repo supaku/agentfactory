@@ -17,3 +17,19 @@ export * from './worker-spawner.js'
 export * from './setup-wizard.js'
 export { Daemon, DAEMON_VERSION } from './daemon.js'
 export type { DaemonOptions } from './daemon.js'
+export {
+  AutoUpdater,
+  EXIT_CODE_RESTART,
+  UPDATE_CDN_BASE,
+  buildManifestUrl,
+  buildBinaryUrl,
+  buildSignatureUrl,
+  resolvePlatformSuffix,
+  isNewerVersion,
+} from './auto-update.js'
+export type {
+  AutoUpdateOptions,
+  AutoUpdateResult,
+  BinaryVerifier,
+  VersionManifest,
+} from './auto-update.js'

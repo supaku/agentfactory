@@ -21,21 +21,33 @@
  *   This causes the verifier to return valid=true without invoking cosign.
  */
 
-import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { writeFile, unlink, mkdtemp } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Verifier, VerifierInput, VerifierResult } from './index.js'
 
-const execFileAsync = promisify(execFile)
+/**
+ * Lazily-resolved execFileAsync — avoids evaluating execFile at module load
+ * time, which allows vi.mock('child_process') in tests that don't need cosign
+ * to omit the execFile export without triggering an error.
+ */
+function getExecFileAsync(): (
+  file: string,
+  args: string[],
+  options: { timeout: number },
+) => Promise<{ stdout: string; stderr: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { execFile } = require('node:child_process') as typeof import('node:child_process')
+  return promisify(execFile) as ReturnType<typeof getExecFileAsync>
+}
 
 const COSIGN_TEST_PREFIX = 'COSIGN_TEST:'
 
 /** Check if cosign binary is available in PATH. */
 async function isCosignAvailable(): Promise<boolean> {
   try {
-    await execFileAsync('cosign', ['version'], { timeout: 5000 })
+    await getExecFileAsync()('cosign', ['version'], { timeout: 5000 })
     return true
   } catch {
     return false
@@ -89,7 +101,7 @@ export class CosignVerifier implements Verifier {
       await writeFile(msgFile, manifestHash, 'utf8')
 
       // Run cosign verify-blob
-      await execFileAsync(
+      await getExecFileAsync()(
         'cosign',
         ['verify-blob', '--key', keyFile, '--signature', sigFile, msgFile],
         { timeout: 30_000 },
