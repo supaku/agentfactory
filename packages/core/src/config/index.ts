@@ -6,3 +6,6 @@ export type { EffortLevel, ProfileConfig, SubAgentProfileConfig, DispatchConfig,
 export { resolveProfileForSpawn, resolveSubAgentFromProfile } from './profile-resolution.js'
 export type { ProfileResolutionContext } from './profile-resolution.js'
 export { effortToClaudeOptions, effortToCodexOptions, effortToGeminiOptions, extractProviderConfig } from './effort.js'
+
+// Legacy bridge — synthesizes in-memory KitManifests from RepositoryConfig.projectPaths
+export { synthesizeKitsFromLegacyConfig, projectConfigToKitManifest, serializeKitManifestToToml } from './legacy-bridge.js'

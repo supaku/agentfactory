@@ -41,6 +41,7 @@
     "af-sync-routes": "dist/src/sync-routes.js",
     "af-setup": "dist/src/setup.js",
     "af-migrate-worktrees": "dist/src/migrate-worktrees.js",
+    "af-migrate-config-to-kits": "dist/src/migrate-config-to-kits.js",
     "af-merge-queue": "dist/src/merge-queue.js",
     "af-code": "dist/src/code.js"
   },
