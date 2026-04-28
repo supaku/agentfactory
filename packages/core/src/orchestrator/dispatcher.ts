@@ -1,0 +1,216 @@
+/**
+ * Dispatcher — work-queue routing and capability-based provider selection
+ *
+ * Extracted from orchestrator.ts (REN-1284).  Contains:
+ *   - Work-type detection and coordination-variant upgrade logic
+ *   - Provider/model/profile resolution for a spawn context
+ *   - Shell-command classification helpers used by the event loop
+ *   - Session-output tracking signal classifier
+ *
+ * The AgentOrchestrator imports these helpers so its own body stays focused
+ * on the session lifecycle and dispatch loop.
+ */
+
+import type { AgentWorkType } from './work-types.js'
+
+// ---------------------------------------------------------------------------
+// Work-type detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Map work type to worktree identifier suffix.
+ * This prevents different work types from using the same worktree directory.
+ */
+export const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
+  research: 'RES',
+  'backlog-creation': 'BC',
+  development: 'DEV',
+  inflight: 'INF',
+  'inflight-coordination': 'INF-COORD',
+  coordination: 'COORD',
+  qa: 'QA',
+  acceptance: 'AC',
+  refinement: 'REF',
+  'refinement-coordination': 'REF-COORD',
+  'qa-coordination': 'QA-COORD',
+  'acceptance-coordination': 'AC-COORD',
+  merge: 'MRG',
+  security: 'SEC',
+}
+
+/**
+ * Detect the appropriate work type for an issue based on its status,
+ * upgrading to coordination variants for parent issues with sub-issues.
+ *
+ * This prevents parent issues returning to Backlog after refinement from
+ * being dispatched as 'development' (which uses the wrong template and
+ * produces no sub-agent orchestration).
+ */
+export function detectWorkType(
+  statusName: string,
+  isParent: boolean,
+  statusToWorkType?: Record<string, AgentWorkType>
+): AgentWorkType {
+  const mapping = statusToWorkType ?? {}
+  let workType: AgentWorkType = mapping[statusName] ?? 'development'
+  console.log(`Auto-detected work type: ${workType} (from status: ${statusName})`)
+
+  if (isParent) {
+    if (workType === 'development') workType = 'coordination'
+    else if (workType === 'qa') workType = 'qa-coordination'
+    else if (workType === 'acceptance') workType = 'acceptance-coordination'
+    else if (workType === 'inflight') workType = 'inflight-coordination'
+    else if (workType === 'refinement') workType = 'refinement-coordination'
+    console.log(`Upgraded to coordination work type: ${workType} (parent issue)`)
+  }
+
+  return workType
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance-transition guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Decide whether a passing acceptance session should DEFER its
+ * Delivered → Accepted promotion to the merge worker.
+ *
+ * Returns false when:
+ *   - no merge queue adapter is configured (acceptance merges directly)
+ *   - work type is not acceptance / acceptance-coordination
+ */
+export function shouldDeferAcceptanceTransition(
+  workType: AgentWorkType,
+  hasMergeQueueAdapter: boolean,
+): boolean {
+  if (!hasMergeQueueAdapter) return false
+  return workType === 'acceptance' || workType === 'acceptance-coordination'
+}
+
+// ---------------------------------------------------------------------------
+// Shell-command classifiers (used by the event-stream loop)
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull the actual shell command string out of a tool_use input shape.
+ * Codex emits `{ command: string }`, but different providers may wrap it
+ * differently (e.g., `{ cmd: [...] }`). Returns undefined when the shape
+ * doesn't contain a parseable command.
+ */
+export function extractShellCommand(input: unknown): string | undefined {
+  if (typeof input === 'string') return input
+  if (input && typeof input === 'object') {
+    const obj = input as Record<string, unknown>
+    if (typeof obj.command === 'string') return obj.command
+    if (Array.isArray(obj.command)) {
+      return obj.command.filter((p): p is string => typeof p === 'string').join(' ')
+    }
+    if (typeof obj.cmd === 'string') return obj.cmd
+  }
+  return undefined
+}
+
+/**
+ * Pattern matcher for "legacy grep/glob" shell commands. Used by the code
+ * intelligence adoption counter so shell-based search (rg, grep, find, sed -n
+ * for reading files, ls recursively) is attributed the same way Claude's
+ * native Grep/Glob tools are.
+ */
+export function isGrepGlobShellCommand(command: string): boolean {
+  const stripped = command.replace(
+    /^\s*(?:\/[^\s]+\/)?(?:ba|z)?sh\s+-(?:l?c|c)\s+['"]?/i,
+    '',
+  )
+  const firstTokens = stripped
+    .split(/[;&|]|\n/)
+    .map(s => s.trim().split(/\s+/)[0])
+    .filter(Boolean)
+
+  const LEGACY_SEARCH_COMMANDS = new Set([
+    'rg', 'ripgrep',
+    'grep', 'egrep', 'fgrep',
+    'find', 'fd',
+    'ack',
+    'ag',
+    'sed',
+  ])
+
+  return firstTokens.some(tok => LEGACY_SEARCH_COMMANDS.has(tok))
+}
+
+// ---------------------------------------------------------------------------
+// Tool-error classification (used by provider event handling)
+// ---------------------------------------------------------------------------
+
+/**
+ * Patterns that indicate tool-related errors (not API or resource limit errors).
+ */
+const TOOL_ERROR_PATTERNS = [
+  /sandbox/i,
+  /not allowed/i,
+  /operation not permitted/i,
+  /permission denied/i,
+  /EACCES/,
+  /access denied/i,
+  /ENOENT/,
+  /no such file or directory/i,
+  /file not found/i,
+  /ECONNREFUSED/,
+  /ETIMEDOUT/,
+  /ENOTFOUND/,
+  /connection refused/i,
+  /network error/i,
+  /command failed/i,
+  /exited with code/i,
+  /tool.*error/i,
+  /tool.*failed/i,
+  /is_error.*true/i,
+]
+
+/**
+ * Check if an error message is related to tool execution
+ * (vs API errors, resource limits, etc.)
+ */
+export function isToolRelatedError(error: string): boolean {
+  return TOOL_ERROR_PATTERNS.some((pattern) => pattern.test(error))
+}
+
+/**
+ * Extract tool name from an error message if present.
+ */
+export function extractToolNameFromError(error: string): string {
+  const patterns = [
+    /Tool\s+["']?(\w+)["']?/i,
+    /(\w+)\s+tool.*(?:error|failed)/i,
+    /Failed to (?:run|execute|call)\s+["']?(\w+)["']?/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = error.match(pattern)
+    if (match && match[1]) {
+      return match[1]
+    }
+  }
+
+  return 'unknown'
+}
+
+// ---------------------------------------------------------------------------
+// MentionContext merge helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge a caller-supplied `customPrompt` with any explicit `mentionContext`
+ * into a single string suitable for injection into the template registry's
+ * `mentionContext` slot.
+ *
+ * Returns `undefined` when neither input is a non-empty string.
+ */
+export function mergeMentionContext(
+  mentionContext: string | undefined,
+  customPrompt: string | undefined,
+): string | undefined {
+  const parts = [mentionContext, customPrompt]
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+  return parts.length > 0 ? parts.join('\n\n---\n\n') : undefined
+}
