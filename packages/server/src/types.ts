@@ -21,5 +21,4 @@ export type AgentWorkType =
   | 'merge'
   | 'security'
   | 'improvement-loop'
-  | 'outcome-auditor'
-  | 'ga-readiness'
+  | 'outcome-auditor'  | 'ga-readiness'
