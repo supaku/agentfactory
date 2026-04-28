@@ -22,3 +22,4 @@ export type AgentWorkType =
   | 'security'
   | 'improvement-loop'
   | 'outcome-auditor'
+  | 'ga-readiness'

@@ -21,6 +21,7 @@ const WORK_TYPES = [
   'acceptance',
   'refinement',
   'refinement-coordination',
+  'ga-readiness',
 ] as const
 
 // Session status values for zod enum validation

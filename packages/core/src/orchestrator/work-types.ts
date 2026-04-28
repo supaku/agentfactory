@@ -24,6 +24,7 @@ export type AgentWorkType =
   | 'security'              // Security scanning: SAST, dependency audit
   | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
   | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
+  | 'ga-readiness'          // PM agent: assess feature GA readiness before production promotion (REN-1327)
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').

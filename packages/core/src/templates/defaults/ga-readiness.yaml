@@ -1,0 +1,230 @@
+apiVersion: v1
+kind: WorkflowTemplate
+metadata:
+  name: ga-readiness
+  description: >
+    PM Agent — GA-Readiness Assessor (012 Archetype 5). Runs before promotion to
+    production. Reads accepted issues for a feature, checks AC coverage, consumes
+    Architectural Intelligence drift report, checks observability + security review
+    status, and produces a structured GA-readiness report. Authors blocker issues
+    for any gaps using add-relation (NOT --parentId).
+  workType: ga-readiness
+
+# Cron-trigger metadata — consumed by the Active Backlog Management workflow.
+# Also manually triggered before a feature promotion to production.
+schedule:
+  triggers:
+    - manual
+    - workflow_step
+
+# Default model: sonnet. Synthesis pass for complex features uses opus.
+# The agent prompt instructs the model to use opus for the final synthesis
+# when the feature has > 5 accepted issues or > 10 code paths.
+model: sonnet
+
+tools:
+  allow:
+    - shell: "pnpm af-linear get-issue *"
+    - shell: "pnpm af-linear list-issues *"
+    - shell: "pnpm af-linear list-comments *"
+    - shell: "pnpm af-linear list-relations *"
+    - shell: "pnpm af-linear create-issue *"
+    - shell: "pnpm af-linear create-comment *"
+    - shell: "pnpm af-linear update-issue *"
+    - shell: "pnpm af-linear add-relation *"
+    - shell: "pnpm af-code search-symbols *"
+    - shell: "pnpm af-code search-code *"
+    - shell: "pnpm af-ai assess *"
+    - shell: "gh pr view *"
+    - shell: "git log *"
+    - shell: "git diff *"
+  disallow:
+    # Principle 1 enforcement: sub-issues are reserved for human intent.
+    # The GA-Readiness Assessor creates standalone blocker issues, never sub-issues.
+    - shell: "pnpm af-linear create-issue --parentId *"
+    - user-input
+
+prompt: |
+  You are the GA-Readiness Assessor. Your job is to evaluate whether feature
+  {{identifier}} is ready for promotion to production (GA).
+
+  Feature scope: {{identifier}}
+
+  ## Overview
+
+  Run each check below in order. For each gap found, create a standalone
+  blocker issue and add a `blocks` relation to the feature epic.
+
+  **CRITICAL: Do NOT use --parentId. All blocker issues are standalone.**
+
+  ## Step 1 — Read the feature epic
+
+  ```
+  pnpm af-linear get-issue {{identifier}}
+  pnpm af-linear list-issues --label "{{identifier}}" --status Accepted
+  ```
+
+  Read the feature epic to understand the scope, acceptance criteria, and
+  the set of accepted issues that belong to this feature.
+
+  ## Step 2 — AC Coverage Check
+
+  For each accepted issue in the feature scope:
+
+  a. Read the issue and its acceptance criteria:
+     ```
+     pnpm af-linear get-issue <ISSUE_ID>
+     pnpm af-linear list-comments <ISSUE_ID>
+     ```
+
+  b. Find the merged PR for this issue:
+     ```
+     git log --oneline --merges -30
+     gh pr view <PR_NUMBER_OR_BRANCH>
+     ```
+
+  c. Verify each AC item was addressed in the merged PR. Flag any:
+     - **Missed ACs**: Not implemented at all.
+     - **Deferred ACs**: "We'll do X later" in comments or PR.
+     - **Partial ACs**: Implemented differently from spec.
+
+  d. For each AC gap, create a blocker issue:
+     ```
+     pnpm af-linear create-issue \
+       --title "GA-Blocker: <gap description> (from <ISSUE_ID>)" \
+       --team "<TEAM_NAME>" \
+       --state "Backlog" \
+       --description "GA-readiness gap detected in <ISSUE_ID>.\n\nGap type: <missed/deferred/partial>\nDetails: <what was missed and why it matters for GA>\nSource issue: <ISSUE_ID>"
+     ```
+
+     Then add a blocks relation so the gap blocks the feature from going GA:
+     ```
+     pnpm af-linear add-relation <BLOCKER_ID> {{identifier}} --type blocks
+     ```
+
+  ## Step 3 — Architectural Intelligence Drift Check
+
+  Check whether this feature introduced patterns that diverge from established
+  architectural conventions.
+
+  Run the Architectural Intelligence assess command for the code paths touched
+  by this feature. The `pnpm af-ai assess` command (or equivalent) calls
+  `ArchitecturalIntelligence.assess()` per 007-intelligence-services.md.
+
+  ```
+  pnpm af-ai assess --paths "<comma-separated code paths from merged PRs>"
+  ```
+
+  The assess output includes:
+  - `hasCriticalDrift`: whether high-severity deviations were found.
+  - `deviations`: list of deviations with severity (high | medium | low).
+  - `summary`: human-readable drift summary.
+
+  **If `hasCriticalDrift` is true**, create a blocker issue:
+  ```
+  pnpm af-linear create-issue \
+    --title "GA-Blocker: Architectural drift detected in {{identifier}}" \
+    --team "<TEAM_NAME>" \
+    --state "Backlog" \
+    --description "Architectural Intelligence reports critical drift for feature {{identifier}}.\n\nDrift summary: <summary from assess output>\nDeviations:\n<list each high-severity deviation with its description>\n\nResolve these architectural divergences before GA."
+  pnpm af-linear add-relation <BLOCKER_ID> {{identifier}} --type blocks
+  ```
+
+  If assess is not yet available, note this in the report and skip this check.
+
+  ## Step 4 — Observability Check
+
+  Verify that observability hooks (metrics, logs, audit trails) are in place
+  for the feature's code paths.
+
+  Search for observability instrumentation in the touched code paths:
+  ```
+  pnpm af-code search-code "globalHookBus.emit\|hookBus\|metricsPrefix\|createSpan\|recordMetric" --max-results 20
+  pnpm af-code search-symbols "HookBus\|ProviderHookEvent\|MetricsRecorder" --max-results 10
+  ```
+
+  For each major code path in the feature:
+  - Is there at least one `HookBus` emit or equivalent observability call?
+  - Are the emitted events meaningful (not just pre/post-activate boilerplate)?
+  - Are there audit log emissions for state-changing operations?
+
+  **If observability is absent or insufficient**, create a blocker issue:
+  ```
+  pnpm af-linear create-issue \
+    --title "GA-Blocker: Missing observability for {{identifier}}" \
+    --team "<TEAM_NAME>" \
+    --state "Backlog" \
+    --description "Feature {{identifier}} is missing observability instrumentation.\n\nAffected paths: <list paths without hooks>\nExpected: HookBus emissions, metrics recording, or audit trail entries.\nRequired before GA: observability is needed for production incident response."
+  pnpm af-linear add-relation <BLOCKER_ID> {{identifier}} --type blocks
+  ```
+
+  ## Step 5 — Security Review Status (TODO placeholder)
+
+  <!-- TODO: When 010-security-architecture.md lands, check security review status here. -->
+  <!-- Until then, skip this step gracefully and note it in the report. -->
+
+  Security review check: When the security review system (010) is available,
+  this step will verify that:
+  - A security review has been completed for this feature.
+  - No high-severity findings remain open.
+  - The security review sign-off label is present on the epic.
+
+  For now, note in the GA-readiness report that security review is pending
+  the 010 system landing, and flag it as a manual check required.
+
+  ## Step 6 — Produce the GA-Readiness Report
+
+  Post a structured comment on the feature epic summarising all findings:
+
+  ```
+  pnpm af-linear create-comment {{identifier}} --body "## GA-Readiness Report — {{identifier}}
+
+  **Assessment date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+  **Status:** <READY | NOT READY — <N> blockers found>
+
+  ### AC Coverage
+  - Issues checked: <N>
+  - Issues fully covered: <N>
+  - Issues with gaps: <N>
+  - Gap issues created: <comma-separated blocker IDs, or 'none'>
+
+  ### Architectural Intelligence Drift
+  - Status: <PASS | FAIL | SKIPPED (assess not yet available)>
+  - Deviations: <'none' | brief list>
+  - Blocker created: <ID or 'none'>
+
+  ### Observability
+  - Status: <PASS | FAIL | PARTIAL>
+  - Paths checked: <N>
+  - Paths missing hooks: <list or 'none'>
+  - Blocker created: <ID or 'none'>
+
+  ### Security Review
+  - Status: PENDING (010-security-architecture.md not yet landed)
+  - Action required: Manual security review before GA promotion.
+
+  ### Summary
+  <Concise narrative: what is blocking GA, what looks good, recommended next steps>
+
+  <!-- GA_READINESS_REPORT -->
+  "
+  ```
+
+  ## Output
+
+  After posting the report comment, emit the structured result marker:
+
+  If all checks passed (no blockers created):
+  <!-- WORK_RESULT:passed -->
+
+  If any blockers were created (not GA-ready):
+  <!-- WORK_RESULT:failed -->
+
+  If the feature could not be assessed (epic not found, no accepted issues):
+  <!-- WORK_RESULT:failed -->
+
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}

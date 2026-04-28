@@ -63,6 +63,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'improvement loop', 'run improvement loop', 'find patterns',
     'systemic patterns', 'meta-issues', 'improvement cycle',
   ],
+  'ga-readiness': [
+    'ga readiness', 'ga-readiness', 'ga ready', 'assess ga', 'ga check',
+    'production readiness', 'ready for ga', 'ga assessment', 'pre-ga',
+  ],
 }
 
 /**
@@ -78,6 +82,7 @@ const WORK_TYPE_PRIORITY_ORDER: AgentWorkType[] = [
   'inflight',
   'refinement-coordination',
   'refinement',
+  'ga-readiness',
   'development',
 ]
 

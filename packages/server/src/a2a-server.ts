@@ -127,6 +127,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Analyze recent session outcomes and author meta-issues for systemic patterns',
     tags: ['pm', 'improvement', 'meta'],
   },
+  'ga-readiness': {
+    id: 'ga-readiness',
+    name: 'GA-Readiness Assessor',
+    description: 'Assess feature GA readiness: AC coverage, architectural drift, observability, and security review status',
+    tags: ['pm', 'ga', 'readiness', 'release'],
+  },
 }
 
 /**
