@@ -194,6 +194,14 @@ export interface TemplateContext {
   // Session memory (cross-session context injection)
   /** Pre-built context from past observations, injected by the context builder */
   sessionMemoryContext?: string
+
+  // Architectural Intelligence (REN-1316)
+  /**
+   * Rendered architectural context section (## Architectural context).
+   * Injected by the orchestrator at session start from ArchitecturalIntelligence.query().
+   * Priority-ordered: drift warnings > active issue patterns > project-wide conventions > org-wide patterns.
+   */
+  architecturalContext?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +350,8 @@ export const TemplateContextSchema = z.object({
   }).optional(),
   // Session memory (cross-session context injection)
   sessionMemoryContext: z.string().optional(),
+  // Architectural Intelligence (REN-1316)
+  architecturalContext: z.string().optional(),
 })
 
 // ---------------------------------------------------------------------------

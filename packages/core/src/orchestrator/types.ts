@@ -133,6 +133,19 @@ export interface OrchestratorConfig {
    * When provided, enables deployment status checking for QA/acceptance workflows.
    */
   deployProvider?: DeployProvider
+  /**
+   * Architectural Intelligence instance for session-start context injection (REN-1316).
+   * When provided, the orchestrator queries it at session start and injects the returned
+   * ArchView into the `architecturalContext` template variable.
+   * When omitted, architectural context injection is skipped gracefully.
+   */
+  architecturalIntelligence?: import('@renseiai/architectural-intelligence').ArchitecturalIntelligence
+  /**
+   * Maximum tokens to devote to the architectural context section.
+   * Defaults to 2000. Priority order: drift warnings > active issue patterns >
+   * project-wide conventions > org-wide patterns.
+   */
+  architecturalContextMaxTokens?: number
 }
 
 export interface OrchestratorIssue {
@@ -236,6 +249,12 @@ export interface SpawnAgentOptions {
   dispatchModel?: string
   /** Sub-agent model override from platform dispatch (QueuedWork.subAgentModel) */
   dispatchSubAgentModel?: string
+  /**
+   * Pre-built architectural context section (REN-1316).
+   * Built by callers (spawnAgentForIssue, spawnAgentWithResume) via buildArchitecturalContext()
+   * before calling spawnAgent, so the synchronous spawnAgent() can use it without awaiting.
+   */
+  architecturalContext?: string
 }
 
 export interface OrchestratorStreamConfig {

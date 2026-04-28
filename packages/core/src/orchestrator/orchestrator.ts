@@ -113,6 +113,13 @@ import {
   checkForPushedWorkWithoutPR,
   getWorktreeIdentifier,
 } from '../workarea/git-worktree.js'
+import {
+  buildArchitecturalContext,
+  flushSessionObservations,
+  type ContextInjectionConfig,
+} from './context-injection.js'
+import { shouldFlushObservations } from './session-supervisor.js'
+import type { ArchitecturalIntelligence } from '@renseiai/architectural-intelligence'
 
 // Default inactivity timeout: 5 minutes
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
@@ -176,7 +183,7 @@ export function validateGitRemote(expectedRepo: string, cwd?: string): void {
   }
 }
 
-const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation' | 'deployProvider'>> & {
+const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation' | 'deployProvider' | 'architecturalIntelligence' | 'architecturalContextMaxTokens'>> & {
   streamConfig: OrchestratorStreamConfig
   maxSessionTimeoutMs?: number
 } = {
@@ -230,7 +237,7 @@ export { getWorktreeIdentifier } from '../workarea/git-worktree.js'
 export { detectWorkType } from './dispatcher.js'
 
 export class AgentOrchestrator {
-  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation' | 'deployProvider'>> & {
+  private readonly config: Required<Omit<OrchestratorConfig, 'project' | 'provider' | 'streamConfig' | 'apiActivityConfig' | 'workTypeTimeouts' | 'maxSessionTimeoutMs' | 'templateDir' | 'repository' | 'issueTrackerClient' | 'statusMappings' | 'toolPlugins' | 'mergeQueueAdapter' | 'mergeQueueStorage' | 'fileReservation' | 'deployProvider' | 'architecturalIntelligence' | 'architecturalContextMaxTokens'>> & {
     project?: string
     repository?: string
     streamConfig: OrchestratorStreamConfig
@@ -301,6 +308,8 @@ export class AgentOrchestrator {
   private mergeQueueAdapter?: import('../merge-queue/types.js').MergeQueueAdapter
   // Git repository root for running git commands (resolved from worktreePath or cwd)
   private readonly gitRoot: string
+  // Architectural Intelligence for session-start context injection (REN-1316)
+  private readonly contextInjectionConfig: ContextInjectionConfig
 
   constructor(config: OrchestratorConfig = {}, events: OrchestratorEvents = {}) {
     // Validate that an issue tracker client is available
@@ -341,6 +350,12 @@ export class AgentOrchestrator {
     // Validate git remote matches configured repository (if set)
     if (this.config.repository) {
       validateGitRemote(this.config.repository, this.gitRoot)
+    }
+
+    // Initialize Architectural Intelligence context injection config (REN-1316)
+    this.contextInjectionConfig = {
+      architecturalIntelligence: config.architecturalIntelligence,
+      maxTokens: config.architecturalContextMaxTokens,
     }
 
     // Use injected client or fail (caller must provide one)
@@ -2106,6 +2121,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       mentionContext,
       dispatchModel,
       dispatchSubAgentModel,
+      architecturalContext: prebuiltArchContext,
     } = options
 
     // Resolve provider (and full profile when profiles are configured)
@@ -2170,6 +2186,12 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     // mergeMentionContext() for the merge semantics.
     const mergedMentionContext = mergeMentionContext(mentionContext, customPrompt)
 
+    // --- REN-1316: Use pre-built architectural context ---
+    // The architectural context is pre-built by async callers (spawnAgentForIssue,
+    // spawnAgentWithResume) via buildArchitecturalContext() before calling
+    // spawnAgent(). This keeps spawnAgent() synchronous.
+    const architecturalContext = prebuiltArchContext
+
     if (hasTemplate) {
       // Resolve per-project config overrides (falls back to repo-wide defaults)
       const perProject = projectName && this.repoConfig
@@ -2197,6 +2219,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
         subAgentEffort: resolvedSubAgentEffort,
         subAgentProvider: resolvedSubAgentProvider,
         mentionContext: mergedMentionContext,
+        architecturalContext,
       }
       const rendered = this.templateRegistry!.renderPrompt(workType, context)
       prompt = rendered ?? customPrompt ?? generatePromptForWorkType(identifier, workType)
@@ -2933,6 +2956,23 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
               error: error instanceof Error ? error.message : String(error),
             })
           }
+        }
+
+        // --- REN-1316: Session-end Architectural Intelligence flush ---
+        // Flush new observations when the session completed successfully.
+        // Best-effort — errors are swallowed inside flushSessionObservations.
+        if (shouldFlushObservations(agent)) {
+          await flushSessionObservations(
+            {
+              issueId,
+              sessionId: sessionId ?? issueId,
+              workType: workType ?? 'development',
+              scope: { level: 'project', projectId: issueId },
+              passed: agent.workResult === 'passed' || !['qa', 'acceptance'].includes(workType ?? ''),
+            },
+            this.contextInjectionConfig,
+            log,
+          )
         }
 
         // Unassign agent from issue for clean handoff visibility
@@ -4134,6 +4174,26 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
     // This ensures LINEAR_SESSION_ID is always set, triggering headless operation
     const effectiveSessionId = sessionId ?? randomUUID()
 
+    // --- REN-1316: Pre-build architectural context (async, before synchronous spawnAgent) ---
+    const archContextLog = createLogger({ issueIdentifier: identifier })
+    const architecturalContext = await buildArchitecturalContext(
+      {
+        workType: effectiveWorkType ?? 'development',
+        issueId,
+        scope: { level: 'project', projectId: projectName ?? issueId },
+        maxTokens: this.contextInjectionConfig.maxTokens,
+        includeActiveDrift: true,
+      },
+      this.contextInjectionConfig,
+      archContextLog,
+    )
+    if (architecturalContext) {
+      archContextLog.info('Architectural Intelligence context injected at session start', {
+        chars: architecturalContext.length,
+        workType: effectiveWorkType,
+      })
+    }
+
     // Spawn agent with work type and optional custom prompt
     return this.spawnAgent({
       issueId,
@@ -4148,6 +4208,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       labels: labelNames,
       dispatchModel: extra?.dispatchModel,
       dispatchSubAgentModel: extra?.dispatchSubAgentModel,
+      architecturalContext,
     })
   }
 
