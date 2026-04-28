@@ -10,11 +10,17 @@
  *   - Single-tenant local implementation: SqliteArchitecturalIntelligence
  *   - Multi-tenant SaaS stub: PostgresArchitecturalIntelligence (throws; see REN-1322)
  *
+ * Observation pipeline (REN-1324). Ships:
+ *   - runObservationPass     — main pipeline entry point (pipeline.ts)
+ *   - attachPipelineSubscribers — hook bus integration (pipeline.ts)
+ *   - PrDiff / readDiffObservations — VCS diff reader (diff-reader.ts)
+ *   - clusterObservations / effectiveConfidence — cluster+dedupe (cluster.ts)
+ *   - isAuthoredDoc / makeAuthoredObservation — authored intent helpers
+ *   - createTestBus          — in-package test hook bus
+ *
  * Not yet shipped (separate issues):
- *   - Observation ingestion pipeline (REN-1316)
  *   - Synthesis prompts (REN-1317)
  *   - Drift detection algorithm (REN-1317)
- *   - Workarea seam wiring (REN-1324)
  *   - MCP tool exposure (REN-1323)
  */
 
@@ -43,3 +49,31 @@ export { SqliteArchitecturalIntelligence } from './sqlite-impl.js'
 export type { SqliteArchConfig } from './sqlite-impl.js'
 
 export { PostgresArchitecturalIntelligence } from './postgres-impl.js'
+
+// Observation pipeline (REN-1324)
+export {
+  runObservationPass,
+  attachPipelineSubscribers,
+  isAuthoredDoc,
+  makeAuthoredObservation,
+  createTestBus,
+  MEMORY_OBSERVATION_KINDS,
+} from './pipeline.js'
+export type {
+  RunObservationPassInput,
+  RunObservationPassResult,
+  PipelineSubscriberOptions,
+  PipelineHookBus,
+  PipelineHookEvent,
+  PipelineHookHandler,
+  MemoryObservationEvent,
+  MemoryObservationKind,
+} from './pipeline.js'
+
+// VCS diff reader (REN-1324)
+export { readDiffObservations } from './diff-reader.js'
+export type { PrDiff, PrFileDiff, DiffReaderConfig } from './diff-reader.js'
+
+// Cluster + dedupe (REN-1324)
+export { clusterObservations, effectiveConfidence, _jaccardSimilarity } from './cluster.js'
+export type { ClusterConfig, ObservationWithTimestamp, ClusterResult } from './cluster.js'
