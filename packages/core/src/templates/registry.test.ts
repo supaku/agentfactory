@@ -157,6 +157,7 @@ describe('TemplateRegistry', () => {
       // (acceptance hands off to the sidecar worker) so agents no longer need a merge prompt.
       const workTypes = fullRegistry.getRegisteredWorkTypes()
       expect(workTypes.length).toBe(16)
+>>>>>>> 1013b55 (Update test assertions: 11 → 15 work types (10 base + improvement-loop + 5 strategy templates))
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
       expect(workTypes).not.toContain('coordination')
