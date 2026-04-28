@@ -43,7 +43,8 @@
     "af-migrate-worktrees": "dist/src/migrate-worktrees.js",
     "af-migrate-config-to-kits": "dist/src/migrate-config-to-kits.js",
     "af-merge-queue": "dist/src/merge-queue.js",
-    "af-code": "dist/src/code.js"
+    "af-code": "dist/src/code.js",
+    "af-arch": "dist/src/code-arch.js"
   },
   "main": "./dist/src/index.js",
   "module": "./dist/src/index.js",
@@ -124,6 +125,7 @@
     "@renseiai/agentfactory": "workspace:*",
     "@renseiai/plugin-linear": "workspace:*",
     "@renseiai/agentfactory-server": "workspace:*",
+    "@renseiai/architectural-intelligence": "workspace:*",
     "dotenv": "^17.2.3"
   },
   "optionalDependencies": {

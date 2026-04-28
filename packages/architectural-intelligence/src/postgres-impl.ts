@@ -31,7 +31,8 @@ import type {
 const NOT_IMPLEMENTED_MSG =
   'PostgresArchitecturalIntelligence is not yet implemented. ' +
   'This is the SaaS-only multi-tenant implementation — see REN-1322. ' +
-  'For single-tenant local use, use SqliteArchitecturalIntelligence.'
+  'For single-tenant local use, use SqliteArchitecturalIntelligence. ' +
+  'For drift detection, use SqliteArchitecturalIntelligence.assessWithAdapter().'
 
 /**
  * Multi-tenant SaaS implementation of ArchitecturalIntelligence.

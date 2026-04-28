@@ -25,8 +25,16 @@
  *   - evaluatePrompt / createStubAdapter / createFixedAdapter — eval rubric harness
  *   - compareABPrompts / formatABReport — A/B testing harness
  *
+ * Drift detection (REN-1326). Ships:
+ *   - assessChange           — core drift detection function (drift.ts)
+ *   - DriftGatePolicy / resolveDriftGatePolicy / evaluateGate — threshold gating
+ *   - AssessInput            — input type for assessChange
+ *   - registerArchitectureVerbs — workflow verb registration (verbs.ts)
+ *   - ASSESS_CHANGE_VERB / ARCHITECTURE_VERBS — verb declarations
+ *   - handleAssessChange     — workflow verb action handler
+ *   - AssessChangeVerbInput / AssessChangeVerbOutput — verb I/O schemas
+ *
  * Not yet shipped (separate issues):
- *   - Drift detection algorithm (REN-1317)
  *   - MCP tool exposure (REN-1323)
  */
 
@@ -122,3 +130,22 @@ export type {
   ABTestResult,
   ABTestConfig,
 } from './ab-test.js'
+
+// Drift detection (REN-1326)
+export { assessChange, resolveDriftGatePolicy, evaluateGate } from './drift.js'
+export type { DriftGatePolicy, AssessInput } from './drift.js'
+
+// Workflow verb registration (REN-1326)
+export {
+  registerArchitectureVerbs,
+  handleAssessChange,
+  ASSESS_CHANGE_VERB,
+  ARCHITECTURE_VERBS,
+  ARCHITECTURE_PLUGIN_ID,
+} from './verbs.js'
+export type {
+  VerbRegistry,
+  AssessChangeVerbInput,
+  AssessChangeVerbOutput,
+  AssessChangeHandlerOptions,
+} from './verbs.js'
