@@ -25,6 +25,7 @@
  *   update-sub-issue <id>       Update sub-issue status with comment
  *   check-deployment <PR>       Check Vercel deployment status for a PR
  *   create-blocker <source-id>  Create a human-needed blocker issue
+ *   cleanup-sub-issues          Audit and clean up agent-created sub-issues
  *
  * Array Values:
  *   --labels accepts comma-separated: --labels "Bug,Feature"
@@ -42,6 +43,7 @@ import { config } from 'dotenv'
 config({ path: path.resolve(process.cwd(), '.env.local'), quiet: true })
 
 import { runLinear, parseLinearArgs } from './lib/linear-runner.js'
+import { runCleanupSubIssues, renderMarkdownReport } from './cleanup-sub-issues.js'
 
 function printHelp(): void {
   console.log(`
@@ -68,10 +70,18 @@ Commands:
   update-sub-issue <id>         Update sub-issue status with comment
   check-deployment <PR>         Check Vercel deployment status for a PR
   create-blocker <source-id>    Create a human-needed blocker issue
+  cleanup-sub-issues            Audit and clean up agent-created sub-issues
   help                          Show this help message
 
 Options:
   --help, -h                    Show this help message
+
+cleanup-sub-issues Options:
+  --project <name>              Linear project name to scan (required)
+  --dry-run                     List issues with disposition recommendations (no changes)
+  --apply                       Apply the recommended dispositions
+  --tracking <id>               Post dry-run report as a comment on this issue ID
+  --agent-authors-config <path> Path to .rensei/known-agent-authors.json
 
 Array Values:
   --labels accepts comma-separated: --labels "Bug,Feature"
@@ -87,6 +97,9 @@ Examples:
   af-linear update-issue PROJ-123 --state "Finished"
   af-linear list-backlog-issues --project "MyProject"
   af-linear check-deployment 42
+  af-linear cleanup-sub-issues --project "Agent" --dry-run
+  af-linear cleanup-sub-issues --project "Agent" --dry-run --tracking REN-1323
+  af-linear cleanup-sub-issues --project "Agent" --apply
 `)
 }
 
@@ -95,6 +108,48 @@ async function main(): Promise<void> {
 
   if (!command || command === 'help' || args['help'] || args['h']) {
     printHelp()
+    return
+  }
+
+  // Handle cleanup-sub-issues separately — it has its own runner
+  if (command === 'cleanup-sub-issues') {
+    if (!args.project) {
+      console.error('Error: --project <name> is required for cleanup-sub-issues')
+      console.error('Usage: af-linear cleanup-sub-issues --project <name> [--dry-run | --apply] [--tracking <id>]')
+      process.exit(1)
+    }
+
+    const isDryRun = !!args['dry-run']
+    const isApply = !!args['apply']
+
+    if (!isDryRun && !isApply) {
+      console.error('Error: either --dry-run or --apply must be specified')
+      console.error('Usage: af-linear cleanup-sub-issues --project <name> [--dry-run | --apply]')
+      process.exit(1)
+    }
+
+    const report = await runCleanupSubIssues({
+      project: args.project as string,
+      dryRun: isDryRun,
+      apply: isApply,
+      trackingIssueId: args.tracking as string | undefined,
+      agentAuthorsConfigPath: args['agent-authors-config'] as string | undefined,
+    })
+
+    // Print markdown report to stdout
+    console.log(renderMarkdownReport(report))
+
+    // Also print structured JSON summary
+    console.log('\n---\n')
+    console.log(JSON.stringify({
+      project: report.project,
+      scannedParents: report.scannedParents,
+      scannedSubIssues: report.scannedSubIssues,
+      alreadyProcessed: report.alreadyProcessed,
+      toClose: report.toClose.length,
+      toDetach: report.toDetach.length,
+      dryRun: report.dryRun,
+    }, null, 2))
     return
   }
 
