@@ -334,6 +334,7 @@ export type AgentWorkType =
   | 'security'              // Security scanning: SAST, dependency audit
   | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
   | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
+  | 'ga-readiness'          // PM agent: assess feature GA readiness before production promotion (REN-1327)
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -372,6 +373,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'security': null,         // Security scanning: no status transition on start
   'improvement-loop': null,  // PM Agent: cron-triggered, no status transition on start
   'outcome-auditor': null,  // Outcome Auditor: cron/workflow-triggered, no status transition on start
+  'ga-readiness': null,     // GA-Readiness Assessor: manually/workflow-triggered, no status transition on start
 }
 
 /**
@@ -392,6 +394,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'security': 'Finished',   // Security scan complete
   'improvement-loop': null, // PM Agent: no auto-transition; cron-triggered, stateless
   'outcome-auditor': null,  // Outcome Auditor: no auto-transition; tags issues with audit:clean/has-followups
+  'ga-readiness': null,     // GA-Readiness Assessor: no auto-transition; posts report comment, authors blockers
 }
 
 /**
@@ -412,6 +415,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'security': null,         // Security scan failure: no status transition
   'improvement-loop': null, // PM Agent: no status transition on failure
   'outcome-auditor': null,  // Outcome Auditor failure: no status transition
+  'ga-readiness': null,     // GA-Readiness Assessor failure: no status transition
 }
 
 /**
@@ -432,6 +436,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'merge',
   'security',
   'outcome-auditor',
+  'ga-readiness',
 ])
 
 /**
@@ -452,6 +457,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
   'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
   'outcome-auditor': ['Accepted'],  // Outcome Auditor runs on recently accepted issues
+  'ga-readiness': [],         // GA-Readiness Assessor: manually/workflow-triggered, not status-gated
 }
 
 /**

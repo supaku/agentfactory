@@ -408,6 +408,32 @@ Read the issue, evaluate its relevance, and apply exactly one disposition:
 If the issue is older than 60 days with no recent activity, also add label pm:stale.
 NEVER create sub-issues (Principle 1). Process this one issue only.${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'ga-readiness':
+      // PM agent (012 Archetype 5 — GA-Readiness Assessor). Runs before production promotion.
+      // The TemplateRegistry-based prompt is the canonical path; this legacy
+      // function is a fallback for environments that haven't migrated to templates.
+      basePrompt = `Assess GA readiness for feature ${identifier}.
+
+WORKFLOW:
+1. Read the feature epic: pnpm af-linear get-issue ${identifier}
+2. List accepted issues: pnpm af-linear list-issues --label "${identifier}" --status Accepted
+3. For each accepted issue: verify all AC items were delivered in the merged PR.
+4. Run Architectural Intelligence drift check: pnpm af-ai assess --paths "<code paths>"
+5. Check observability: search for HookBus emissions and metrics in touched paths.
+6. Security review: PENDING 010-security-architecture.md — note as manual check.
+7. Post a structured GA-readiness report as a comment on the feature epic.
+8. For each gap found: create a standalone blocker issue and add a blocks relation.
+
+HARD RULES:
+- NEVER use --parentId (Principle 1: sub-issues are reserved for human intent).
+- Author blocker issues, not sub-issues. Use: pnpm af-linear add-relation <BLOCKER_ID> ${identifier} --type blocks
+- The GA-readiness report is a COMMENT, not a new issue.
+
+STRUCTURED RESULT MARKER (REQUIRED):
+- All checks pass (no blockers): Include <!-- WORK_RESULT:passed --> in your final message
+- Any blockers found: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries

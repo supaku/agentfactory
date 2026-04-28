@@ -261,6 +261,7 @@ const WORK_TYPES = [
   'security',
   'improvement-loop',
   'outcome-auditor',
+  'ga-readiness',
 ] as const
 
 export const AgentWorkTypeSchema = z.enum(WORK_TYPES)

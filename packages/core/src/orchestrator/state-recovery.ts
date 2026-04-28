@@ -315,6 +315,7 @@ export function getTaskListId(
     security: 'SEC',
     'outcome-auditor': 'OA',
     'improvement-loop': 'IMP',
+    'ga-readiness': 'GA',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

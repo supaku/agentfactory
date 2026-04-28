@@ -35,6 +35,7 @@ export const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   security: 'SEC',
   'outcome-auditor': 'OA',
   'improvement-loop': 'IMP',
+  'ga-readiness': 'GA',
 }
 
 /**
