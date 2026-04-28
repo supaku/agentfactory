@@ -24,6 +24,18 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  packages/architectural-intelligence:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.5.4
+        version: 22.19.10
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.3
+        version: 3.2.4(@types/node@22.19.10)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/cli:
     dependencies:
       '@renseiai/agentfactory':
@@ -193,6 +205,8 @@ importers:
       vitest:
         specifier: ^3.2.3
         version: 3.2.4(@types/node@22.19.10)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/kits/default-ts-nextjs: {}
 
   packages/linear:
     dependencies:
