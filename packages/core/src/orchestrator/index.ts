@@ -244,3 +244,21 @@ export { SummaryBuilder } from './summary-builder.js'
 // Context Manager (coordinates context window management)
 export { ContextManager } from './context-manager.js'
 export type { ContextManagerConfig } from './context-manager.js'
+
+// Sandbox scheduler — cross-provider capability-based routing
+// Architecture reference: rensei-architecture/004-sandbox-capability-matrix.md
+export {
+  pickProvider,
+  normalizeCost,
+  ProviderBlacklist,
+  filterBlacklisted,
+} from './scheduler.js'
+export type {
+  SchedulerSandboxSpec,
+  CapacitySnapshot,
+  SchedulerCandidate,
+  TenantSchedulePolicy,
+  EliminationStep,
+  SchedulerResult,
+  BlacklistEntry,
+} from './scheduler.js'
