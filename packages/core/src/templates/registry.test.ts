@@ -150,16 +150,18 @@ describe('TemplateRegistry', () => {
   describe('built-in defaults', () => {
     it('loads built-in default templates when useBuiltinDefaults is true', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      // 13 base work types + 5 strategy templates. The former `merge` template
-      // was removed — merging is handled by the local queue (acceptance hands
-      // off to the sidecar worker) so agents no longer need a merge prompt.
+      // 10 base work types + 4 strategy templates + 1 PM agent (outcome-auditor).
+      // The former `merge` template was removed — merging is handled by the local
+      // queue (acceptance hands off to the sidecar worker) so agents no longer
+      // need a merge prompt. REN-1297: outcome-auditor added as PM agent work type.
       const workTypes = fullRegistry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(14)
+      expect(workTypes.length).toBe(15)
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
       expect(workTypes).not.toContain('coordination')
       expect(workTypes).toContain('security')
       expect(workTypes).not.toContain('merge')
+      expect(workTypes).toContain('outcome-auditor')
       // Strategy-specific templates
       expect(workTypes).toContain('refinement-context-enriched')
       expect(workTypes).toContain('refinement-decompose')

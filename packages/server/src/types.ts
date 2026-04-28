@@ -19,3 +19,4 @@ export type AgentWorkType =
   | 'refinement-coordination'
   | 'merge'
   | 'security'
+  | 'outcome-auditor'

@@ -331,6 +331,7 @@ export type AgentWorkType =
   | 'refinement-coordination' // Rejected: Coordinate refinement across sub-issues for parent issues
   | 'merge'                 // Merge queue: handle PR merge operations
   | 'security'              // Security scanning: SAST, dependency audit
+  | 'outcome-auditor'      // PM agent: audit accepted issues for delivery gaps, author follow-up issues
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -366,6 +367,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'refinement-coordination': null, // Already Rejected
   'merge': null,            // Merge is triggered programmatically, no status transition
   'security': null,         // Security scanning: no status transition on start
+  'outcome-auditor': null,  // Outcome Auditor: cron/workflow-triggered, no status transition on start
 }
 
 /**
@@ -383,6 +385,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers development which re-runs failing sub-issues)
   'merge': null,            // Merge completion is handled by the merge queue adapter
   'security': 'Finished',   // Security scan complete
+  'outcome-auditor': null,  // Outcome Auditor: no auto-transition; tags issues with audit:clean/has-followups
 }
 
 /**
@@ -400,6 +403,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'refinement-coordination': null,
   'merge': null,            // Merge failure is handled by the merge queue adapter
   'security': null,         // Security scan failure: no status transition
+  'outcome-auditor': null,  // Outcome Auditor failure: no status transition
 }
 
 /**
@@ -418,6 +422,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'refinement-coordination',
   'merge',
   'security',
+  'outcome-auditor',
 ])
 
 /**
@@ -435,6 +440,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'refinement-coordination': ['Rejected'],
   'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
   'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
+  'outcome-auditor': ['Accepted'],  // Outcome Auditor runs on recently accepted issues
 }
 
 /**

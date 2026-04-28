@@ -1080,7 +1080,7 @@ export class AgentOrchestrator {
     // for them pollutes the branch namespace and causes stale-base issues when
     // development later reuses the branch without rebasing.
     const NON_COMMITTING_WORK_TYPES = new Set([
-      'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security',
+      'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security', 'outcome-auditor',
     ])
 
     if (NON_COMMITTING_WORK_TYPES.has(workType)) {

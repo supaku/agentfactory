@@ -254,6 +254,19 @@ Security Scan Steps:
 5. If critical or high severity issues found, emit WORK_RESULT:failed
 6. If only medium/low or no issues found, emit WORK_RESULT:passed`
       break
+    case 'outcome-auditor':
+      basePrompt = `Run outcome audit for recently accepted issues.
+${READ_ONLY_CONSTRAINT}
+${WORK_RESULT_MARKER_INSTRUCTION}
+
+Outcome Audit Steps:
+1. List recently accepted issues for the project.
+2. For each issue: read the original AC, find merged PR(s), diff against AC, check for deferred or missed work.
+3. For each gap: author a follow-up issue (Backlog), reference source issue, add blocks relation if applicable.
+4. For clean issues: tag with audit:clean and post "Audit pass: no gaps" comment.
+5. For issues with gaps: tag with audit:has-followups.
+IMPORTANT: Do NOT create sub-issues (--parentId). Follow-up issues are standalone.`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION

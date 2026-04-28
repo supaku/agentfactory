@@ -312,6 +312,7 @@ export function getTaskListId(
     'refinement-coordination': 'REF-COORD',
     merge: 'MRG',
     security: 'SEC',
+    'outcome-auditor': 'OA',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

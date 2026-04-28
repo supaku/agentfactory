@@ -325,6 +325,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'refinement-coordination': 'REF-COORD',
   merge: 'MRG',
   security: 'SEC',
+  'outcome-auditor': 'OA',
 }
 
 /**
@@ -737,7 +738,7 @@ export function createWorktree(opts: CreateWorktreeOptions): { worktreePath: str
   const baseBranch = hasRemoteMain ? 'origin/main' : 'main'
 
   const NON_COMMITTING_WORK_TYPES = new Set([
-    'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security',
+    'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security', 'outcome-auditor',
   ])
 
   if (NON_COMMITTING_WORK_TYPES.has(workType)) {
