@@ -76,3 +76,31 @@ export {
   composeKits,
   resolveToolchainInstall,
 } from './compose.js'
+
+// Registry sources — Tessl + agentskills.io adapters + federation loader
+export type {
+  TesslApiTile,
+  TesslApiSkill,
+  TesslApiDoc,
+  TesslApiMcpServer,
+  TesslApiListResponse,
+  TesslKitSourceOptions,
+  KitSourceResult,
+  FetchFn,
+  AgentSkillsApiSkill,
+  AgentSkillsApiListResponse,
+  AgentSkillsKitSourceOptions,
+  FederatedKitSourceConfig,
+  FederationOrder,
+} from './sources/index.js'
+
+export {
+  TESSL_API_BASE,
+  tesslTileToKitManifest,
+  TesslKitSource,
+  AGENTSKILLS_API_BASE,
+  agentSkillToKitManifest,
+  AgentSkillsKitSource,
+  DEFAULT_FEDERATION_ORDER,
+  FederatedKitLoader,
+} from './sources/index.js'
