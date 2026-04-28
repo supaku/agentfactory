@@ -212,6 +212,8 @@ export class SpringAiProvider implements AgentProvider {
     needsPermissionConfig: false,
     supportsCodeIntelligenceEnforcement: false,
     toolPermissionFormat: 'spring-ai' as const,
+    emitsSubagentEvents: false,
+    humanLabel: 'Spring AI',
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {

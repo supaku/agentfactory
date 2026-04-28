@@ -46,7 +46,35 @@ export interface AgentProviderCapabilities {
   supportsCodeIntelligenceEnforcement?: boolean
   /** Tool permission format this provider uses (default: 'claude') */
   toolPermissionFormat?: ToolPermissionFormat
+  /**
+   * Whether the provider emits Anthropic-style subagent events (e.g. Task tool
+   * progress events). Used by the Topology view to decide whether to render
+   * the subagent event stream. Only true for the Claude provider because the
+   * Anthropic Task tool fires provider-specific sub-agent lifecycle events.
+   * Codex and Spring AI have no equivalent emission today.
+   */
+  emitsSubagentEvents: boolean
+  /**
+   * Human-readable label for this provider family. Used in UI and log
+   * messages where the raw provider name ('spring-ai') is not user-friendly.
+   * Companion to the AgentRuntimeProvider alias for corpus documentation.
+   */
+  humanLabel?: string
 }
+
+/**
+ * Human-readable label registry for every AgentRuntimeProvider family.
+ * Keyed by AgentProviderName. Populated by each provider's declared
+ * capabilities.humanLabel; this map is the single source of truth for
+ * display names used in the Topology view and log messages.
+ */
+export const AGENT_RUNTIME_PROVIDER_HUMAN_LABELS: Readonly<Record<AgentProviderName, string>> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  amp: 'Amp',
+  'spring-ai': 'Spring AI',
+  a2a: 'A2A',
+} as const
 
 export interface AgentProvider {
   /** Provider identifier */
@@ -68,6 +96,21 @@ export interface AgentProvider {
    */
   shutdown?(): Promise<void>
 }
+
+/**
+ * AgentRuntimeProvider — corpus alias for AgentProvider.
+ *
+ * ADR-2026-04-27 introduces "AgentRuntimeProvider" as the 8th plugin-family
+ * name in the corpus (documentation, architecture diagrams, Linear labels).
+ * The implementation type stays AgentProvider. This alias lets callers use
+ * the new corpus name in type annotations without a breaking rename.
+ *
+ * @example
+ *   // Both are equivalent; prefer AgentRuntimeProvider in new code per ADR.
+ *   const p: AgentRuntimeProvider = new ClaudeProvider()
+ *   const q: AgentProvider        = new ClaudeProvider()
+ */
+export type AgentRuntimeProvider = AgentProvider
 
 /**
  * Configuration passed to a provider when spawning an agent.

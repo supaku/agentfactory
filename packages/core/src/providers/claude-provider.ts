@@ -166,6 +166,8 @@ export class ClaudeProvider implements AgentProvider {
     needsPermissionConfig: false,
     supportsCodeIntelligenceEnforcement: true,
     toolPermissionFormat: 'claude' as const,
+    emitsSubagentEvents: true,
+    humanLabel: 'Claude',
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {

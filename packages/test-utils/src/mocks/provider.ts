@@ -26,6 +26,7 @@ export function createMockProvider(name: AgentProviderName = 'claude'): AgentPro
     capabilities: {
       supportsMessageInjection: name === 'claude' || name === 'a2a',
       supportsSessionResume: true,
+      emitsSubagentEvents: name === 'claude',
     },
     spawn: vi.fn().mockReturnValue(handle),
     resume: vi.fn().mockReturnValue(handle),

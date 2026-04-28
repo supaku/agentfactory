@@ -28,7 +28,8 @@
  * 10. Hardcoded 'claude'                            — ultimate fallback
  */
 
-export type { AgentProviderName, AgentProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent, ToolPermissionFormat } from './types.js'
+export type { AgentProviderName, AgentProvider, AgentRuntimeProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent, ToolPermissionFormat } from './types.js'
+export { AGENT_RUNTIME_PROVIDER_HUMAN_LABELS } from './types.js'
 export type {
   AgentInitEvent,
   AgentSystemEvent,

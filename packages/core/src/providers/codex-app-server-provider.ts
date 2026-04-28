@@ -1870,6 +1870,8 @@ export class CodexAppServerProvider implements AgentProvider {
     needsPermissionConfig: true,
     supportsCodeIntelligenceEnforcement: false,
     toolPermissionFormat: 'codex' as const,
+    emitsSubagentEvents: false,
+    humanLabel: 'Codex',
   } as const
 
   /** Shared process manager — one app-server process serves all threads */
