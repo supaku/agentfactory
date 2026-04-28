@@ -208,4 +208,5 @@ export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   merge: 'Merge work queued. Agent will handle PR merge queue operations...',
   security: 'Security scan queued. Agent will run SAST and dependency audit...',
   'outcome-auditor': 'Outcome audit queued. Agent will verify accepted issues delivered their stated intent and author follow-up issues for gaps...',
+  'improvement-loop': 'Improvement Loop queued. Agent will analyze recent sessions and author meta-issues for systemic patterns...',
 }

@@ -331,7 +331,8 @@ export type AgentWorkType =
   | 'refinement-coordination' // Rejected: Coordinate refinement across sub-issues for parent issues
   | 'merge'                 // Merge queue: handle PR merge operations
   | 'security'              // Security scanning: SAST, dependency audit
-  | 'outcome-auditor'      // PM agent: audit accepted issues for delivery gaps, author follow-up issues
+  | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
+  | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
 
 /**
  * Mapping from Linear issue status to agent work type
@@ -367,6 +368,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
   'refinement-coordination': null, // Already Rejected
   'merge': null,            // Merge is triggered programmatically, no status transition
   'security': null,         // Security scanning: no status transition on start
+  'improvement-loop': null,  // PM Agent: cron-triggered, no status transition on start
   'outcome-auditor': null,  // Outcome Auditor: cron/workflow-triggered, no status transition on start
 }
 
@@ -385,6 +387,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
   'refinement-coordination': 'Backlog', // Rejected -> Backlog after coordinated refinement (triggers development which re-runs failing sub-issues)
   'merge': null,            // Merge completion is handled by the merge queue adapter
   'security': 'Finished',   // Security scan complete
+  'improvement-loop': null, // PM Agent: no auto-transition; cron-triggered, stateless
   'outcome-auditor': null,  // Outcome Auditor: no auto-transition; tags issues with audit:clean/has-followups
 }
 
@@ -403,6 +406,7 @@ export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus |
   'refinement-coordination': null,
   'merge': null,            // Merge failure is handled by the merge queue adapter
   'security': null,         // Security scan failure: no status transition
+  'improvement-loop': null, // PM Agent: no status transition on failure
   'outcome-auditor': null,  // Outcome Auditor failure: no status transition
 }
 
@@ -438,6 +442,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'acceptance': ['Delivered'],
   'refinement': ['Rejected'],
   'refinement-coordination': ['Rejected'],
+  'improvement-loop': [],     // PM Agent: cron-triggered, not status-gated
   'merge': ['Started', 'Finished'],  // Merge can be triggered on in-progress or completed PRs
   'security': ['Started', 'Finished'],  // Security scan can be triggered on in-progress or completed work
   'outcome-auditor': ['Accepted'],  // Outcome Auditor runs on recently accepted issues

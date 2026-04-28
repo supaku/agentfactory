@@ -326,6 +326,7 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   merge: 'MRG',
   security: 'SEC',
   'outcome-auditor': 'OA',
+  'improvement-loop': 'IMP',
 }
 
 /**

@@ -21,7 +21,8 @@ export type AgentWorkType =
   | 'refinement-coordination'
   | 'merge'                 // Merge queue: handle PR merge operations
   | 'security'              // Security scanning: SAST, dependency audit
-  | 'outcome-auditor'      // PM agent: audit accepted issues for delivery gaps, author follow-up issues
+  | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
+  | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').

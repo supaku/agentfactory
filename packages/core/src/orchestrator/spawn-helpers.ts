@@ -355,6 +355,29 @@ You MUST include a structured result marker in your final output message.
 - On fail: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
       break
 
+    case 'improvement-loop':
+      basePrompt = `You are the Improvement Loop for project ${identifier}.
+Read the last 20 accepted/rejected sessions and identify systemic patterns.
+Author meta-issues (at most 5 per cycle) about how the system works.
+
+HARD RULES:
+- Author at most 5 issues per cycle.
+- Each issue MUST cite at least 3 specific failure cases (issue IDs / session IDs).
+- Tag every meta-issue with meta:improvement AND subsystem:<name>.
+- NEVER create sub-issues (--parentId is forbidden).
+
+WORKFLOW:
+1. List recent sessions: pnpm af-linear list-issues --project ${identifier} --status "Accepted,Rejected" --limit 20
+2. Read each issue and its comments.
+3. Cluster by failure mode. Only clusters of 3+ cases become meta-issues.
+4. Author one meta-issue per cluster (at most 5 total).
+5. Emit WORK_RESULT:passed when done.
+
+STRUCTURED RESULT MARKER (REQUIRED):
+- On completion: Include <!-- WORK_RESULT:passed --> in your final message
+- On failure: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
+      break
+
     case 'outcome-auditor':
       basePrompt = `Run outcome audit: verify recently accepted issues delivered their stated intent.
 
