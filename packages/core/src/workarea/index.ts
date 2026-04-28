@@ -75,3 +75,29 @@ export {
   linkDependencies,
   syncDependencies,
 } from './dep-linker.js'
+
+// WorkareaProvider local-pool implementation (REN-1280)
+export {
+  LocalPoolWorkareaProvider,
+  computeCleanStateChecksum,
+  deriveToolchainKey,
+} from './local-pool.js'
+
+export type {
+  LocalPoolConfig,
+} from './local-pool.js'
+
+// WorkareaProvider types (REN-1280)
+export type {
+  WorkareaId,
+  CleanStateChecksum,
+  WorkareaSource,
+  ToolchainDemand,
+  WorkareaSpec,
+  Workarea,
+  ReleaseMode,
+  WorkareaSnapshotRef,
+  WorkareaPoolMemberStatus,
+  WorkareaPoolMember,
+  WorkareaProvider,
+} from './types.js'
