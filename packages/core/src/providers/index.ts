@@ -28,6 +28,42 @@
  * 10. Hardcoded 'claude'                            — ultimate fallback
  */
 
+// Provider base contract — unified Provider<F> interface and ProviderHookEvent taxonomy
+export type {
+  ProviderFamily,
+  ProviderHealth,
+  ScopeSelector,
+  ProviderScope,
+  ProviderEntry,
+  SandboxProviderCapabilities,
+  WorkareaProviderCapabilities,
+  AgentRuntimeProviderCapabilities,
+  VersionControlProviderCapabilities,
+  IssueTrackerProviderCapabilities,
+  DeploymentProviderCapabilities,
+  AgentRegistryProviderCapabilities,
+  KitProviderCapabilities,
+  ProviderCapabilities,
+  ProviderManifest,
+  ProviderSignature,
+  ProviderRef,
+  ProviderHost,
+  ProviderHookEvent,
+  Provider,
+  VerifySignatureOptions,
+  SignatureVerificationResult,
+  ManifestValidationResult,
+  ScopeResolutionResult,
+} from './base.js'
+export {
+  canonicalJson,
+  hashManifest,
+  verifySignature,
+  isFlatCapabilities,
+  validateManifest,
+  resolveScope,
+} from './base.js'
+
 export type { AgentProviderName, AgentProvider, AgentRuntimeProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent, ToolPermissionFormat } from './types.js'
 export { AGENT_RUNTIME_PROVIDER_HUMAN_LABELS } from './types.js'
 export type {
