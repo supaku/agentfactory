@@ -1,0 +1,61 @@
+{
+  "name": "@renseiai/architectural-intelligence",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Architectural Intelligence — system-level synthesis of patterns, conventions, decisions, and drift across a tenant's codebase",
+  "author": "Rensei AI (https://rensei.ai)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RenseiAI/agentfactory.git",
+    "directory": "packages/architectural-intelligence"
+  },
+  "homepage": "https://github.com/RenseiAI/agentfactory/tree/main/packages/architectural-intelligence",
+  "bugs": {
+    "url": "https://github.com/RenseiAI/agentfactory/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "architectural-intelligence",
+    "architecture",
+    "patterns",
+    "conventions",
+    "drift-detection",
+    "agent",
+    "rensei"
+  ],
+  "main": "./dist/src/index.js",
+  "module": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm clean && pnpm build"
+  }
+}

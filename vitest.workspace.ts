@@ -11,4 +11,5 @@ export default defineWorkspace([
   'packages/test-utils',
   'packages/code-intelligence',
   'packages/create-app',
+  'packages/architectural-intelligence',
 ])
