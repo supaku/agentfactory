@@ -313,6 +313,7 @@ export function getTaskListId(
     merge: 'MRG',
     security: 'SEC',
     'outcome-auditor': 'OA',
+    'improvement-loop': 'IMP',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

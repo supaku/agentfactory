@@ -250,6 +250,7 @@ const WORK_TYPES = [
   'refinement-coordination',
   'merge',
   'security',
+  'improvement-loop',
   'outcome-auditor',
 ] as const
 

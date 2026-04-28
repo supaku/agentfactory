@@ -115,6 +115,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Audit recently accepted issues for delivery gaps; author follow-up issues for missed AC items',
     tags: ['audit', 'pm', 'quality'],
   },
+  'improvement-loop': {
+    id: 'improvement-loop',
+    name: 'Improvement Loop',
+    description: 'Analyze recent session outcomes and author meta-issues for systemic patterns',
+    tags: ['pm', 'improvement', 'meta'],
+  },
 }
 
 /**

@@ -55,6 +55,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'outcome audit', 'audit outcomes', 'audit accepted', 'delivery audit',
     'check delivered', 'verify delivery', 'outcome-auditor',
   ],
+  'improvement-loop': [
+    'improvement loop', 'run improvement loop', 'find patterns',
+    'systemic patterns', 'meta-issues', 'improvement cycle',
+  ],
 }
 
 /**

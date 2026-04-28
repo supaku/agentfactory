@@ -251,9 +251,9 @@ describe('backlog-writer (REN-1287)', () => {
       expect(hasAddRelation, 'add-relation must be in allow list').toBe(true)
     })
 
-    it('full registry still has 15 registered work types (no templates lost)', () => {
+    it('full registry still has 16 registered work types (11 base + 5 strategy templates)', () => {
       const workTypes = registry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(15)
+      expect(workTypes.length).toBe(16)
     })
   })
 })

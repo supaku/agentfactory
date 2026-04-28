@@ -254,6 +254,21 @@ Security Scan Steps:
 5. If critical or high severity issues found, emit WORK_RESULT:failed
 6. If only medium/low or no issues found, emit WORK_RESULT:passed`
       break
+
+    case 'improvement-loop':
+      basePrompt = `You are the Improvement Loop for project ${identifier}.
+Read the last 20 accepted/rejected sessions and identify systemic patterns.
+Author meta-issues (at most 5 per cycle) about how the system works.
+
+HARD RULES:
+- Author at most 5 issues per cycle.
+- Each issue MUST cite at least 3 specific failure cases (issue IDs / session IDs).
+- Tag every meta-issue with meta:improvement AND subsystem:<name>.
+- NEVER create sub-issues (--parentId is forbidden).
+
+${WORK_RESULT_MARKER_INSTRUCTION}`
+      break
+
     case 'outcome-auditor':
       basePrompt = `Run outcome audit for recently accepted issues.
 ${READ_ONLY_CONSTRAINT}
