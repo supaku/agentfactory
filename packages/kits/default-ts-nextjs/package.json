@@ -1,0 +1,29 @@
+{
+  "name": "@renseiai/kit-default-ts-nextjs",
+  "version": "1.0.0",
+  "description": "OSS default Kit for TypeScript / Next.js projects",
+  "author": "Rensei AI (https://rensei.ai)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RenseiAI/agentfactory.git",
+    "directory": "packages/kits/default-ts-nextjs"
+  },
+  "homepage": "https://rensei.ai",
+  "keywords": [
+    "rensei",
+    "kit",
+    "typescript",
+    "nextjs",
+    "agent"
+  ],
+  "files": [
+    "kit.toml",
+    "partials",
+    "skills",
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
