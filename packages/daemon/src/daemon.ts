@@ -24,6 +24,8 @@ import { HeartbeatService } from './heartbeat.js'
 import { WorkerSpawner, createStubSpawner } from './worker-spawner.js'
 import { runSetupWizard, shouldSkipWizard, buildDefaultConfig } from './setup-wizard.js'
 import { globalHookBus } from '@renseiai/agentfactory'
+import { AutoUpdater } from './auto-update.js'
+import type { AutoUpdateOptions } from './auto-update.js'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,6 +48,11 @@ export interface DaemonOptions {
   workerScript?: string
   /** Skip setup wizard even in TTY environments. */
   skipWizard?: boolean
+  /**
+   * Options forwarded to AutoUpdater.
+   * Used in tests to inject a mock fetch / verifier without a real CDN call.
+   */
+  autoUpdateOverrides?: Partial<AutoUpdateOptions>
 }
 
 // ---------------------------------------------------------------------------
@@ -248,14 +255,25 @@ export class Daemon extends EventEmitter {
   /**
    * Trigger a daemon self-update:
    *   1. Set state to 'updating'.
-   *   2. Stop accepting new work.
+   *   2. Stop accepting new work (status → 'draining' in orchestrator).
    *   3. Wait for in-flight sessions to drain (up to drainTimeoutSeconds).
+   *      Straggler sessions receive SIGTERM after the timeout; their workareas
+   *      are released with mode: archive for post-mortem inspection.
    *   4. Stop heartbeat and capacity loops.
-   *   5. Signal the process to restart (emits 'update-ready' for the system
-   *      service / launchd to catch via SIGHUP or exit code).
+   *   5. Run the auto-update flow (AutoUpdater):
+   *      a. Check CDN for a newer version on the configured channel.
+   *      b. Download the binary + detached signature.
+   *      c. Verify the signature via sigstore (REN-1314). Reject if invalid.
+   *      d. Atomically swap the binary at the install path.
+   *      e. Exit with EXIT_CODE_RESTART (3) — the launchd / systemd supervisor
+   *         re-execs the new binary. (Skipped in dry-run / test mode.)
+   *   6. Emit 'update-ready' for callers that don't wait for process restart.
    *
-   * The actual binary swap is handled by the installer (REN-1292/1293).
-   * This method is responsible only for the drain gate.
+   * Restart contract:
+   *   The daemon exits with exit code 3 (EXIT_CODE_RESTART). The launchd plist
+   *   (REN-1292) and systemd unit (REN-1293) treat code 3 as a clean
+   *   "restart-requested" — they re-exec the new binary without incrementing
+   *   the crash counter. Code 0 = clean stop, non-0/non-3 = error crash.
    */
   async update(): Promise<void> {
     if (this._state === 'stopped') {
@@ -264,12 +282,15 @@ export class Daemon extends EventEmitter {
 
     this._setState('updating')
 
-    const drainTimeout = (this._config?.autoUpdate.drainTimeoutSeconds ?? 600) * 1000
+    const autoUpdateConfig = this._config?.autoUpdate ?? {
+      channel: 'stable' as const,
+      schedule: 'nightly' as const,
+      drainTimeoutSeconds: 600,
+    }
+    const drainTimeout = autoUpdateConfig.drainTimeoutSeconds * 1000
     await this._drain(drainTimeout)
 
     this._teardownLoops()
-
-    this.emit('update-ready')
 
     void globalHookBus.emit({
       kind: 'post-verb',
@@ -278,6 +299,29 @@ export class Daemon extends EventEmitter {
       result: { version: DAEMON_VERSION },
       durationMs: 0,
     })
+
+    // Run the full binary-swap auto-update flow
+    const updater = new AutoUpdater({
+      currentVersion: DAEMON_VERSION,
+      config: autoUpdateConfig,
+      ...this._opts.autoUpdateOverrides,
+    })
+
+    // Forward updater events so callers can observe progress
+    updater.on('check-start', () => this.emit('update-check-start'))
+    updater.on('up-to-date', (e: unknown) => this.emit('update-up-to-date', e))
+    updater.on('download-start', (e: unknown) => this.emit('update-download-start', e))
+    updater.on('download-complete', (e: unknown) => this.emit('update-download-complete', e))
+    updater.on('verify-start', (e: unknown) => this.emit('update-verify-start', e))
+    updater.on('verify-failed', (e: unknown) => this.emit('update-verify-failed', e))
+    updater.on('verify-ok', (e: unknown) => this.emit('update-verify-ok', e))
+    updater.on('swap-start', (e: unknown) => this.emit('update-swap-start', e))
+    updater.on('swap-complete', (e: unknown) => this.emit('update-swap-complete', e))
+    updater.on('error', (err: Error) => this.emit('error', err))
+
+    const result = await updater.runUpdate()
+
+    this.emit('update-ready', result)
   }
 
   // ---------------------------------------------------------------------------

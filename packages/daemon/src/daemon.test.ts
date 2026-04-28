@@ -228,7 +228,20 @@ describe('Daemon lifecycle', () => {
   })
 
   it('drain on update() — transitions through updating before emitting update-ready', async () => {
-    const daemon = new Daemon({ configPath, skipWizard: true })
+    // Inject a no-op auto-update path (already up-to-date) so update() completes
+    // without a real CDN fetch.
+    const daemon = new Daemon({
+      configPath,
+      skipWizard: true,
+      autoUpdateOverrides: {
+        // Same version → no-op; still exercises full drain + update-ready path
+        fetchFn: async () => new Response(
+          JSON.stringify({ version: '0.1.0', sha256: 'abc', releasedAt: new Date().toISOString() }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+        _testDryRunExit: true,
+      },
+    })
     await daemon.start()
 
     let updateReadyEmitted = false

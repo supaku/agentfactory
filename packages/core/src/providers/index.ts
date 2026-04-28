@@ -65,6 +65,35 @@ export {
   resolveScope,
 } from './base.js'
 
+// Verifier registry — sigstore, cosign, minisign, ed25519
+// Re-exported for consumers that need to verify binary signatures (e.g., daemon auto-update).
+export type { Verifier, VerifierInput, VerifierResult } from './verifiers/index.js'
+export {
+  registerVerifier,
+  getVerifier,
+  listRegisteredAlgorithms,
+  Ed25519Verifier,
+  MinisignVerifier,
+  CosignVerifier,
+  SigstoreVerifier,
+} from './verifiers/index.js'
+
+// Signing runtime — manifest verification, trust modes, capability discrepancy detection
+export type {
+  TrustMode,
+  TrustOverride,
+  TrustOverrideAuditEntry,
+  VerifyManifestOptions,
+  ManifestVerificationResult,
+} from './signing.js'
+export {
+  verifyManifestSignature,
+  verifySignatureDispatch,
+  detectCapabilityMismatch,
+  getTrustOverrideAuditLog,
+  clearTrustOverrideAuditLog,
+} from './signing.js'
+
 export type { AgentProviderName, AgentProvider, AgentRuntimeProvider, AgentProviderCapabilities, AgentSpawnConfig, AgentHandle, AgentEvent, ToolPermissionFormat } from './types.js'
 export { AGENT_RUNTIME_PROVIDER_HUMAN_LABELS } from './types.js'
 export type { SandboxProviderCapabilities } from './types.js'
