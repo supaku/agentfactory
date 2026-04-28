@@ -25,6 +25,7 @@ export type AgentWorkType =
   | 'improvement-loop'      // PM Agent: identify systemic patterns, author meta-issues (REN-1299)
   | 'outcome-auditor'       // PM agent: audit accepted issues for delivery gaps, author follow-up issues (REN-1297)
   | 'ga-readiness'          // PM agent: assess feature GA readiness before production promotion (REN-1327)
+  | 'documentation-steward' // PM agent: flag stale docs, identify undocumented surfaces, author refinement issues (REN-1329)
 
 /**
  * Workflow status — platform-agnostic string (e.g., 'Started', 'Finished').

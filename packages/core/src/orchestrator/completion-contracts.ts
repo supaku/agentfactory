@@ -249,6 +249,15 @@ const CONTRACTS: Record<string, CompletionContract> = {
     required: [FIELD.prMerged],
     optional: [],
   },
+
+  // Documentation steward scans repo docs, posts a summary comment, and optionally
+  // creates refinement issues. A comment_posted is the primary evidence of a completed
+  // scan. issue_updated is optional (direct-commit path updates the source issue).
+  'documentation-steward': {
+    workType: 'documentation-steward',
+    required: [FIELD.commentPosted],
+    optional: [FIELD.issueUpdated],
+  },
 }
 
 // ---------------------------------------------------------------------------

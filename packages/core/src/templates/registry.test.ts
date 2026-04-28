@@ -150,13 +150,14 @@ describe('TemplateRegistry', () => {
   describe('built-in defaults', () => {
     it('loads built-in default templates when useBuiltinDefaults is true', () => {
       const fullRegistry = TemplateRegistry.create({ useBuiltinDefaults: true })
-      // 13 base work types (research, backlog-creation, development, inflight, qa, acceptance, security,
-      // refinement, improvement-loop, outcome-auditor, backlog-groomer, refinement-coordination, ga-readiness)
+      // 14 base work types (research, backlog-creation, development, inflight, qa, acceptance, security,
+      // refinement, improvement-loop, outcome-auditor, backlog-groomer, refinement-coordination, ga-readiness,
+      // documentation-steward)
       // + 5 strategy templates (refinement-context-enriched, refinement-decompose, development-retry, qa-retry, qa-native).
       // The former `merge` template was removed — merging is handled by the local queue
       // (acceptance hands off to the sidecar worker) so agents no longer need a merge prompt.
       const workTypes = fullRegistry.getRegisteredWorkTypes()
-      expect(workTypes.length).toBe(18)
+      expect(workTypes.length).toBe(19)
       expect(workTypes).toContain('development')
       expect(workTypes).toContain('qa')
       expect(workTypes).toContain('backlog-groomer')
@@ -165,6 +166,7 @@ describe('TemplateRegistry', () => {
       expect(workTypes).not.toContain('merge')
       expect(workTypes).toContain('outcome-auditor')
       expect(workTypes).toContain('ga-readiness')
+      expect(workTypes).toContain('documentation-steward')
       // Strategy-specific templates
       expect(workTypes).toContain('refinement-context-enriched')
       expect(workTypes).toContain('refinement-decompose')

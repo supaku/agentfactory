@@ -316,6 +316,7 @@ export function getTaskListId(
     'outcome-auditor': 'OA',
     'improvement-loop': 'IMP',
     'ga-readiness': 'GA',
+    'documentation-steward': 'DS',
   }
   return `${issueIdentifier}-${suffixMap[workType]}`
 }

@@ -23,3 +23,4 @@ export type AgentWorkType =
   | 'improvement-loop'
   | 'outcome-auditor'
   | 'ga-readiness'
+  | 'documentation-steward'
