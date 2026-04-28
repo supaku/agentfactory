@@ -2,17 +2,12 @@
  * Agent Orchestrator
  * Spawns concurrent Claude agents to work on Linear backlog issues
  * Uses the Claude Agent SDK for programmatic control
- *
- * Decomposed by REN-1284 — large concerns now live in separate modules:
- *   - packages/core/src/workarea/         (git worktree ops, dep linking)
- *   - packages/core/src/orchestrator/dispatcher.ts   (work-queue routing)
- *   - packages/core/src/orchestrator/session-supervisor.ts (heartbeat / drain / reap)
  */
 
 import { randomUUID } from 'crypto'
 import { execSync } from 'child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from 'fs'
-import { resolve, dirname } from 'path'
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'fs'
+import { resolve, dirname, basename, isAbsolute } from 'path'
 import { parse as parseDotenv } from 'dotenv'
 import {
   type AgentProvider,
@@ -100,39 +95,35 @@ import {
   loadAppEnvFiles,
   generatePromptForWorkType,
 } from './spawn-helpers.js'
-// ---- Decomposed modules (REN-1284) ----------------------------------------
 import {
-  findRepoRoot as _findRepoRoot,
-  resolveMainRepoRoot as _resolveMainRepoRoot,
-  resolveWorktreePath as _resolveWorktreePath,
-  getWorktreeIdentifier as _getWorktreeIdentifier,
-  checkForIncompleteWork as _checkForIncompleteWork,
-  checkForPushedWorkWithoutPR as _checkForPushedWorkWithoutPR,
-  createWorktree as _createWorktree,
-  removeWorktree as _removeWorktree,
-} from '../workarea/git-worktree.js'
-import {
-  linkDependencies as _linkDependencies,
-  syncDependencies as _syncDependencies,
-} from '../workarea/dep-linker.js'
-import {
-  detectWorkType as _detectWorkType,
-  shouldDeferAcceptanceTransition as _shouldDeferAcceptanceTransition,
-  extractShellCommand as _extractShellCommand,
-  isGrepGlobShellCommand as _isGrepGlobShellCommand,
-  isToolRelatedError as _isToolRelatedError,
-  extractToolNameFromError as _extractToolNameFromError,
-  mergeMentionContext as _mergeMentionContext,
+  extractShellCommand,
+  isGrepGlobShellCommand,
+  isToolRelatedError,
+  extractToolNameFromError,
+  mergeMentionContext,
+  shouldDeferAcceptanceTransition,
+  detectWorkType as detectWorkTypeHelper,
   WORK_TYPE_SUFFIX,
 } from './dispatcher.js'
 import {
-  DEFAULT_INACTIVITY_TIMEOUT_MS,
-  COORDINATION_INACTIVITY_TIMEOUT_MS,
-  DEFAULT_MAX_SESSION_TIMEOUT_MS,
-} from './session-supervisor.js'
-// ---------------------------------------------------------------------------
+  findRepoRoot,
+  resolveMainRepoRoot,
+  resolveWorktreePath,
+  checkForIncompleteWork,
+  checkForPushedWorkWithoutPR,
+  getWorktreeIdentifier,
+} from '../workarea/git-worktree.js'
 
-// Timeout constants are imported from session-supervisor.ts (REN-1284)
+// Default inactivity timeout: 5 minutes
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 300000
+// Coordination inactivity timeout: 30 minutes.
+// Coordinators spawn foreground sub-agents via the Agent tool. During sub-agent
+// execution the parent event stream is silent (no tool_progress events), so the
+// standard 5-minute inactivity timeout kills coordinators prematurely. 30 minutes
+// gives sub-agents ample time to complete complex work.
+const COORDINATION_INACTIVITY_TIMEOUT_MS = 1800000
+// Default max session timeout: unlimited (undefined)
+const DEFAULT_MAX_SESSION_TIMEOUT_MS: number | undefined = undefined
 
 // Env vars that Claude Code interprets for authentication/routing. If these
 // leak into agent processes from app .env.local files, Claude Code switches
@@ -208,7 +199,6 @@ const DEFAULT_CONFIG: Required<Omit<OrchestratorConfig, 'linearApiKey' | 'projec
   // Max session timeout: hard cap on runtime (unlimited by default)
   maxSessionTimeoutMs: DEFAULT_MAX_SESSION_TIMEOUT_MS,
 }
-
 
 // loadSettingsEnv, loadAppEnvFiles, generatePromptForWorkType imported from spawn-helpers.ts above (REN-1284)
 
@@ -346,7 +336,7 @@ export class AgentOrchestrator {
     // Resolve git root from cwd — use resolveMainRepoRoot first so that when the
     // orchestrator runs inside a linked worktree we follow the .git file back to
     // the main repo instead of treating the worktree itself as the repo root.
-    this.gitRoot = _resolveMainRepoRoot(process.cwd()) ?? _findRepoRoot(process.cwd()) ?? process.cwd()
+    this.gitRoot = resolveMainRepoRoot(process.cwd()) ?? findRepoRoot(process.cwd()) ?? process.cwd()
 
     // Validate git remote matches configured repository (if set)
     if (this.config.repository) {
@@ -558,15 +548,14 @@ export class AgentOrchestrator {
       }
     }
 
-    // Coordination work types spawn foreground sub-agents via the Agent tool.
-    // During sub-agent execution the parent event stream is silent (no
-    // tool_progress events flow from Agent tool execution), so the standard
-    // inactivity timeout would kill coordinators prematurely. Use a longer
-    // default unless the user has configured a per-work-type override above.
-    const isCoordination = workType === 'coordination' || workType === 'inflight-coordination'
-      || workType === 'qa-coordination' || workType === 'acceptance-coordination'
+    // Work types that spawn foreground sub-agents via the Agent tool may have
+    // silent periods in the event stream while sub-agents run. Use a longer
+    // inactivity timeout for all work types that may coordinate sub-agents,
+    // unless the user has configured a per-work-type override above.
+    const maySpawnSubAgents = workType === 'development' || workType === 'inflight'
+      || workType === 'qa' || workType === 'acceptance'
       || workType === 'refinement-coordination'
-    if (isCoordination) {
+    if (maySpawnSubAgents) {
       return {
         inactivityTimeoutMs: Math.max(baseConfig.inactivityTimeoutMs, COORDINATION_INACTIVITY_TIMEOUT_MS),
         maxSessionTimeoutMs: baseConfig.maxSessionTimeoutMs,
@@ -577,16 +566,12 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Detect the appropriate work type for an issue, upgrading to coordination
-   * variants for parent issues that have sub-issues.
-   *
-   * This prevents parent issues returning to Backlog after refinement from
-   * being dispatched as 'development' (which uses the wrong template and
-   * produces no sub-agent orchestration).
+   * Detect the appropriate work type for an issue based on its status.
+   * Parent and leaf issues use the same work type — coordinator behavior
+   * is decided at runtime by the agent based on sub-issue presence.
    */
   async detectWorkType(issueId: string, statusName: string): Promise<AgentWorkType> {
-    const isParent = await this.client.isParentIssue(issueId)
-    return _detectWorkType(statusName, isParent, this.statusMappings.statusToWorkType)
+    return detectWorkTypeHelper(statusName, false, this.statusMappings.statusToWorkType)
   }
 
   /**
@@ -670,10 +655,871 @@ export class AgentOrchestrator {
     })
   }
 
-  // -----------------------------------------------------------------------
-  // Worktree management — thin wrappers delegating to workarea/git-worktree.ts
-  // and workarea/dep-linker.ts (REN-1284 decomposition).
-  // -----------------------------------------------------------------------
+  /**
+   * Validate that a path is a valid git worktree
+   */
+  private validateWorktree(worktreePath: string): { valid: boolean; reason?: string } {
+    if (!existsSync(worktreePath)) {
+      return { valid: false, reason: 'Directory does not exist' }
+    }
+
+    const gitPath = resolve(worktreePath, '.git')
+    if (!existsSync(gitPath)) {
+      return { valid: false, reason: 'Missing .git file' }
+    }
+
+    // Verify .git is a worktree reference file (not a directory)
+    try {
+      const stat = statSync(gitPath)
+      if (stat.isDirectory()) {
+        return { valid: false, reason: '.git is a directory, not a worktree reference' }
+      }
+      const content = readFileSync(gitPath, 'utf-8')
+      if (!content.includes('gitdir:')) {
+        return { valid: false, reason: '.git file missing gitdir reference' }
+      }
+    } catch {
+      return { valid: false, reason: 'Cannot read .git file' }
+    }
+
+    return { valid: true }
+  }
+
+  /**
+   * Extract the full error message from an execSync error.
+   *
+   * Node's execSync throws an Error where .message only contains
+   * "Command failed: <command>", but the actual git error output
+   * is in .stderr. This helper combines both for reliable pattern matching.
+   */
+  private getExecSyncErrorMessage(error: unknown): string {
+    if (error && typeof error === 'object') {
+      const parts: string[] = []
+      if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
+        parts.push((error as { message: string }).message)
+      }
+      if ('stderr' in error && typeof (error as { stderr: unknown }).stderr === 'string') {
+        parts.push((error as { stderr: string }).stderr)
+      }
+      if ('stdout' in error && typeof (error as { stdout: unknown }).stdout === 'string') {
+        parts.push((error as { stdout: string }).stdout)
+      }
+      return parts.join('\n')
+    }
+    return String(error)
+  }
+
+  // Branch-conflict detection lives in ../merge-queue/branch-conflict.ts so the
+  // merge worker can reuse the same logic. These thin wrappers exist only so
+  // existing `this.isBranchConflictError(...)` / `this.parseConflictingWorktreePath(...)`
+  // call sites keep working.
+  private isBranchConflictError(errorMsg: string): boolean {
+    return isBranchConflictErrorShared(errorMsg)
+  }
+
+  private parseConflictingWorktreePath(errorMsg: string): string | null {
+    return parseConflictingWorktreePathShared(errorMsg)
+  }
+
+  /**
+   * Check if a path is the main git working tree (not a worktree).
+   *
+   * The main working tree has a `.git` directory, while worktrees have a
+   * `.git` file containing a `gitdir:` pointer. This is the primary safeguard
+   * against accidentally destroying the main repository.
+   */
+  private isMainWorktree(targetPath: string): boolean {
+    try {
+      const gitPath = resolve(targetPath, '.git')
+      if (!existsSync(gitPath)) return false
+      const stat = statSync(gitPath)
+      // Main working tree has .git as a directory; worktrees have .git as a file
+      if (stat.isDirectory()) return true
+
+      // Double-check via `git worktree list --porcelain`
+      const output = execSync('git worktree list --porcelain', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+      })
+      const mainTreeMatch = output.match(/^worktree (.+)$/m)
+      if (mainTreeMatch) {
+        const mainTreePath = mainTreeMatch[1]
+        return resolve(targetPath) === resolve(mainTreePath)
+      }
+    } catch {
+      // If we can't determine, err on the side of caution - treat as main
+      return true
+    }
+    return false
+  }
+
+  /**
+   * Check if a path is inside the configured worktrees directory.
+   *
+   * Only paths within the worktrees directory should ever be candidates for
+   * automated cleanup. This prevents the main repo or other directories from
+   * being targeted.
+   */
+  private isInsideWorktreesDir(targetPath: string): boolean {
+    const worktreesDir = resolveWorktreePath(this.config.worktreePath, this.gitRoot)
+    const normalizedTarget = resolve(targetPath)
+    // Must be inside the worktrees directory (not equal to it)
+    return normalizedTarget.startsWith(worktreesDir + '/')
+  }
+
+  /**
+   * Attempt to clean up a stale worktree that is blocking branch creation.
+   *
+   * During dev\u2192qa\u2192acceptance handoffs, the prior work type's worktree may still
+   * exist after its agent has finished (the orchestrator cleans up externally,
+   * but there's a race window). This method checks if the blocking worktree's
+   * agent is still alive via heartbeat. If not, it removes the stale worktree
+   * so the new work type can proceed.
+   *
+   * SAFETY: This method will NEVER clean up the main working tree. It only
+   * operates on paths inside the configured worktrees directory. This prevents
+   * catastrophic data loss when a branch is checked out in the main tree
+   * (e.g., by a user in their IDE).
+   *
+   * @returns true if the conflicting worktree was cleaned up
+   */
+  private tryCleanupConflictingWorktree(conflictPath: string, branchName: string): boolean {
+    // SAFETY GUARD 1: Never touch the main working tree
+    if (this.isMainWorktree(conflictPath)) {
+      console.warn(
+        `SAFETY: Refusing to clean up ${conflictPath} \u2014 it is the main working tree. ` +
+        `Branch '${branchName}' appears to be checked out in the main repo (e.g., via IDE). ` +
+        `The agent will retry or skip this issue.`
+      )
+      return false
+    }
+
+    // SAFETY GUARD 2: Only clean up paths inside worktrees directory
+    if (!this.isInsideWorktreesDir(conflictPath)) {
+      console.warn(
+        `SAFETY: Refusing to clean up ${conflictPath} \u2014 it is not inside the worktrees directory. ` +
+        `Only paths inside '${resolveWorktreePath(this.config.worktreePath, this.gitRoot)}' can be auto-cleaned.`
+      )
+      return false
+    }
+
+    if (!existsSync(conflictPath)) {
+      // Directory doesn't exist - just prune git's worktree list
+      try {
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+        console.log(`Pruned stale worktree reference for branch ${branchName}`)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    // SAFETY GUARD 4: Preserved worktrees — save work as patch, then allow cleanup.
+    // Preserved worktrees contain uncommitted work from a previous agent session.
+    // A diagnostic comment was already posted to the issue when the worktree was
+    // preserved. Blocking all future agents on this branch indefinitely causes
+    // work stoppages, so we save a patch for manual recovery and allow cleanup.
+    const preservedMarker = resolve(conflictPath, '.agent', 'preserved.json')
+    if (existsSync(preservedMarker)) {
+      console.warn(
+        `Preserved worktree detected at ${conflictPath}. ` +
+        `Saving incomplete work as patch before cleanup to unblock branch '${branchName}'.`
+      )
+      try {
+        const patchDir = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), '.patches')
+        if (!existsSync(patchDir)) {
+          mkdirSync(patchDir, { recursive: true })
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const patchName = `${branchName}-preserved-${timestamp}.patch`
+        const patchPath = resolve(patchDir, patchName)
+
+        // Capture tracked changes (staged + unstaged)
+        const diff = execSync('git diff HEAD', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+        if (diff.trim().length > 0) {
+          writeFileSync(patchPath, diff)
+          console.log(`Saved preserved worktree patch: ${patchPath}`)
+        }
+
+        // Capture untracked files — git diff HEAD misses these entirely.
+        // Without this, new files the agent created but never committed are lost.
+        const untrackedFiles = execSync(
+          'git ls-files --others --exclude-standard',
+          { cwd: conflictPath, encoding: 'utf-8', timeout: 10000 }
+        ).trim()
+
+        if (untrackedFiles.length > 0) {
+          const untrackedPatchName = `${branchName}-preserved-${timestamp}-untracked.patch`
+          const untrackedPatchPath = resolve(patchDir, untrackedPatchName)
+          // Use git diff --no-index to create a patch for untracked files
+          // by diffing /dev/null against each file
+          const untrackedDiff = execSync(
+            'git diff --no-index /dev/null -- ' +
+              untrackedFiles.split('\n').map(f => `"${f}"`).join(' ') +
+              ' || true',
+            { cwd: conflictPath, encoding: 'utf-8', timeout: 10000, shell: '/bin/bash' }
+          )
+          if (untrackedDiff.trim().length > 0) {
+            writeFileSync(untrackedPatchPath, untrackedDiff)
+            console.log(`Saved untracked files patch: ${untrackedPatchPath} (${untrackedFiles.split('\n').length} file(s))`)
+          }
+        }
+      } catch (patchError) {
+        console.warn(
+          'Failed to save preserved worktree patch:',
+          patchError instanceof Error ? patchError.message : String(patchError)
+        )
+      }
+      // Fall through to cleanup below (don't return false)
+    }
+
+    // Check if the agent in the conflicting worktree is still alive
+    const recoveryInfo = checkRecovery(conflictPath, {
+      heartbeatTimeoutMs: getHeartbeatTimeoutFromEnv(),
+      maxRecoveryAttempts: 0, // We don't want to recover, just check liveness
+    })
+
+    if (recoveryInfo.agentAlive) {
+      console.log(
+        `Branch ${branchName} is held by a running agent at ${conflictPath} - cannot clean up`
+      )
+      return false
+    }
+
+    // Agent is not alive - check for incomplete work before cleaning up
+    const incompleteCheck = checkForIncompleteWork(conflictPath)
+    if (incompleteCheck.hasIncompleteWork) {
+      // Save a patch before removing so work can be recovered
+      try {
+        const patchDir = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), '.patches')
+        if (!existsSync(patchDir)) {
+          mkdirSync(patchDir, { recursive: true })
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const patchName = `${branchName}-${timestamp}.patch`
+        const patchPath = resolve(patchDir, patchName)
+
+        // Capture both staged and unstaged changes
+        const diff = execSync('git diff HEAD', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+        if (diff.trim().length > 0) {
+          writeFileSync(patchPath, diff)
+          console.log(`Saved incomplete work patch: ${patchPath}`)
+        }
+
+        // Also capture untracked files list
+        const untracked = execSync('git ls-files --others --exclude-standard', {
+          cwd: conflictPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+        }).trim()
+        if (untracked.length > 0) {
+          // Create a full diff including untracked files
+          const fullDiff = execSync('git diff HEAD -- . && git diff --no-index /dev/null $(git ls-files --others --exclude-standard) 2>/dev/null || true', {
+            cwd: conflictPath,
+            encoding: 'utf-8',
+            timeout: 10000,
+            shell: '/bin/bash',
+          })
+          if (fullDiff.trim().length > 0) {
+            writeFileSync(patchPath, fullDiff)
+            console.log(`Saved incomplete work patch (including untracked files): ${patchPath}`)
+          }
+        }
+      } catch (patchError) {
+        console.warn('Failed to save work patch before cleanup:', patchError instanceof Error ? patchError.message : String(patchError))
+      }
+    }
+
+    console.log(
+      `Cleaning up stale worktree at ${conflictPath} (agent no longer running) ` +
+      `to unblock branch ${branchName}`
+    )
+
+    try {
+      execSync(`git worktree remove "${conflictPath}" --force`, {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+      })
+      console.log(`Removed stale worktree: ${conflictPath}`)
+      return true
+    } catch (removeError) {
+      const removeMsg = removeError instanceof Error ? removeError.message : String(removeError)
+      console.warn(`Failed to remove stale worktree ${conflictPath}:`, removeMsg)
+
+      // SAFETY GUARD 3: If git itself says "main working tree", absolutely stop
+      if (removeMsg.includes('is a main working tree')) {
+        console.error(
+          `SAFETY: git confirmed ${conflictPath} is the main working tree. Aborting cleanup.`
+        )
+        return false
+      }
+
+      // Fallback: rm -rf + prune (safe because guards 1 & 2 already verified
+      // this path is inside .worktrees/ and is not the main tree)
+      try {
+        execSync(`rm -rf "${conflictPath}"`, { stdio: 'pipe', encoding: 'utf-8' })
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+        console.log(`Force-removed stale worktree: ${conflictPath}`)
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
+
+  /**
+   * Handle a branch conflict error by attempting to clean up the stale worktree
+   * and retrying, or throwing a retriable error for the worker's retry loop.
+   */
+  private handleBranchConflict(errorMsg: string, branchName: string): void {
+    const conflictPath = this.parseConflictingWorktreePath(errorMsg)
+
+    if (conflictPath) {
+      const cleaned = this.tryCleanupConflictingWorktree(conflictPath, branchName)
+      if (cleaned) {
+        // Return without throwing - the caller should retry the git command
+        return
+      }
+    }
+
+    // Could not clean up - throw retriable error for worker's retry loop
+    throw new Error(
+      `Branch '${branchName}' is already checked out in another worktree. ` +
+      `This may indicate another agent is still working on this issue.`
+    )
+  }
+
+  /**
+   * Create a git worktree for an issue with work type suffix
+   *
+   * @param issueIdentifier - Issue identifier (e.g., "SUP-294")
+   * @param workType - Type of work being performed
+   * @returns Object containing worktreePath and worktreeIdentifier
+   */
+  createWorktree(
+    issueIdentifier: string,
+    workType: AgentWorkType
+  ): { worktreePath: string; worktreeIdentifier: string } {
+    const worktreeIdentifier = getWorktreeIdentifier(issueIdentifier, workType)
+    const worktreePath = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), worktreeIdentifier)
+    // Use issue identifier for branch name (shared across work types)
+    const branchName = issueIdentifier
+
+    // Ensure parent directory exists
+    const parentDir = resolveWorktreePath(this.config.worktreePath, this.gitRoot)
+    if (!existsSync(parentDir)) {
+      mkdirSync(parentDir, { recursive: true })
+    }
+
+    // Prune any stale worktrees first (handles deleted directories)
+    try {
+      execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+    } catch {
+      // Ignore prune errors
+    }
+
+    // Check if worktree already exists AND is valid
+    // A valid worktree has a .git file (not directory) pointing to parent repo with gitdir reference
+    if (existsSync(worktreePath)) {
+      const validation = this.validateWorktree(worktreePath)
+      if (validation.valid) {
+        console.log(`Worktree already exists: ${worktreePath}`)
+        return { worktreePath, worktreeIdentifier }
+      }
+
+      // Invalid/incomplete worktree - must clean up
+      console.log(`Removing invalid worktree: ${worktreePath} (${validation.reason})`)
+      try {
+        rmSync(worktreePath, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 })
+      } catch (cleanupError) {
+        throw new Error(
+          `Failed to clean up invalid worktree at ${worktreePath}: ` +
+          `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`
+        )
+      }
+
+      // Verify cleanup worked
+      if (existsSync(worktreePath)) {
+        throw new Error(`Failed to remove invalid worktree directory at ${worktreePath}`)
+      }
+    }
+
+    console.log(`Creating worktree: ${worktreePath} (branch: ${branchName})`)
+
+    // Fetch latest main from remote so worktrees start with current deps/lockfiles.
+    // Non-fatal: offline/CI environments may not have network access.
+    let hasRemoteMain = false
+    try {
+      execSync('git fetch origin main', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        timeout: 30_000,
+      })
+      hasRemoteMain = true
+    } catch {
+      console.warn('Failed to fetch origin/main — proceeding with local main')
+    }
+
+    // Base new feature branches on origin/main (latest remote) when available,
+    // falling back to local main for offline environments.
+    const baseBranch = hasRemoteMain ? 'origin/main' : 'main'
+
+    // Non-committing work types use detached HEAD to avoid creating stale branches.
+    // Research/BC only read the codebase and never commit. Creating named branches
+    // for them pollutes the branch namespace and causes stale-base issues when
+    // development later reuses the branch without rebasing.
+    const NON_COMMITTING_WORK_TYPES = new Set([
+      'research', 'backlog-creation', 'refinement', 'refinement-coordination', 'security',
+    ])
+
+    if (NON_COMMITTING_WORK_TYPES.has(workType)) {
+      execSync(`git worktree add --detach "${worktreePath}" ${baseBranch}`, {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+      })
+      console.log(`Created detached worktree for ${workType}: ${worktreePath}`)
+      return { worktreePath, worktreeIdentifier }
+    }
+
+    // Try to create worktree with new branch
+    // Uses a two-attempt strategy: if a branch conflict is detected and the
+    // conflicting worktree's agent is no longer alive, clean it up and retry once.
+    const MAX_CONFLICT_RETRIES = 1
+    let conflictRetries = 0
+
+    const attemptCreateWorktree = (): void => {
+      try {
+        execSync(`git worktree add "${worktreePath}" -b ${branchName} ${baseBranch}`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          cwd: this.gitRoot,
+        })
+      } catch (error) {
+        // Branch might already exist or be checked out elsewhere
+        // Note: execSync errors have the git message in .stderr, not just .message
+        const errorMsg = this.getExecSyncErrorMessage(error)
+
+        // If branch is in use by another worktree, try to clean up the stale worktree
+        if (this.isBranchConflictError(errorMsg)) {
+          if (conflictRetries < MAX_CONFLICT_RETRIES) {
+            conflictRetries++
+            // handleBranchConflict returns if cleanup succeeded, throws if not
+            this.handleBranchConflict(errorMsg, branchName)
+            // Cleanup succeeded - retry
+            console.log(`Retrying worktree creation after cleaning up stale worktree`)
+            attemptCreateWorktree()
+            return
+          }
+          throw new Error(
+            `Branch '${branchName}' is already checked out in another worktree. ` +
+            `This may indicate another agent is still working on this issue.`
+          )
+        }
+
+        if (errorMsg.includes('already exists')) {
+          // Branch exists, try without -b flag
+          try {
+            execSync(`git worktree add "${worktreePath}" ${branchName}`, {
+              stdio: 'pipe',
+              encoding: 'utf-8',
+              cwd: this.gitRoot,
+            })
+
+            // If this is a code-producing work type and the branch has no unique
+            // commits (e.g., created by a prior research/BC phase that used named
+            // branches before the detached HEAD fix), reset to current origin/main
+            // to prevent working on a stale codebase.
+            const CODE_PRODUCING_TYPES = new Set([
+              'development', 'inflight',
+            ])
+            if (CODE_PRODUCING_TYPES.has(workType)) {
+              try {
+                const aheadCount = execSync(
+                  `git -C "${worktreePath}" rev-list --count ${baseBranch}..HEAD`,
+                  { stdio: 'pipe', encoding: 'utf-8' }
+                ).trim()
+                if (aheadCount === '0') {
+                  execSync(`git -C "${worktreePath}" reset --hard ${baseBranch}`, {
+                    stdio: 'pipe', encoding: 'utf-8',
+                  })
+                  console.log(`Reset stale branch ${branchName} to ${baseBranch} (was 0 commits ahead)`)
+                }
+              } catch {
+                console.warn(`Failed to check/reset branch freshness for ${branchName}`)
+              }
+            }
+          } catch (innerError) {
+            const innerMsg = this.getExecSyncErrorMessage(innerError)
+
+            // If branch is in use by another worktree, try to clean up
+            if (this.isBranchConflictError(innerMsg)) {
+              if (conflictRetries < MAX_CONFLICT_RETRIES) {
+                conflictRetries++
+                this.handleBranchConflict(innerMsg, branchName)
+                console.log(`Retrying worktree creation after cleaning up stale worktree`)
+                attemptCreateWorktree()
+                return
+              }
+              throw new Error(
+                `Branch '${branchName}' is already checked out in another worktree. ` +
+                `This may indicate another agent is still working on this issue.`
+              )
+            }
+
+            // For any other error, propagate it
+            throw innerError
+          }
+        } else {
+          throw error
+        }
+      }
+    }
+
+    attemptCreateWorktree()
+
+    // Validate worktree was created correctly
+    const validation = this.validateWorktree(worktreePath)
+    if (!validation.valid) {
+      // Clean up partial state
+      try {
+        if (existsSync(worktreePath)) {
+          execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe', encoding: 'utf-8' })
+        }
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      throw new Error(
+        `Failed to create valid worktree at ${worktreePath}: ${validation.reason}. ` +
+        `This may indicate a race condition with another agent.`
+      )
+    }
+
+    console.log(`Worktree created successfully: ${worktreePath}`)
+
+    // Clear stale stashes. Git stashes are repo-scoped (stored in refs/stash in the
+    // shared git directory), so stashes from prior sessions in ANY worktree are visible
+    // here. If an agent runs `git stash pop`, it may apply a stale stash from an
+    // unrelated session, causing conflicts and potential work loss.
+    try {
+      const stashList = execSync('git stash list', {
+        cwd: worktreePath,
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim()
+      if (stashList.length > 0) {
+        const stashCount = stashList.split('\n').length
+        execSync('git stash clear', {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 5000,
+        })
+        console.log(`Cleared ${stashCount} stale stash(es) to prevent cross-session contamination`)
+      }
+    } catch {
+      // Non-fatal — stash clearing is defensive
+    }
+
+    // Initialize .agent/ directory for state persistence
+    try {
+      initializeAgentDir(worktreePath)
+    } catch (initError) {
+      // Log but don't fail - state persistence is optional
+      console.warn(`Failed to initialize .agent/ directory: ${initError instanceof Error ? initError.message : String(initError)}`)
+    }
+
+    // Write helper scripts into .agent/ for agent use
+    this.writeWorktreeHelpers(worktreePath)
+
+    // Configure mergiraf merge driver if enabled
+    this.configureMergiraf(worktreePath)
+
+    // Bootstrap lockfile and package.json from origin/main
+    this.bootstrapWorktreeDeps(worktreePath)
+
+    // Capture quality baseline for delta checking (runs test/typecheck on main)
+    if (this.isQualityBaselineEnabled()) {
+      try {
+        const qualityConfig = this.buildQualityConfig()
+        const baseline = captureQualityBaseline(worktreePath, qualityConfig)
+        saveBaseline(worktreePath, baseline)
+        console.log(`Quality baseline captured: ${baseline.tests.total} tests, ${baseline.typecheck.errorCount} type errors, ${baseline.lint.errorCount} lint errors`)
+      } catch (baselineError) {
+        // Log but don't fail worktree creation — quality gate is advisory
+        console.warn(`Failed to capture quality baseline: ${baselineError instanceof Error ? baselineError.message : String(baselineError)}`)
+      }
+    }
+
+    return { worktreePath, worktreeIdentifier }
+  }
+
+  /**
+   * Clean up a git worktree
+   *
+   * @param worktreeIdentifier - Worktree identifier with work type suffix (e.g., "SUP-294-QA")
+   */
+  removeWorktree(worktreeIdentifier: string, deleteBranchName?: string): void {
+    const worktreePath = resolve(resolveWorktreePath(this.config.worktreePath, this.gitRoot), worktreeIdentifier)
+
+    if (existsSync(worktreePath)) {
+      try {
+        execSync(`git worktree remove "${worktreePath}" --force`, {
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          cwd: this.gitRoot,
+        })
+      } catch (error) {
+        console.warn(`Failed to remove worktree via git, trying fallback:`, error)
+        try {
+          execSync(`rm -rf "${worktreePath}"`, { stdio: 'pipe', encoding: 'utf-8' })
+          execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+        } catch (fallbackError) {
+          console.warn(`Fallback worktree removal also failed:`, fallbackError)
+        }
+      }
+    } else {
+      // Directory gone but git may still track it
+      try {
+        execSync('git worktree prune', { stdio: 'pipe', encoding: 'utf-8', cwd: this.gitRoot })
+      } catch {
+        // Ignore
+      }
+    }
+
+    // Clean up leftover directory shells (e.g., dirs with only .agent/ remaining
+    // after git worktree remove succeeded but the directory wasn't fully deleted)
+    if (existsSync(worktreePath)) {
+      try {
+        const entries = readdirSync(worktreePath).filter(e => e !== '.agent')
+        if (entries.length === 0) {
+          rmSync(worktreePath, { recursive: true, force: true })
+        }
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+
+    // Delete the branch for non-code-producing work types to prevent stale branches
+    // from polluting the namespace and being accidentally reused by future work types.
+    //
+    // Safety: skip deletion if the branch has a remote upstream — that means it
+    // carries development work (from a prior code-producing session) that QA /
+    // acceptance / refinement are validating. Deleting the local ref doesn't
+    // lose data (remote stays), but forces future agents to re-fetch and
+    // breaks the invariant that "branch X exists locally" maps to "there's
+    // ongoing work on X." The original stale-branch-cleanup intent was for
+    // ephemeral branches created during exploratory work types that never
+    // push — those have no upstream and are still cleaned up here.
+    if (deleteBranchName) {
+      try {
+        // A non-zero exit from `git rev-parse --abbrev-ref X@{upstream}` means
+        // no upstream is set — safe to delete. A zero exit means upstream exists
+        // — preserve the branch.
+        let hasUpstream = false
+        try {
+          execSync(`git rev-parse --abbrev-ref ${deleteBranchName}@{upstream}`, {
+            stdio: 'pipe',
+            encoding: 'utf-8',
+            cwd: this.gitRoot,
+          })
+          hasUpstream = true
+        } catch {
+          hasUpstream = false
+        }
+
+        if (hasUpstream) {
+          console.log(`Preserved branch ${deleteBranchName} (has remote upstream — dev work may still be in progress)`)
+        } else {
+          execSync(`git branch -D ${deleteBranchName}`, {
+            stdio: 'pipe',
+            encoding: 'utf-8',
+            cwd: this.gitRoot,
+          })
+          console.log(`Deleted branch ${deleteBranchName} (non-code-producing work type, no upstream)`)
+        }
+      } catch {
+        // Branch may not exist (detached HEAD) or may be in use by another worktree — ignore
+      }
+    }
+  }
+
+  /**
+   * Write helper scripts into the worktree's .agent/ directory.
+   *
+   * Currently writes:
+   * - .agent/add-dep.sh: Safely adds a new dependency by removing symlinked
+   *   node_modules first, then running `pnpm add` with the guard bypass.
+   */
+  private writeWorktreeHelpers(worktreePath: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    // Skip helper scripts for non-Node projects
+    if (pm === 'none') return
+
+    const addCmd = getAddCommand(pm) ?? `${pm} add`
+
+    const agentDir = resolve(worktreePath, '.agent')
+    const scriptPath = resolve(agentDir, 'add-dep.sh')
+
+    const script = `#!/bin/bash
+# Safe dependency addition for agents in worktrees.
+# Removes symlinked node_modules, then runs ${addCmd} with guard bypass.
+# Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]
+set -e
+if [ $# -eq 0 ]; then
+  echo "Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]"
+  exit 1
+fi
+echo "Cleaning symlinked node_modules..."
+rm -rf node_modules
+for subdir in apps packages; do
+  [ -d "$subdir" ] && find "$subdir" -maxdepth 2 -name node_modules -type d -exec rm -rf {} + 2>/dev/null || true
+done
+echo "Installing: ${addCmd} $@"
+ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
+`
+
+    try {
+      if (!existsSync(agentDir)) {
+        mkdirSync(agentDir, { recursive: true })
+      }
+      writeFileSync(scriptPath, script, { mode: 0o755 })
+    } catch (error) {
+      // Log but don't fail — the helper is optional
+      console.warn(
+        `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+
+  /**
+   * Bootstrap worktree dependencies from origin/main.
+   * Ensures the lockfile and root package.json in the worktree match the latest
+   * remote main, not the (potentially stale) local main the worktree branched from.
+   * Framework-neutral: uses getLockFileName() to resolve the correct lockfile.
+   * No-op for packageManager 'none'.
+   */
+  private bootstrapWorktreeDeps(worktreePath: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
+    const lockFile = getLockFileName(pm)
+    if (!lockFile) return
+
+    // Copy lockfile from origin/main into the worktree
+    try {
+      const originLockContent = execSync(`git show origin/main:${lockFile}`, {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      writeFileSync(resolve(worktreePath, lockFile), originLockContent)
+    } catch {
+      // Lockfile may not exist on origin/main (new repo) or fetch failed — skip
+    }
+
+    // Copy root package.json from origin/main
+    try {
+      const originPkgContent = execSync('git show origin/main:package.json', {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      writeFileSync(resolve(worktreePath, 'package.json'), originPkgContent)
+    } catch {
+      // Skip if not found
+    }
+  }
+
+  /**
+   * Configure mergiraf as the git merge driver in a worktree.
+   * Uses worktree-local git config so mergiraf only runs in agent worktrees.
+   * Falls back silently to default git merge if mergiraf is not installed.
+   */
+  private configureMergiraf(worktreePath: string): void {
+    // Check if mergiraf is disabled via config
+    if (this.repoConfig?.mergeDriver === 'default') {
+      return
+    }
+
+    try {
+      // Check if mergiraf binary is available
+      execSync('which mergiraf', { stdio: 'pipe', encoding: 'utf-8' })
+    } catch {
+      // mergiraf not installed — fall back to default merge silently
+      console.log('mergiraf not found on PATH, using default git merge driver')
+      return
+    }
+
+    try {
+      // Enable worktree-local config extension
+      execSync('git config extensions.worktreeConfig true', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+
+      // Register mergiraf merge driver in worktree-local config
+      execSync('git config --worktree merge.mergiraf.name "mergiraf"', {
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        cwd: worktreePath,
+      })
+      execSync(
+        'git config --worktree merge.mergiraf.driver "mergiraf merge --git %O %A %B -s %S -x %X -y %Y -p %P"',
+        { stdio: 'pipe', encoding: 'utf-8', cwd: worktreePath },
+      )
+
+      // Write .gitattributes in worktree root (not repo root)
+      const gitattributesPath = resolve(worktreePath, '.gitattributes')
+      if (!existsSync(gitattributesPath)) {
+        const content = [
+          '# AST-aware merge driver (mergiraf) — worktree-local',
+          '*.ts merge=mergiraf',
+          '*.tsx merge=mergiraf',
+          '*.js merge=mergiraf',
+          '*.jsx merge=mergiraf',
+          '*.json merge=mergiraf',
+          '*.yaml merge=mergiraf',
+          '*.yml merge=mergiraf',
+          '*.py merge=mergiraf',
+          '*.go merge=mergiraf',
+          '*.rs merge=mergiraf',
+          '*.java merge=mergiraf',
+          '*.css merge=mergiraf',
+          '*.html merge=mergiraf',
+          '',
+          '# Lock files — keep ours and regenerate',
+          'pnpm-lock.yaml merge=ours',
+          'package-lock.json merge=ours',
+          'yarn.lock merge=ours',
+          '',
+        ].join('\n')
+        writeFileSync(gitattributesPath, content, 'utf-8')
+      }
+
+      console.log(`mergiraf configured as merge driver in ${worktreePath}`)
+    } catch (error) {
+      // Log warning but don't fail — merge driver is non-critical
+      console.warn(
+        `Failed to configure mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
 
   /**
    * Check if quality baseline capture is enabled via repository config.
@@ -724,105 +1570,410 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Write helper scripts into the worktree's .agent/ directory.
-   * Called as the onCreated callback from createWorktree.
+   * Link dependencies from the main repo into a worktree via symlinks.
+   *
+   * Creates a REAL node_modules directory in the worktree and symlinks each
+   * entry (packages, .pnpm, .bin) individually. This prevents pnpm from
+   * resolving through a directory-level symlink and corrupting the main
+   * repo's node_modules when an agent accidentally runs `pnpm install`.
+   *
+   * For non-Node repos (packageManager 'none' or no node_modules), this is a no-op.
+   *
+   * Falls back to install via the configured package manager if symlinking fails.
    */
-  private writeWorktreeHelpers(worktreePath: string): void {
+  linkDependencies(worktreePath: string, identifier: string): void {
     const pm = (this.packageManager ?? 'pnpm') as PackageManager
     if (pm === 'none') return
 
-    const addCmd = getAddCommand(pm) ?? `${pm} add`
+    // Use the main repo root (set at construction from process.cwd()) for node_modules.
+    // Worktrees are sibling directories that don't contain node_modules.
+    const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
+    if (!repoRoot) {
+      console.warn(`[${identifier}] Could not find repo root, skipping dependency linking`)
+      return
+    }
 
-    const agentDir = resolve(worktreePath, '.agent')
-    const scriptPath = resolve(agentDir, 'add-dep.sh')
-    const script = [
-      '#!/bin/bash',
-      '# Safe dependency addition for agents in worktrees.',
-      `# Removes symlinked node_modules, then runs ${addCmd} with guard bypass.`,
-      '# Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]',
-      'set -e',
-      'if [ $# -eq 0 ]; then',
-      '  echo "Usage: bash .agent/add-dep.sh <package> [--filter <workspace>]"',
-      '  exit 1',
-      'fi',
-      'echo "Cleaning symlinked node_modules..."',
-      'rm -rf node_modules',
-      'for subdir in apps packages; do',
-      '  [ -d "$subdir" ] && find "$subdir" -maxdepth 2 -name node_modules -type d -exec rm -rf {} + 2>/dev/null || true',
-      'done',
-      `echo "Installing: ${addCmd} $@"`,
-      `ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"`,
-      '',
-    ].join('\n')
+    const mainNodeModules = resolve(repoRoot, 'node_modules')
+    if (!existsSync(mainNodeModules)) {
+      // Not a Node.js project, or deps not installed in main repo — nothing to do
+      console.log(`[${identifier}] No node_modules in main repo, skipping dependency linking`)
+      return
+    }
 
+    console.log(`[${identifier}] Linking dependencies from main repo...`)
     try {
-      if (!existsSync(agentDir)) {
-        mkdirSync(agentDir, { recursive: true })
+      // Link root node_modules — create a real directory with symlinked contents
+      // so pnpm can't follow a top-level symlink to corrupt the main repo
+      const destRoot = resolve(worktreePath, 'node_modules')
+      this.linkNodeModulesContents(mainNodeModules, destRoot, identifier)
+
+      // Link per-workspace node_modules (apps/*, packages/*)
+      let skipped = 0
+      for (const subdir of ['apps', 'packages']) {
+        const mainSubdir = resolve(repoRoot, subdir)
+        if (!existsSync(mainSubdir)) continue
+
+        for (const entry of readdirSync(mainSubdir)) {
+          const src = resolve(mainSubdir, entry, 'node_modules')
+          const destParent = resolve(worktreePath, subdir, entry)
+          const dest = resolve(destParent, 'node_modules')
+
+          if (!existsSync(src)) continue
+
+          // Skip entries where the app/package doesn't exist on this branch
+          if (!existsSync(destParent)) {
+            skipped++
+            continue
+          }
+
+          this.linkNodeModulesContents(src, dest, identifier)
+        }
       }
-      writeFileSync(scriptPath, script, { mode: 0o755 })
+
+      // Fix 5: Also scan worktree for workspaces that exist on the branch
+      // but not in the main repo's directory listing (e.g., newly added workspaces)
+      for (const subdir of ['apps', 'packages']) {
+        const wtSubdir = resolve(worktreePath, subdir)
+        if (!existsSync(wtSubdir)) continue
+
+        for (const entry of readdirSync(wtSubdir)) {
+          const src = resolve(repoRoot, subdir, entry, 'node_modules')
+          const dest = resolve(wtSubdir, entry, 'node_modules')
+
+          if (!existsSync(src)) continue  // No source deps to link
+          if (existsSync(dest)) continue  // Already linked above
+
+          this.linkNodeModulesContents(src, dest, identifier)
+        }
+      }
+
+      if (skipped > 0) {
+        console.log(
+          `[${identifier}] Dependencies linked successfully (${skipped} workspace(s) skipped — not on this branch)`
+        )
+      } else {
+        console.log(`[${identifier}] Dependencies linked successfully`)
+      }
+
+      // Verify critical symlinks are intact; if not, remove and retry once
+      if (!this.verifyDependencyLinks(worktreePath, identifier)) {
+        console.warn(`[${identifier}] Dependency verification failed — removing and re-linking`)
+        this.removeWorktreeNodeModules(worktreePath)
+        const retryDest = resolve(worktreePath, 'node_modules')
+        this.linkNodeModulesContents(mainNodeModules, retryDest, identifier)
+
+        if (!this.verifyDependencyLinks(worktreePath, identifier)) {
+          console.warn(`[${identifier}] Verification failed after retry — falling back to install`)
+          this.installDependencies(worktreePath, identifier)
+        }
+      }
     } catch (error) {
       console.warn(
-        `Failed to write worktree helper scripts: ${error instanceof Error ? error.message : String(error)}`
+        `[${identifier}] Symlink failed, falling back to install:`,
+        error instanceof Error ? error.message : String(error)
       )
+      this.installDependencies(worktreePath, identifier)
     }
   }
 
   /**
-   * Create a git worktree for an issue with work type suffix.
-   * Delegates to workarea/git-worktree.ts createWorktree().
+   * Verify that critical dependency symlinks are intact and resolvable.
+   * Returns true if verification passes, false if re-linking is needed.
    */
-  createWorktree(
-    issueIdentifier: string,
-    workType: AgentWorkType
-  ): { worktreePath: string; worktreeIdentifier: string } {
-    const result = _createWorktree({
-      issueIdentifier,
-      workType,
-      worktreePathTemplate: this.config.worktreePath,
-      gitRoot: this.gitRoot,
-      packageManager: this.packageManager ?? 'pnpm',
-      mergeDriverDisabled: this.repoConfig?.mergeDriver === 'default',
-      qualityBaselineEnabled: false, // handled below after creation
-      onCreated: (wt) => this.writeWorktreeHelpers(wt),
-    })
+  private verifyDependencyLinks(worktreePath: string, identifier: string): boolean {
+    const destRoot = resolve(worktreePath, 'node_modules')
+    if (!existsSync(destRoot)) return false
 
-    // Capture quality baseline after worktree is ready
-    if (this.isQualityBaselineEnabled()) {
-      try {
-        const qualityConfig = this.buildQualityConfig()
-        const baseline = captureQualityBaseline(result.worktreePath, qualityConfig)
-        saveBaseline(result.worktreePath, baseline)
-        console.log(`Quality baseline captured: ${baseline.tests.total} tests, ${baseline.typecheck.errorCount} type errors, ${baseline.lint.errorCount} lint errors`)
-      } catch (baselineError) {
-        console.warn(`Failed to capture quality baseline: ${baselineError instanceof Error ? baselineError.message : String(baselineError)}`)
+    // Sentinel packages that should always be present in a Node.js project
+    const sentinels = ['typescript']
+
+    // Also check for .modules.yaml (pnpm store metadata) if using pnpm
+    if ((this.packageManager ?? 'pnpm') === 'pnpm') {
+      const repoRoot = findRepoRoot(worktreePath)
+      if (repoRoot) {
+        const pnpmMeta = resolve(repoRoot, 'node_modules', '.modules.yaml')
+        if (existsSync(pnpmMeta)) {
+          sentinels.push('.modules.yaml')
+        }
       }
     }
 
-    return result
+    for (const pkg of sentinels) {
+      const pkgPath = resolve(destRoot, pkg)
+      if (!existsSync(pkgPath)) {
+        console.warn(`[${identifier}] Verification: missing ${pkg}`)
+        return false
+      }
+      // Follow the symlink — throws if target was deleted from main repo
+      try {
+        statSync(pkgPath)
+      } catch {
+        console.warn(`[${identifier}] Verification: broken symlink for ${pkg}`)
+        return false
+      }
+    }
+    return true
   }
 
   /**
-   * Clean up a git worktree.
-   * Delegates to workarea/git-worktree.ts removeWorktree().
+   * Remove all node_modules directories from a worktree (root + per-workspace).
    */
-  removeWorktree(worktreeIdentifier: string, deleteBranchName?: string): void {
-    _removeWorktree(worktreeIdentifier, this.config.worktreePath, this.gitRoot, deleteBranchName)
+  private removeWorktreeNodeModules(worktreePath: string): void {
+    const destRoot = resolve(worktreePath, 'node_modules')
+    try {
+      if (existsSync(destRoot)) {
+        rmSync(destRoot, { recursive: true, force: true })
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+
+    for (const subdir of ['apps', 'packages']) {
+      const subPath = resolve(worktreePath, subdir)
+      if (!existsSync(subPath)) continue
+      try {
+        for (const entry of readdirSync(subPath)) {
+          const nm = resolve(subPath, entry, 'node_modules')
+          if (existsSync(nm)) {
+            rmSync(nm, { recursive: true, force: true })
+          }
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
   }
 
   /**
-   * Link dependencies from the main repo into a worktree via symlinks.
-   * Delegates to workarea/dep-linker.ts linkDependencies().
+   * Create or update a symlink atomically, handling EEXIST races.
+   *
+   * If the destination already exists and points to the correct target, this is a no-op.
+   * If it points elsewhere or isn't a symlink, it's replaced.
    */
-  linkDependencies(worktreePath: string, identifier: string): void {
-    _linkDependencies(worktreePath, identifier, this.packageManager ?? 'pnpm', this.gitRoot)
+  private safeSymlink(src: string, dest: string): void {
+    try {
+      symlinkSync(src, dest)
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        // Verify existing symlink points to correct target
+        try {
+          const existing = readlinkSync(dest)
+          if (resolve(existing) === resolve(src)) return // Already correct
+        } catch {
+          // Not a symlink or can't read — remove and retry
+        }
+        unlinkSync(dest)
+        symlinkSync(src, dest)
+      } else {
+        throw error
+      }
+    }
+  }
+
+  /**
+   * Create a real node_modules directory and symlink each entry from the source.
+   *
+   * Instead of symlinking the entire node_modules directory (which lets pnpm
+   * resolve through the symlink and corrupt the original), we create a real
+   * directory and symlink each entry individually. If pnpm "recreates" this
+   * directory, it only destroys the worktree's symlinks — not the originals.
+   *
+   * Supports incremental sync: if the destination already exists, only missing
+   * or stale entries are updated (safe for concurrent agents and phase reuse).
+   */
+  private linkNodeModulesContents(
+    srcNodeModules: string,
+    destNodeModules: string,
+    identifier: string
+  ): void {
+    mkdirSync(destNodeModules, { recursive: true })
+
+    for (const entry of readdirSync(srcNodeModules)) {
+      const srcEntry = resolve(srcNodeModules, entry)
+      const destEntry = resolve(destNodeModules, entry)
+
+      // For scoped packages (@org/), create the scope dir and symlink contents
+      if (entry.startsWith('@')) {
+        const stat = lstatSync(srcEntry)
+        if (stat.isDirectory()) {
+          mkdirSync(destEntry, { recursive: true })
+          for (const scopedEntry of readdirSync(srcEntry)) {
+            const srcScoped = resolve(srcEntry, scopedEntry)
+            const destScoped = resolve(destEntry, scopedEntry)
+            this.safeSymlink(srcScoped, destScoped)
+          }
+          continue
+        }
+      }
+
+      this.safeSymlink(srcEntry, destEntry)
+    }
+  }
+
+  /**
+   * Fallback: install dependencies via the configured package manager.
+   * Only called when symlinking fails.
+   */
+  private installDependencies(worktreePath: string, identifier: string): void {
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
+    const frozenCmd = getInstallCommand(pm, true)
+    const baseCmd = getInstallCommand(pm, false)
+    if (!baseCmd) return
+
+    console.log(`[${identifier}] Installing dependencies via ${pm}...`)
+
+    // Remove any node_modules from a partial linkDependencies attempt
+    this.removeWorktreeNodeModules(worktreePath)
+
+    // Set ORCHESTRATOR_INSTALL=1 to bypass the preinstall guard script
+    // that blocks installs in worktrees (to prevent symlink corruption).
+    const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
+
+    try {
+      execSync(`${frozenCmd ?? baseCmd} 2>&1`, {
+        cwd: worktreePath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        timeout: 120_000,
+        env: installEnv,
+      })
+      console.log(`[${identifier}] Dependencies installed successfully`)
+    } catch {
+      try {
+        execSync(`${baseCmd} 2>&1`, {
+          cwd: worktreePath,
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          timeout: 120_000,
+          env: installEnv,
+        })
+        console.log(`[${identifier}] Dependencies installed (without frozen lockfile)`)
+      } catch (retryError) {
+        console.warn(
+          `[${identifier}] Install failed (agent may retry):`,
+          retryError instanceof Error ? retryError.message : String(retryError)
+        )
+      }
+    }
   }
 
   /**
    * Sync dependencies between worktree and main repo before linking.
-   * Delegates to workarea/dep-linker.ts syncDependencies().
+   *
+   * When a development agent adds new packages on a branch, the lockfile in the
+   * worktree diverges from the main repo. This method detects lockfile drift,
+   * updates the main repo's node_modules, then re-links into the worktree.
    */
   syncDependencies(worktreePath: string, identifier: string): void {
-    _syncDependencies(worktreePath, identifier, this.packageManager ?? 'pnpm', this.gitRoot)
+    const pm = (this.packageManager ?? 'pnpm') as PackageManager
+    if (pm === 'none') return
+
+    const repoRoot = this.gitRoot ?? resolveMainRepoRoot(worktreePath) ?? findRepoRoot(worktreePath)
+    if (!repoRoot) {
+      this.linkDependencies(worktreePath, identifier)
+      return
+    }
+
+    const lockFileName = getLockFileName(pm)
+    if (!lockFileName) {
+      this.linkDependencies(worktreePath, identifier)
+      return
+    }
+
+    const worktreeLock = resolve(worktreePath, lockFileName)
+    const mainLock = resolve(repoRoot, lockFileName)
+
+    // Detect behind-drift: worktree lockfile is stale vs origin/main
+    // (main was bumped after this worktree was created or last synced)
+    let behindDrift = false
+    try {
+      const originLock = execSync(`git show origin/main:${lockFileName}`, {
+        encoding: 'utf-8',
+        cwd: this.gitRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 10_000,
+      })
+      if (existsSync(worktreeLock)) {
+        const wtContent = readFileSync(worktreeLock, 'utf-8')
+        if (wtContent !== originLock) {
+          console.log(`[${identifier}] Lockfile behind origin/main — updating worktree`)
+          writeFileSync(worktreeLock, originLock)
+          behindDrift = true
+        }
+      }
+    } catch {
+      // git show failed (no remote, no lockfile on main) — skip behind-drift check
+    }
+
+    // Detect ahead-drift: worktree lockfile differs from main repo
+    // (agent added/changed dependencies on the branch)
+    let aheadDrift = false
+    if (existsSync(worktreeLock) && existsSync(mainLock)) {
+      try {
+        const wtContent = readFileSync(worktreeLock, 'utf-8')
+        const mainContent = readFileSync(mainLock, 'utf-8')
+        aheadDrift = wtContent !== mainContent
+      } catch {
+        // If we can't read either file, proceed without sync
+      }
+    }
+
+    if (aheadDrift || behindDrift) {
+      const driftType = behindDrift && aheadDrift ? 'bidirectional' : behindDrift ? 'behind-main' : 'ahead-of-main'
+      console.log(`[${identifier}] Lockfile drift detected (${driftType}) — syncing main repo dependencies`)
+      try {
+        // Copy the worktree's lockfile to the main repo so install picks up new deps
+        copyFileSync(worktreeLock, mainLock)
+
+        // Also copy any changed package.json files from worktree workspaces to main
+        for (const subdir of ['', 'apps', 'packages']) {
+          const wtDir = subdir ? resolve(worktreePath, subdir) : worktreePath
+          const mainDir = subdir ? resolve(repoRoot, subdir) : repoRoot
+
+          if (subdir && !existsSync(wtDir)) continue
+
+          const entries = subdir ? readdirSync(wtDir) : ['']
+          for (const entry of entries) {
+            const wtPkg = resolve(wtDir, entry, 'package.json')
+            const mainPkg = resolve(mainDir, entry, 'package.json')
+            if (!existsSync(wtPkg)) continue
+            try {
+              const wtPkgContent = readFileSync(wtPkg, 'utf-8')
+              const mainPkgContent = existsSync(mainPkg) ? readFileSync(mainPkg, 'utf-8') : ''
+              if (wtPkgContent !== mainPkgContent) {
+                copyFileSync(wtPkg, mainPkg)
+              }
+            } catch {
+              // Skip files we can't read
+            }
+          }
+        }
+
+        // Install in the main repo (not the worktree) to update node_modules
+        const installCmd = getInstallCommand(pm, true) ?? `${pm} install`
+        const installEnv = { ...process.env, ORCHESTRATOR_INSTALL: '1' }
+        execSync(`${installCmd} 2>&1`, {
+          cwd: repoRoot,
+          stdio: 'pipe',
+          encoding: 'utf-8',
+          timeout: 120_000,
+          env: installEnv,
+        })
+        console.log(`[${identifier}] Main repo dependencies synced`)
+
+        // Remove stale worktree node_modules so linkDependencies creates fresh symlinks
+        this.removeWorktreeNodeModules(worktreePath)
+      } catch (error) {
+        console.warn(
+          `[${identifier}] Dependency sync failed, proceeding with existing state:`,
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+
+    this.linkDependencies(worktreePath, identifier)
   }
 
   /**
@@ -1017,7 +2168,7 @@ export class AgentOrchestrator {
     const hasTemplate = this.templateRegistry?.hasTemplate(workType) ?? false
     // Merge customPrompt with any explicit mentionContext. See
     // mergeMentionContext() for the merge semantics.
-    const mergedMentionContext = _mergeMentionContext(mentionContext, customPrompt)
+    const mergedMentionContext = mergeMentionContext(mentionContext, customPrompt)
 
     if (hasTemplate) {
       // Resolve per-project config overrides (falls back to repo-wide defaults)
@@ -1242,7 +2393,7 @@ export class AgentOrchestrator {
     env.LINEAR_WORK_TYPE = workType
 
     // Flag shared worktree for coordination mode so sub-agents know not to modify git state
-    if (workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination') {
+    if (workType === 'development' || workType === 'inflight' || workType === 'qa' || workType === 'acceptance' || workType === 'refinement-coordination') {
       env.SHARED_WORKTREE = 'true'
     }
 
@@ -1285,7 +2436,7 @@ export class AgentOrchestrator {
     // Coordinators need significantly more turns than standard agents
     // since they spawn sub-agents and poll their status repeatedly.
     // Inflight also gets the bump — it may be resuming coordination work.
-    const needsMoreTurns = workType === 'coordination' || workType === 'inflight-coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'refinement-coordination' || workType === 'inflight'
+    const needsMoreTurns = workType === 'development' || workType === 'inflight' || workType === 'qa' || workType === 'acceptance' || workType === 'refinement-coordination'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
     // Build code intelligence enforcement config.
@@ -1410,8 +2561,8 @@ export class AgentOrchestrator {
           if (event.toolName === 'Grep' || event.toolName === 'Glob') {
             grepGlobToolCalls++
           } else if (event.toolName === 'shell' && event.input) {
-            const cmd = _extractShellCommand(event.input)
-            if (cmd && _isGrepGlobShellCommand(cmd)) {
+            const cmd = extractShellCommand(event.input)
+            if (cmd && isGrepGlobShellCommand(cmd)) {
               grepGlobToolCalls++
             }
           }
@@ -1586,7 +2737,7 @@ export class AgentOrchestrator {
 
       // --- Quality Gate: Check quality delta for code-producing work types ---
       if (agent.status === 'completed' && agent.worktreePath && this.isQualityBaselineEnabled()) {
-        const codeProducingTypes = ['development', 'inflight', 'coordination', 'inflight-coordination']
+        const codeProducingTypes = ['development', 'inflight']
         const agentWorkType = agent.workType ?? 'development'
         if (codeProducingTypes.includes(agentWorkType)) {
           try {
@@ -1648,7 +2799,7 @@ export class AgentOrchestrator {
       // Update Linear status based on work type if auto-transition is enabled
       if ((agent.status === 'completed' || agent.status === 'failed') && this.config.autoTransition) {
         const workType = agent.workType ?? 'development'
-        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'coordination' || workType === 'qa-coordination' || workType === 'acceptance-coordination' || workType === 'inflight-coordination' || workType === 'merge'
+        const isResultSensitive = workType === 'qa' || workType === 'acceptance' || workType === 'development' || workType === 'inflight' || workType === 'merge'
 
         let targetStatus: string | null = null
 
@@ -1682,7 +2833,7 @@ export class AgentOrchestrator {
               // error) the worker demotes to Rejected and refinement picks
               // it up. The orchestrator's only job here is to enqueue, which
               // happens unconditionally a few lines below.
-              const deferredToMergeQueue = _shouldDeferAcceptanceTransition(workType, !!this.mergeQueueAdapter)
+              const deferredToMergeQueue = shouldDeferAcceptanceTransition(workType, !!this.mergeQueueAdapter)
               if (deferredToMergeQueue) {
                 log?.info('Acceptance passed — deferring status transition to merge worker', {
                   workType,
@@ -1723,60 +2874,9 @@ export class AgentOrchestrator {
             }
           }
         } else if (agent.status === 'completed') {
-          // Non-QA/acceptance: promote on completion, but validate code-producing work types first
-          const isCodeProducing = workType === 'development' || workType === 'inflight'
-
-          if (isCodeProducing && agent.worktreePath && !agent.pullRequestUrl) {
-            // Code-producing agent completed without a detected PR — check for commits
-            const incompleteCheck = _checkForIncompleteWork(agent.worktreePath)
-
-            if (incompleteCheck.hasIncompleteWork) {
-              // Agent has uncommitted/unpushed changes — block promotion
-              // The diagnostic comment is posted in the cleanup section AFTER the
-              // worktree preservation is confirmed — not here, to avoid promising
-              // preservation before it actually happens.
-              log?.error('Code-producing agent completed without PR and has incomplete work — blocking promotion', {
-                workType,
-                reason: incompleteCheck.reason,
-                details: incompleteCheck.details,
-              })
-
-              // Do NOT set targetStatus — leave issue in current state
-            } else {
-              // Worktree is clean (no uncommitted/unpushed changes) — but check if branch
-              // has commits ahead of main that should have resulted in a PR
-              const hasPushedWork = _checkForPushedWorkWithoutPR(agent.worktreePath)
-
-              if (hasPushedWork.hasPushedWork) {
-                // Agent pushed commits to remote but never created a PR — block promotion
-                log?.error('Code-producing agent pushed commits but no PR was created — blocking promotion', {
-                  workType,
-                  details: hasPushedWork.details,
-                })
-
-                try {
-                  await this.client.createComment(
-                    issueId,
-                    `⚠️ **Agent completed and pushed code, but no PR was created.**\n\n` +
-                    `${hasPushedWork.details}\n\n` +
-                    `**Issue status was NOT promoted** because work cannot be reviewed without a PR.\n\n` +
-                    `The branch has been pushed to the remote. To recover:\n` +
-                    `\`\`\`bash\ngh pr create --head ${hasPushedWork.branch} --title "feat: <title>" --body "..."\n\`\`\`\n` +
-                    `Or re-trigger the agent to complete the PR creation step.`
-                  )
-                } catch {
-                  // Best-effort comment
-                }
-
-                // Do NOT set targetStatus — leave issue in current state
-              } else {
-                // No PR and no pushed commits ahead of main — genuinely clean completion
-                targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
-              }
-            }
-          } else {
-            targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
-          }
+          // Non-result-sensitive work types (research, backlog-creation, refinement, etc.):
+          // promote on completion
+          targetStatus = this.statusMappings.workTypeCompleteStatus[workType]
         }
 
         if (targetStatus) {
@@ -1802,7 +2902,7 @@ export class AgentOrchestrator {
         // to populate it was removed in v0.8.20 as a QA-bypass fix).
         const isMergeWork = workType === 'merge'
         const isAcceptancePass =
-          (workType === 'acceptance' || workType === 'acceptance-coordination') &&
+          workType === 'acceptance' &&
           agent.workResult === 'passed'
         const shouldEnqueue =
           (isMergeWork || isAcceptancePass) &&
@@ -1878,7 +2978,7 @@ export class AgentOrchestrator {
         // Non-code work types (research, backlog-creation, QA, refinement, etc.) use
         // worktrees for codebase exploration but don't produce commits/PRs. Checking
         // them triggers false "work not persisted" warnings from bootstrapped .agent/ files.
-        const codeProducingWorkTypes = new Set(['development', 'inflight', 'coordination', 'inflight-coordination'])
+        const codeProducingWorkTypes = new Set(['development', 'inflight'])
         const agentWorkType = agent.workType ?? 'development'
         const isCodeProducingAgent = codeProducingWorkTypes.has(agentWorkType)
 
@@ -1886,7 +2986,7 @@ export class AgentOrchestrator {
         if (shouldPreserve && isCodeProducingAgent) {
           if (!agent.pullRequestUrl) {
             // No PR detected - check for uncommitted/unpushed work
-            const incompleteCheck = _checkForIncompleteWork(agent.worktreePath)
+            const incompleteCheck = checkForIncompleteWork(agent.worktreePath)
 
             if (incompleteCheck.hasIncompleteWork) {
               // Mark as incomplete and preserve worktree
@@ -2016,7 +3116,7 @@ export class AgentOrchestrator {
 
         // Check for any uncommitted/unpushed work before cleaning up
         if (shouldPreserve) {
-          const incompleteCheck = _checkForIncompleteWork(agent.worktreePath)
+          const incompleteCheck = checkForIncompleteWork(agent.worktreePath)
 
           if (incompleteCheck.hasIncompleteWork) {
             // Preserve worktree - there's work that could be recovered
@@ -2064,7 +3164,7 @@ export class AgentOrchestrator {
         if (shouldCleanup && agent.worktreeIdentifier) {
           try {
             const failedAgentWorkType = agent.workType ?? 'development'
-            const failedCodeProducing = new Set(['development', 'inflight', 'coordination', 'inflight-coordination'])
+            const failedCodeProducing = new Set(['development', 'inflight'])
             const shouldDeleteBranch = !failedCodeProducing.has(failedAgentWorkType)
             this.removeWorktree(
               agent.worktreeIdentifier,
@@ -2402,8 +3502,8 @@ export class AgentOrchestrator {
             for (const err of event.errors) {
               log?.error('Error detail', { error: err })
 
-              if (_isToolRelatedError(err)) {
-                const toolName = _extractToolNameFromError(err)
+              if (isToolRelatedError(err)) {
+                const toolName = extractToolNameFromError(err)
                 try {
                   const issue = await emitter.reportToolError(toolName, err, {
                     issueIdentifier: agent.identifier,
@@ -2776,7 +3876,7 @@ export class AgentOrchestrator {
       console.log(`Processing: ${issue.identifier} - ${issue.title}`)
 
       try {
-        // Detect work type — parent issues with sub-issues use coordination variants
+        // Detect work type from issue status
         const workType = await this.detectWorkType(issue.id, 'Backlog')
 
         // Create worktree with work type suffix
@@ -2873,13 +3973,13 @@ export class AgentOrchestrator {
         const isChild = await this.client.isChildIssue(issueId)
         if (isChild) {
           throw new Error(
-            `Issue ${identifier} is a sub-issue managed by a parent coordinator — skipping independent pickup. ` +
-            `Sub-issues should only be processed by their parent's coordination agent.`
+            `Issue ${identifier} is a sub-issue managed by a parent agent — skipping independent pickup. ` +
+            `Sub-issues should only be processed by their parent issue's agent.`
           )
         }
       } catch (err) {
         // Re-throw our own guard error; swallow API errors so we don't block on transient failures
-        if (err instanceof Error && err.message.includes('managed by a parent coordinator')) {
+        if (err instanceof Error && err.message.includes('managed by a parent agent')) {
           throw err
         }
         console.warn(`Failed to check child status for ${identifier}:`, err)
@@ -2898,18 +3998,15 @@ export class AgentOrchestrator {
       const statusName = issue.status ?? 'Backlog'
       effectiveWorkType = await this.detectWorkType(issueId, statusName)
     } else {
-      // Re-validate: upgrade OR downgrade coordination variant based on fresh parent check.
-      // The caller may have a stale work type from before the session was queued
-      // (e.g., children deleted between queueing and processing).
+      // Re-validate work type from issue status in case the caller had a stale value.
       try {
-        const isParent = await this.client.isParentIssue(issueId)
-        const revalidated = _detectWorkType(issue.status ?? 'Backlog', isParent, this.statusMappings.statusToWorkType)
+        const revalidated = detectWorkTypeHelper(issue.status ?? 'Backlog', false, this.statusMappings.statusToWorkType)
         if (revalidated !== effectiveWorkType) {
-          console.log(`Re-validated work type from ${effectiveWorkType} to ${revalidated} (isParent=${isParent})`)
+          console.log(`Re-validated work type from ${effectiveWorkType} to ${revalidated}`)
           effectiveWorkType = revalidated
         }
       } catch (err) {
-        console.warn(`Failed to check parent status for work type re-validation:`, err)
+        console.warn(`Failed to re-validate work type:`, err)
       }
     }
 
@@ -3652,7 +4749,7 @@ export class AgentOrchestrator {
 
     // Coordinators need significantly more turns than standard agents
     const resolvedWorkType = workType ?? 'development'
-    const needsMoreTurns = resolvedWorkType === 'coordination' || resolvedWorkType === 'qa-coordination' || resolvedWorkType === 'acceptance-coordination' || resolvedWorkType === 'refinement-coordination' || resolvedWorkType === 'inflight'
+    const needsMoreTurns = resolvedWorkType === 'development' || resolvedWorkType === 'inflight' || resolvedWorkType === 'qa' || resolvedWorkType === 'acceptance' || resolvedWorkType === 'refinement-coordination'
     const maxTurns = needsMoreTurns ? 200 : undefined
 
     // Build code intelligence and tool plugin flags

@@ -123,7 +123,7 @@ ${context.failureSummary ?? 'No details recorded.'}
     }
 
     case 'development':
-    case 'coordination': {
+    case 'inflight': {
       return `\n\n## Retry Context
 
 This is retry #${context.cycleCount} for this issue. Previous QA failures:
@@ -132,8 +132,7 @@ ${context.failureSummary ?? 'No details recorded.'}
 Pay special attention to the areas that failed QA previously.`
     }
 
-    case 'qa':
-    case 'qa-coordination': {
+    case 'qa': {
       if (!context.failureSummary) return ''
       return `\n\n## Previous QA Results
 This issue has been QA'd ${context.qaAttemptCount ?? context.cycleCount} times previously.
@@ -185,11 +184,6 @@ ${PERSISTENCE_DIRECTIVES}`
       basePrompt = `Continue work on ${identifier}. Resume where you left off.
 ${PERSISTENCE_DIRECTIVES}`
       break
-    case 'inflight-coordination':
-      basePrompt = `Resume coordination of sub-issue execution for parent issue ${identifier}. Check sub-issue statuses, continue work on incomplete sub-issues, and create a PR when all are done.
-${PERSISTENCE_DIRECTIVES}
-${WORK_RESULT_MARKER_INSTRUCTION}`
-      break
     case 'qa':
       basePrompt = `QA ${identifier}. Validate the implementation against acceptance criteria.
 ${READ_ONLY_CONSTRAINT}
@@ -220,87 +214,6 @@ Acceptance Steps:
       break
     case 'refinement':
       basePrompt = `Refine ${identifier} based on rejection feedback. Read comments, update requirements, then return to Backlog.`
-      break
-    case 'coordination': {
-      const isRetry = workflowContext && workflowContext.cycleCount > 0
-      if (isRetry) {
-        basePrompt = `Fix issues found during QA for parent issue ${identifier}.
-
-REWORK MODE — DO NOT re-coordinate sub-issues from scratch.
-All sub-issues are already Finished and a PR already exists. QA failed and specific fixes are needed.
-
-MANDATORY FIRST STEPS:
-1. Read the most recent QA failure comments: pnpm af-linear list-comments ${identifier}
-2. Identify the SPECIFIC fixes needed from the QA failure details below
-3. Apply fixes directly — do NOT re-spawn sub-agents for already-complete work
-4. Commit fixes, push to the existing PR branch
-5. Run full validation: pnpm typecheck && pnpm build && pnpm test
-6. Update parent issue status to Finished
-
-COMMON REWORK FIXES:
-- Missing migration .json snapshots: Find .ts migrations without .json, patch the latest snapshot
-- TypeScript errors: Read the error details, fix the type issues
-- Missing API fields: Update route handlers to include missing fields
-- Build failures: Run pnpm build, diagnose, fix
-
-If the existing PR branch is checked out, work directly on it. Do not create a new branch or PR.
-${PERSISTENCE_DIRECTIVES}
-${WORK_RESULT_MARKER_INSTRUCTION}`
-      } else {
-        basePrompt = `Coordinate sub-issue execution for parent issue ${identifier}. Fetch sub-issues with dependency graph, create tasks mapping to each sub-issue, spawn sub-agents for unblocked sub-issues in parallel, monitor completion, and create a single PR with all changes when done.
-
-SUB-ISSUE STATUS MANAGEMENT:
-Update sub-issue statuses in Linear as work progresses:
-- When starting work on a sub-issue: update status to Started
-- When a sub-agent completes a sub-issue: update status to Finished
-- If a sub-agent fails: add a comment explaining the failure
-
-COMPLETION VERIFICATION:
-Before marking the parent issue as complete, verify ALL sub-issues are in Finished status.
-If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
-${PERSISTENCE_DIRECTIVES}
-${WORK_RESULT_MARKER_INSTRUCTION}`
-      }
-      break
-    }
-    case 'qa-coordination':
-      basePrompt = `Coordinate QA across sub-issues for parent issue ${identifier}. Fetch sub-issues, validate each against acceptance criteria, collect pass/fail results, and roll up to parent.
-${READ_ONLY_CONSTRAINT}
-${WORK_RESULT_MARKER_INSTRUCTION}
-${PR_SELECTION_GUIDANCE}
-
-QA Coordination Steps:
-1. Find and validate the correct PR (see PR selection above)
-2. Fetch all sub-issues and verify each is in Finished or later status
-3. Run tests scoped to the affected packages
-4. Verify the build passes (pnpm typecheck && pnpm build)
-5. Review changes against each sub-issue's acceptance criteria
-6. Verify cross-cutting concerns: shared types, API contracts, data flow between sub-issues
-7. Check deployment status (CI checks on the PR)
-
-Pass/Fail:
-- PASS (emit <!-- WORK_RESULT:passed -->): ALL tests pass, build succeeds, all sub-issues implemented, deployment healthy
-- FAIL (emit <!-- WORK_RESULT:failed -->): ANY test failure, build error, missing implementation, deployment failure
-Post a result comment listing per-sub-issue findings, then emit the marker.`
-      break
-    case 'acceptance-coordination':
-      basePrompt = `Coordinate acceptance across sub-issues for parent issue ${identifier}. Verify all sub-issues are Delivered, validate the PR, merge it, and bulk-update sub-issues to Accepted.
-${READ_ONLY_CONSTRAINT}
-${WORK_RESULT_MARKER_INSTRUCTION}
-${PR_SELECTION_GUIDANCE}
-
-Acceptance Coordination Steps:
-1. Find and validate the correct PR (see PR selection above)
-2. Verify ALL sub-issues are in Delivered or Accepted status
-3. Verify CI is passing and there are no merge conflicts
-4. Merge the PR
-5. Delete the remote branch after successful merge
-6. Post result comment with per-sub-issue status, then emit the marker
-
-Pass/Fail:
-- PASS (emit <!-- WORK_RESULT:passed -->): All sub-issues Delivered, CI passing, PR merged successfully
-- FAIL (emit <!-- WORK_RESULT:failed -->): Incomplete sub-issues, CI failure, merge conflicts, merge failed
-If ANY issue prevents merging, do NOT attempt to fix it — emit WORK_RESULT:failed with details.`
       break
     case 'refinement-coordination':
       basePrompt = `Coordinate refinement across sub-issues for parent issue ${identifier}.

@@ -109,7 +109,9 @@ describe('buildAgentCard', () => {
     expect(ids).toContain('quality-assurance')
     expect(ids).toContain('research-analysis')
     expect(ids).toContain('backlog-creation')
-    expect(ids).toContain('coordination')
+    expect(ids).toContain('refinement-coordination')
+    expect(ids).not.toContain('coordination')
+    expect(ids).not.toContain('inflight-coordination')
   })
 
   it('uses explicit skills when provided, ignoring auto-generation', () => {

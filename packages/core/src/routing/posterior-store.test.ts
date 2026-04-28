@@ -38,11 +38,11 @@ describe('defaultPosterior', () => {
     expect(posterior.lastUpdated).toBeLessThanOrEqual(after)
   })
 
-  it('works with coordination work types', () => {
-    const posterior = defaultPosterior('amp', 'qa-coordination')
+  it('works with refinement-coordination work type', () => {
+    const posterior = defaultPosterior('amp', 'refinement-coordination')
 
     expect(posterior.provider).toBe('amp')
-    expect(posterior.workType).toBe('qa-coordination')
+    expect(posterior.workType).toBe('refinement-coordination')
     expect(posterior.alpha).toBe(1)
     expect(posterior.beta).toBe(1)
   })

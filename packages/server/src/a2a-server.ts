@@ -79,12 +79,6 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Continue work on in-progress tasks',
     tags: ['workflow'],
   },
-  'inflight-coordination': {
-    id: 'inflight-coordination',
-    name: 'In-Flight Coordination',
-    description: 'Resume coordination of sub-issues for in-progress parent tasks',
-    tags: ['workflow', 'coordination'],
-  },
   acceptance: {
     id: 'acceptance-review',
     name: 'Acceptance Review',
@@ -96,24 +90,6 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     name: 'Refinement',
     description: 'Refine and improve existing work based on feedback',
     tags: ['refinement', 'iteration'],
-  },
-  coordination: {
-    id: 'coordination',
-    name: 'Coordination',
-    description: 'Coordinate work across multiple agents and tasks',
-    tags: ['coordination', 'orchestration'],
-  },
-  'qa-coordination': {
-    id: 'qa-coordination',
-    name: 'QA Coordination',
-    description: 'Coordinate quality assurance across multiple agents',
-    tags: ['qa', 'coordination'],
-  },
-  'acceptance-coordination': {
-    id: 'acceptance-coordination',
-    name: 'Acceptance Coordination',
-    description: 'Coordinate acceptance reviews across multiple agents',
-    tags: ['acceptance', 'coordination'],
   },
   'refinement-coordination': {
     id: 'refinement-coordination',

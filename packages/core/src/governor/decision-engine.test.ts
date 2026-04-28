@@ -194,7 +194,7 @@ describe('decideAction — Icebox (top-of-funnel)', () => {
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('none')
-    expect(result.reason).toContain('coordination')
+    expect(result.reason).toContain('Parent issues')
   })
 
   it('returns none when auto-research is disabled and description is sparse', () => {
@@ -294,14 +294,14 @@ describe('decideAction — Backlog', () => {
     expect(result.reason).toContain('triggering development')
   })
 
-  it('triggers development for parent Backlog issue (coordination)', () => {
+  it('triggers development for parent Backlog issue (agent will coordinate sub-issues)', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Backlog' }),
       isParentIssue: true,
     })
     const result = decideAction(ctx)
     expect(result.action).toBe('trigger-development')
-    expect(result.reason).toContain('coordination')
+    expect(result.reason).toContain('coordinate sub-issues')
   })
 
   it('skips sub-issues in Backlog (coordinator manages via parent)', () => {
@@ -674,7 +674,7 @@ describe('decideAction — config flags integration', () => {
 // ---------------------------------------------------------------------------
 
 describe('decideAction — parent issue handling', () => {
-  it('parent Backlog issue triggers development (coordination template)', () => {
+  it('parent Backlog issue triggers development (agent coordinates sub-issues at runtime)', () => {
     const ctx = makeContext({
       issue: makeIssue({ status: 'Backlog' }),
       isParentIssue: true,
@@ -682,10 +682,10 @@ describe('decideAction — parent issue handling', () => {
     const result = decideAction(ctx)
     expect(result.action).toBe('trigger-development')
     expect(result.reason).toContain('Parent issue')
-    expect(result.reason).toContain('coordination')
+    expect(result.reason).toContain('coordinate sub-issues')
   })
 
-  it('parent Icebox issue returns none (coordination, no top-of-funnel)', () => {
+  it('parent Icebox issue returns none (no top-of-funnel for parent issues)', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2025-06-01T12:00:00Z'))
 

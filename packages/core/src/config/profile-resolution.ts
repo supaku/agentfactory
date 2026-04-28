@@ -31,7 +31,7 @@ import { extractProviderConfig } from './effort.js'
 // ---------------------------------------------------------------------------
 
 export interface ProfileResolutionContext {
-  /** Work type (e.g., 'development', 'qa', 'coordination') */
+  /** Work type (e.g., 'development', 'qa', 'refinement-coordination') */
   workType?: string
   /** Project name (e.g., 'Social') */
   project?: string

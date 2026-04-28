@@ -199,11 +199,6 @@ const CONTRACTS: Record<string, CompletionContract> = {
     required: [FIELD.workResult, FIELD.commentPosted],
     optional: [],
   },
-  'qa-coordination': {
-    workType: 'qa-coordination',
-    required: [FIELD.workResult, FIELD.commentPosted],
-    optional: [],
-  },
   acceptance: {
     workType: 'acceptance',
     // REN-1153: acceptance must produce BOTH a pass/fail decision AND a
@@ -212,23 +207,6 @@ const CONTRACTS: Record<string, CompletionContract> = {
     // emit WORK_RESULT:passed, skip the merge, and the issue would auto-
     // promote Delivered → Accepted leaving the PR open indefinitely.
     required: [FIELD.workResult, FIELD.prMergedOrEnqueued],
-    optional: [],
-  },
-  'acceptance-coordination': {
-    workType: 'acceptance-coordination',
-    required: [FIELD.workResult, FIELD.prMergedOrEnqueued],
-    optional: [],
-  },
-
-  // --- Coordination work types ---
-  coordination: {
-    workType: 'coordination',
-    required: [FIELD.commitsPresent, FIELD.branchPushed, FIELD.prUrl, FIELD.workResult],
-    optional: [],
-  },
-  'inflight-coordination': {
-    workType: 'inflight-coordination',
-    required: [FIELD.commitsPresent, FIELD.branchPushed, FIELD.prUrl, FIELD.workResult],
     optional: [],
   },
 

@@ -183,9 +183,8 @@ The orchestrator wraps every agent session with deterministic post-session valid
 | Work Type | Required Outputs |
 |-----------|-----------------|
 | `development`, `inflight` | Commits on branch, branch pushed, PR created |
-| `qa`, `qa-coordination` | Work result (passed/failed), comment posted |
-| `acceptance`, `acceptance-coordination` | Work result (passed/failed) |
-| `coordination`, `inflight-coordination` | Commits, branch pushed, PR created, work result |
+| `qa` | Work result (passed/failed), comment posted |
+| `acceptance` | Work result (passed/failed) |
 | `refinement` | Comment posted |
 | `refinement-coordination` | Comment posted |
 | `research` | Issue description updated |

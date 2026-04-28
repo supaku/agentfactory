@@ -62,11 +62,6 @@ const PHASE_ACTION_MAP: Record<string, GovernorAction> = {
   'qa': 'trigger-qa',
   'acceptance': 'trigger-acceptance',
   'refinement': 'trigger-refinement',
-  // Coordination phases still map to the same trigger action;
-  // the orchestrator resolves the coordination template via isParentIssue.
-  'coordination': 'trigger-development',
-  'qa-coordination': 'trigger-qa',
-  'acceptance-coordination': 'trigger-acceptance',
   'refinement-coordination': 'trigger-refinement',
 }
 

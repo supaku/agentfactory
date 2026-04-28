@@ -60,7 +60,7 @@ function makeWork(overrides: Partial<QueuedWork> = {}): QueuedWork {
     priority: 2,
     queuedAt: Date.now(),
     prompt: 'test prompt',
-    workType: 'qa-coordination',
+    workType: 'qa',
     ...overrides,
   }
 }

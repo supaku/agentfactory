@@ -38,18 +38,6 @@ phases:
       context-enriched: refinement-context-enriched
       decompose: refinement-decompose
 
-  - name: coordination
-    description: Orchestrate sub-issue execution for parent issues
-    template: coordination
-
-  - name: qa-coordination
-    description: Coordinate QA across sub-issues
-    template: qa-coordination
-
-  - name: acceptance-coordination
-    description: Coordinate acceptance across sub-issues
-    template: acceptance-coordination
-
   - name: refinement-coordination
     description: Coordinate refinement across sub-issues
     template: refinement-coordination

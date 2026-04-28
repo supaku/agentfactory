@@ -168,13 +168,9 @@ export function defaultGetPriority(workType: AgentWorkType): number {
     case 'refinement': return 2
     case 'refinement-coordination': return 2
     case 'inflight': return 2
-    case 'inflight-coordination': return 2
     case 'backlog-creation': return 3
     case 'development': return 3
     case 'research': return 4
-    case 'coordination': return 2
-    case 'qa-coordination': return 2
-    case 'acceptance-coordination': return 2
     default: return 3
   }
 }
@@ -203,15 +199,11 @@ export function getPriority(config: ResolvedWebhookConfig, workType: AgentWorkTy
 export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   research: 'Research work queued. Agent will analyze and flesh out story requirements...',
   'backlog-creation': 'Backlog creation queued. Agent will break down the story into separate issues...',
-  development: 'Development work queued. Waiting for an available worker...',
-  inflight: 'Resuming in-flight work. Agent will continue where it left off...',
-  'inflight-coordination': 'Resuming in-flight coordination. Agent will continue orchestrating sub-issues...',
-  qa: 'QA work queued. Waiting for an available worker to validate the implementation...',
-  acceptance: 'Acceptance testing queued. Agent will verify the deployed preview...',
+  development: 'Development work queued. Agent will implement the feature/fix, coordinating sub-agents when needed...',
+  inflight: 'Resuming in-flight work. Agent will continue where it left off, coordinating sub-agents when needed...',
+  qa: 'QA work queued. Agent will validate the implementation, coordinating sub-agents when needed...',
+  acceptance: 'Acceptance testing queued. Agent will verify and merge, coordinating sub-agents when needed...',
   refinement: 'Refinement work queued. Agent will address rejection feedback...',
-  coordination: 'Coordination work queued. Agent will orchestrate sub-issue execution...',
-  'qa-coordination': 'QA coordination queued. Agent will validate all sub-issues in parallel...',
-  'acceptance-coordination': 'Acceptance coordination queued. Agent will verify sub-issues and merge PR...',
   'refinement-coordination': 'Refinement coordination queued. Agent will triage QA/acceptance failures to sub-issues...',
   merge: 'Merge work queued. Agent will handle PR merge queue operations...',
   security: 'Security scan queued. Agent will run SAST and dependency audit...',

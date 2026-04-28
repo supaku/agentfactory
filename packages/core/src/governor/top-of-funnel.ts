@@ -143,7 +143,7 @@ export function needsResearch(
 ): boolean {
   if (issue.status !== 'Icebox') return false
 
-  // Parent issues use coordination, not individual research
+  // Parent issues use development with sub-agent spawning, not individual research
   if (issue.parentId !== undefined) return false
 
   const ageMs = Date.now() - issue.createdAt
@@ -175,7 +175,7 @@ export function isReadyForBacklogCreation(
 ): boolean {
   if (issue.status !== 'Icebox') return false
 
-  // Parent issues use coordination, not individual backlog creation
+  // Parent issues use development with sub-agent spawning, not individual backlog creation
   if (issue.parentId !== undefined) return false
 
   return isWellResearched(issue.description, config)
@@ -217,7 +217,7 @@ export function determineTopOfFunnelAction(
   }
 
   if (context.isParentIssue) {
-    return none('Parent/coordinator issues are handled via coordination workflow')
+    return none('Parent issues are handled via development workflow with sub-agent spawning')
   }
 
   // --- Research evaluation ---

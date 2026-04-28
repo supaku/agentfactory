@@ -80,7 +80,7 @@ describe('dist ships YAML assets (REN-74 regression)', () => {
     const workTypes = registry.getRegisteredWorkTypes()
 
     // Minimum viable set: the core work types must all be registered.
-    const mustHave = ['development', 'qa', 'acceptance', 'coordination', 'research', 'backlog-creation']
+    const mustHave = ['development', 'qa', 'acceptance', 'refinement', 'research', 'backlog-creation']
     for (const wt of mustHave) {
       expect(workTypes, `work type "${wt}" missing from dist-loaded registry`).toContain(wt)
     }

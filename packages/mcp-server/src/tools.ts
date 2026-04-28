@@ -17,13 +17,10 @@ const WORK_TYPES = [
   'backlog-creation',
   'development',
   'inflight',
-  'inflight-coordination',
   'qa',
   'acceptance',
   'refinement',
-  'coordination',
-  'qa-coordination',
-  'acceptance-coordination',
+  'refinement-coordination',
 ] as const
 
 // Session status values for zod enum validation

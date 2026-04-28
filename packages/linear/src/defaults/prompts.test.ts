@@ -53,23 +53,11 @@ describe('buildFailureContextBlock', () => {
     })
   })
 
-  describe('coordination work type', () => {
+  describe('inflight work type', () => {
     it('includes retry context same as development', () => {
-      const result = buildFailureContextBlock('coordination', baseContext)
+      const result = buildFailureContextBlock('inflight', baseContext)
       expect(result).toContain('Retry Context')
       expect(result).toContain('retry #2')
-    })
-  })
-
-  describe('qa-coordination work type', () => {
-    it('returns empty string when no failure summary', () => {
-      expect(buildFailureContextBlock('qa-coordination', { ...baseContext, failureSummary: null })).toBe('')
-    })
-
-    it('includes previous QA results when failure summary exists', () => {
-      const result = buildFailureContextBlock('qa-coordination', baseContext)
-      expect(result).toContain('Previous QA Results')
-      expect(result).toContain('TypeError in UserService')
     })
   })
 
@@ -161,7 +149,7 @@ describe('defaultGeneratePrompt with workflowContext', () => {
 })
 
 describe('defaultGeneratePrompt read-only constraint', () => {
-  const readOnlyWorkTypes = ['qa', 'acceptance', 'qa-coordination', 'acceptance-coordination'] as const
+  const readOnlyWorkTypes = ['qa', 'acceptance'] as const
 
   for (const workType of readOnlyWorkTypes) {
     it(`includes READ-ONLY constraint for ${workType}`, () => {
@@ -172,7 +160,7 @@ describe('defaultGeneratePrompt read-only constraint', () => {
     })
   }
 
-  const writableWorkTypes = ['development', 'coordination', 'inflight-coordination', 'refinement', 'research', 'backlog-creation', 'inflight'] as const
+  const writableWorkTypes = ['development', 'refinement', 'research', 'backlog-creation', 'inflight'] as const
 
   for (const workType of writableWorkTypes) {
     it(`does NOT include READ-ONLY constraint for ${workType}`, () => {
@@ -182,121 +170,6 @@ describe('defaultGeneratePrompt read-only constraint', () => {
   }
 })
 
-describe('defaultGeneratePrompt coordination prompts have steps', () => {
-  it('qa-coordination includes numbered steps and pass/fail criteria', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'qa-coordination')
-    expect(result).toContain('QA Coordination Steps:')
-    expect(result).toContain('1. Find and validate the correct PR')
-    expect(result).toContain('Pass/Fail:')
-    expect(result).toContain('WORK_RESULT:passed')
-    expect(result).toContain('WORK_RESULT:failed')
-    expect(result).toContain('PR Selection')
-  })
-
-  it('acceptance-coordination includes numbered steps and pass/fail criteria', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'acceptance-coordination')
-    expect(result).toContain('Acceptance Coordination Steps:')
-    expect(result).toContain('1. Find and validate the correct PR')
-    expect(result).toContain('Merge the PR')
-    expect(result).toContain('Pass/Fail:')
-    expect(result).toContain('WORK_RESULT:passed')
-    expect(result).toContain('WORK_RESULT:failed')
-    expect(result).toContain('do NOT attempt to fix it')
-    expect(result).toContain('PR Selection')
-  })
-})
-
-describe('defaultGeneratePrompt coordination retry', () => {
-  it('uses fresh coordination prompt when no workflowContext', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination')
-    expect(result).toContain('Coordinate sub-issue execution for parent issue PROJ-100')
-    expect(result).toContain('Fetch sub-issues with dependency graph')
-    expect(result).not.toContain('REWORK MODE')
-  })
-
-  it('uses fresh coordination prompt when cycleCount is 0', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 0,
-      strategy: 'normal',
-      failureSummary: null,
-    })
-    expect(result).toContain('Coordinate sub-issue execution for parent issue PROJ-100')
-    expect(result).not.toContain('REWORK MODE')
-  })
-
-  it('switches to rework mode when cycleCount > 0', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 1,
-      strategy: 'context-enriched',
-      failureSummary: '2 migrations missing .json snapshots',
-    })
-    expect(result).toContain('REWORK MODE')
-    expect(result).toContain('Fix issues found during QA for parent issue PROJ-100')
-    expect(result).toContain('DO NOT re-coordinate sub-issues from scratch')
-    expect(result).toContain('pnpm af-linear list-comments PROJ-100')
-    expect(result).not.toContain('Fetch sub-issues with dependency graph')
-  })
-
-  it('includes common rework fixes in rework mode', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 2,
-      strategy: 'context-enriched',
-      failureSummary: 'Build failed',
-    })
-    expect(result).toContain('Missing migration .json snapshots')
-    expect(result).toContain('TypeScript errors')
-    expect(result).toContain('Missing API fields')
-    expect(result).toContain('Build failures')
-  })
-
-  it('appends failure context block in rework mode', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 2,
-      strategy: 'context-enriched',
-      failureSummary: 'Tests failed: missing snapshot for 20260308_migration.ts',
-    })
-    expect(result).toContain('REWORK MODE')
-    expect(result).toContain('Retry Context')
-    expect(result).toContain('retry #2')
-    expect(result).toContain('missing snapshot for 20260308_migration.ts')
-  })
-
-  it('includes mention context alongside rework mode', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', 'Focus on the migration snapshots', {
-      cycleCount: 1,
-      strategy: 'normal',
-      failureSummary: 'Missing .json snapshots',
-    })
-    expect(result).toContain('REWORK MODE')
-    expect(result).toContain('Focus on the migration snapshots')
-  })
-
-  it('instructs agent to use existing PR branch', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 1,
-      strategy: 'normal',
-      failureSummary: null,
-    })
-    expect(result).toContain('Do not create a new branch or PR')
-    expect(result).toContain('push to the existing PR branch')
-  })
-
-  it('includes sub-issue status management in fresh coordination', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination')
-    expect(result).toContain('SUB-ISSUE STATUS MANAGEMENT')
-    expect(result).toContain('COMPLETION VERIFICATION')
-  })
-
-  it('does not include sub-issue status management in rework mode', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 1,
-      strategy: 'normal',
-      failureSummary: 'QA failed',
-    })
-    expect(result).not.toContain('SUB-ISSUE STATUS MANAGEMENT')
-    expect(result).not.toContain('COMPLETION VERIFICATION')
-  })
-})
 
 describe('defaultGeneratePrompt persistence directives (REN-74)', () => {
   const persistenceSignatures = [
@@ -307,7 +180,7 @@ describe('defaultGeneratePrompt persistence directives (REN-74)', () => {
     'gh pr create',
   ]
 
-  const codeProducingTypes = ['development', 'inflight', 'coordination', 'inflight-coordination'] as const
+  const codeProducingTypes = ['development', 'inflight'] as const
 
   for (const workType of codeProducingTypes) {
     it(`embeds commit/push/PR directives in ${workType} base prompt`, () => {
@@ -318,19 +191,9 @@ describe('defaultGeneratePrompt persistence directives (REN-74)', () => {
     })
   }
 
-  it('embeds directives in coordination rework mode', () => {
-    const result = defaultGeneratePrompt('PROJ-100', 'coordination', undefined, {
-      cycleCount: 1,
-      strategy: 'normal',
-      failureSummary: 'QA failed',
-    })
-    for (const signature of persistenceSignatures) {
-      expect(result).toContain(signature)
-    }
-  })
 
   it('does NOT embed persistence directives in read-only work types', () => {
-    const readOnlyTypes = ['qa', 'acceptance', 'qa-coordination', 'acceptance-coordination', 'refinement', 'research', 'security'] as const
+    const readOnlyTypes = ['qa', 'acceptance', 'refinement', 'research', 'security'] as const
     for (const workType of readOnlyTypes) {
       const result = defaultGeneratePrompt('PROJ-123', workType)
       expect(result, `${workType} should not include persistence directives`).not.toContain('PERSIST YOUR WORK')

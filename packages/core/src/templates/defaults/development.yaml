@@ -2,7 +2,7 @@ apiVersion: v1
 kind: WorkflowTemplate
 metadata:
   name: development
-  description: Implement the feature/fix as specified
+  description: Implement the feature/fix as specified, coordinating sub-agents when sub-issues are present
   workType: development
 
 tools:
@@ -16,6 +16,98 @@ tools:
     - user-input
 
 prompt: |
+  {{#if subIssueList}}
+  Coordinate sub-issue execution for parent issue {{identifier}}.
+  Fetch sub-issues with dependency graph, create Claude Code Tasks mapping to each sub-issue,
+  spawn sub-agents for unblocked sub-issues in parallel, wait for them to finish,
+  and create a single PR with all changes when done.
+
+  {{> partials/task-lifecycle}}
+
+  SUB-ISSUE STATUS MANAGEMENT:
+  You MUST update sub-issue statuses in Linear as work progresses:
+  - When starting work on a sub-issue: {{linearCli}} update-sub-issue <id> --state Started
+  - When a sub-agent completes a sub-issue: {{linearCli}} update-sub-issue <id> --state Finished --comment "Completed by coordinator agent"
+  - If a sub-agent fails on a sub-issue: {{linearCli}} create-comment <sub-issue-id> --body "Sub-agent failed: <reason>"
+
+  ICEBOX SUB-ISSUE HANDLING:
+  Sub-issues created by the backlog-writer start in Icebox status. These are NOT "future roadmap"
+  items — they are ready for work but awaiting coordination. Before spawning agents:
+  1. Move each Icebox sub-issue you intend to process to Backlog: {{linearCli}} update-sub-issue <id> --state Backlog
+  2. Then proceed with the normal wave-based execution (move to Started when spawning, Finished when done)
+  Only sub-issues explicitly labeled "post-GA", "deferred", or "future" should be treated as
+  intentionally frozen — detach these from the parent or skip them.
+
+  POST-REFINEMENT HANDLING:
+  If this parent issue was recently refined (came back to Backlog after rejection), some sub-issues
+  may already be in Finished status while others are in Backlog with refinement comments. This is
+  expected — the refinement agent triaged failures and moved only the failing sub-issues to Backlog.
+  - Read each Backlog sub-issue's comments for "Refinement Instructions" — these contain the specific
+    fixes required. Pass these instructions to the sub-agent prompt.
+  - Do NOT re-run sub-issues that are already Finished — they passed previous QA.
+  - Ignore any comments from prior agents that mention state transitions (e.g., "moving to delivered").
+    Always trust the ACTUAL Linear status from {{linearCli}} list-sub-issue-statuses, not comment text.
+
+  INTEGRATION VALIDATION (after all sub-agents finish, before commit/push/PR):
+  Sub-agents work on individual sub-issues and may not catch integration failures between their
+  combined changes. After ALL sub-agents have finished, you MUST run:
+  {{#if validateCommand}}
+    {{{validateCommand}}}
+  {{else}}
+    {{packageManager}} typecheck
+  {{/if}}
+  {{#if buildCommand}}
+    {{{buildCommand}}}
+  {{else}}
+    {{packageManager}} build
+  {{/if}}
+  {{#if testCommand}}
+    {{{testCommand}}}
+  {{else}}
+    {{packageManager}} test
+  {{/if}}
+  If any command fails, diagnose the issue and fix it yourself — do NOT re-spawn sub-agents for
+  integration-level problems (e.g., missing switch cases from combined type changes, missing
+  cross-package dependencies). These are integration gaps between sub-issues, not sub-issue failures.
+  Only proceed to commit/push/PR after all validation passes.
+  {{> partials/validation-hard-fail}}
+
+  COMPLETION VERIFICATION:
+  Before marking the parent issue as complete, verify ALL sub-issues are in Finished status:
+    {{linearCli}} list-sub-issue-statuses {{identifier}}
+  If any sub-issue is not Finished, report the failure and do not mark the parent as complete.
+  Sub-issues intentionally deferred (labeled "post-GA", "deferred", or "future") should be
+  detached from the parent before marking coordination as complete, or coordination should fail.
+
+  SCOPE COVERAGE VERIFICATION:
+  After all sub-issues are Finished, re-read the PARENT issue description for {{identifier}}.
+  Verify that the union of all sub-issue deliverables covers EVERY requirement in the parent.
+  If gaps exist between what the parent describes and what sub-issues delivered:
+  - Create additional sub-issues to cover the gaps
+  - Execute them before proceeding to commit/push/PR
+  - Do NOT document gaps as "follow-up" comments — fill them
+  Partial scope delivery with WORK_RESULT:passed is NEVER acceptable.
+
+  AUTONOMOUS OPERATION:
+  You are running autonomously — NEVER ask the user a question or wait for input. If you encounter
+  ambiguity or an unexpected state:
+  - Post a comment on the parent issue describing the situation
+  - If a sub-issue is in an unexpected state (not Backlog/Finished/Icebox), post a comment and skip it
+  - If you cannot proceed at all, create a blocker issue and mark coordination as failed
+  - Always prefer making a reasonable autonomous decision over stopping to ask
+  {{> partials/repo-validation}}
+  {{> partials/path-scoping}}
+  {{> partials/shared-worktree-safety}}
+  {{> partials/dependency-instructions}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
+  {{> partials/commit-push-pr}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
+  {{> partials/work-result-marker}}
+  {{else}}
   Start work on {{identifier}}.
   Implement the feature/fix as specified in the issue description.
   You MUST deliver 100% of the documented scope. Do NOT defer, punt, or list
@@ -45,4 +137,5 @@ prompt: |
 
   Additional context from the user's mention:
   {{mentionContext}}
+  {{/if}}
   {{/if}}

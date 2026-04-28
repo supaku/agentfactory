@@ -319,14 +319,10 @@ const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   'backlog-creation': 'BC',
   development: 'DEV',
   inflight: 'INF',
-  'inflight-coordination': 'INF-COORD',
-  coordination: 'COORD',
   qa: 'QA',
   acceptance: 'AC',
   refinement: 'REF',
   'refinement-coordination': 'REF-COORD',
-  'qa-coordination': 'QA-COORD',
-  'acceptance-coordination': 'AC-COORD',
   merge: 'MRG',
   security: 'SEC',
 }
@@ -791,7 +787,7 @@ export function createWorktree(opts: CreateWorktreeOptions): { worktreePath: str
           })
 
           const CODE_PRODUCING_TYPES = new Set([
-            'development', 'inflight', 'coordination', 'inflight-coordination',
+            'development', 'inflight',
           ])
           if (CODE_PRODUCING_TYPES.has(workType)) {
             try {

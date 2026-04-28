@@ -41,10 +41,11 @@ describe('loadWorkflowDefinitionFile', () => {
     expect(phaseNames).toContain('qa')
     expect(phaseNames).toContain('acceptance')
     expect(phaseNames).toContain('refinement')
-    expect(phaseNames).toContain('coordination')
-    expect(phaseNames).toContain('qa-coordination')
-    expect(phaseNames).toContain('acceptance-coordination')
     expect(phaseNames).toContain('refinement-coordination')
+    expect(phaseNames).not.toContain('coordination')
+    expect(phaseNames).not.toContain('qa-coordination')
+    expect(phaseNames).not.toContain('acceptance-coordination')
+    expect(phaseNames).not.toContain('inflight-coordination')
   })
 
   it('built-in workflow has expected transitions', () => {

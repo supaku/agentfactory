@@ -269,12 +269,14 @@ describe('A2A Server — AgentCard generation', () => {
     expect(skillIds).toContain('research-analysis')
     expect(skillIds).toContain('backlog-creation')
     expect(skillIds).toContain('inflight-work')
-    expect(skillIds).toContain('inflight-coordination')
     expect(skillIds).toContain('acceptance-review')
     expect(skillIds).toContain('refinement')
-    expect(skillIds).toContain('coordination')
-    expect(skillIds).toContain('qa-coordination')
-    expect(skillIds).toContain('acceptance-coordination')
+    expect(skillIds).toContain('refinement-coordination')
+    // Deprecated coordination work types removed
+    expect(skillIds).not.toContain('coordination')
+    expect(skillIds).not.toContain('inflight-coordination')
+    expect(skillIds).not.toContain('qa-coordination')
+    expect(skillIds).not.toContain('acceptance-coordination')
 
     // Each skill should have an id, name, and description
     for (const skill of card.skills) {

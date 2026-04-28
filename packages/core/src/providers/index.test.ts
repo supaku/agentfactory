@@ -202,11 +202,11 @@ describe('resolveProviderWithSource — full cascade', () => {
   })
 
   it('normalizes work type with hyphens to env var format', () => {
-    process.env.AGENT_PROVIDER_QA_COORDINATION = 'codex'
-    const result = resolveProviderWithSource({ workType: 'qa-coordination' })
+    process.env.AGENT_PROVIDER_REFINEMENT_COORDINATION = 'codex'
+    const result = resolveProviderWithSource({ workType: 'refinement-coordination' })
     expect(result.name).toBe('codex')
-    expect(result.source).toBe('env AGENT_PROVIDER_QA_COORDINATION')
-    delete process.env.AGENT_PROVIDER_QA_COORDINATION
+    expect(result.source).toBe('env AGENT_PROVIDER_REFINEMENT_COORDINATION')
+    delete process.env.AGENT_PROVIDER_REFINEMENT_COORDINATION
   })
 })
 
@@ -804,11 +804,11 @@ describe('resolveModelWithSource — full cascade', () => {
   })
 
   it('normalizes work type with hyphens to env var format', () => {
-    process.env.AGENT_MODEL_QA_COORDINATION = 'claude-opus-4-6'
-    const result = resolveModelWithSource({ workType: 'qa-coordination' })
+    process.env.AGENT_MODEL_REFINEMENT_COORDINATION = 'claude-opus-4-6'
+    const result = resolveModelWithSource({ workType: 'refinement-coordination' })
     expect(result.model).toBe('claude-opus-4-6')
-    expect(result.source).toBe('env AGENT_MODEL_QA_COORDINATION')
-    delete process.env.AGENT_MODEL_QA_COORDINATION
+    expect(result.source).toBe('env AGENT_MODEL_REFINEMENT_COORDINATION')
+    delete process.env.AGENT_MODEL_REFINEMENT_COORDINATION
   })
 })
 

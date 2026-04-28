@@ -14,6 +14,61 @@ tools:
     - user-input
 
 prompt: |
+  {{#if subIssueList}}
+  Coordinate acceptance across sub-issues for parent issue {{identifier}}.
+
+  WORKFLOW:
+  1. Verify all sub-issues are in Delivered status: {{linearCli}} list-sub-issue-statuses {{identifier}}
+  2. If any sub-issue is NOT Delivered, report which sub-issues need attention and fail
+  3. Validate the PR:
+     - CI checks are passing
+     {{#if mergeQueueEnabled}}
+     - Merge conflicts are handled by the merge queue worker — do not fail for conflicts
+     {{else}}
+     - No merge conflicts
+     {{/if}}
+     - Preview deployment succeeded (if applicable)
+  {{#if mergeQueueEnabled}}
+  4. Add "approved-for-merge" label: gh pr edit <PR_NUMBER> --add-label "approved-for-merge"
+     The merge queue worker handles rebase, conflict resolution, and merging.
+  {{else}}
+  4. Merge the PR: gh pr merge <PR_NUMBER> --squash
+  5. After merge succeeds, delete the remote branch: git push origin --delete <BRANCH_NAME>
+  {{/if}}
+  6. Bulk-update all sub-issues to Accepted: for each sub-issue, run {{linearCli}} update-sub-issue <id> --state Accepted
+  7. Mark parent as complete (transitions to Accepted)
+
+  AUTONOMOUS OPERATION:
+  You are running autonomously — NEVER ask the user a question or wait for input. If you encounter
+  ambiguity or an unexpected state:
+  - Post a comment on the parent issue describing the situation
+  - If a sub-issue is in an unexpected state, post a comment and fail
+  - If you cannot proceed at all, create a blocker issue and mark as failed
+  - Always prefer making a reasonable autonomous decision over stopping to ask
+
+  IMPORTANT CONSTRAINTS:
+  - This is a GATE — validate and merge or reject. Do NOT make code changes, git commits, or fix issues yourself.
+  - The implementation lives on the PR's branch, NOT in this worktree. This worktree (`{{identifier}}-AC`) is intentionally a fresh branch off main with no project changes — that is normal. Inspect the PR with `gh pr view <PR_NUMBER>` and `gh pr diff <PR_NUMBER>`, not the local working tree.
+  - If you find yourself running `git add`, `git commit`, or editing project files, STOP — you are in the wrong work type. Emit WORK_RESULT:failed and explain that the PR appears incomplete.
+  - If the PR has problems, report them and emit WORK_RESULT:failed. Do NOT attempt to fix them.
+  - ALL sub-issues must be in Delivered status before proceeding
+  {{#if mergeQueueEnabled}}
+  - The PR must pass CI (conflicts are handled by the merge queue worker)
+  {{else}}
+  - The PR must pass CI and have no conflicts
+  {{/if}}
+  - If merge fails, report the error and do not mark as Accepted
+  - NEVER run {{linearCli}} update-issue --state. The orchestrator manages ALL parent issue status transitions based on your WORK_RESULT marker. Manually changing status causes infinite loops.
+  - Only use {{linearCli}} for: list-sub-issue-statuses, list-sub-issues, update-sub-issue, create-comment, check-deployment
+  {{> partials/repo-validation}}
+  {{> partials/large-file-instructions}}{{> partials/code-intelligence-instructions}}{{> partials/cli-instructions}}
+  {{#if mentionContext}}
+
+  Additional context from the user's mention:
+  {{mentionContext}}
+  {{/if}}
+  {{> partials/work-result-marker}}
+  {{else}}
   Process acceptance for {{identifier}}.
   Validate development and QA work is complete.
   {{#if mergeQueueEnabled}}
@@ -48,3 +103,4 @@ prompt: |
   {{mentionContext}}
   {{/if}}
   {{> partials/work-result-marker}}
+  {{/if}}

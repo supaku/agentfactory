@@ -153,7 +153,7 @@ export function parseWorkResult(
   }
 
   // 2. Fall back to heuristic patterns scoped by work type
-  if (workType === 'qa' || workType === 'qa-coordination') {
+  if (workType === 'qa') {
     if (QA_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }
@@ -162,7 +162,7 @@ export function parseWorkResult(
     }
   }
 
-  if (workType === 'acceptance' || workType === 'acceptance-coordination') {
+  if (workType === 'acceptance') {
     if (ACCEPTANCE_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }
@@ -171,7 +171,7 @@ export function parseWorkResult(
     }
   }
 
-  if (workType === 'coordination' || workType === 'inflight-coordination') {
+  if (workType === 'development' || workType === 'inflight') {
     if (COORDINATION_FAIL_PATTERNS.some((p) => p.test(resultMessage))) {
       return 'failed'
     }

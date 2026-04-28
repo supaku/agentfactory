@@ -261,18 +261,13 @@ export async function handleIssueUpdated(
 
     const linearClient = await config.linearClient.getClient(payload.organizationId)
 
-    // Detect parent issues → qa-coordination
-    let qaWorkType: AgentWorkType = 'qa'
+    // QA work type — same for parent and leaf issues (coordinator behavior is runtime-decided)
+    const qaWorkType: AgentWorkType = 'qa'
     let qaPrompt = `QA ${issueIdentifier}`
     try {
-      const isParent = await linearClient.isParentIssue(issueId)
-      if (isParent) {
-        qaWorkType = 'qa-coordination'
-        qaPrompt = config.generatePrompt(issueIdentifier, 'qa-coordination')
-        issueLog.info('Parent issue detected, using qa-coordination work type')
-      }
+      qaPrompt = config.generatePrompt(issueIdentifier, 'qa')
     } catch (err) {
-      issueLog.warn('Failed to detect parent issue for QA routing', { error: err })
+      issueLog.warn('Failed to generate QA prompt', { error: err })
     }
 
     // Enrich QA prompt with previous failure context
@@ -604,17 +599,8 @@ export async function handleIssueUpdated(
 
       await markDevelopmentQueued(issueId)
 
-      // Auto-detect parent for coordination (before session creation so we can store immediately)
-      let workType: AgentWorkType = 'development'
-      try {
-        const isParent = await linearClient.isParentIssue(issueId)
-        if (isParent) {
-          workType = 'coordination'
-          issueLog.info('Parent issue detected, switching to coordination work type')
-        }
-      } catch (err) {
-        issueLog.warn('Failed to check if issue is parent', { error: err })
-      }
+      // Parent and leaf issues use the same work type — coordinator behavior is runtime-decided
+      const workType: AgentWorkType = 'development'
 
       let prompt = config.generatePrompt(issueIdentifier, workType)
 
@@ -829,23 +815,9 @@ export async function handleIssueUpdated(
       const linearClient = await config.linearClient.getClient(payload.organizationId)
 
       // Detect parent → acceptance-coordination (only if sub-issues were actually worked)
-      let acceptanceWorkType: AgentWorkType = 'acceptance'
-      let acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance')
-      try {
-        const isParent = await linearClient.isParentIssue(issueId)
-        if (isParent) {
-          const hasWorked = await linearClient.hasWorkedSubIssues(issueId)
-          if (hasWorked) {
-            acceptanceWorkType = 'acceptance-coordination'
-            acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance-coordination')
-            issueLog.info('Parent issue with worked sub-issues detected, using acceptance-coordination work type')
-          } else {
-            issueLog.info('Parent issue with no worked sub-issues, using regular acceptance work type')
-          }
-        }
-      } catch (err) {
-        issueLog.warn('Failed to detect parent issue for acceptance routing', { error: err })
-      }
+      // Acceptance work type — same for parent and leaf issues (coordinator behavior is runtime-decided)
+      const acceptanceWorkType: AgentWorkType = 'acceptance'
+      const acceptancePrompt = config.generatePrompt(issueIdentifier, 'acceptance')
 
       // Create Linear AgentSession for acceptance
       let acceptanceSessionId: string
