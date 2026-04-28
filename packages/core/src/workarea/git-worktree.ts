@@ -8,6 +8,12 @@
  * These are intentionally plain functions (not yet behind the WorkareaProvider
  * contract) so they can be consumed by the orchestrator today and migrated to the
  * provider interface incrementally.
+ *
+ * Public typed API (REN-1285):
+ *   addWorktree(repo, ref, path)  → AddWorktreeResult
+ *   removeWorktree(path)          → RemoveWorktreeResult   (typed overload)
+ *   listWorktrees(cwd?)           → ListWorktreesResult
+ *   cleanWorktree(path)           → CleanWorktreeResult
  */
 
 import { execSync } from 'child_process'
@@ -21,6 +27,17 @@ import {
   writeFileSync,
 } from 'fs'
 import { resolve, dirname, basename, isAbsolute } from 'path'
+import {
+  ok,
+  err,
+} from './types.js'
+import type {
+  AddWorktreeResult,
+  RemoveWorktreeResult,
+  ListWorktreesResult,
+  CleanWorktreeResult,
+  WorktreeEntry,
+} from './types.js'
 import {
   isBranchConflictError as isBranchConflictErrorShared,
   parseConflictingWorktreePath as parseConflictingWorktreePathShared,
@@ -1067,4 +1084,312 @@ export function configureMergiraf(worktreePath: string): void {
       `Failed to configure mergiraf in worktree: ${error instanceof Error ? error.message : String(error)}`
     )
   }
+}
+
+// ---------------------------------------------------------------------------
+// Typed public API (REN-1285)
+// ---------------------------------------------------------------------------
+
+/**
+ * Paths that must never be used as worktree targets.
+ * Rejects: main repo root, anything inside rensei-architecture/, anything under runs/.
+ */
+function isProtectedPath(targetPath: string): boolean {
+  const normalized = resolve(targetPath)
+
+  // Guard: main repo root (has a real .git directory, not a worktree .git file)
+  const gitPath = resolve(normalized, '.git')
+  if (existsSync(gitPath)) {
+    try {
+      if (statSync(gitPath).isDirectory()) {
+        return true
+      }
+    } catch {
+      // Stat failed — treat as non-protected, git operations will fail later
+    }
+  }
+
+  // Guard: inside rensei-architecture/
+  const parts = normalized.replace(/\\/g, '/').split('/')
+  if (parts.includes('rensei-architecture')) {
+    return true
+  }
+
+  // Guard: under runs/ (top-level sibling or within any ancestor named "runs")
+  if (parts.includes('runs')) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Add a git worktree.
+ *
+ * @param repo - Absolute path to the main git repository (used as `cwd` for
+ *               git commands).
+ * @param ref  - Branch name or commit SHA to check out in the new worktree.
+ *               If the branch does not yet exist, it will be created from
+ *               HEAD.  Pass `--detach` semantics by prefixing the ref with
+ *               `--detach ` (the caller is responsible for splitting args).
+ *               For a clean API, pass a branch name and let addWorktree
+ *               handle the `-b` / existing-branch distinction internally.
+ * @param path - Absolute path where the worktree should be created.
+ *
+ * @returns AddWorktreeResult — ok on success, err with a typed error code on
+ *          expected failure.
+ */
+export function addWorktree(repo: string, ref: string, path: string): AddWorktreeResult {
+  const resolvedPath = resolve(path)
+  const resolvedRepo = resolve(repo)
+
+  if (isProtectedPath(resolvedPath)) {
+    return err('protected-path')
+  }
+
+  // Idempotency: if the path already exists and is a valid worktree, succeed
+  // immediately so that callers can call addWorktree safely on retry.
+  if (existsSync(resolvedPath)) {
+    const validation = validateWorktree(resolvedPath)
+    if (validation.valid) {
+      // Already a valid worktree — return ok (idempotent)
+      return ok({ path: resolvedPath, ref })
+    }
+    return err('path-exists')
+  }
+
+  // Ensure parent directory exists
+  const parentDir = dirname(resolvedPath)
+  if (!existsSync(parentDir)) {
+    mkdirSync(parentDir, { recursive: true })
+  }
+
+  // Check if branch already exists in this repo
+  let branchExists = false
+  try {
+    execSync(`git rev-parse --verify refs/heads/${ref}`, {
+      cwd: resolvedRepo,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    })
+    branchExists = true
+  } catch {
+    branchExists = false
+  }
+
+  try {
+    if (branchExists) {
+      // Branch already exists — check it out (no -b flag)
+      execSync(`git worktree add "${resolvedPath}" "${ref}"`, {
+        cwd: resolvedRepo,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      })
+    } else {
+      // Create new branch from HEAD
+      execSync(`git worktree add -b "${ref}" "${resolvedPath}"`, {
+        cwd: resolvedRepo,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+      })
+    }
+    return ok({ path: resolvedPath, ref })
+  } catch (error) {
+    const msg = getExecSyncErrorMessage(error)
+
+    if (
+      msg.includes('already exists') ||
+      msg.includes('is already used by worktree') ||
+      msg.includes('is already checked out at')
+    ) {
+      return err('branch-exists')
+    }
+
+    if (msg.includes('already exists') && msg.includes(resolvedPath)) {
+      return err('path-exists')
+    }
+
+    return err('git-error')
+  }
+}
+
+/**
+ * Remove a git worktree by its absolute path.
+ *
+ * This is the typed variant of removeWorktree().  The existing overload that
+ * accepts (identifier, template, gitRoot) is kept for backward compatibility
+ * with orchestrator call sites; this new single-argument form is the clean
+ * public API backing WorkareaProvider.release.
+ *
+ * @param path    - Absolute path of the worktree to remove.
+ * @param gitRoot - Optional main repo root.  When omitted the function tries
+ *                  to resolve it via resolveMainRepoRoot(path).
+ *
+ * @returns RemoveWorktreeResult — ok on success, err with a typed error code.
+ */
+export function removeWorktreePath(path: string, gitRoot?: string): RemoveWorktreeResult {
+  const resolvedPath = resolve(path)
+
+  if (isProtectedPath(resolvedPath)) {
+    return err('protected-path')
+  }
+
+  if (!existsSync(resolvedPath)) {
+    return err('not-found')
+  }
+
+  const root = gitRoot
+    ? resolve(gitRoot)
+    : (resolveMainRepoRoot(resolvedPath) ?? resolvedPath)
+
+  try {
+    execSync(`git worktree remove "${resolvedPath}" --force`, {
+      cwd: root,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    })
+    return ok(undefined)
+  } catch (removeError) {
+    const removeMsg = getExecSyncErrorMessage(removeError)
+
+    if (removeMsg.includes('is a main working tree')) {
+      return err('protected-path')
+    }
+
+    // Fallback: rm -rf + prune
+    try {
+      rmSync(resolvedPath, { recursive: true, force: true })
+      execSync('git worktree prune', { cwd: root, stdio: 'pipe', encoding: 'utf-8' })
+      return ok(undefined)
+    } catch {
+      return err('git-error')
+    }
+  }
+}
+
+/**
+ * List all git worktrees for the repository that contains `cwd`.
+ *
+ * Uses `git worktree list --porcelain` and parses the output into a typed
+ * array.  The first entry is always the main working tree.
+ *
+ * @param cwd - Any path inside the git repository (defaults to process.cwd()).
+ *
+ * @returns ListWorktreesResult
+ */
+export function listWorktrees(cwd: string = process.cwd()): ListWorktreesResult {
+  try {
+    const raw = execSync('git worktree list --porcelain', {
+      cwd: resolve(cwd),
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      timeout: 10_000,
+    })
+
+    const entries: WorktreeEntry[] = []
+    let current: Partial<WorktreeEntry> | null = null
+    let isFirst = true
+
+    for (const line of raw.split('\n')) {
+      if (line.startsWith('worktree ')) {
+        if (current && current.path !== undefined) {
+          entries.push({
+            path: current.path,
+            head: current.head ?? '',
+            branch: current.branch ?? null,
+            isMain: current.isMain ?? false,
+          })
+        }
+        current = { path: line.slice('worktree '.length).trim(), isMain: isFirst }
+        isFirst = false
+      } else if (line.startsWith('HEAD ') && current) {
+        current.head = line.slice('HEAD '.length).trim()
+      } else if (line.startsWith('branch ') && current) {
+        // "branch refs/heads/main" → "main"
+        current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '')
+      } else if (line.trim() === 'detached' && current) {
+        current.branch = null
+      }
+    }
+
+    // Push final entry
+    if (current && current.path !== undefined) {
+      entries.push({
+        path: current.path,
+        head: current.head ?? '',
+        branch: current.branch ?? null,
+        isMain: current.isMain ?? false,
+      })
+    }
+
+    return ok(entries)
+  } catch {
+    return err('git-error')
+  }
+}
+
+/**
+ * Clean a worktree by removing well-known artifact directories and resetting
+ * tracked files to HEAD.  Useful for pool reuse (return-to-pool path in
+ * WorkareaProvider).
+ *
+ * Removed artifact dirs: `.next`, `.turbo`, `dist`, `coverage`,
+ * `node_modules/.cache`.
+ *
+ * @param path - Absolute path to the worktree to clean.
+ *
+ * @returns CleanWorktreeResult — value.removed lists the paths that were
+ *          deleted.
+ */
+export function cleanWorktree(path: string): CleanWorktreeResult {
+  const resolvedPath = resolve(path)
+
+  if (isProtectedPath(resolvedPath)) {
+    return err('protected-path')
+  }
+
+  if (!existsSync(resolvedPath)) {
+    return err('not-found')
+  }
+
+  const validation = validateWorktree(resolvedPath)
+  if (!validation.valid) {
+    return err('invalid-worktree')
+  }
+
+  const ARTIFACT_DIRS = [
+    '.next',
+    '.turbo',
+    'dist',
+    'coverage',
+    resolve(resolvedPath, 'node_modules', '.cache'),
+  ]
+
+  const removed: string[] = []
+
+  for (const rel of ARTIFACT_DIRS) {
+    const target = rel.startsWith('/') ? rel : resolve(resolvedPath, rel)
+    if (existsSync(target)) {
+      try {
+        rmSync(target, { recursive: true, force: true })
+        removed.push(target)
+      } catch {
+        // Best-effort — don't abort the whole clean for one dir
+      }
+    }
+  }
+
+  // Reset tracked files to HEAD
+  try {
+    execSync('git checkout -- .', {
+      cwd: resolvedPath,
+      stdio: 'pipe',
+      encoding: 'utf-8',
+      timeout: 30_000,
+    })
+  } catch {
+    return err('git-error')
+  }
+
+  return ok({ removed })
 }
