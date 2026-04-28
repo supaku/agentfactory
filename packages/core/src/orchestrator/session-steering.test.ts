@@ -51,6 +51,7 @@ function makeProvider(overrides?: Partial<AgentProviderCapabilities>): AgentProv
   const capabilities: AgentProviderCapabilities = {
     supportsMessageInjection: false,
     supportsSessionResume: true,
+    emitsSubagentEvents: false,
     ...overrides,
   }
   return {

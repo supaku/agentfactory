@@ -26,6 +26,8 @@ export class AmpProvider implements AgentProvider {
     needsBaseInstructions: false,
     needsPermissionConfig: false,
     supportsCodeIntelligenceEnforcement: false,
+    emitsSubagentEvents: false,
+    humanLabel: 'Amp',
   } as const
 
   spawn(_config: AgentSpawnConfig): AgentHandle {

@@ -426,6 +426,8 @@ export class CodexProvider implements AgentProvider {
         needsBaseInstructions: false,
         needsPermissionConfig: false,
         supportsCodeIntelligenceEnforcement: false,
+        emitsSubagentEvents: false,
+        humanLabel: 'Codex',
       }
     }
     if (this.appServerProvider || isAppServerEnabled()) {
@@ -437,6 +439,8 @@ export class CodexProvider implements AgentProvider {
         needsPermissionConfig: true,
         supportsCodeIntelligenceEnforcement: false,
         toolPermissionFormat: 'codex' as const,
+        emitsSubagentEvents: false,
+        humanLabel: 'Codex',
       }
     }
     return {
@@ -446,6 +450,8 @@ export class CodexProvider implements AgentProvider {
       needsBaseInstructions: false,
       needsPermissionConfig: false,
       supportsCodeIntelligenceEnforcement: false,
+      emitsSubagentEvents: false,
+      humanLabel: 'Codex',
     }
   }
 

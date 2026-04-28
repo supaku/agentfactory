@@ -507,6 +507,8 @@ export class A2aProvider implements AgentProvider {
     needsBaseInstructions: false,
     needsPermissionConfig: false,
     supportsCodeIntelligenceEnforcement: false,
+    emitsSubagentEvents: false,
+    humanLabel: 'A2A',
   } as const
 
   spawn(config: AgentSpawnConfig): AgentHandle {
