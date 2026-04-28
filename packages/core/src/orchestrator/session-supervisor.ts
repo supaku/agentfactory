@@ -13,10 +13,43 @@
  *   - Heartbeat — written by HeartbeatWriter at an interval; read on recovery
  *   - Drain — allow in-flight work to finish before shutdown
  *   - Reap — forcibly stop hung agents, record stop reason
+ *
+ * REN-1316: Architectural Intelligence retrieval is wired at session start and
+ * session end via context-injection.ts. The supervisor exposes the
+ * shouldFlushObservations() helper to determine when a session end warrants
+ * flushing new observations back into the AI graph.
  */
 
 import type { AgentProcess } from './types.js'
 import type { Logger } from '../logger.js'
+
+// ---------------------------------------------------------------------------
+// REN-1316: Session-end observation flush decision
+// ---------------------------------------------------------------------------
+
+/**
+ * Determine whether post-session observation flushing should occur.
+ *
+ * Flushing is only warranted when:
+ * 1. The agent completed (not stopped/failed/incomplete).
+ * 2. The work result was 'passed' (QA/acceptance) or the work type does not
+ *    produce a work-result marker (development, research, etc.).
+ *
+ * This is intentionally conservative — flushing failed sessions could
+ * introduce noise into the architectural graph.
+ */
+export function shouldFlushObservations(
+  agent: AgentProcess,
+): boolean {
+  if (agent.status !== 'completed') return false
+  // For work types that produce a structured work result, only flush on 'passed'.
+  // For other work types (development, research, etc.), flush on completion.
+  const resultSensitiveTypes = new Set(['qa', 'acceptance'])
+  if (agent.workType && resultSensitiveTypes.has(agent.workType)) {
+    return agent.workResult === 'passed'
+  }
+  return true
+}
 
 // ---------------------------------------------------------------------------
 // Timeout configuration

@@ -125,6 +125,7 @@ prompt: |
   {{conflictWarning}}
   {{/if}}
 
+  {{> partials/architectural-context}}
   {{> partials/repo-validation}}
   {{> partials/path-scoping}}
   {{> partials/quality-baseline}}

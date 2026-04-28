@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PartialTemplate
+metadata:
+  name: architectural-context
+  description: Architectural Intelligence context injection — patterns, conventions, decisions, and drift warnings retrieved at session start
+content: |
+  {{#if architecturalContext}}
+  {{{architecturalContext}}}
+
+  ---
+  {{/if}}
