@@ -24,6 +24,7 @@ import {
   formatRatchetResult,
 } from '../orchestrator/quality-ratchet.js'
 import { captureQualityBaseline, type QualityConfig } from '../orchestrator/quality-baseline.js'
+import type { VersionControlProvider, ProposalRef, MergeQueueOpts, VCSMergeResult } from '../vcs/types.js'
 
 const exec = promisify(execCb)
 
@@ -183,6 +184,21 @@ export interface MergeWorkerDeps {
     removeApprovedForMergeLabel(prNumber: number): Promise<void>
     getPRState?(prNumber: number): Promise<PRState | null>
   }
+  /**
+   * Optional VCS provider. When supplied, the merge-queue uses the provider's
+   * capability flags to gate serialization logic:
+   *
+   *   - `capabilities.hasMergeQueue = true`  → standard queue serialization (git path)
+   *   - `capabilities.hasMergeQueue = false` → commutative VCS path (Atomic); the
+   *     worker calls `provider.mergeProposal()` directly without queuing.
+   *
+   * When absent, the worker behaves as before — git semantics are assumed and
+   * the existing rebase/test/push pipeline runs unconditionally. This preserves
+   * backward compatibility for callers that do not configure a VCS provider.
+   *
+   * See: rensei-architecture/008-version-control-providers.md §Merge queue logic
+   */
+  vcsProvider?: VersionControlProvider
 }
 
 /** Subset of GitHub PR state used for pre-flight skip detection. */
@@ -261,6 +277,63 @@ function codeBlock(s: string): string {
   const MAX = 4000
   const truncated = s.length > MAX ? s.slice(0, MAX) + '\n…(truncated)' : s
   return '```\n' + truncated + '\n```'
+}
+
+// ---------------------------------------------------------------------------
+// VCS capability-gated merge helper (008-version-control-providers.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Safely merge a proposal via the VCS provider, branching on whether push
+ * serialization is required.
+ *
+ * Per 008 §Merge queue logic — gated, not hard-wired:
+ *
+ *   - `hasMergeQueue = false` → commutative VCS (Atomic). Pushes commute by
+ *     construction; the worker calls `mergeProposal()` directly.
+ *   - `hasMergeQueue = true`  → git-shaped. Serialization is required; the
+ *     caller is responsible for the queue (this function just calls
+ *     `enqueueForMerge`).
+ *
+ * Returns a VCSMergeResult. `auto-resolved` MUST be surfaced to callers —
+ * never silently treated as `clean`.
+ *
+ * When `provider` is not supplied, returns null (caller falls back to the
+ * existing git rebase pipeline).
+ *
+ * @internal Exported for unit-testing the capability-gated path.
+ */
+export async function mergeProposalSafely(
+  provider: VersionControlProvider | undefined,
+  ref: ProposalRef,
+  queueOpts?: MergeQueueOpts,
+): Promise<VCSMergeResult | null> {
+  if (!provider) return null
+
+  if (!provider.capabilities.hasMergeQueue) {
+    // Commutative VCS — pushes commute by construction (Atomic path).
+    // Call mergeProposal directly without queue serialization.
+    if (!provider.mergeProposal) {
+      // Provider declared hasPullRequests = false — commutative VCS with no PR concept.
+      // The push itself is the merge; nothing to do here.
+      return { kind: 'clean' }
+    }
+    return await provider.mergeProposal(ref, 'auto')
+  }
+
+  // Git-shaped VCS — enqueue for serialized merge.
+  if (!provider.enqueueForMerge) {
+    // Provider declared hasMergeQueue = true but didn't implement enqueueForMerge.
+    // This is a capability mismatch; fall back to direct merge.
+    if (!provider.mergeProposal) return { kind: 'clean' }
+    return await provider.mergeProposal(ref, 'auto')
+  }
+
+  // Enqueue — the caller is responsible for polling the ticket to completion.
+  await provider.enqueueForMerge(ref, queueOpts ?? {})
+  // Return clean to indicate the PR was successfully queued.
+  // The actual merge result will be determined by the queue processing.
+  return { kind: 'clean' }
 }
 
 // ---------------------------------------------------------------------------
