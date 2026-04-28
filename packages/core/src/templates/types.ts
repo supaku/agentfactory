@@ -242,6 +242,7 @@ export interface TemplateRegistryConfig {
 const WORK_TYPES = [
   'research',
   'backlog-creation',
+  'backlog-groomer',
   'development',
   'inflight',
   'qa',

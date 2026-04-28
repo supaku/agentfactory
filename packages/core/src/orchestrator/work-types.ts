@@ -13,6 +13,7 @@
 export type AgentWorkType =
   | 'research'
   | 'backlog-creation'
+  | 'backlog-groomer'       // PM agent: scan icebox, decide discard/refine/escalate-human
   | 'development'
   | 'inflight'
   | 'qa'

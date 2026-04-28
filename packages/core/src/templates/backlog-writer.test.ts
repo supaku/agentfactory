@@ -252,6 +252,7 @@ describe('backlog-writer (REN-1287)', () => {
     })
 
     it('full registry still has 16 registered work types (11 base + 5 strategy templates)', () => {
+      // REN-1298: backlog-groomer added (10 base + 5 strategy templates)
       const workTypes = registry.getRegisteredWorkTypes()
       expect(workTypes.length).toBe(16)
     })

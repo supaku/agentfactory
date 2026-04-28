@@ -199,6 +199,7 @@ export function getPriority(config: ResolvedWebhookConfig, workType: AgentWorkTy
 export const WORK_TYPE_MESSAGES: Record<AgentWorkType, string> = {
   research: 'Research work queued. Agent will analyze and flesh out story requirements...',
   'backlog-creation': 'Backlog creation queued. Agent will break down the story into separate issues...',
+  'backlog-groomer': 'Backlog grooming queued. Agent will triage one icebox issue (discard/refine/escalate)...',
   development: 'Development work queued. Agent will implement the feature/fix, coordinating sub-agents when needed...',
   inflight: 'Resuming in-flight work. Agent will continue where it left off, coordinating sub-agents when needed...',
   qa: 'QA work queued. Agent will validate the implementation, coordinating sub-agents when needed...',

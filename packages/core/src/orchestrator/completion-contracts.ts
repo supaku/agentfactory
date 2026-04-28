@@ -234,6 +234,15 @@ const CONTRACTS: Record<string, CompletionContract> = {
     optional: [FIELD.commentPosted],
   },
 
+  // --- PM agent work types ---
+  // Backlog groomer processes ONE icebox issue per invocation: comment posted
+  // records the disposition (discard/refine/escalate-human).
+  'backlog-groomer': {
+    workType: 'backlog-groomer',
+    required: [FIELD.commentPosted],
+    optional: [FIELD.issueUpdated],
+  },
+
   // --- Merge work types ---
   merge: {
     workType: 'merge',

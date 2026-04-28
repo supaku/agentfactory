@@ -12,6 +12,10 @@ import type { AgentWorkType } from '../types.js'
  * More specific phrases come before generic ones within each work type.
  */
 const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
+  'backlog-groomer': [
+    'groom backlog', 'groom icebox', 'backlog groomer', 'backlog-groomer',
+    'process icebox', 'triage icebox', 'icebox grooming',
+  ],
   'backlog-creation': [
     'create backlog', 'write stories', 'create stories', 'create issues',
     'generate issues', 'make issues', 'turn into issues', 'break down',
@@ -66,6 +70,7 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
  * More specific work types come first to ensure correct matching.
  */
 const WORK_TYPE_PRIORITY_ORDER: AgentWorkType[] = [
+  'backlog-groomer',
   'backlog-creation',
   'research',
   'qa',

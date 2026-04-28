@@ -323,6 +323,7 @@ export type LinearWorkflowStatus =
 export type AgentWorkType =
   | 'research'              // Icebox: Flesh out story details, research
   | 'backlog-creation'      // Icebox: Create backlog issues from researched story
+  | 'backlog-groomer'       // Icebox: PM agent — scan icebox, decide discard/refine/escalate-human (cron-triggered)
   | 'development'           // Backlog: Implement the feature/fix (also coordinates sub-agents for parent issues)
   | 'inflight'              // Started: Continue in-progress work (also resumes sub-agent coordination for parent issues)
   | 'qa'                    // Finished: Validate implementation (also coordinates QA sub-agents for parent issues)
@@ -360,6 +361,7 @@ export type TerminalStatus = typeof TERMINAL_STATUSES[number]
 export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus | null> = {
   'research': null,          // No transition from Icebox on start
   'backlog-creation': null,  // No transition from Icebox on start
+  'backlog-groomer': null,   // Cron-triggered; no status transition on start
   'development': 'Started',  // Backlog -> Started when agent begins
   'inflight': null,          // Already Started, no change
   'qa': null,                // Already Finished
@@ -379,6 +381,7 @@ export const WORK_TYPE_START_STATUS: Record<AgentWorkType, LinearWorkflowStatus 
 export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStatus | null> = {
   'research': null,          // No auto-transition, user moves to Backlog
   'backlog-creation': null,  // Issues created in Backlog, source stays in Icebox
+  'backlog-groomer': null,   // Groomer labels the issue; scheduler drives next pass
   'development': 'Finished', // Started -> Finished when work done
   'inflight': 'Finished',    // Started -> Finished when work done
   'qa': 'Delivered',         // Finished -> Delivered on QA pass
@@ -398,6 +401,7 @@ export const WORK_TYPE_COMPLETE_STATUS: Record<AgentWorkType, LinearWorkflowStat
 export const WORK_TYPE_FAIL_STATUS: Record<AgentWorkType, LinearWorkflowStatus | null> = {
   'research': null,
   'backlog-creation': null,
+  'backlog-groomer': null,   // Groomer failure: no status transition; operator reviews log
   'development': null,
   'inflight': null,
   'qa': 'Rejected',             // QA failure -> Rejected (refinement handler analyzes failure context and dispatches targeted fixes)
@@ -422,6 +426,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
   'acceptance',
   'research',
   'backlog-creation',
+  'backlog-groomer',
   'refinement',
   'refinement-coordination',
   'merge',
@@ -436,6 +441,7 @@ export const WORK_TYPES_REQUIRING_WORKTREE: ReadonlySet<AgentWorkType> = new Set
 export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
   'research': ['Icebox'],
   'backlog-creation': ['Icebox'],
+  'backlog-groomer': ['Icebox'],  // Processes icebox issues on cron; triggered externally
   'development': ['Backlog'],
   'inflight': ['Started'],
   'qa': ['Finished'],
@@ -458,7 +464,7 @@ export const WORK_TYPE_ALLOWED_STATUSES: Record<AgentWorkType, string[]> = {
  *   but could still provide agent specialization hints
  */
 export const STATUS_VALID_WORK_TYPES: Record<string, AgentWorkType[]> = {
-  'Icebox': ['research', 'backlog-creation'],
+  'Icebox': ['research', 'backlog-creation', 'backlog-groomer'],
   'Backlog': ['development'],
   'Started': ['inflight', 'merge'],
   'Finished': ['qa'],
