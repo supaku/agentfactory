@@ -346,24 +346,30 @@ export function hashManifest<F extends ProviderFamily>(manifest: ProviderManifes
 }
 
 // ---------------------------------------------------------------------------
-// Signature verification stub
+// Signature verification
 // ---------------------------------------------------------------------------
 
 /**
  * Verify a provider signature against a manifest.
  *
- * Real sigstore/cosign/minisign wiring is deferred to REN-1314.
- * This stub implements the structural contract so consumers can program
- * against it today:
+ * REN-1314: Real verifier dispatch is now wired via ./signing.ts.
+ * Four algorithms are supported: sigstore, cosign, minisign, ed25519.
+ *
+ * This function is intentionally synchronous for backwards compatibility.
+ * For the full async verification path (including Rekor/Fulcio network calls),
+ * use `verifyManifestSignature()` from `./signing.ts`.
  *
  * - The manifestHash in the signature must match the canonical-JSON sha256 of
  *   the manifest.
  * - The signatureValue must be present and non-empty.
  * - The publicKey must be present and non-empty.
  *
- * For tests that need a "valid" signature, provide a signatureValue whose
- * first 7 bytes encode 'VALID' (base64url) or use the `_testBypassVerify`
- * option.
+ * Test modes (in order of precedence):
+ *   1. _testBypassVerify: true   → skip all crypto, return valid
+ *   2. signatureValue starts with 'STUB_VALID' → skip crypto, return valid
+ *      (legacy test mode, kept for existing tests)
+ *   3. Otherwise: returns an error directing callers to the async path
+ *      in ./signing.ts which dispatches to real algorithm-specific verifiers.
  */
 export interface VerifySignatureOptions {
   /**
@@ -402,24 +408,28 @@ export function verifySignature<F extends ProviderFamily>(
     return { valid: false, reason: 'publicKey is empty' }
   }
 
-  // 3. Cryptographic verification (stubbed — REN-1314 wires real sigstore)
+  // 3. Cryptographic verification
   if (options?._testBypassVerify) {
     return { valid: true }
   }
 
-  // Deterministic stub: sig.signatureValue must start with 'STUB_VALID'
-  // (base64-encoded). Real implementations replace this block with the
-  // algorithm-specific verification call.
-  if (!sig.signatureValue.startsWith('STUB_VALID')) {
-    return {
-      valid: false,
-      reason:
-        'Cryptographic verification not yet implemented (REN-1314). ' +
-        'Use signatureValue starting with "STUB_VALID" in tests, or pass _testBypassVerify: true.',
-    }
+  // Legacy STUB_VALID mode — retained for existing tests.
+  // New code should use verifyManifestSignature() from ./signing.ts instead.
+  if (sig.signatureValue.startsWith('STUB_VALID')) {
+    return { valid: true }
   }
 
-  return { valid: true }
+  // Real cryptographic verification requires the async verifier dispatch
+  // in ./signing.ts. This synchronous function cannot await that path.
+  // All four algorithms (sigstore, cosign, minisign, ed25519) are available
+  // via verifyManifestSignature() in ./signing.ts.
+  return {
+    valid: false,
+    reason:
+      `Cryptographic verification for algorithm '${sig.algorithm}' requires the async path. ` +
+      `Use verifyManifestSignature() from ./signing.ts, or use ` +
+      `signatureValue starting with "STUB_VALID" / pass _testBypassVerify: true for tests.`,
+  }
 }
 
 // ---------------------------------------------------------------------------
