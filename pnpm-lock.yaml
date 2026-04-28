@@ -44,6 +44,9 @@ importers:
       '@renseiai/agentfactory-server':
         specifier: workspace:*
         version: link:../server
+      '@renseiai/architectural-intelligence':
+        specifier: workspace:*
+        version: link:../architectural-intelligence
       '@renseiai/plugin-linear':
         specifier: workspace:*
         version: link:../linear

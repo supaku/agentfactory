@@ -49,6 +49,8 @@ import type {
   ChangeRef,
 } from './types.js'
 import { CITATION_CONFIDENCE_RANK } from './types.js'
+import type { ModelAdapter } from './eval.js'
+import { assessChange } from './drift.js'
 
 // ---------------------------------------------------------------------------
 // Config
@@ -218,6 +220,8 @@ interface DeviationRow {
  */
 export class SqliteArchitecturalIntelligence implements ArchitecturalIntelligence {
   private readonly _db: DatabaseSync
+  private _modelAdapter: ModelAdapter | undefined
+  private readonly _defaultScope: ArchScope
 
   constructor(config: SqliteArchConfig = {}) {
     const dbPath = config.dbPath ?? '.agentfactory/arch-intelligence/db.sqlite'
@@ -230,6 +234,8 @@ export class SqliteArchitecturalIntelligence implements ArchitecturalIntelligenc
 
     this._db = new DatabaseSync(dbPath)
     this._db.exec(SCHEMA_DDL)
+
+    this._defaultScope = { level: 'project' }
   }
 
   // ---------------------------------------------------------------------------
@@ -417,17 +423,69 @@ export class SqliteArchitecturalIntelligence implements ArchitecturalIntelligenc
   // assess()
   // ---------------------------------------------------------------------------
 
-  async assess(_change: ChangeRef): Promise<DriftReport> {
-    // Skeleton placeholder — drift detection algorithm is out-of-scope for
-    // REN-1315. Deferred to REN-1317 (drift detection).
-    return {
-      change: _change,
-      deviations: [],
-      reinforced: [],
-      hasCriticalDrift: false,
-      summary: 'Drift assessment not yet implemented (REN-1317).',
-      assessedAt: new Date(),
+  /**
+   * Assess a change for architectural drift.
+   *
+   * REN-1326: Delegates to the `assessChange()` function in drift.ts, which
+   * runs the deviation-detection prompt and returns a structured DriftReport.
+   *
+   * Requires a ModelAdapter. When called without one (e.g., from query() with
+   * includeActiveDrift=true and no adapter provided), returns an empty report
+   * with an informational message — the caller should inject an adapter via
+   * assessWithAdapter().
+   *
+   * Use `assessWithAdapter()` for the full drift detection flow.
+   */
+  async assess(change: ChangeRef): Promise<DriftReport> {
+    if (!this._modelAdapter) {
+      // No adapter configured — return a minimal informational report.
+      // Callers that need actual drift detection should use assessWithAdapter().
+      return {
+        change,
+        deviations: [],
+        reinforced: [],
+        hasCriticalDrift: false,
+        summary:
+          'No model adapter configured. Call assessWithAdapter(change, adapter) ' +
+          'for full drift detection. Set a default adapter via setModelAdapter().',
+        assessedAt: new Date(),
+      }
     }
+
+    return assessChange(this, this._modelAdapter, { change, scope: this._defaultScope })
+  }
+
+  /**
+   * Assess a change for architectural drift using a specific model adapter.
+   *
+   * This is the preferred entry point for ad-hoc assessment (e.g., CLI usage).
+   * The `adapter` parameter is the LLM interface — inject a deterministic stub
+   * in tests.
+   *
+   * @param change  - The VCS change reference to assess.
+   * @param adapter - The model adapter (Anthropic SDK, stub, etc.).
+   * @param prDiff  - Optional PR diff for diff-signal detection.
+   * @param scope   - Scope to query the baseline against (defaults to project-level).
+   */
+  async assessWithAdapter(
+    change: ChangeRef,
+    adapter: ModelAdapter,
+    prDiff?: import('./diff-reader.js').PrDiff,
+    scope?: import('./types.js').ArchScope,
+  ): Promise<DriftReport> {
+    return assessChange(this, adapter, {
+      change,
+      prDiff,
+      scope: scope ?? this._defaultScope,
+    })
+  }
+
+  /**
+   * Set a default model adapter for `assess()` calls that don't specify one.
+   * Optional — only needed when assess() is called without an explicit adapter.
+   */
+  setModelAdapter(adapter: ModelAdapter): void {
+    this._modelAdapter = adapter
   }
 
   // ---------------------------------------------------------------------------
