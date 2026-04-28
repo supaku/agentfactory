@@ -198,6 +198,9 @@ export type { GovernorIssue as LinearGovernorIssue } from './platform-adapter.js
 // Issue tracker adapter (implements core's IssueTrackerClient)
 export { LinearIssueTrackerClient, createLinearStatusMappings } from './issue-tracker-adapter.js'
 
+// IssueTrackerProvider implementation (implements core's IssueTrackerProvider contract)
+export { LinearIssueTrackerProvider } from './linear-issue-tracker-provider.js'
+
 // Proxy issue tracker adapter (implements IssueTrackerClient via remote proxy)
 export { ProxyIssueTrackerAdapter } from './proxy-issue-tracker-adapter.js'
 
