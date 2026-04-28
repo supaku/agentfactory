@@ -304,6 +304,7 @@ export function getTaskListId(
   const suffixMap: Record<AgentWorkType, string> = {
     research: 'RES',
     'backlog-creation': 'BC',
+    'backlog-groomer': 'BG',
     development: 'DEV',
     inflight: 'INF',
     qa: 'QA',

@@ -73,6 +73,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Create and prioritize backlog items from requirements',
     tags: ['planning', 'backlog'],
   },
+  'backlog-groomer': {
+    id: 'backlog-groomer',
+    name: 'Backlog Groomer',
+    description: 'Triage one icebox issue per invocation: discard, refine, or escalate-human (PM agent)',
+    tags: ['planning', 'backlog', 'pm'],
+  },
   inflight: {
     id: 'inflight-work',
     name: 'In-Flight Work',

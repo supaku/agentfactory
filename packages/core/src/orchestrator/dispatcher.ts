@@ -24,6 +24,7 @@ import type { AgentWorkType } from './work-types.js'
 export const WORK_TYPE_SUFFIX: Record<AgentWorkType, string> = {
   research: 'RES',
   'backlog-creation': 'BC',
+  'backlog-groomer': 'BG',
   development: 'DEV',
   inflight: 'INF',
   qa: 'QA',

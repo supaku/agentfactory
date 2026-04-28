@@ -395,6 +395,19 @@ STRUCTURED RESULT MARKER (REQUIRED):
 - On success: Include <!-- WORK_RESULT:passed --> in your final message
 - On failure (no issues to audit, PRs missing): Include <!-- WORK_RESULT:failed -->${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'backlog-groomer':
+      // PM agent (012 Archetype 3 — Ralph Wiggum loop). One issue per invocation.
+      // The TemplateRegistry-based prompt is the canonical path; this legacy
+      // function is a fallback for environments that haven't migrated to templates.
+      basePrompt = `Groom icebox issue ${identifier}.
+Read the issue, evaluate its relevance, and apply exactly one disposition:
+- discard: add label pm:discard, post comment, close issue.
+- refine: add label pm:needs-refine, post comment describing what needs refinement.
+- escalate-human: add label pm:needs-human-decision, post comment describing the decision needed.
+If the issue is older than 60 days with no recent activity, also add label pm:stale.
+NEVER create sub-issues (Principle 1). Process this one issue only.${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries

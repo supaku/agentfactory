@@ -282,6 +282,19 @@ Outcome Audit Steps:
 5. For issues with gaps: tag with audit:has-followups.
 IMPORTANT: Do NOT create sub-issues (--parentId). Follow-up issues are standalone.`
       break
+
+    case 'backlog-groomer':
+      // PM agent (012 Archetype 3 — Ralph Wiggum loop). One issue per invocation.
+      // The TemplateRegistry-based prompt is the canonical path; this legacy
+      // function is a fallback for environments that haven't migrated to templates.
+      basePrompt = `Groom icebox issue ${identifier}.
+Read the issue, evaluate its relevance, and apply exactly one disposition:
+- discard: add label pm:discard, post comment explaining why, close the issue.
+- refine: add label pm:needs-refine, post comment describing what needs refinement.
+- escalate-human: add label pm:needs-human-decision, post comment describing the decision needed.
+If the issue is older than 60 days with no recent activity, also add label pm:stale.
+NEVER create sub-issues (Principle 1). Process this one issue only.`
+      break
   }
 
   basePrompt += HUMAN_BLOCKER_INSTRUCTION
