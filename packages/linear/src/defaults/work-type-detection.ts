@@ -51,6 +51,10 @@ const DEFAULT_WORK_TYPE_KEYWORDS: Record<AgentWorkType, string[]> = {
     'security scan', 'security audit', 'vulnerability scan', 'sast',
     'dependency audit', 'run security', 'scan for vulnerabilities',
   ],
+  'outcome-auditor': [
+    'outcome audit', 'audit outcomes', 'audit accepted', 'delivery audit',
+    'check delivered', 'verify delivery', 'outcome-auditor',
+  ],
 }
 
 /**

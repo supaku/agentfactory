@@ -109,6 +109,12 @@ const WORK_TYPE_SKILLS: Record<AgentWorkType, A2aSkill> = {
     description: 'Run SAST and dependency audit scans, output structured vulnerability data',
     tags: ['security', 'scanning'],
   },
+  'outcome-auditor': {
+    id: 'outcome-auditor',
+    name: 'Outcome Auditor',
+    description: 'Audit recently accepted issues for delivery gaps; author follow-up issues for missed AC items',
+    tags: ['audit', 'pm', 'quality'],
+  },
 }
 
 /**

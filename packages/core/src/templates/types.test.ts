@@ -126,11 +126,11 @@ describe('PartialTemplateSchema', () => {
 })
 
 describe('AgentWorkTypeSchema', () => {
-  it('accepts all 10 work types', () => {
+  it('accepts all 11 work types', () => {
     const workTypes = [
       'research', 'backlog-creation', 'development', 'inflight',
       'qa', 'acceptance', 'refinement',
-      'refinement-coordination', 'merge', 'security',
+      'refinement-coordination', 'merge', 'security', 'outcome-auditor',
     ]
     for (const wt of workTypes) {
       expect(AgentWorkTypeSchema.parse(wt)).toBe(wt)

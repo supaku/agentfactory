@@ -354,6 +354,24 @@ You MUST include a structured result marker in your final output message.
 - On pass: Include <!-- WORK_RESULT:passed --> in your final message
 - On fail: Include <!-- WORK_RESULT:failed --> in your final message${LINEAR_CLI_INSTRUCTION}`
       break
+
+    case 'outcome-auditor':
+      basePrompt = `Run outcome audit: verify recently accepted issues delivered their stated intent.
+
+WORKFLOW:
+1. List recently accepted issues: pnpm af-linear list-issues --project ${identifier} --status Accepted --limit 20
+2. For each issue: read AC, find merged PR via git log, diff PR against AC.
+3. For gaps (missed/deferred/incorrect work): create a standalone follow-up issue in Backlog.
+   - NEVER use --parentId (Principle 1: sub-issues are reserved for human intent).
+   - Reference source issue in description; add blocks relation if gap blocks further use.
+   - Tag source issue: pnpm af-linear update-issue <id> --labels "audit:has-followups"
+4. For clean issues: pnpm af-linear update-issue <id> --labels "audit:clean"
+   Post comment: "Audit pass: no gaps detected."
+
+STRUCTURED RESULT MARKER (REQUIRED):
+- On success: Include <!-- WORK_RESULT:passed --> in your final message
+- On failure (no issues to audit, PRs missing): Include <!-- WORK_RESULT:failed -->${LINEAR_CLI_INSTRUCTION}`
+      break
   }
 
   // Inject workflow failure context for retries
