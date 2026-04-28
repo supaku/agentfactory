@@ -51,3 +51,23 @@ export type {
   SystemdDoctorOptions,
   SystemdDoctorResult,
 } from './installer-linux.js'
+export {
+  generatePlist,
+  install as installLaunchd,
+  uninstall as uninstallLaunchd,
+  doctor as doctorLaunchd,
+  resolveDaemonBin,
+  readInstalledPlist,
+  LAUNCHD_LABEL,
+  PLIST_PATH,
+  DEFAULT_DAEMON_BIN_GLOBAL,
+  DEFAULT_DAEMON_BIN_USER,
+  LOG_DIR,
+  LOG_PATH,
+  ERROR_LOG_PATH,
+} from './launchd-installer.js'
+export type {
+  LaunchdInstallOptions,
+  DoctorResult,
+  DoctorCheck,
+} from './launchd-installer.js'
