@@ -241,6 +241,44 @@ describe('GitHub capability profile', () => {
   it('declares email identity scheme', () => {
     expect(GITHUB_VCS_CAPABILITIES.identityScheme).toBe('email')
   })
+
+  // ── REN-1343 corpus-008 surface ─────────────────────────────────────────
+  it('declares mergeModel = three-way-text (corpus-008 alias of mergeStrategy)', () => {
+    expect(GITHUB_VCS_CAPABILITIES.mergeModel).toBe('three-way-text')
+    expect(GITHUB_VCS_CAPABILITIES.mergeModel).toBe(GITHUB_VCS_CAPABILITIES.mergeStrategy)
+  })
+
+  it('declares patchModel = commit-graph', () => {
+    expect(GITHUB_VCS_CAPABILITIES.patchModel).toBe('commit-graph')
+  })
+
+  it('declares branchSemantics = git-branches', () => {
+    expect(GITHUB_VCS_CAPABILITIES.branchSemantics).toBe('git-branches')
+  })
+
+  it('declares auditModel = commit-trailer (git fakes attestation via trailers)', () => {
+    expect(GITHUB_VCS_CAPABILITIES.auditModel).toBe('commit-trailer')
+  })
+
+  it('declares supportsAttest = true (every shipped adapter supports attest)', () => {
+    expect(GITHUB_VCS_CAPABILITIES.supportsAttest).toBe(true)
+  })
+
+  it('declares remoteProtocol = git-smart-http', () => {
+    expect(GITHUB_VCS_CAPABILITIES.remoteProtocol).toBe('git-smart-http')
+  })
+
+  it('declares supportsRebase = true', () => {
+    expect(GITHUB_VCS_CAPABILITIES.supportsRebase).toBe(true)
+  })
+
+  it('declares supportsBranches = true', () => {
+    expect(GITHUB_VCS_CAPABILITIES.supportsBranches).toBe(true)
+  })
+
+  it('declares supportsBinary = true', () => {
+    expect(GITHUB_VCS_CAPABILITIES.supportsBinary).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------

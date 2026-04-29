@@ -167,6 +167,44 @@ describe('Atomic capability profile', () => {
   it('declares provenanceNative = true (first-class attestation, NOT trailers)', () => {
     expect(ATOMIC_VCS_CAPABILITIES.provenanceNative).toBe(true)
   })
+
+  // ── REN-1343 corpus-008 surface ─────────────────────────────────────────
+  it('declares mergeModel = patch-theory (corpus-008 alias of mergeStrategy)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.mergeModel).toBe('patch-theory')
+    expect(ATOMIC_VCS_CAPABILITIES.mergeModel).toBe(ATOMIC_VCS_CAPABILITIES.mergeStrategy)
+  })
+
+  it('declares patchModel = patch-theoretic (the headline distinction per corpus 008 §Atomic)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.patchModel).toBe('patch-theoretic')
+  })
+
+  it('declares branchSemantics = atomic-views (Atomic "views", not git refs)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.branchSemantics).toBe('atomic-views')
+  })
+
+  it('declares auditModel = native (Ed25519 + session metadata embedded in patch)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.auditModel).toBe('native')
+  })
+
+  it('declares supportsAttest = true (consumed by REN-1314 sigstore work)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.supportsAttest).toBe(true)
+  })
+
+  it('declares remoteProtocol = atomic-merkle', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.remoteProtocol).toBe('atomic-merkle')
+  })
+
+  it('declares supportsRebase = false (rebase is a commit-graph concept)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.supportsRebase).toBe(false)
+  })
+
+  it('declares supportsBranches = true (Atomic views are branches)', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.supportsBranches).toBe(true)
+  })
+
+  it('declares supportsBinary = true', () => {
+    expect(ATOMIC_VCS_CAPABILITIES.supportsBinary).toBe(true)
+  })
 })
 
 // ---------------------------------------------------------------------------

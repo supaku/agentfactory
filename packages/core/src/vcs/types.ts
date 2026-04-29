@@ -222,7 +222,12 @@ export interface AttestationRef {
  *   - openProposal / mergeProposal ← capabilities.hasPullRequests
  *   - enqueueForMerge              ← capabilities.hasMergeQueue
  *   - resolveConflict              ← consumer checks conflicts[].length > 0
- *   - attest                       ← always supported (faked via trailers if !provenanceNative)
+ *   - attest                       ← capabilities.supportsAttest (REN-1343 first-class
+ *                                    verb declaration; consumed by REN-1314 sigstore).
+ *                                    Every shipped adapter declares supportsAttest: true
+ *                                    — git fakes via trailers, S3 via metadata, Atomic
+ *                                    uses native Ed25519. Minimal community adapters
+ *                                    MAY declare false to opt out.
  *
  * Usage pattern:
  * ```ts
@@ -309,8 +314,12 @@ export interface VersionControlProvider extends Provider<'vcs'> {
    * For Atomic: uses native Ed25519 + session attestation.
    * For S3: writes object metadata.
    *
-   * Always supported; provenanceNative indicates whether attestation is
-   * first-class (Atomic) vs faked via trailers/metadata (git, S3).
+   * Gate: capabilities.supportsAttest (REN-1343). First-class verb on every
+   * shipped adapter. provenanceNative additionally indicates whether the
+   * attestation is native (Atomic) or faked via trailers/metadata (git, S3).
+   *
+   * Consumed by REN-1314 (sigstore manifest signing) — providers declaring
+   * supportsAttest: true are eligible for the SLSA-attested signing pipeline.
    */
   attest?(ws: Workspace, sessionMetadata: SessionAttestation): Promise<AttestationRef>
 }
