@@ -35,6 +35,11 @@ import {
   releaseFiles as serverReleaseFiles,
   releaseAllSessionFiles as serverReleaseAllSessionFiles,
   isRedisConfigured,
+  createSessionHeartbeat,
+  verifyTenantEnvelope,
+  sessionEventBus,
+  type TenantEnvelope,
+  type SessionHeartbeatHandle,
 } from '@renseiai/agentfactory-server'
 import { createProxyFileReservationDelegate } from '@renseiai/agentfactory'
 
@@ -93,6 +98,12 @@ interface WorkItem {
   model?: string
   /** Sub-agent model override from platform dispatch */
   subAgentModel?: string
+  /**
+   * Tenant envelope injected at enqueue time per ADR-2026-04-29 §Decision 6.
+   * Workers re-verify the JWT signature against the trust anchor and reject
+   * jobs whose `org` claim does not match their registration.  REN-1399.
+   */
+  tenantEnvelope?: TenantEnvelope
 }
 
 interface InboxMessage {
@@ -650,7 +661,84 @@ export async function runWorker(
     // Issue lock TTL refresher
     let lockRefresher: ReturnType<typeof setInterval> | null = null
 
+    // Per-step session heartbeat (REN-1399 / ADR Decision 5).  Started below
+    // once we've passed the JWT envelope check; stopped in finally.
+    let sessionHeartbeat: SessionHeartbeatHandle | null = null
+
     try {
+      // -- Tenant envelope verification (REN-1399 / ADR Decision 6) --------
+      // The dispatcher attaches a JWT envelope to every queued work item.
+      // We re-verify the signature against the REN-1314 trust anchor and
+      // confirm the `org` claim matches our registration.  Mismatch ->
+      // emit `session.permission-denied` and reject before any tools fire.
+      if (work.tenantEnvelope) {
+        const trustedIssuersEnv = process.env.WORKER_JWT_TRUSTED_ISSUERS ?? ''
+        const trustedIssuers = trustedIssuersEnv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+        const workerOrg = process.env.WORKER_ORG_ID
+        const hmacKey = process.env.WORKER_JWT_HMAC_KEY
+        const issuerKeysJson = process.env.WORKER_JWT_ISSUER_PUBLIC_KEYS
+        let issuerPublicKeys: Record<string, string> | undefined
+        if (issuerKeysJson) {
+          try {
+            issuerPublicKeys = JSON.parse(issuerKeysJson) as Record<string, string>
+          } catch {
+            agentLog.warn('WORKER_JWT_ISSUER_PUBLIC_KEYS is not valid JSON; ignoring')
+          }
+        }
+
+        // When the trust anchor is configured, enforcement is on.  Without
+        // a configured workerOrg / trustedIssuers the verification is a
+        // no-op (rollout window — falls back to the legacy WORKER_API_KEY
+        // path).
+        if (workerOrg && trustedIssuers.length > 0) {
+          const verifyOpts = {
+            trustedIssuers,
+            workerOrg,
+            ...(hmacKey && { hmacKey }),
+            ...(issuerPublicKeys && { issuerPublicKeys }),
+          }
+          const result = verifyTenantEnvelope(work.tenantEnvelope, verifyOpts)
+          if (!result.valid) {
+            agentLog.error('Tenant envelope verification failed; rejecting work', {
+              sessionId: work.sessionId.substring(0, 8),
+              reason: result.reason,
+              detail: result.detail,
+            })
+            // Emit a permission_denied audit event for the platform mirror.
+            await sessionEventBus.emit({
+              kind: 'session.permission-denied',
+              sessionId: work.sessionId,
+              workerId: workerId ?? 'unknown',
+              emittedAt: Date.now(),
+              reason: result.reason,
+              ...(work.tenantEnvelope.org && { jobOrg: work.tenantEnvelope.org }),
+              workerOrg,
+            })
+            finalStatus = 'failed'
+            statusPayload = {
+              error: { message: `permission_denied: ${result.reason}` },
+            }
+            await reportStatus(work.sessionId, 'finalizing').catch(() => {})
+            await postProgress(
+              work.sessionId,
+              'failed',
+              `Tenant verification failed: ${result.reason}`,
+            )
+            return
+          }
+        }
+      }
+
+      // -- Per-step session heartbeat (REN-1399 / ADR Decision 5) -----------
+      sessionHeartbeat = createSessionHeartbeat({
+        sessionId: work.sessionId,
+        workerId: workerId ?? 'unknown',
+      })
+      sessionHeartbeat.start(work.workType)
+
       await reportStatus(work.sessionId, 'running')
 
       // Start lock TTL refresher (refresh every 60s, lock TTL is 2 hours)
@@ -1007,6 +1095,11 @@ export async function runWorker(
       await postProgress(work.sessionId, 'failed', `Work failed: ${errorMsg}`)
     } finally {
       if (lockRefresher) clearInterval(lockRefresher)
+
+      // Stop the per-step session heartbeat (REN-1399). idempotent.
+      if (sessionHeartbeat) {
+        sessionHeartbeat.stop()
+      }
 
       // Clean up lost session marker if present
       lostSessions.delete(work.sessionId)

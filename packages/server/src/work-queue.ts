@@ -37,6 +37,7 @@ import {
   redisLRem,
 } from './redis.js'
 import type { AgentWorkType } from './types.js'
+import type { TenantEnvelope } from './jwt-envelope.js'
 
 const log = {
   info: (msg: string, data?: Record<string, unknown>) => console.log(`[work-queue] ${msg}`, data ? JSON.stringify(data) : ''),
@@ -80,6 +81,14 @@ export interface QueuedWork {
   model?: string
   /** Model override for Task sub-agents spawned by coordinators (e.g., 'claude-sonnet-4-6') */
   subAgentModel?: string
+  /**
+   * Tenant envelope injected at enqueue time (REN-1399 / ADR Decision 6).
+   * Workers re-verify the JWT on consume and reject jobs whose `org` claim
+   * does not match their registration.  Optional during the rollout window —
+   * deployments without a configured trust anchor leave this undefined and
+   * fall back to the legacy WORKER_API_KEY path.
+   */
+  tenantEnvelope?: TenantEnvelope
 }
 
 /**
