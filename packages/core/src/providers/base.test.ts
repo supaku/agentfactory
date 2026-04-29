@@ -570,12 +570,23 @@ describe('Provider<F> generic typing', () => {
   it('Provider<"vcs"> compiles with vcs capabilities', () => {
     const vcsCaps: ProviderCapabilities<'vcs'> = {
       mergeStrategy: 'three-way-text',
+      mergeModel: 'three-way-text',
       conflictGranularity: 'line',
+      patchModel: 'commit-graph',
       hasPullRequests: true,
       hasReviewWorkflow: true,
       hasMergeQueue: false,
+      branchSemantics: 'git-branches',
+      supportsBranches: true,
+      supportsRebase: true,
       identityScheme: 'email',
+      remoteProtocol: 'git-smart-http',
       provenanceNative: false,
+      auditModel: 'commit-trailer',
+      supportsAttest: true,
+      supportsBinary: true,
+      supportsStructuredContent: false,
+      supportsLargeFiles: false,
     }
     const p: Provider<'vcs'> = makeProvider('vcs', 'github', { level: 'global' }, vcsCaps)
     expect(p.manifest.family).toBe('vcs')

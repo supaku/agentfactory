@@ -86,13 +86,41 @@ export type OpenProposalResult = Result<ProposalRef, UnsupportedOperationError>
 // ---------------------------------------------------------------------------
 
 export const ATOMIC_VCS_CAPABILITIES: VersionControlProviderCapabilities = {
+  // Merge model — Atomic uses patch theory with token-level auto-resolution
   mergeStrategy: 'patch-theory',
+  mergeModel: 'patch-theory',
   conflictGranularity: 'token',
+
+  // Patch theory vs commit graph — Atomic IS the patch-theoretic adapter;
+  // patches are first-class commutative objects (per corpus 008 §Atomic).
+  patchModel: 'patch-theoretic',
+
+  // Proposal / review — no PR concept today; review via Slack / Linear thread
   hasPullRequests: false,
   hasReviewWorkflow: false,
+  // Commutative — pushes commute by construction, no serialization needed
   hasMergeQueue: false,
+
+  // Branching — Atomic "views" are the branching primitive
+  branchSemantics: 'atomic-views',
+  supportsBranches: true,
+  // Patch-theory model does not have rebase; that is a commit-graph concept
+  supportsRebase: false,
+
+  // Identity & trust — native Ed25519 keypairs + atomic-merkle remote protocol
   identityScheme: 'ed25519',
+  remoteProtocol: 'atomic-merkle',
+  // The headline differentiator — first-class attestation, NOT trailers
   provenanceNative: true,
+
+  // Audit chain — native attestation embedded in the patch object
+  auditModel: 'native',
+  supportsAttest: true,
+
+  // Content shape — binary supported; not structured; no LFS-style large-file path
+  supportsBinary: true,
+  supportsStructuredContent: false,
+  supportsLargeFiles: false,
 }
 
 // ---------------------------------------------------------------------------

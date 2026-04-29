@@ -61,13 +61,37 @@ const GH_TIMEOUT = 30_000
 // ---------------------------------------------------------------------------
 
 export const GITHUB_VCS_CAPABILITIES: VersionControlProviderCapabilities = {
+  // Merge model — git uses three-way text merge with line-level conflicts
   mergeStrategy: 'three-way-text',
+  mergeModel: 'three-way-text',
   conflictGranularity: 'line',
+
+  // Patch theory vs commit graph — git family uses a content-addressed DAG
+  patchModel: 'commit-graph',
+
+  // Proposal / review — GitHub has full PR + merge-queue support
   hasPullRequests: true,
   hasReviewWorkflow: true,
   hasMergeQueue: true,
+
+  // Branching — standard git refs
+  branchSemantics: 'git-branches',
+  supportsBranches: true,
+  supportsRebase: true,
+
+  // Identity & trust — email-based author identity, smart-HTTP remote
   identityScheme: 'email',
+  remoteProtocol: 'git-smart-http',
   provenanceNative: false,
+
+  // Audit chain — git fakes attestation via commit trailers (X-Rensei-*)
+  auditModel: 'commit-trailer',
+  supportsAttest: true,
+
+  // Content shape — supports binary (LFS for large files); not structured
+  supportsBinary: true,
+  supportsStructuredContent: false,
+  supportsLargeFiles: false,
 }
 
 // ---------------------------------------------------------------------------

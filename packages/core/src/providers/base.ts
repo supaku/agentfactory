@@ -127,14 +127,122 @@ export interface AgentRuntimeProviderCapabilities {
   supportsReasoningEffort: boolean
 }
 
+/**
+ * Capability matrix for VersionControlProvider implementations.
+ *
+ * Architecture reference: rensei-architecture/008-version-control-providers.md
+ *
+ * REN-1343 expansion: in addition to the original Cycle-2 minimal struct
+ * (mergeStrategy, conflictGranularity, hasPullRequests, hasReviewWorkflow,
+ * hasMergeQueue, identityScheme, provenanceNative), this capability matrix
+ * now exposes the corpus-008 full surface — the higher-level groupings the
+ * scheduler, audit-chain aggregator, and merge-queue logic branch on:
+ *
+ *   - mergeModel       — names the model family (three-way-text / patch-theory / ...)
+ *                        same value as `mergeStrategy`; kept in sync as the
+ *                        corpus-008 group label.
+ *   - patchModel       — discriminates commit-graph vs patch-theoretic vs
+ *                        object-version vs cell-based content models.
+ *                        Independent from mergeModel: e.g., a patch-theoretic
+ *                        merge model implies a patch-theoretic patch model,
+ *                        but commit-graph is the default for git family.
+ *   - branchSemantics  — what "branches" mean on this provider (git refs,
+ *                        Atomic views, none).
+ *   - auditModel       — how attestations land: commit trailers (git),
+ *                        native (Atomic Ed25519), object metadata (S3),
+ *                        property fields (Notion). Used by Layer 6 audit
+ *                        chain assembly to pick the right ingestion path.
+ *   - supportsAttest   — whether attest() is a first-class verb. Every
+ *                        adapter SHOULD support it (faked or native), but
+ *                        a minimal adapter MAY declare false to opt out.
+ *                        Consumed by REN-1314 sigstore work.
+ *
+ * The corpus-008 broader content/protocol surface is also surfaced:
+ *   supportsBranches, supportsRebase, remoteProtocol, supportsBinary,
+ *   supportsStructuredContent, supportsLargeFiles.
+ *
+ * NOTE: Flat-struct constraint (isFlatCapabilities) — every value MUST be a
+ * primitive or an array. No nested objects.
+ */
 export interface VersionControlProviderCapabilities {
-  mergeStrategy: 'three-way-text' | 'patch-theory' | 'crdt' | 'last-write-wins' | 'object-version'
+  // ── Merge model ─────────────────────────────────────────────────────────
+  /**
+   * Original Cycle-2 field (REN-1289). Names the merge strategy family.
+   * Kept for backward compatibility with existing consumers.
+   */
+  mergeStrategy: 'three-way-text' | 'patch-theory' | 'crdt' | 'last-write-wins' | 'object-version' | 'cell-merge'
+  /**
+   * Corpus-008 alias for mergeStrategy. Kept in lock-step with mergeStrategy
+   * so the broader corpus-008 surface (REN-1343) is queryable by its
+   * documented name without a renaming churn for downstream consumers.
+   */
+  mergeModel: 'three-way-text' | 'patch-theory' | 'crdt' | 'last-write-wins' | 'object-version' | 'cell-merge'
   conflictGranularity: 'line' | 'token' | 'object' | 'cell' | 'none'
+
+  // ── Patch theory vs commit graph ────────────────────────────────────────
+  /**
+   * Distinguishes the underlying patch model:
+   *   - commit-graph    : git family — commits are content-addressed nodes
+   *                       in a DAG; merges produce new commits.
+   *   - patch-theoretic : Atomic / Pijul — patches are first-class commutative
+   *                       objects; merges are set-union, not graph operations.
+   *   - object-version  : S3-style — versions are immutable object snapshots;
+   *                       no merge operation, last-write-wins by default.
+   *   - cell-based      : Sheets/Notion — cell-level updates land directly on
+   *                       the live document; no notion of patches at all.
+   */
+  patchModel: 'commit-graph' | 'patch-theoretic' | 'object-version' | 'cell-based'
+
+  // ── Proposal/review concepts ────────────────────────────────────────────
   hasPullRequests: boolean
   hasReviewWorkflow: boolean
   hasMergeQueue: boolean
-  identityScheme: 'email' | 'ed25519' | 'oauth' | 'iam'
+
+  // ── Branching ───────────────────────────────────────────────────────────
+  /**
+   * Names the kind of branching this provider supports.
+   *   - git-branches : standard git refs (branches/tags).
+   *   - atomic-views : Atomic's "views" — channel-like patch-set selectors.
+   *   - none         : no branching concept (S3 versioned, sheets/Notion).
+   */
+  branchSemantics: 'git-branches' | 'atomic-views' | 'none'
+  supportsBranches: boolean
+  supportsRebase: boolean
+
+  // ── Identity & trust ────────────────────────────────────────────────────
+  identityScheme: 'email' | 'ed25519' | 'oauth' | 'iam' | 'workspace-token'
+  remoteProtocol: 'git-smart-http' | 'atomic-merkle' | 's3' | 'http-api'
   provenanceNative: boolean
+
+  // ── Audit chain ─────────────────────────────────────────────────────────
+  /**
+   * How attestations are physically stored on this VCS, used by Layer 6
+   * audit-chain ingestion to pick the right reader path.
+   *   - commit-trailer  : git family — X-Rensei-* trailers on commits.
+   *   - native          : Atomic — Ed25519 + session metadata embedded in
+   *                       the patch object (provenanceNative: true).
+   *   - object-metadata : S3 — x-amz-meta-rensei-* headers on the object.
+   *   - property-field  : Notion / Sheets — custom property cells / fields.
+   *   - none            : adapter does not record attestations
+   *                       (supportsAttest === false).
+   */
+  auditModel: 'commit-trailer' | 'native' | 'object-metadata' | 'property-field' | 'none'
+
+  /**
+   * Whether attest() is a first-class verb on this provider.
+   *
+   * Consumed by REN-1314 (sigstore manifest signing) — providers with
+   * supportsAttest: true are eligible to receive the SLSA-attested signing
+   * pipeline. Every shipped adapter (git, atomic, S3) SHOULD declare true;
+   * a minimal community adapter MAY declare false to opt out without
+   * needing to throw at runtime.
+   */
+  supportsAttest: boolean
+
+  // ── Content shape ───────────────────────────────────────────────────────
+  supportsBinary: boolean
+  supportsStructuredContent: boolean
+  supportsLargeFiles: boolean
 }
 
 export interface IssueTrackerProviderCapabilities {
