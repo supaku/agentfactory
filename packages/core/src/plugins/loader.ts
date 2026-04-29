@@ -38,6 +38,11 @@ import {
   type RegisteredVerb,
   type PluginLifecycleState,
 } from './registry.js'
+import {
+  checkTrustedIssuer,
+  type PluginTrustMode,
+  type TrustedIssuerSet,
+} from './trusted-issuers.js'
 import type { ProviderFamily } from '../providers/base.js'
 
 // ---------------------------------------------------------------------------
@@ -83,6 +88,27 @@ export interface PluginLoaderOptions {
    * Defaults to false.
    */
   requireSignatures?: boolean
+
+  /**
+   * Plugin-loader trust mode (REN-1344). Gates the trusted-issuer check:
+   *
+   * - `permissive`: unsigned and untrusted-signer plugins emit a warning
+   *   but are accepted (default; preserves OSS behaviour).
+   * - `strict`: unsigned plugins are rejected, and signed plugins must
+   *   match the trusted-issuer set.
+   *
+   * Setting `requireSignatures: true` and `trustMode: 'strict'` together
+   * gives the SaaS-Standard / Enterprise default-signed posture.
+   */
+  trustMode?: PluginTrustMode
+
+  /**
+   * Trusted-issuer set used by the trust-mode gate. When omitted, the
+   * loader falls back to the module-level singleton from trusted-issuers.ts
+   * (which is the placeholder stub by default — populate via
+   * setTrustedIssuerSet() at host startup, see docs/plugin-signing.md).
+   */
+  trustedIssuers?: TrustedIssuerSet
 
   /**
    * Override NODE_ENV for testing purposes.
@@ -176,9 +202,16 @@ export class PluginLoader {
       projectRoot: options.projectRoot ?? process.cwd(),
       registryUrls: options.registryUrls ?? [],
       requireSignatures: options.requireSignatures ?? false,
+      trustMode: options.trustMode ?? 'permissive',
+      trustedIssuers: options.trustedIssuers ?? { issuers: [] },
       _testNodeEnv: options._testNodeEnv ?? process.env.NODE_ENV ?? 'development',
     }
+    // Track whether a trustedIssuers override was supplied so the loader
+    // can fall back to the module singleton when none was given.
+    this._trustedIssuersOverridden = options.trustedIssuers !== undefined
   }
+
+  private readonly _trustedIssuersOverridden: boolean
 
   // -------------------------------------------------------------------------
   // Discovery
@@ -299,6 +332,37 @@ export class PluginLoader {
       }
       // No signature + not required — warn only
       warnings.push(`Plugin '${pluginId}' has no valid signature (OSS mode, accepted).`)
+    }
+
+    // 2b. Trusted-issuer gate (REN-1344)
+    // Only run when not bypassed; in test bypass mode we skip both crypto
+    // verification and the trust check to keep test fixtures simple.
+    if (!options._testBypassSignatureVerify) {
+      const trustResult = checkTrustedIssuer(manifest, {
+        trustMode: this.options.trustMode,
+        trustedIssuers: this._trustedIssuersOverridden
+          ? this.options.trustedIssuers
+          : undefined,
+      })
+      if (!trustResult.trusted) {
+        // strict mode rejection — loud failure
+        return {
+          pluginId,
+          success: false,
+          errors: [`Trust check failed: ${trustResult.reason}`],
+          warnings,
+          source,
+        }
+      }
+      // Permissive but signer not in trusted-issuer set — warn loudly so
+      // operators see the gap before they flip strict mode on.
+      if (
+        manifest.signature &&
+        !trustResult.matchedIssuer &&
+        this.options.trustMode === 'permissive'
+      ) {
+        warnings.push(trustResult.reason)
+      }
     }
 
     // 3. One-OAuth-per-install enforcement

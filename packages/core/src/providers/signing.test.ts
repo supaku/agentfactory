@@ -340,7 +340,7 @@ describe('Sigstore verifier (test mode)', () => {
     expect(result.valid).toBe(true)
   })
 
-  it('rejects without @sigstore/verify installed when not in test mode', async () => {
+  it('rejects a malformed sigstore bundle (REN-1344: @sigstore/verify is now a regular dep)', async () => {
     const manifest = makeManifest()
     const sig: ProviderSignature = {
       signer: 'did:web:sigstore.dev',
@@ -353,7 +353,7 @@ describe('Sigstore verifier (test mode)', () => {
     }
 
     const result = await verifyManifestSignature(manifest, sig)
-    // Either @sigstore/verify is not installed (most likely) or it fails
+    // The bundle is structurally invalid — @sigstore/verify rejects it.
     expect(result.valid).toBe(false)
   })
 })

@@ -288,8 +288,15 @@ export function verifyPluginSignature(
   if (!sig.signatureValue || sig.signatureValue.trim().length === 0) {
     return { valid: false, reason: 'signatureValue is empty' }
   }
-  if (!sig.publicKey || sig.publicKey.trim().length === 0) {
-    return { valid: false, reason: 'publicKey is empty' }
+  // publicKey is required for keyed algorithms (ed25519, minisign).
+  // For keyless algorithms (sigstore, cosign) the cert chain travels in
+  // the bundle so publicKey may be empty.
+  const requiresPublicKey = sig.algorithm !== 'sigstore' && sig.algorithm !== 'cosign'
+  if (requiresPublicKey && (!sig.publicKey || sig.publicKey.trim().length === 0)) {
+    return {
+      valid: false,
+      reason: `publicKey is empty for algorithm '${sig.algorithm}'`,
+    }
   }
 
   // 3. Cryptographic verification
@@ -419,8 +426,14 @@ export function validatePluginManifest(manifest: PluginManifest): PluginManifest
     if (!sig.signatureValue || sig.signatureValue.trim().length === 0) {
       errors.push('signature.signatureValue must not be empty')
     }
-    if (!sig.publicKey || sig.publicKey.trim().length === 0) {
-      errors.push('signature.publicKey must not be empty')
+    // publicKey is required for keyed algorithms (ed25519, minisign).
+    // For keyless algorithms (sigstore OIDC, cosign keyless) the cert chain
+    // travels inside the bundle, so publicKey may legitimately be empty.
+    const requiresPublicKey = sig.algorithm !== 'sigstore' && sig.algorithm !== 'cosign'
+    if (requiresPublicKey && (!sig.publicKey || sig.publicKey.trim().length === 0)) {
+      errors.push(
+        `signature.publicKey must not be empty for algorithm '${sig.algorithm}'`
+      )
     }
   }
 

@@ -55,3 +55,19 @@ export {
   loadPluginFromYaml,
   loadPluginFromFile,
 } from './loader.js'
+
+// Trusted issuer set (REN-1344)
+export type {
+  PluginTrustMode,
+  TrustedIssuer,
+  TrustedIssuerSet,
+  TrustCheckResult,
+} from './trusted-issuers.js'
+
+export {
+  PLACEHOLDER_TRUSTED_ISSUERS,
+  setTrustedIssuerSet,
+  getTrustedIssuerSet,
+  resetTrustedIssuerSet,
+  checkTrustedIssuer,
+} from './trusted-issuers.js'
