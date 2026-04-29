@@ -116,6 +116,15 @@ export interface AgentRuntimeProviderCapabilities {
   supportsToolPlugins: boolean
   emitsSubagentEvents: boolean
   toolPermissionFormat: 'claude' | 'codex' | 'spring-ai' | 'generic'
+  /**
+   * REN-1245: whether the provider honors per-step reasoning-effort hints
+   * (`low | medium | high | xhigh`). The dispatch path consults this flag to
+   * decide whether to forward `Profile.dispatch.effort` to the provider
+   * invocation or drop it (with a Layer-6 `capability-mismatch` warning).
+   * See `AgentProviderCapabilities.supportsReasoningEffort` in `./types.ts`
+   * for the full semantics.
+   */
+  supportsReasoningEffort: boolean
 }
 
 export interface VersionControlProviderCapabilities {

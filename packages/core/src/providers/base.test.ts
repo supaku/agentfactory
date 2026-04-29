@@ -589,9 +589,12 @@ describe('Provider<F> generic typing', () => {
       supportsToolPlugins: true,
       emitsSubagentEvents: true,
       toolPermissionFormat: 'claude',
+      // REN-1245: per-step reasoning-effort capability flag.
+      supportsReasoningEffort: true,
     }
     const p: Provider<'agent-runtime'> = makeProvider('agent-runtime', 'claude', { level: 'global' }, caps)
     expect(p.capabilities.emitsSubagentEvents).toBe(true)
+    expect(p.capabilities.supportsReasoningEffort).toBe(true)
   })
 
   it('Provider without signature has null signature', () => {
