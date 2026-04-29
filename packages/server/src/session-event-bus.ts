@@ -80,6 +80,51 @@ export type SessionLifecycleEvent =
       /** Optional — the org context the worker registered with */
       workerOrg?: string
     }
+  /**
+   * `session.cancel-requested` — a caller (UI, governor, parent agent) has
+   * asked the runtime to wind this session down.  The agent observes this
+   * between steps; the in-flight step completes by default unless the step
+   * declared `interrupt: 'safe' | 'unsafe'` (per ADR Decision 4).  Layer 6
+   * subscribers may surface the request in observability dashboards.
+   */
+  | {
+      kind: 'session.cancel-requested'
+      sessionId: string
+      /** Unix ms — when the cancel was requested */
+      requestedAt: number
+      /** Optional — the principal that asked for the cancel. */
+      requestedBy?: string
+      /**
+       * Optional — short reason string the caller passed in (free-form,
+       * surfaced in UI / audit trails).
+       */
+      reason?: string
+    }
+  /**
+   * `session.cancelled` — terminal hook event fired AFTER the in-flight
+   * step has completed (or, for `interrupt: 'unsafe'`, after the worker
+   * subprocess was killed).  Subscribers know the session won't make
+   * forward progress without a new external trigger.
+   */
+  | {
+      kind: 'session.cancelled'
+      sessionId: string
+      workerId: string
+      /** Unix ms — when the cancel actually took effect (post-step). */
+      cancelledAt: number
+      /**
+       * Last step that finished before the cancel took effect.  Useful
+       * for resume-from-journal forensics: the next replay starts from
+       * the journal entry whose `stepId` matches this value.
+       */
+      lastCompletedStepId?: string
+      /**
+       * `safe` (no-op or step finished naturally), `unsafe` (worker
+       * subprocess was killed mid-step), or `cooperative` (default —
+       * agent observed between steps and stopped cleanly).
+       */
+      mode: 'cooperative' | 'safe' | 'unsafe'
+    }
 
 export type SessionLifecycleEventKind = SessionLifecycleEvent['kind']
 

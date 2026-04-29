@@ -143,3 +143,15 @@ export * from './session-heartbeat.js'
 
 // JWT tenant envelope verification (ADR Decision 6) — REN-1399
 export * from './jwt-envelope.js'
+
+// Cooperative session cancel coordinator (ADR Decision 4) — REN-1398
+export * from './session-cancel.js'
+
+// Suspend-until-time wake queue + 1Hz sweeper (ADR Decision 4) — REN-1398
+export * from './suspend-until-time.js'
+
+// Resume-from-journal marker (ADR Decision 4) — REN-1398
+export * from './session-resume.js'
+
+// Cooperative step runner (ADR Decision 4) — REN-1398
+export * from './step-runner.js'
