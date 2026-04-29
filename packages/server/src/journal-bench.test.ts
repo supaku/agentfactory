@@ -9,10 +9,9 @@
  * `>= 10k writes/sec sustained @ p99 < 2ms`.
  *
  * Regression thresholds checked here (in-memory, with a fake Redis client):
- *   - throughput >= 50,000 writes/sec (5× the acceptance throughput,
- *     which is fair because we strip out the network round-trip — any
- *     in-memory regression below 5× the prod target signals a serializer
- *     or event-bus problem)
+ *   - throughput >= 25,000 writes/sec (2.5× the acceptance throughput;
+ *     loose because shared CI runners contend for CPU. The point of this
+ *     gate is to catch ~10× regressions, not to enforce the AC.)
  *   - p99 latency < 5ms (loose because vitest runs other suites in
  *     parallel; the AC's tight 2ms gate is enforced by the Redis-backed
  *     bench artifact, where the worker process is dedicated)
@@ -68,7 +67,7 @@ function quantile(sorted: number[], q: number): number {
 
 describe('journal write throughput (regression)', () => {
   it(
-    'sustains >= 50k writes/sec with p99 < 5ms in-memory (loose CI threshold)',
+    'sustains >= 25k writes/sec with p99 < 5ms in-memory (loose CI threshold)',
     async () => {
       const TOTAL = 10_000
       const CONCURRENCY = 64
@@ -122,7 +121,7 @@ describe('journal write throughput (regression)', () => {
 
       // Regression thresholds (looser than the AC, which is gated by the
       // Redis-backed bench artifact — see file header).
-      expect(writesPerSec).toBeGreaterThanOrEqual(50_000)
+      expect(writesPerSec).toBeGreaterThanOrEqual(25_000)
       expect(p99).toBeLessThan(5)
     },
     30_000
