@@ -131,3 +131,12 @@ export { createLocalMergeQueueStorage } from './merge-queue-storage-bridge.js'
 
 // Security scan event storage (Redis-backed)
 export * from './security-scan-storage.js'
+
+// Session event bus (Layer 6 hook surface for session-scoped events) — REN-1399
+export * from './session-event-bus.js'
+
+// Session heartbeat emitter (15s cadence; ADR Decision 5) — REN-1399
+export * from './session-heartbeat.js'
+
+// JWT tenant envelope verification (ADR Decision 6) — REN-1399
+export * from './jwt-envelope.js'
