@@ -549,6 +549,15 @@ Or use HTML for GitHub theme-switching (auto light/dark):
 </a>
 ```
 
+## Migrating from the legacy Node CLI
+
+If you are upgrading from `@renseiai/agentfactory-cli` (the Node/TypeScript binaries), see the [migration guide](./docs/migration-from-legacy-cli.md) for:
+
+- A full table mapping each legacy binary (`af-orchestrator`, `af-linear`, `af-analyze-logs`, `af-cleanup`, `af-queue-admin`, `af-merge-queue`, `af-code`, `af-arch`, and more) to its Go `af` equivalent
+- Side-by-side flag comparisons for the most-used commands
+- Per-binary deprecation notice templates for your CHANGELOG
+- The difference between `af` (single-user OSS) and `rensei` (platform-aware)
+
 ## License
 
 MIT - see [LICENSE](./LICENSE)

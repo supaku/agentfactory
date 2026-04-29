@@ -2,6 +2,8 @@
 
 Multi-agent fleet management for coding agents. This is a pnpm monorepo using Turborepo.
 
+> **Migrating from the legacy Node CLI?** See [`docs/migration-from-legacy-cli.md`](./docs/migration-from-legacy-cli.md) for the full `@renseiai/agentfactory-cli` → Go `af` binary mapping.
+
 ## Architecture
 
 Authoritative architecture lives in `../rensei-architecture/` (remote: https://github.com/RenseiAI/rensei-architecture, private). Read in this order:
