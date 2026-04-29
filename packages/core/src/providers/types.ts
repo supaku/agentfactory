@@ -248,6 +248,19 @@ export interface AgentProviderCapabilities {
    */
   emitsSubagentEvents: boolean
   /**
+   * REN-1245: whether the provider honors the per-step `effort` value on
+   * AgentSpawnConfig (`low | medium | high | xhigh`). When true, the dispatch
+   * path forwards the value to the provider's native reasoning-effort knob
+   * (Claude: `effort` option; Codex/OpenAI: `model_reasoning_effort` /
+   * `reasoningEffort`; Gemini: `thinkingBudget`). When false, the dispatch
+   * path drops the value and emits a `capability-mismatch` hook event on the
+   * Layer 6 bus so observers can flag silently-ignored cost-control hints.
+   *
+   * Optional for backwards compatibility — providers that omit it are treated
+   * as not supporting reasoning effort (conservative default).
+   */
+  supportsReasoningEffort?: boolean
+  /**
    * Human-readable label for this provider family. Used in UI and log
    * messages where the raw provider name ('spring-ai') is not user-friendly.
    * Companion to the AgentRuntimeProvider alias for corpus documentation.

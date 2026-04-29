@@ -153,6 +153,10 @@ export { AmpProvider, createAmpProvider } from './amp-provider.js'
 export { SpringAiProvider, createSpringAiProvider } from './spring-ai-provider.js'
 export { A2aProvider, createA2aProvider } from './a2a-provider.js'
 
+// REN-1245: per-step reasoning-effort dispatch gate
+export { applyReasoningEffort } from './reasoning-effort-dispatch.js'
+export type { ReasoningEffortDecision, ApplyReasoningEffortOptions } from './reasoning-effort-dispatch.js'
+
 import type { AgentProvider, AgentProviderName } from './types.js'
 import type { PosteriorStore } from '../routing/posterior-store.js'
 import type { RoutingConfig } from '../routing/types.js'

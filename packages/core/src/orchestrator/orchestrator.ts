@@ -25,6 +25,7 @@ import {
 } from '../providers/index.js'
 import { buildSafetyInstructions } from '../providers/safety-rules.js'
 import { buildBaseInstructionsFromShared } from '../providers/agent-instructions.js'
+import { applyReasoningEffort } from '../providers/reasoning-effort-dispatch.js'
 import {
   initializeAgentDir,
   writeState,
@@ -2503,6 +2504,21 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       ? systemPromptAppendSections.join('\n\n')
       : undefined
 
+    // REN-1245: gate the per-step reasoning-effort hint on the provider's
+    // capabilities.supportsReasoningEffort flag. Drops + emits a Layer 6
+    // capability-mismatch warning when the provider can't honor it, so the
+    // dispatch never silently ignores cost-control hints.
+    const effortDecision = applyReasoningEffort({
+      provider: spawnProvider,
+      requestedEffort: resolvedEffort,
+    })
+    if (effortDecision.dropped) {
+      log.warn('Per-step reasoning-effort hint dropped (provider does not support it)', {
+        provider: spawnProviderName,
+        requestedEffort: resolvedEffort,
+      })
+    }
+
     // Spawn agent via provider interface
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -2515,7 +2531,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       model: resolvedModel,
-      effort: resolvedEffort,
+      effort: effortDecision.effort,
       providerConfig: resolvedProviderConfig,
       subAgentProvider: resolvedSubAgentProvider,
       baseInstructions,
@@ -4844,6 +4860,21 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       ? systemPromptAppendSections.join('\n\n')
       : undefined
 
+    // REN-1245: gate per-step reasoning-effort hint on provider capability.
+    // Same drop-and-warn behaviour as the fresh-spawn path so resume sessions
+    // can't sneak through with an effort hint a provider would silently ignore.
+    const effortDecision = applyReasoningEffort({
+      provider: spawnProvider,
+      requestedEffort: resolvedEffort,
+    })
+    if (effortDecision.dropped) {
+      log.warn('Per-step reasoning-effort hint dropped (provider does not support it)', {
+        provider: spawnProviderName,
+        requestedEffort: resolvedEffort,
+        path: 'resume',
+      })
+    }
+
     // Spawn agent via provider interface (with resume if session ID available)
     const spawnConfig: AgentSpawnConfig = {
       prompt,
@@ -4856,7 +4887,7 @@ ORCHESTRATOR_INSTALL=1 exec ${addCmd} "$@"
       mcpStdioServers: stdioServers?.servers,
       maxTurns,
       model: resolvedModel,
-      effort: resolvedEffort,
+      effort: effortDecision.effort,
       providerConfig: resolvedProviderConfig,
       baseInstructions,
       permissionConfig,

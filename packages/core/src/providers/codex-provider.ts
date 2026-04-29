@@ -427,6 +427,9 @@ export class CodexProvider implements AgentProvider {
         needsPermissionConfig: false,
         supportsCodeIntelligenceEnforcement: false,
         emitsSubagentEvents: false,
+        // REN-1245: exec mode forwards `effort` via
+        // `--config model_reasoning_effort=...` (see createExecHandle).
+        supportsReasoningEffort: true,
         humanLabel: 'Codex',
       }
     }
@@ -440,6 +443,9 @@ export class CodexProvider implements AgentProvider {
         supportsCodeIntelligenceEnforcement: false,
         toolPermissionFormat: 'codex' as const,
         emitsSubagentEvents: false,
+        // REN-1245: app-server mode forwards `effort` via
+        // `turnParams.reasoningEffort` (see codex-app-server-provider).
+        supportsReasoningEffort: true,
         humanLabel: 'Codex',
       }
     }
@@ -451,6 +457,9 @@ export class CodexProvider implements AgentProvider {
       needsPermissionConfig: false,
       supportsCodeIntelligenceEnforcement: false,
       emitsSubagentEvents: false,
+      // REN-1245: default exec mode forwards `effort` via the Codex CLI
+      // `--config model_reasoning_effort=...` flag.
+      supportsReasoningEffort: true,
       humanLabel: 'Codex',
     }
   }

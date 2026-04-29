@@ -1871,6 +1871,9 @@ export class CodexAppServerProvider implements AgentProvider {
     supportsCodeIntelligenceEnforcement: false,
     toolPermissionFormat: 'codex' as const,
     emitsSubagentEvents: false,
+    // REN-1245: app-server forwards `effort` to the Codex thread via
+    // `turnParams.reasoningEffort` (see CodexAppServerThread.send).
+    supportsReasoningEffort: true,
     humanLabel: 'Codex',
   } as const
 
