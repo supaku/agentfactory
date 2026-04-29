@@ -16,6 +16,9 @@ export * from './work-queue.js'
 // Scheduling queue (three-tier: active, backoff, suspended)
 export * from './scheduling-queue.js'
 
+// Per-step journal primitive (REN-1397, ADR-2026-04-29 §Decisions 2,3,7)
+export * from './journal.js'
+
 // Worker pool
 export * from './worker-storage.js'
 

@@ -29,6 +29,7 @@ import {
 } from './redis.js'
 import { WORK_QUEUE_KEY, WORK_ITEMS_KEY, calculateScore } from './work-queue.js'
 import type { QueuedWork } from './work-queue.js'
+import { writeJournalEntry } from './journal.js'
 
 // Re-export QueuedWork so downstream consumers can import from this module
 export type { QueuedWork }
@@ -335,6 +336,87 @@ export async function moveToSuspended(
     log.error('Failed to move to suspended', {
       error: error instanceof Error ? error.message : String(error),
       sessionId,
+    })
+    return false
+  }
+}
+
+/**
+ * Atomically remove a work item from the active queue and write its journal
+ * completion entry. Per ADR-2026-04-29 §Implementation notes:
+ *
+ * > `scheduling-queue.moveToBackoff` extension in agentfactory-server: add
+ * > `journal_id` field on the queue entry; `moveToCompleted(journal_id, result)`
+ * > writes to journal hash before unblocking next step.
+ *
+ * The Redis-side dequeue (ZREM/HDEL on the active queue) is pipelined together
+ * for atomicity; the journal write happens BEFORE the dequeue so a
+ * subsequent step that depends on the completion record sees a consistent
+ * view (journal-first, then unblock).
+ *
+ * @param sessionId - Session id (used as the active-queue work key).
+ * @param stepId - Workflow step id whose completion we are journaling.
+ * @param result - Completion descriptor: input hash + CAS pointer + timing
+ *                 metadata for the journal entry.
+ * @returns true if the journal entry was written and the work item dequeued
+ *          (or was already absent); false on Redis errors.
+ */
+export async function moveToCompleted(
+  sessionId: string,
+  stepId: string,
+  result: {
+    inputHash: string
+    outputCAS: string
+    startedAt: number
+    completedAt?: number
+    attempt?: number
+  }
+): Promise<boolean> {
+  if (!isRedisConfigured()) {
+    log.warn('Redis not configured, cannot move to completed')
+    return false
+  }
+
+  try {
+    // 1. Journal first — record the terminal state before unblocking the
+    //    next step so dependants observe a consistent view.
+    const journalOk = await writeJournalEntry({
+      sessionId,
+      stepId,
+      status: 'completed',
+      inputHash: result.inputHash,
+      outputCAS: result.outputCAS,
+      startedAt: result.startedAt,
+      completedAt: result.completedAt ?? Date.now(),
+      attempt: result.attempt ?? 0,
+    })
+
+    if (!journalOk) {
+      log.error('Failed to write journal completion before dequeue', {
+        sessionId,
+        stepId,
+      })
+      return false
+    }
+
+    // 2. Pipeline the dequeue. Idempotent — ZREM/HDEL on a missing key are no-ops.
+    const redis = getRedisClient()
+    const pipeline = redis.pipeline()
+    pipeline.zrem(ACTIVE_QUEUE_KEY, sessionId)
+    pipeline.hdel(ACTIVE_ITEMS_KEY, sessionId)
+    await pipeline.exec()
+
+    log.info('Work moved to completed (journal written, dequeued)', {
+      sessionId,
+      stepId,
+    })
+
+    return true
+  } catch (error) {
+    log.error('Failed to move to completed', {
+      error: error instanceof Error ? error.message : String(error),
+      sessionId,
+      stepId,
     })
     return false
   }

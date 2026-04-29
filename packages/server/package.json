@@ -57,6 +57,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "bench:journal": "tsx bench/journal-bench.ts",
     "clean": "rm -rf dist",
     "prepublishOnly": "pnpm clean && pnpm build"
   }

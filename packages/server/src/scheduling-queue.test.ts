@@ -41,15 +41,22 @@ vi.mock('./work-queue.js', () => ({
   }),
 }))
 
+// Mock journal.js so moveToCompleted's writeJournalEntry call is observable.
+vi.mock('./journal.js', () => ({
+  writeJournalEntry: vi.fn(async () => true),
+}))
+
 import {
   addToActive,
   moveToBackoff,
   moveToSuspended,
+  moveToCompleted,
   promoteFromBackoff,
   reevaluateSuspended,
   getQueueStats,
   calculateBackoff,
 } from './scheduling-queue.js'
+import { writeJournalEntry } from './journal.js'
 import type { QueuedWork, BackoffEntry, SuspendedEntry } from './scheduling-queue.js'
 import {
   isRedisConfigured,
@@ -694,5 +701,105 @@ describe('calculateBackoff', () => {
 
     // Attempt 3 average should be significantly higher than attempt 0 average
     expect(avg3).toBeGreaterThan(avg0 * 2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// moveToCompleted (REN-1397 — journal-first, then dequeue)
+// ---------------------------------------------------------------------------
+
+describe('moveToCompleted', () => {
+  const mockWriteJournalEntry = vi.mocked(writeJournalEntry)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsRedisConfigured.mockReturnValue(true)
+    mockWriteJournalEntry.mockResolvedValue(true)
+  })
+
+  it('returns false when Redis is not configured', async () => {
+    mockIsRedisConfigured.mockReturnValue(false)
+    const result = await moveToCompleted('s1', 'step-1', {
+      inputHash: 'h',
+      outputCAS: 'cas://x',
+      startedAt: 1,
+    })
+    expect(result).toBe(false)
+    expect(mockWriteJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('writes the journal entry BEFORE dequeueing the work item', async () => {
+    const order: string[] = []
+    mockWriteJournalEntry.mockImplementation(async () => {
+      order.push('journal')
+      return true
+    })
+
+    const pipeline = makePipelineMock()
+    pipeline.exec = vi.fn().mockImplementation(async () => {
+      order.push('dequeue')
+      return []
+    })
+    mockGetRedisClient.mockReturnValue({ pipeline: () => pipeline } as never)
+
+    const ok = await moveToCompleted('sess-7', 'step-x', {
+      inputHash: 'h-1',
+      outputCAS: 'cas://result/7',
+      startedAt: 100,
+      completedAt: 200,
+      attempt: 1,
+    })
+
+    expect(ok).toBe(true)
+    expect(order).toEqual(['journal', 'dequeue'])
+    expect(pipeline.zrem).toHaveBeenCalledWith('work:queue', 'sess-7')
+    expect(pipeline.hdel).toHaveBeenCalledWith('work:items', 'sess-7')
+
+    // Journal write captured all the result fields.
+    expect(mockWriteJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'sess-7',
+        stepId: 'step-x',
+        status: 'completed',
+        inputHash: 'h-1',
+        outputCAS: 'cas://result/7',
+        startedAt: 100,
+        completedAt: 200,
+        attempt: 1,
+      })
+    )
+  })
+
+  it('returns false (and does NOT dequeue) if the journal write fails', async () => {
+    mockWriteJournalEntry.mockResolvedValue(false)
+
+    const pipeline = makePipelineMock()
+    mockGetRedisClient.mockReturnValue({ pipeline: () => pipeline } as never)
+
+    const ok = await moveToCompleted('sess-8', 'step-x', {
+      inputHash: 'h',
+      outputCAS: 'cas://y',
+      startedAt: 1,
+    })
+
+    expect(ok).toBe(false)
+    expect(pipeline.exec).not.toHaveBeenCalled()
+  })
+
+  it('defaults completedAt to Date.now() when omitted', async () => {
+    const pipeline = makePipelineMock()
+    mockGetRedisClient.mockReturnValue({ pipeline: () => pipeline } as never)
+
+    const before = Date.now()
+    await moveToCompleted('sess-9', 'step-y', {
+      inputHash: 'h',
+      outputCAS: 'cas://z',
+      startedAt: 1,
+    })
+    const after = Date.now()
+
+    const args = mockWriteJournalEntry.mock.calls[0][0]
+    expect(args.completedAt).toBeGreaterThanOrEqual(before)
+    expect(args.completedAt).toBeLessThanOrEqual(after)
   })
 })
