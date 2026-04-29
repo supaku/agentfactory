@@ -1,0 +1,191 @@
+name: Sign Plugin Tarballs (Sigstore)
+
+# Productionizes plugin signing per REN-1344. When a tag matching `plugin-*-v*`
+# is pushed (e.g. `plugin-vercel-v1.4.0`) or a release is created, this workflow
+# packs the named plugin, signs the resulting tarball with Sigstore Fulcio
+# using GitHub Actions OIDC, pushes the signed bundle entry to Rekor, and
+# attaches the signature artifacts to the GitHub Release.
+#
+# # Required GitHub *org* secrets (provisioned out-of-band — see
+# # docs/plugin-signing.md):
+#
+# - FULCIO_URL              (optional; default https://fulcio.sigstore.dev)
+# - REKOR_URL               (optional; default https://rekor.sigstore.dev)
+# - OIDC_AUDIENCE           (optional; default 'sigstore')
+# - REGISTRY_PUBLISH_TOKEN  (only if uploading to a private registry)
+#
+# Most teams will leave the URL knobs unset and pick up the public-good
+# Sigstore endpoints. The URLs become required *secrets* only when running
+# against a self-hosted Sigstore deployment.
+#
+# # OIDC subject (this becomes the trusted issuer claim):
+#
+#   https://github.com/RenseiAI/agentfactory/.github/workflows/plugin-sign.yml@refs/tags/<tag>
+#
+# Hosts that consume signed plugins must include this subject in their
+# trusted-issuer set (see packages/core/src/plugins/trusted-issuers.ts).
+
+on:
+  push:
+    tags:
+      - 'plugin-*-v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: 'Plugin package name (e.g. plugin-vercel)'
+        required: true
+        type: string
+      version:
+        description: 'Version to sign (e.g. 1.4.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: plugin-sign-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Sign plugin tarball
+    runs-on: ubuntu-latest
+
+    permissions:
+      # OIDC token for Fulcio cert issuance — REQUIRED.
+      id-token: write
+      # Attach signed artifacts to GitHub Releases.
+      contents: write
+
+    env:
+      # Public Sigstore defaults; override via repo/org secrets when running
+      # against a self-hosted Sigstore deployment.
+      FULCIO_URL: ${{ secrets.FULCIO_URL || 'https://fulcio.sigstore.dev' }}
+      REKOR_URL: ${{ secrets.REKOR_URL || 'https://rekor.sigstore.dev' }}
+      OIDC_AUDIENCE: ${{ secrets.OIDC_AUDIENCE || 'sigstore' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js (24 — provides modern OIDC support)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+      # ─── Determine plugin + version ───────────────────────────────────────
+      - name: Resolve plugin name and version
+        id: target
+        run: |
+          if [ -n "${{ inputs.plugin }}" ]; then
+            PLUGIN="${{ inputs.plugin }}"
+            VERSION="${{ inputs.version }}"
+          else
+            # Tag format: plugin-<name>-v<semver>  e.g. plugin-vercel-v1.4.0
+            REF_NAME="${GITHUB_REF_NAME}"
+            PLUGIN="$(echo "$REF_NAME" | sed -E 's/^plugin-(.+)-v[0-9].*/\1/')"
+            VERSION="$(echo "$REF_NAME" | sed -E 's/^plugin-.+-v(.+)$/\1/')"
+          fi
+          if [ -z "$PLUGIN" ] || [ -z "$VERSION" ]; then
+            echo "::error::Could not derive plugin name/version from ref"
+            exit 1
+          fi
+          echo "plugin=$PLUGIN" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Plugin: $PLUGIN  Version: $VERSION"
+
+      # ─── Pack the plugin tarball (the artifact that will be signed) ───────
+      - name: Pack plugin tarball
+        id: pack
+        run: |
+          PLUGIN="${{ steps.target.outputs.plugin }}"
+          PKG_DIR="packages/${PLUGIN}"
+          if [ ! -d "$PKG_DIR" ]; then
+            echo "::error::Plugin directory $PKG_DIR not found"
+            exit 1
+          fi
+          mkdir -p artifacts
+          cd "$PKG_DIR"
+          # `pnpm pack` writes a tarball under the package dir.
+          pnpm pack --pack-destination "$GITHUB_WORKSPACE/artifacts"
+          cd "$GITHUB_WORKSPACE"
+          TARBALL=$(ls artifacts/*.tgz | head -1)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "Packed: $TARBALL"
+
+      # ─── Install sigstore CLI ─────────────────────────────────────────────
+      - name: Install Sigstore (cosign) CLI
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      # ─── Sign the tarball with Fulcio + Rekor (keyless OIDC) ──────────────
+      - name: Sign tarball (Sigstore keyless)
+        id: sign
+        env:
+          # cosign reads the OIDC token automatically when id-token: write is set.
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          BUNDLE="${TARBALL}.sigstore.json"
+          cosign sign-blob \
+            --yes \
+            --bundle "$BUNDLE" \
+            --fulcio-url "$FULCIO_URL" \
+            --rekor-url "$REKOR_URL" \
+            --oidc-issuer https://token.actions.githubusercontent.com \
+            "$TARBALL"
+          echo "bundle=$BUNDLE" >> "$GITHUB_OUTPUT"
+          echo "Signed bundle: $BUNDLE"
+
+      # ─── Verify the signature locally as a self-check ─────────────────────
+      - name: Verify signature (sanity check)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          TARBALL="${{ steps.pack.outputs.tarball }}"
+          BUNDLE="${{ steps.sign.outputs.bundle }}"
+          # Expected OIDC subject for this run.
+          EXPECTED_SUBJECT="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/plugin-sign.yml@${GITHUB_REF}"
+          cosign verify-blob \
+            --bundle "$BUNDLE" \
+            --certificate-identity "$EXPECTED_SUBJECT" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "$TARBALL"
+
+      # ─── Upload as workflow artifact (always available) ───────────────────
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.target.outputs.plugin }}-v${{ steps.target.outputs.version }}-signed
+          path: |
+            ${{ steps.pack.outputs.tarball }}
+            ${{ steps.sign.outputs.bundle }}
+          retention-days: 90
+
+      # ─── Attach to GitHub Release if this is a release event ──────────────
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "Signed plugin tarball + Sigstore bundle attached."
+          fi
+          gh release upload "$TAG" \
+            "${{ steps.pack.outputs.tarball }}" \
+            "${{ steps.sign.outputs.bundle }}" \
+            --clobber

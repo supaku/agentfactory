@@ -2,53 +2,76 @@
  * Sigstore Verifier — implements the Sigstore bundle verification path.
  *
  * Sigstore uses Rekor (transparency log) + Fulcio (certificate authority)
- * to produce signed bundles. For provider manifests we support two modes:
+ * to produce signed bundles. Plugin tarballs and provider manifests both
+ * follow the same path:
  *
  * 1. **Bundle mode** (production): signatureValue is base64(JSON sigstore bundle).
- *    We attempt to import @sigstore/verify if available; otherwise we report a
- *    clear error with installation instructions.
+ *    `@sigstore/verify` is now a regular dependency (REN-1344), so this is the
+ *    default-active path whenever a sigstore-algorithm signature is presented.
  *
  * 2. **Test mode**: signatureValue starts with 'SIGSTORE_TEST:'.
- *    Returns valid=true without any network call or library dependency.
+ *    Returns valid=true without any network call. Used by smoke tests.
  *
  * The publicKey field may be:
- *   - Empty string: use Rekor/Fulcio identity verification (OIDC signer)
- *   - PEM certificate or public key: used for keyful signing verification
+ *   - Empty string: keyless mode — bundle's embedded Fulcio cert is the
+ *     trust anchor (verified via Rekor + the trusted-issuer set on the host).
+ *   - PEM certificate or public key: keyful mode.
  *
- * Note: Full Sigstore verification requires network access to Rekor. In
- * environments without network access, use cosign or ed25519 instead.
+ * Note: Full Sigstore verification can require network access to Rekor.
+ * Air-gapped deployments should use cosign or ed25519 with a local key, or
+ * supply a pre-fetched TrustedRoot bundle (see plugin-signing.md).
  */
 
 import type { Verifier, VerifierInput, VerifierResult } from './index.js'
 
 const SIGSTORE_TEST_PREFIX = 'SIGSTORE_TEST:'
 
+// The shape we use from @sigstore/verify. Defined here so the type doesn't
+// leak the package's internal types into our public surface.
+type SigstoreBundle = Record<string, unknown>
+type SignedEntity = Record<string, unknown>
+type SigstoreVerifierInstance = { verify(entity: SignedEntity, artifact: Buffer): void }
+type SigstoreVerifierCtor = new (policy: unknown, options?: unknown) => SigstoreVerifierInstance
+type SigstoreVerifyModule = {
+  Verifier?: SigstoreVerifierCtor
+  toSignedEntity?: (bundle: SigstoreBundle) => SignedEntity
+}
+
 /**
- * Attempt to verify using @sigstore/verify if installed.
- * Returns null if the package is not available.
+ * Lazy-loaded module reference. We keep the import dynamic so that the
+ * verifier remains tree-shake-friendly and degrades gracefully if a future
+ * environment lacks the package (e.g. a stripped-down distribution).
+ *
+ * REN-1344: package is now a *regular* dependency, so this should always
+ * resolve in production. The graceful-fallback path below remains for
+ * defense in depth and clean error reporting.
  */
+let _modulePromise: Promise<SigstoreVerifyModule | null> | null = null
+async function loadSigstoreModule(): Promise<SigstoreVerifyModule | null> {
+  if (_modulePromise) return _modulePromise
+  // We use a string variable to keep the module name out of the static
+  // import graph in environments where the package is intentionally absent.
+  const moduleName = '@sigstore/verify'
+  _modulePromise = import(/* @vite-ignore */ moduleName)
+    .then((m) => m as SigstoreVerifyModule)
+    .catch(() => null)
+  return _modulePromise
+}
+
+/**
+ * Reset the cached module reference. Tests use this to simulate
+ * "package not installed" conditions.
+ */
+export function _resetSigstoreModuleCache(): void {
+  _modulePromise = null
+}
+
 async function tryVerifyWithSigstorePackage(
   bundleJson: string,
   artifactBytes: Buffer,
 ): Promise<VerifierResult | null> {
-  // Type definitions for the @sigstore/verify API shapes we use.
-  // Defined inline to avoid a hard dependency on the package types.
-  type SigstoreBundle = Record<string, unknown>
-  type SignedEntity = Record<string, unknown>
-  type SigstoreVerifierInstance = { verify(entity: SignedEntity, artifact: Buffer): void }
-  type SigstoreVerifierCtor = new (policy: unknown, options?: unknown) => SigstoreVerifierInstance
-  type SigstoreVerifyModule = {
-    Verifier?: SigstoreVerifierCtor
-    toSignedEntity?: (bundle: SigstoreBundle) => SignedEntity
-    TrustRootManager?: { fulcio(): unknown }
-  }
-
   try {
-    // Dynamic import — graceful degradation if not installed.
-    // We use a string variable to prevent TypeScript from resolving
-    // the module at compile time (avoids TS2307 when not installed).
-    const moduleName = '@sigstore/verify'
-    const sigstoreVerify = await import(/* @vite-ignore */ moduleName).catch(() => null) as SigstoreVerifyModule | null
+    const sigstoreVerify = await loadSigstoreModule()
     if (!sigstoreVerify) return null
 
     const { Verifier: SigstoreVerifierClass, toSignedEntity } = sigstoreVerify
@@ -71,7 +94,8 @@ async function tryVerifyWithSigstorePackage(
 
     const signedEntity = toSignedEntity(bundle)
     // The verifier API varies between @sigstore/verify versions.
-    // We use a try-based dispatch to handle different API shapes.
+    // We use a permissive policy here — full trust enforcement happens at
+    // the trusted-issuer-set layer in the plugin loader (REN-1344).
     const verifierInstance = new SigstoreVerifierClass({})
     verifierInstance.verify(signedEntity, artifactBytes)
 
@@ -104,18 +128,20 @@ export class SigstoreVerifier implements Verifier {
       return { valid: false, reason: 'signatureValue is not valid base64' }
     }
 
-    // Try @sigstore/verify first
+    // Hand off to @sigstore/verify
     const packageResult = await tryVerifyWithSigstorePackage(bundleJson, artifactBytes)
     if (packageResult !== null) {
       return packageResult
     }
 
-    // @sigstore/verify not available
+    // @sigstore/verify did not load — should not happen post-REN-1344
+    // since it's now a regular dep, but we keep a clear actionable error.
     return {
       valid: false,
       reason:
-        '@sigstore/verify package is not installed. Install it with: ' +
-        'pnpm add @sigstore/verify\n' +
+        '@sigstore/verify package failed to load. As of REN-1344 this package ' +
+        'is a regular dependency of @renseiai/agentfactory; reinstall dependencies ' +
+        'with `pnpm install`. ' +
         'Alternatively, use signatureValue starting with "SIGSTORE_TEST:" for tests, ' +
         'or use the cosign or ed25519 algorithm with a local key.',
     }
