@@ -266,7 +266,7 @@ npm install -g @renseiai/agentfactory-cli
 
 ```bash
 # macOS (Homebrew — when available)
-brew install renseiai/tap/af
+brew install RenseiAI/tap/af
 
 # Direct download (all platforms)
 curl -sSfL https://github.com/RenseiAI/af/releases/latest/download/install.sh | sh
@@ -276,6 +276,8 @@ af --version
 ```
 
 The Go binary is statically compiled — no Node.js, no `node_modules`, no pnpm.
+
+> **macOS users**: starting with `af v0.2.2`, all darwin builds are signed with an Apple Developer ID Application certificate and notarized via Apple's `notarytool`. `brew install RenseiAI/tap/af` runs cleanly with **no Gatekeeper friction** — no popup, no System Settings → Privacy & Security clickthrough required. Verify with `spctl --assess --verbose /opt/homebrew/bin/af` (expects `accepted` + `source=Notarized Developer ID`). See REN-1412 and `agentfactory-tui/RELEASING.md` § macOS signing for the signing pipeline detail.
 
 ---
 
